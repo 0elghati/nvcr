@@ -15,6 +15,12 @@ YUV420p8. Its `encode` and `decode` commands run independently and exchange a
 persistent NVCR sequence file. Predicted frames remain
 `not_implemented`, so `gop_size=1` is required.
 
+Engine artifacts are generated outside the repository source tree by
+`scripts/build_dcvcrt_tensorrt.sh`. The script copies the runtime assets from
+`build/models/dcvcrt` into the chosen engine directory and writes the plan files
+there as well. The CLI then consumes that directory via `--engine-dir`, and the
+same path can be provided to `NVCR_TENSORRT_ENGINE_DIR` for native test runs.
+
 This is an internal NVCR encode/decode path, not a declaration of byte-for-byte
 compatibility with the upstream DCVC-RT Python payloads or containers. Current
 correctness is verified at the encoder/decoder reconstruction level and by the

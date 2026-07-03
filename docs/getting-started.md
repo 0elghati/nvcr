@@ -49,6 +49,26 @@ If you used the install prefix path, confirm the CLI is reachable:
 nvcr --help
 ```
 
+## Generate engine artifacts
+
+The native DCVC-RT backend needs TensorRT plans plus the copied runtime assets.
+Generate them with the helper script after you have built or installed the
+models:
+
+```bash
+./scripts/build_dcvcrt_tensorrt.sh \
+  --models build/models/dcvcrt \
+  --engines build/engines/dcvcrt
+```
+
+By default the script builds the 1080p optimization-point engines and writes the
+results to `build/engines/dcvcrt`. If you want a different output location, pass
+`--engines /path/to/engines`. The script requires `trtexec` from TensorRT unless
+you override it with `--trtexec`.
+
+For a release-style install, copy or symlink the generated engine directory to
+the path you pass with `--engine-dir`, for example `/opt/nvcr/engines/dcvcrt`.
+
 ## Use the CLI
 
 The installed binary is `nvcr`. Encode raw planar YUV420p8 into an NVCR

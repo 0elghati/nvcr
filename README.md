@@ -147,13 +147,18 @@ for meaningful timing and GPU-resident pipeline optimization is still in progres
 When `NVCR_TENSORRT_ENGINE_DIR` is set, CTest runs an end-to-end 176x144 native
 round trip and requires the encoder and decoder reconstructions to match exactly.
 
-Build the TensorRT engines with the helper script before running the native sample:
+Generate the TensorRT engines with the helper script before running the native
+sample or the `nvcr encode` / `nvcr decode` commands:
 
 ```bash
 ./scripts/build_dcvcrt_tensorrt.sh \
   --models build/models/dcvcrt \
   --engines build/engines/dcvcrt
 ```
+
+The script expects `trtexec` from TensorRT and copies the runtime assets into the
+engine directory. For a release-style install, place or symlink that generated
+directory at `/opt/nvcr/engines/dcvcrt` and pass it to `--engine-dir`.
 
 ### Developer-only upstream reference
 

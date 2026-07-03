@@ -7,6 +7,10 @@ prefix. On Linux, add that `bin` directory to `PATH` and run `nvcr` directly.
 Encoding and decoding are separate commands and processes. Both commands
 currently use planar 8-bit YUV 4:2:0 at the CLI boundary.
 
+The CLI expects a generated engine directory. By default the helper script writes
+one to `build/engines/dcvcrt`, and release-style installs can point to a copied
+or symlinked `/opt/nvcr/engines/dcvcrt` directory instead.
+
 The native backend currently implements I-frames only. NVCR does not treat that as
 complete video encoding and does not silently force normal multi-frame input into
 an all-I stream.
