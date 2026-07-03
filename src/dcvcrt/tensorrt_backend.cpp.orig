@@ -1,0 +1,2455 @@
+#include "nvcr/dcvcrt/tensorrt_backend.hpp"
+
+#include "cuda_ops.hpp"
+
+#include "nvcr/dcvcrt/rans_codec.hpp"
+
+#include <NvInfer.h>
+#include <cuda_fp16.h>
+#include <cuda_runtime_api.h>
+
+#include <array>
+#include <bit>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <exception>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <limits>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace nvcr::dcvcrt {
+namespace {
+
+namespace fs = std::filesystem;
+
+constexpr std::string_view subsystem = "dcvcrt.tensorrt";
+
+struct TensorSpec final {
+    std::string_view name;
+    nvinfer1::TensorIOMode mode;
+    std::array<std::int64_t, 4> dimensions;
+};
+
+struct EngineSpec final {
+    std::string_view filename;
+    std::span<const TensorSpec> tensors;
+};
+
+constexpr std::array<TensorSpec, 3> analysis_tensors{{
+    {"frame", nvinfer1::TensorIOMode::kINPUT, {1, 3, -1, -1}},
+    {"q_enc", nvinfer1::TensorIOMode::kINPUT, {1, 368, 1, 1}},
+    {"y", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
+}};
+constexpr std::array<TensorSpec, 2> hyper_analysis_tensors{{
+    {"y_padded", nvinfer1::TensorIOMode::kINPUT, {1, 256, -1, -1}},
+    {"z", nvinfer1::TensorIOMode::kOUTPUT, {1, 128, -1, -1}},
+}};
+constexpr std::array<TensorSpec, 3> hyper_synthesis_tensors{{
+    {"z_hat", nvinfer1::TensorIOMode::kINPUT, {1, 128, -1, -1}},
+    {"params_padded", nvinfer1::TensorIOMode::kOUTPUT, {1, 514, -1, -1}},
+    {"common_padded", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
+}};
+constexpr std::array<TensorSpec, 2> spatial_prior_tensors{{
+    {"context", nvinfer1::TensorIOMode::kINPUT, {1, 512, -1, -1}},
+    {"scales_means", nvinfer1::TensorIOMode::kOUTPUT, {1, 512, -1, -1}},
+}};
+constexpr std::array<TensorSpec, 3> synthesis_tensors{{
+    {"y_hat", nvinfer1::TensorIOMode::kINPUT, {1, 256, -1, -1}},
+    {"q_dec", nvinfer1::TensorIOMode::kINPUT, {1, 368, 1, 1}},
+    {"frame_hat", nvinfer1::TensorIOMode::kOUTPUT, {1, 3, -1, -1}},
+}};
+
+constexpr std::array<TensorSpec, 4> p_reference_frame_tensors{{
+    {"reference_frame", nvinfer1::TensorIOMode::kINPUT, {1, 3, -1, -1}},
+    {"q_feature", nvinfer1::TensorIOMode::kINPUT, {1, 256, 1, 1}},
+    {"context", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
+    {"temporal_context", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
+}};
+constexpr std::array<TensorSpec, 4> p_reference_feature_tensors{{
+    {"reference_feature", nvinfer1::TensorIOMode::kINPUT, {1, 256, -1, -1}},
+    {"q_feature", nvinfer1::TensorIOMode::kINPUT, {1, 256, 1, 1}},
+    {"context", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
+    {"temporal_context", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
+}};
+constexpr std::array<TensorSpec, 4> p_analysis_tensors{{
+    {"frame", nvinfer1::TensorIOMode::kINPUT, {1, 3, -1, -1}},
+    {"context", nvinfer1::TensorIOMode::kINPUT, {1, 256, -1, -1}},
+    {"q_encoder", nvinfer1::TensorIOMode::kINPUT, {1, 256, 1, 1}},
+    {"y", nvinfer1::TensorIOMode::kOUTPUT, {1, 128, -1, -1}},
+}};
+constexpr std::array<TensorSpec, 2> p_hyper_analysis_tensors{{
+    {"y_padded", nvinfer1::TensorIOMode::kINPUT, {1, 128, -1, -1}},
+    {"z", nvinfer1::TensorIOMode::kOUTPUT, {1, 128, -1, -1}},
+}};
+constexpr std::array<TensorSpec, 3> p_prior_tensors{{
+    {"z_hat", nvinfer1::TensorIOMode::kINPUT, {1, 128, -1, -1}},
+    {"temporal_context", nvinfer1::TensorIOMode::kINPUT, {1, 256, -1, -1}},
+    {"params", nvinfer1::TensorIOMode::kOUTPUT, {1, 384, -1, -1}},
+}};
+constexpr std::array<TensorSpec, 2> p_spatial_prior_tensors{{
+    {"context", nvinfer1::TensorIOMode::kINPUT, {1, 512, -1, -1}},
+    {"scales_means", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
+}};
+constexpr std::array<TensorSpec, 6> p_synthesis_tensors{{
+    {"y_hat", nvinfer1::TensorIOMode::kINPUT, {1, 128, -1, -1}},
+    {"context", nvinfer1::TensorIOMode::kINPUT, {1, 256, -1, -1}},
+    {"q_decoder", nvinfer1::TensorIOMode::kINPUT, {1, 256, 1, 1}},
+    {"q_recon", nvinfer1::TensorIOMode::kINPUT, {1, 320, 1, 1}},
+    {"frame_hat", nvinfer1::TensorIOMode::kOUTPUT, {1, 3, -1, -1}},
+    {"feature", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
+}};
+
+const std::array<EngineSpec, 14> engine_specs{{
+    {"i_analysis.plan", analysis_tensors},
+    {"i_hyper_analysis.plan", hyper_analysis_tensors},
+    {"i_hyper_synthesis.plan", hyper_synthesis_tensors},
+    {"i_spatial_prior_1.plan", spatial_prior_tensors},
+    {"i_spatial_prior_2.plan", spatial_prior_tensors},
+    {"i_spatial_prior_3.plan", spatial_prior_tensors},
+    {"i_synthesis.plan", synthesis_tensors},
+    {"p_reference_frame.plan", p_reference_frame_tensors},
+    {"p_reference_feature.plan", p_reference_feature_tensors},
+    {"p_analysis.plan", p_analysis_tensors},
+    {"p_hyper_analysis.plan", p_hyper_analysis_tensors},
+    {"p_prior.plan", p_prior_tensors},
+    {"p_spatial_prior.plan", p_spatial_prior_tensors},
+    {"p_synthesis.plan", p_synthesis_tensors},
+}};
+
+class TensorRTLogger final : public nvinfer1::ILogger {
+public:
+    void log(Severity severity, const char* message) noexcept override {
+        if (severity <= Severity::kWARNING) {
+            std::clog << "[TensorRT] " << (message != nullptr ? message : "") << '\n';
+        }
+    }
+};
+
+struct EngineInstance final {
+    fs::path path;
+    std::unique_ptr<nvinfer1::ICudaEngine> engine;
+    std::unique_ptr<nvinfer1::IExecutionContext> context;
+};
+
+Error backend_error(std::string message) {
+    return Error(ErrorCode::backend_error, std::move(message), std::string(subsystem));
+}
+
+Error cuda_error(std::string_view operation, cudaError_t status) {
+    return backend_error(
+        std::string(operation) + " failed: " + cudaGetErrorString(status));
+}
+
+Result<std::vector<std::byte>> read_binary(const fs::path& path) {
+    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    if (!input) {
+        return Error(
+            ErrorCode::io_error,
+            "cannot open file: " + path.string(),
+            std::string(subsystem));
+    }
+    const auto end = input.tellg();
+    if (end <= 0) {
+        return Error(
+            ErrorCode::io_error,
+            "file is empty: " + path.string(),
+            std::string(subsystem));
+    }
+    const auto size = static_cast<std::size_t>(end);
+    std::vector<std::byte> bytes(size);
+    input.seekg(0, std::ios::beg);
+    input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(size));
+    if (!input) {
+        return Error(
+            ErrorCode::io_error,
+            "failed to read file: " + path.string(),
+            std::string(subsystem));
+    }
+    return bytes;
+}
+
+std::string dimensions_string(const nvinfer1::Dims& dimensions) {
+    std::string output;
+    for (std::int32_t index = 0; index < dimensions.nbDims; ++index) {
+        if (!output.empty()) output += 'x';
+        output += std::to_string(dimensions.d[index]);
+    }
+    return output;
+}
+
+Result<void> validate_engine(
+    const nvinfer1::ICudaEngine& engine,
+    const EngineSpec& specification) {
+    if (engine.getNbIOTensors() != static_cast<std::int32_t>(specification.tensors.size())) {
+        return backend_error(
+            std::string(specification.filename) + " has " +
+            std::to_string(engine.getNbIOTensors()) + " I/O tensors; expected " +
+            std::to_string(specification.tensors.size()));
+    }
+
+    for (const auto& tensor : specification.tensors) {
+        const std::string name(tensor.name);
+        if (engine.getTensorIOMode(name.c_str()) != tensor.mode) {
+            return backend_error(
+                std::string(specification.filename) + " has missing or incorrect I/O mode for '" +
+                name + "'");
+        }
+        if (engine.getTensorDataType(name.c_str()) != nvinfer1::DataType::kHALF) {
+            return backend_error(
+                std::string(specification.filename) + " tensor '" + name + "' is not FP16");
+        }
+        const auto actual = engine.getTensorShape(name.c_str());
+        if (actual.nbDims != static_cast<std::int32_t>(tensor.dimensions.size())) {
+            return backend_error(
+                std::string(specification.filename) + " tensor '" + name +
+                "' has rank " + std::to_string(actual.nbDims) + "; expected rank 4");
+        }
+        for (std::size_t index = 0; index < tensor.dimensions.size(); ++index) {
+            if (actual.d[index] != tensor.dimensions[index]) {
+                return backend_error(
+                    std::string(specification.filename) + " tensor '" + name +
+                    "' has shape " + dimensions_string(actual) + "; contract mismatch");
+            }
+        }
+    }
+    return {};
+}
+
+Result<EngineInstance> load_engine(
+    nvinfer1::IRuntime& runtime,
+    const fs::path& root,
+    const EngineSpec& specification) {
+    const auto path = root / specification.filename;
+    auto bytes = read_binary(path);
+    if (!bytes) return bytes.error();
+
+    std::unique_ptr<nvinfer1::ICudaEngine> engine(
+        runtime.deserializeCudaEngine(bytes.value().data(), bytes.value().size()));
+    if (!engine) {
+        return backend_error("failed to deserialize file: " + path.string());
+    }
+    auto valid = validate_engine(*engine, specification);
+    if (!valid) return valid.error();
+
+    std::unique_ptr<nvinfer1::IExecutionContext> context(engine->createExecutionContext());
+    if (!context) {
+        return backend_error("failed to create execution context: " + path.string());
+    }
+    return EngineInstance{path, std::move(engine), std::move(context)};
+}
+
+thread_local cudaStream_t allocation_stream = nullptr;
+
+class CudaAllocationScope final {
+public:
+    explicit CudaAllocationScope(cudaStream_t stream)
+        : previous_(std::exchange(allocation_stream, stream)) {}
+    ~CudaAllocationScope() { allocation_stream = previous_; }
+    CudaAllocationScope(const CudaAllocationScope&) = delete;
+    CudaAllocationScope& operator=(const CudaAllocationScope&) = delete;
+
+private:
+    cudaStream_t previous_{};
+};
+
+void release_cuda(void* pointer, cudaStream_t stream) noexcept {
+    if (pointer == nullptr) return;
+    if (stream != nullptr) {
+        static_cast<void>(cudaFreeAsync(pointer, stream));
+    } else {
+        static_cast<void>(cudaFree(pointer));
+    }
+}
+
+struct CudaAllocation final {
+    CudaAllocation() = default;
+    CudaAllocation(void* pointer, std::size_t byte_count, cudaStream_t owner_stream)
+        : data(pointer), bytes(byte_count), stream(owner_stream) {}
+    ~CudaAllocation() { release_cuda(data, stream); }
+    CudaAllocation(CudaAllocation&& other) noexcept
+        : data(std::exchange(other.data, nullptr)),
+          bytes(std::exchange(other.bytes, 0)),
+          stream(std::exchange(other.stream, nullptr)) {}
+    CudaAllocation& operator=(CudaAllocation&& other) noexcept {
+        if (this != &other) {
+            release_cuda(data, stream);
+            data = std::exchange(other.data, nullptr);
+            bytes = std::exchange(other.bytes, 0);
+            stream = std::exchange(other.stream, nullptr);
+        }
+        return *this;
+    }
+    CudaAllocation(const CudaAllocation&) = delete;
+    CudaAllocation& operator=(const CudaAllocation&) = delete;
+
+    void* data{};
+    std::size_t bytes{};
+    cudaStream_t stream{};
+};
+
+struct CudaEvent final {
+    CudaEvent() = default;
+    ~CudaEvent() {
+        if (data != nullptr) static_cast<void>(cudaEventDestroy(data));
+    }
+    CudaEvent(const CudaEvent&) = delete;
+    CudaEvent& operator=(const CudaEvent&) = delete;
+    cudaEvent_t data{};
+};
+
+Result<CudaAllocation> allocate_cuda(std::size_t bytes) {
+    void* pointer = nullptr;
+    const auto stream = allocation_stream;
+    const auto status = stream != nullptr ? cudaMallocAsync(&pointer, bytes, stream)
+                                          : cudaMalloc(&pointer, bytes);
+    if (status != cudaSuccess) {
+        return cuda_error(stream != nullptr ? "cudaMallocAsync" : "cudaMalloc", status);
+    }
+    return CudaAllocation(pointer, bytes, stream);
+}
+
+Result<std::size_t> tensor_bytes(const nvinfer1::Dims& shape) {
+    std::size_t elements = 1;
+    for (std::int32_t index = 0; index < shape.nbDims; ++index) {
+        if (shape.d[index] <= 0) return backend_error("TensorRT produced an unresolved shape");
+        const auto dimension = static_cast<std::size_t>(shape.d[index]);
+        if (elements > std::numeric_limits<std::size_t>::max() / dimension) {
+            return backend_error("TensorRT tensor size overflow");
+        }
+        elements *= dimension;
+    }
+    if (elements > std::numeric_limits<std::size_t>::max() / sizeof(std::uint16_t)) {
+        return backend_error("TensorRT tensor byte size overflow");
+    }
+    return elements * sizeof(std::uint16_t);
+}
+
+nvinfer1::Dims warmup_shape(
+    std::string_view filename, std::string_view name, nvinfer1::Dims shape) {
+    if (name == "frame" || name == "reference_frame") {
+        shape.d[2] = filename.starts_with("p_") ? 192 : 144;
+        shape.d[3] = filename.starts_with("p_") ? 192 : 176;
+    } else if (name == "reference_feature" || name == "temporal_context") {
+        shape.d[2] = 24;
+        shape.d[3] = 24;
+    } else if (name == "y_padded" || name == "y_hat") {
+        shape.d[2] = 12;
+        shape.d[3] = 12;
+    } else if (name == "z_hat") {
+        shape.d[2] = 3;
+        shape.d[3] = 3;
+    } else if (name == "context") {
+        shape.d[2] = filename == "p_spatial_prior.plan" ? 12 :
+            (filename.starts_with("p_") ? 24 : 9);
+        shape.d[3] = filename == "p_spatial_prior.plan" ? 12 :
+            (filename.starts_with("p_") ? 24 : 11);
+    }
+    return shape;
+}
+
+Result<void> warm_up_engine(
+    EngineInstance& instance, const EngineSpec& specification, cudaStream_t stream) {
+    for (const auto& tensor : specification.tensors) {
+        if (tensor.mode != nvinfer1::TensorIOMode::kINPUT) continue;
+        const std::string name(tensor.name);
+        const auto shape = warmup_shape(
+            specification.filename, tensor.name,
+            instance.engine->getTensorShape(name.c_str()));
+        if (!instance.context->setInputShape(name.c_str(), shape)) {
+            return backend_error(
+                std::string(specification.filename) + " rejected warm-up shape for " + name);
+        }
+    }
+
+    std::vector<CudaAllocation> allocations;
+    allocations.reserve(specification.tensors.size());
+    for (const auto& tensor : specification.tensors) {
+        const std::string name(tensor.name);
+        const auto shape = instance.context->getTensorShape(name.c_str());
+        auto bytes = tensor_bytes(shape);
+        if (!bytes) return bytes.error();
+        auto allocation = allocate_cuda(bytes.value());
+        if (!allocation) return allocation.error();
+        const auto cleared = cudaMemsetAsync(
+            allocation.value().data, 0, allocation.value().bytes, stream);
+        if (cleared != cudaSuccess) return cuda_error("cudaMemsetAsync", cleared);
+        if (!instance.context->setTensorAddress(name.c_str(), allocation.value().data)) {
+            return backend_error(
+                std::string(specification.filename) + " rejected address for " + name);
+        }
+        allocations.push_back(std::move(allocation.value()));
+    }
+    if (!instance.context->enqueueV3(stream)) {
+        return backend_error(std::string(specification.filename) + " enqueueV3 failed");
+    }
+    const auto synchronized = cudaStreamSynchronize(stream);
+    if (synchronized != cudaSuccess) {
+        return cuda_error(
+            std::string("cudaStreamSynchronize warm-up for ") +
+                std::string(specification.filename),
+            synchronized);
+    }
+    return {};
+}
+
+struct HostTensor final {
+    std::string name;
+    nvinfer1::Dims shape;
+    std::vector<__half> values;
+};
+
+nvinfer1::Dims make_dims(
+    std::int32_t channels, std::int32_t height, std::int32_t width) {
+    nvinfer1::Dims shape{};
+    shape.nbDims = 4;
+    shape.d[0] = 1;
+    shape.d[1] = channels;
+    shape.d[2] = height;
+    shape.d[3] = width;
+    return shape;
+}
+
+std::size_t element_count(const nvinfer1::Dims& shape) {
+    std::size_t count = 1;
+    for (std::int32_t index = 0; index < shape.nbDims; ++index) {
+        count *= static_cast<std::size_t>(shape.d[index]);
+    }
+    return count;
+}
+
+const HostTensor* find_tensor(std::span<const HostTensor> tensors, std::string_view name) {
+    for (const auto& tensor : tensors) {
+        if (tensor.name == name) return &tensor;
+    }
+    return nullptr;
+}
+
+struct DeviceTensor final {
+    std::string name;
+    nvinfer1::Dims shape;
+    CudaAllocation storage;
+};
+
+struct DeviceDpb final {
+    std::optional<DeviceTensor> frame;
+    std::optional<DeviceTensor> feature;
+    std::uint64_t next_frame_index{};
+    std::uint64_t generation{};
+
+    [[nodiscard]] bool matches(const SequenceStateView& state) const noexcept {
+        return frame.has_value() && next_frame_index == state.frame_index &&
+            generation == state.generation;
+    }
+
+    void clear() noexcept {
+        frame.reset();
+        feature.reset();
+        next_frame_index = 0;
+    }
+};
+
+const DeviceTensor* find_device_tensor(
+    std::span<DeviceTensor* const> tensors, std::string_view name) {
+    for (const auto* tensor : tensors) {
+        if (tensor != nullptr && tensor->name == name) return tensor;
+    }
+    return nullptr;
+}
+
+Result<DeviceTensor> upload_tensor(
+    const HostTensor& input, std::string name, cudaStream_t stream) {
+    const auto bytes = input.values.size() * sizeof(__half);
+    auto storage = allocate_cuda(bytes);
+    if (!storage) return storage.error();
+    const auto copied = cudaMemcpyAsync(storage.value().data, input.values.data(), bytes,
+                                        cudaMemcpyHostToDevice, stream);
+    if (copied != cudaSuccess) return cuda_error("cudaMemcpyAsync upload", copied);
+    return DeviceTensor{std::move(name), input.shape, std::move(storage.value())};
+}
+
+Result<DeviceTensor> allocate_device_tensor(
+    std::string name, nvinfer1::Dims shape) {
+    auto bytes = tensor_bytes(shape);
+    if (!bytes) return bytes.error();
+    auto storage = allocate_cuda(bytes.value());
+    if (!storage) return storage.error();
+    return DeviceTensor{std::move(name), shape, std::move(storage.value())};
+}
+
+Result<std::vector<DeviceTensor>> run_device_engine(
+    EngineInstance& instance,
+    const EngineSpec& specification,
+    std::span<DeviceTensor* const> inputs,
+    cudaStream_t stream) {
+    for (const auto& tensor : specification.tensors) {
+        if (tensor.mode != nvinfer1::TensorIOMode::kINPUT) continue;
+        const auto* input = find_device_tensor(inputs, tensor.name);
+        if (input == nullptr) {
+            return backend_error(std::string(specification.filename) +
+                                 " missing device input " + std::string(tensor.name));
+        }
+        const std::string name(tensor.name);
+        if (!instance.context->setInputShape(name.c_str(), input->shape)) {
+            return backend_error(std::string(specification.filename) +
+                                 " rejected device input shape for " + name);
+        }
+    }
+
+    std::vector<DeviceTensor> outputs;
+    outputs.reserve(specification.tensors.size());
+    for (const auto& tensor : specification.tensors) {
+        const std::string name(tensor.name);
+        if (tensor.mode == nvinfer1::TensorIOMode::kINPUT) {
+            const auto* input = find_device_tensor(inputs, tensor.name);
+            if (!instance.context->setTensorAddress(name.c_str(), input->storage.data)) {
+                return backend_error(std::string(specification.filename) +
+                                     " rejected device address for " + name);
+            }
+            continue;
+        }
+        const auto shape = instance.context->getTensorShape(name.c_str());
+        auto output = allocate_device_tensor(name, shape);
+        if (!output) return output.error();
+        if (!instance.context->setTensorAddress(name.c_str(), output.value().storage.data)) {
+            return backend_error(std::string(specification.filename) +
+                                 " rejected device output address for " + name);
+        }
+        outputs.push_back(std::move(output.value()));
+    }
+    if (!instance.context->enqueueV3(stream)) {
+        return backend_error(std::string(specification.filename) + " enqueueV3 failed");
+    }
+    return outputs;
+}
+
+Result<DeviceTensor> take_device_tensor(
+    std::vector<DeviceTensor>& tensors, std::string_view name) {
+    for (auto& tensor : tensors) {
+        if (tensor.name == name) return std::move(tensor);
+    }
+    return backend_error("TensorRT device output is missing " + std::string(name));
+}
+
+Result<std::vector<HostTensor>> download_tensors(
+    std::span<DeviceTensor* const> inputs, cudaStream_t stream) {
+    std::vector<HostTensor> outputs;
+    outputs.reserve(inputs.size());
+    for (const auto* input : inputs) {
+        if (input == nullptr) return backend_error("null device tensor download");
+        outputs.push_back(HostTensor{input->name, input->shape,
+                                     std::vector<__half>(element_count(input->shape))});
+        const auto copied = cudaMemcpyAsync(
+            outputs.back().values.data(), input->storage.data,
+            outputs.back().values.size() * sizeof(__half), cudaMemcpyDeviceToHost, stream);
+        if (copied != cudaSuccess) return cuda_error("cudaMemcpyAsync download", copied);
+    }
+    const auto synchronized = cudaStreamSynchronize(stream);
+    if (synchronized != cudaSuccess) return cuda_error("cudaStreamSynchronize", synchronized);
+    return outputs;
+}
+
+Result<std::vector<HostTensor>> run_host_engine(
+    EngineInstance& instance,
+    const EngineSpec& specification,
+    std::span<const HostTensor> inputs,
+    cudaStream_t stream) {
+    for (const auto& tensor : specification.tensors) {
+        if (tensor.mode != nvinfer1::TensorIOMode::kINPUT) continue;
+        const auto* input = find_tensor(inputs, tensor.name);
+        if (input == nullptr) {
+            return backend_error(
+                std::string(specification.filename) + " missing input " +
+                std::string(tensor.name));
+        }
+        const std::string name(tensor.name);
+        if (!instance.context->setInputShape(name.c_str(), input->shape)) {
+            return backend_error(
+                std::string(specification.filename) + " rejected input shape for " + name);
+        }
+    }
+
+    std::vector<CudaAllocation> allocations;
+    std::vector<HostTensor> outputs;
+    std::vector<std::size_t> output_allocation_indexes;
+    allocations.reserve(specification.tensors.size());
+    for (const auto& tensor : specification.tensors) {
+        const std::string name(tensor.name);
+        nvinfer1::Dims shape{};
+        const HostTensor* input = nullptr;
+        if (tensor.mode == nvinfer1::TensorIOMode::kINPUT) {
+            input = find_tensor(inputs, tensor.name);
+            shape = input->shape;
+        } else {
+            shape = instance.context->getTensorShape(name.c_str());
+        }
+        auto bytes = tensor_bytes(shape);
+        if (!bytes) return bytes.error();
+        auto allocation = allocate_cuda(bytes.value());
+        if (!allocation) return allocation.error();
+        if (input != nullptr) {
+            if (input->values.size() != element_count(shape)) {
+                return backend_error(
+                    std::string(specification.filename) + " input size mismatch for " + name);
+            }
+            const auto copied = cudaMemcpyAsync(
+                allocation.value().data, input->values.data(), bytes.value(),
+                cudaMemcpyHostToDevice, stream);
+            if (copied != cudaSuccess) return cuda_error("cudaMemcpyAsync input", copied);
+        } else {
+            output_allocation_indexes.push_back(allocations.size());
+            outputs.push_back(HostTensor{name, shape, std::vector<__half>(element_count(shape))});
+        }
+        if (!instance.context->setTensorAddress(name.c_str(), allocation.value().data)) {
+            return backend_error(
+                std::string(specification.filename) + " rejected address for " + name);
+        }
+        allocations.push_back(std::move(allocation.value()));
+    }
+
+    if (!instance.context->enqueueV3(stream)) {
+        return backend_error(std::string(specification.filename) + " enqueueV3 failed");
+    }
+    for (std::size_t index = 0; index < outputs.size(); ++index) {
+        const auto copied = cudaMemcpyAsync(
+            outputs[index].values.data(),
+            allocations[output_allocation_indexes[index]].data,
+            outputs[index].values.size() * sizeof(__half),
+            cudaMemcpyDeviceToHost, stream);
+        if (copied != cudaSuccess) return cuda_error("cudaMemcpyAsync output", copied);
+    }
+    const auto synchronized = cudaStreamSynchronize(stream);
+    if (synchronized != cudaSuccess) return cuda_error("cudaStreamSynchronize", synchronized);
+    return outputs;
+}
+
+__half to_half(float value) { return __float2half_rn(value); }
+float to_float(__half value) { return __half2float(value); }
+
+std::int32_t round_up(std::int32_t value, std::int32_t multiple) {
+    return ((value + multiple - 1) / multiple) * multiple;
+}
+
+std::size_t tensor_offset(
+    const HostTensor& tensor, std::int32_t channel, std::int32_t y, std::int32_t x) {
+    return (static_cast<std::size_t>(channel) * tensor.shape.d[2] + y) *
+        tensor.shape.d[3] + x;
+}
+
+HostTensor rgb_to_ycbcr(const Frame& frame) {
+    const auto height = round_up(static_cast<std::int32_t>(frame.height()), 16);
+    const auto width = round_up(static_cast<std::int32_t>(frame.width()), 16);
+    HostTensor output{"frame", make_dims(3, height, width),
+                      std::vector<__half>(static_cast<std::size_t>(3) * height * width)};
+    const auto input = frame.data();
+    constexpr float kr = 0.2126F;
+    constexpr float kg = 0.7152F;
+    constexpr float kb = 0.0722F;
+    for (std::int32_t y = 0; y < height; ++y) {
+        const auto source_y = std::min<std::int32_t>(y, frame.height() - 1);
+        for (std::int32_t x = 0; x < width; ++x) {
+            const auto source_x = std::min<std::int32_t>(x, frame.width() - 1);
+            const auto source =
+                (static_cast<std::size_t>(source_y) * frame.width() + source_x) * 3;
+            const float r = std::to_integer<unsigned char>(input[source]) / 255.0F;
+            const float g = std::to_integer<unsigned char>(input[source + 1]) / 255.0F;
+            const float b = std::to_integer<unsigned char>(input[source + 2]) / 255.0F;
+            const float luma = kr * r + kg * g + kb * b;
+            const float cb = 0.5F * (b - luma) / (1.0F - kb) + 0.5F;
+            const float cr = 0.5F * (r - luma) / (1.0F - kr) + 0.5F;
+            output.values[tensor_offset(output, 0, y, x)] =
+                to_half(std::clamp(luma, 0.0F, 1.0F));
+            output.values[tensor_offset(output, 1, y, x)] =
+                to_half(std::clamp(cb, 0.0F, 1.0F));
+            output.values[tensor_offset(output, 2, y, x)] =
+                to_half(std::clamp(cr, 0.0F, 1.0F));
+        }
+    }
+    return output;
+}
+
+HostTensor yuv420p8_to_ycbcr(const Frame& frame) {
+    const auto source_width = static_cast<std::int32_t>(frame.width());
+    const auto source_height = static_cast<std::int32_t>(frame.height());
+    const auto height = round_up(source_height, 16);
+    const auto width = round_up(source_width, 16);
+    HostTensor output{"frame", make_dims(3, height, width),
+                      std::vector<__half>(static_cast<std::size_t>(3) * height * width)};
+    const auto input = frame.data();
+    const auto y_size = static_cast<std::size_t>(source_width) * source_height;
+    const auto uv_width = source_width / 2;
+    const auto uv_size = static_cast<std::size_t>(uv_width) * (source_height / 2);
+    const auto* u_plane = input.data() + y_size;
+    const auto* v_plane = u_plane + uv_size;
+    for (std::int32_t y = 0; y < height; ++y) {
+        const auto source_y = std::min(y, source_height - 1);
+        for (std::int32_t x = 0; x < width; ++x) {
+            const auto source_x = std::min(x, source_width - 1);
+            const auto y_index =
+                static_cast<std::size_t>(source_y) * source_width + source_x;
+            const auto uv_index =
+                static_cast<std::size_t>(source_y / 2) * uv_width + source_x / 2;
+            output.values[tensor_offset(output, 0, y, x)] =
+                to_half(std::to_integer<unsigned char>(input[y_index]) / 255.0F);
+            output.values[tensor_offset(output, 1, y, x)] =
+                to_half(std::to_integer<unsigned char>(u_plane[uv_index]) / 255.0F);
+            output.values[tensor_offset(output, 2, y, x)] =
+                to_half(std::to_integer<unsigned char>(v_plane[uv_index]) / 255.0F);
+        }
+    }
+    return output;
+}
+
+Result<Frame> ycbcr_to_rgb(
+    const HostTensor& tensor, std::uint32_t width, std::uint32_t height, Timestamp timestamp) {
+    constexpr float kr = 0.2126F;
+    constexpr float kg = 0.7152F;
+    constexpr float kb = 0.0722F;
+    std::vector<std::byte> bytes(static_cast<std::size_t>(width) * height * 3);
+    for (std::uint32_t y = 0; y < height; ++y) {
+        for (std::uint32_t x = 0; x < width; ++x) {
+            const float luma = to_float(tensor.values[tensor_offset(tensor, 0, y, x)]);
+            const float cb = to_float(tensor.values[tensor_offset(tensor, 1, y, x)]);
+            const float cr = to_float(tensor.values[tensor_offset(tensor, 2, y, x)]);
+            const float r = luma + (2.0F - 2.0F * kr) * (cr - 0.5F);
+            const float b = luma + (2.0F - 2.0F * kb) * (cb - 0.5F);
+            const float g = (luma - kr * r - kb * b) / kg;
+            const auto destination = (static_cast<std::size_t>(y) * width + x) * 3;
+            const auto quantize = [](float value) {
+                return static_cast<unsigned char>(
+                    std::lround(std::clamp(value, 0.0F, 1.0F) * 255.0F));
+            };
+            bytes[destination] = static_cast<std::byte>(quantize(r));
+            bytes[destination + 1] = static_cast<std::byte>(quantize(g));
+            bytes[destination + 2] = static_cast<std::byte>(quantize(b));
+        }
+    }
+    return Frame::copy_from(width, height, PixelFormat::rgb24, bytes, timestamp);
+}
+
+HostTensor crop_spatial(
+    const HostTensor& input, std::string name, std::int32_t height, std::int32_t width) {
+    HostTensor output{
+        std::move(name),
+        make_dims(static_cast<std::int32_t>(input.shape.d[1]), height, width),
+                      std::vector<__half>(static_cast<std::size_t>(input.shape.d[1]) * height * width)};
+    for (std::int32_t channel = 0; channel < input.shape.d[1]; ++channel) {
+        for (std::int32_t y = 0; y < height; ++y) {
+            const auto source = tensor_offset(input, channel, y, 0);
+            const auto destination = tensor_offset(output, channel, y, 0);
+            std::copy_n(input.values.begin() + static_cast<std::ptrdiff_t>(source), width,
+                        output.values.begin() + static_cast<std::ptrdiff_t>(destination));
+        }
+    }
+    return output;
+}
+
+HostTensor replicate_pad_host(
+    const HostTensor& input, std::string name, std::int32_t height, std::int32_t width) {
+    HostTensor output{std::move(name),
+                      make_dims(static_cast<std::int32_t>(input.shape.d[1]), height, width),
+                      std::vector<__half>(static_cast<std::size_t>(input.shape.d[1]) * height * width)};
+    for (std::int32_t channel = 0; channel < input.shape.d[1]; ++channel) {
+        for (std::int32_t y = 0; y < height; ++y) {
+            const auto source_y = std::min<std::int32_t>(
+                y, static_cast<std::int32_t>(input.shape.d[2]) - 1);
+            for (std::int32_t x = 0; x < width; ++x) {
+                const auto source_x = std::min<std::int32_t>(
+                    x, static_cast<std::int32_t>(input.shape.d[3]) - 1);
+                output.values[tensor_offset(output, channel, y, x)] =
+                    input.values[tensor_offset(input, channel, source_y, source_x)];
+            }
+        }
+    }
+    return output;
+}
+
+HostTensor slice_channels(
+    const HostTensor& input, std::string name, std::int32_t first, std::int32_t count) {
+    HostTensor output{
+        std::move(name),
+        make_dims(count, static_cast<std::int32_t>(input.shape.d[2]),
+                  static_cast<std::int32_t>(input.shape.d[3])),
+                      std::vector<__half>(static_cast<std::size_t>(count) * input.shape.d[2] * input.shape.d[3])};
+    const auto plane = static_cast<std::size_t>(input.shape.d[2]) * input.shape.d[3];
+    std::copy_n(input.values.begin() + static_cast<std::ptrdiff_t>(first * plane),
+                static_cast<std::ptrdiff_t>(count * plane), output.values.begin());
+    return output;
+}
+
+HostTensor concat_channels(
+    const HostTensor& first, const HostTensor& second, std::string name) {
+    HostTensor output{std::move(name),
+                      make_dims(
+                          static_cast<std::int32_t>(first.shape.d[1] + second.shape.d[1]),
+                          static_cast<std::int32_t>(first.shape.d[2]),
+                          static_cast<std::int32_t>(first.shape.d[3])), {}};
+    output.values.reserve(first.values.size() + second.values.size());
+    output.values.insert(output.values.end(), first.values.begin(), first.values.end());
+    output.values.insert(output.values.end(), second.values.begin(), second.values.end());
+    return output;
+}
+
+void add_in_place(HostTensor& destination, const HostTensor& source) {
+    for (std::size_t index = 0; index < destination.values.size(); ++index) {
+        destination.values[index] = to_half(
+            to_float(destination.values[index]) + to_float(source.values[index]));
+    }
+}
+
+
+
+void multiply_broadcast_in_place(HostTensor& tensor, const HostTensor& factor) {
+    const auto plane = static_cast<std::size_t>(tensor.shape.d[2]) * tensor.shape.d[3];
+    for (std::int32_t channel = 0; channel < tensor.shape.d[1]; ++channel) {
+        for (std::size_t index = 0; index < plane; ++index) {
+            const auto offset = static_cast<std::size_t>(channel) * plane + index;
+            tensor.values[offset] = to_half(
+                to_float(tensor.values[offset]) * to_float(factor.values[index]));
+        }
+    }
+}
+
+void multiply_in_place(HostTensor& tensor, const HostTensor& factor) {
+    for (std::size_t index = 0; index < tensor.values.size(); ++index) {
+        tensor.values[index] = to_half(
+            to_float(tensor.values[index]) * to_float(factor.values[index]));
+    }
+}
+
+void clamp_min_in_place(HostTensor& tensor, float minimum) {
+    for (auto& value : tensor.values) value = to_half(std::max(to_float(value), minimum));
+}
+
+void reciprocal_in_place(HostTensor& tensor) {
+    for (auto& value : tensor.values) value = to_half(1.0F / to_float(value));
+}
+
+struct ImagePrior final {
+    HostTensor q_enc;
+    HostTensor q_dec;
+    HostTensor scales;
+    HostTensor means;
+};
+
+ImagePrior separate_image_prior(const HostTensor& params) {
+    auto q_enc = slice_channels(params, "q_enc_prior", 0, 1);
+    auto q_dec = slice_channels(params, "q_dec_prior", 1, 1);
+    for (auto* tensor : {&q_enc, &q_dec}) {
+        for (auto& value : tensor->values) {
+            const float sigmoid = 1.0F / (1.0F + std::exp(-to_float(value)));
+            value = to_half(sigmoid * 1.5F + 0.5F);
+        }
+    }
+    return ImagePrior{
+        std::move(q_enc), std::move(q_dec),
+        slice_channels(params, "scales", 2, 256),
+        slice_channels(params, "means", 258, 256)};
+}
+
+HostTensor make_mask(const HostTensor& like, std::int32_t stage) {
+    HostTensor mask{"mask", like.shape, std::vector<__half>(like.values.size())};
+    constexpr std::int32_t patterns[4][4] = {
+        {0, 1, 2, 3}, {3, 2, 1, 0}, {2, 3, 0, 1}, {1, 0, 3, 2}};
+    for (std::int32_t channel = 0; channel < like.shape.d[1]; ++channel) {
+        const auto quarter = channel / (like.shape.d[1] / 4);
+        for (std::int32_t y = 0; y < like.shape.d[2]; ++y) {
+            for (std::int32_t x = 0; x < like.shape.d[3]; ++x) {
+                const auto parity = (y & 1) * 2 + (x & 1);
+                mask.values[tensor_offset(mask, channel, y, x)] =
+                    to_half(patterns[stage][quarter] == parity ? 1.0F : 0.0F);
+            }
+        }
+    }
+    return mask;
+}
+
+struct MaskResult final {
+    HostTensor symbols;
+    HostTensor reconstructed;
+    HostTensor scales;
+};
+
+MaskResult process_mask(
+    const HostTensor& values, const HostTensor& scales, const HostTensor& means,
+    const HostTensor& mask) {
+    HostTensor symbols{"symbols", values.shape, std::vector<__half>(values.values.size())};
+    HostTensor reconstructed{"reconstructed", values.shape,
+                             std::vector<__half>(values.values.size())};
+    HostTensor masked_scales{"masked_scales", values.shape,
+                             std::vector<__half>(values.values.size())};
+    for (std::size_t index = 0; index < values.values.size(); ++index) {
+        const float mask_value = to_float(mask.values[index]);
+        const float mean = to_float(means.values[index]) * mask_value;
+        const float scale = to_float(scales.values[index]) * mask_value;
+        const float residual = (to_float(values.values[index]) - mean) * mask_value;
+        const float symbol = std::clamp(std::round(residual), -128.0F, 127.0F);
+        symbols.values[index] = to_half(symbol);
+        reconstructed.values[index] = to_half(symbol + mean);
+        masked_scales.values[index] = to_half(scale);
+    }
+    return {std::move(symbols), std::move(reconstructed), std::move(masked_scales)};
+}
+
+HostTensor reduce_quarters(const HostTensor& input, std::string name) {
+    const auto quarter_size = input.values.size() / 4;
+    HostTensor output{std::move(name),
+                      make_dims(
+                          static_cast<std::int32_t>(input.shape.d[1] / 4),
+                          static_cast<std::int32_t>(input.shape.d[2]),
+                          static_cast<std::int32_t>(input.shape.d[3])),
+                      std::vector<__half>(quarter_size)};
+    for (std::size_t index = 0; index < quarter_size; ++index) {
+        float value = 0.0F;
+        for (std::size_t quarter = 0; quarter < 4; ++quarter) {
+            value += to_float(input.values[index + quarter * quarter_size]);
+        }
+        output.values[index] = to_half(value);
+    }
+    return output;
+}
+
+HostTensor reduce_masked_quarters(
+    const HostTensor& input, const HostTensor& mask, std::string name) {
+    HostTensor masked = input;
+    for (std::size_t index = 0; index < masked.values.size(); ++index) {
+        masked.values[index] = to_half(
+            to_float(masked.values[index]) * to_float(mask.values[index]));
+    }
+    return reduce_quarters(masked, std::move(name));
+}
+
+HostTensor restore_quarters(
+    const HostTensor& symbols, const HostTensor& means, const HostTensor& mask) {
+    HostTensor output{"reconstructed", means.shape, std::vector<__half>(means.values.size())};
+    const auto quarter_size = output.values.size() / 4;
+    for (std::size_t index = 0; index < quarter_size; ++index) {
+        const float symbol = to_float(symbols.values[index]);
+        for (std::size_t quarter = 0; quarter < 4; ++quarter) {
+            const auto destination = index + quarter * quarter_size;
+            output.values[destination] = to_half(
+                (symbol + to_float(means.values[destination])) *
+                to_float(mask.values[destination]));
+        }
+    }
+    return output;
+}
+
+HostTensor make_video_mask(const HostTensor& like, std::int32_t stage) {
+    HostTensor mask{"mask", like.shape, std::vector<__half>(like.values.size())};
+    const auto half_channels = like.shape.d[1] / 2;
+    for (std::int32_t channel = 0; channel < like.shape.d[1]; ++channel) {
+        const bool first_half = channel < half_channels;
+        for (std::int32_t y = 0; y < like.shape.d[2]; ++y) {
+            for (std::int32_t x = 0; x < like.shape.d[3]; ++x) {
+                const bool diagonal = (y & 1) == (x & 1);
+                const bool selected = stage == 0 ? (first_half == diagonal) :
+                    (first_half != diagonal);
+                mask.values[tensor_offset(mask, channel, y, x)] =
+                    to_half(selected ? 1.0F : 0.0F);
+            }
+        }
+    }
+    return mask;
+}
+
+HostTensor reduce_halves(const HostTensor& input, std::string name) {
+    const auto half_size = input.values.size() / 2;
+    HostTensor output{std::move(name),
+                      make_dims(static_cast<std::int32_t>(input.shape.d[1] / 2),
+                                static_cast<std::int32_t>(input.shape.d[2]),
+                                static_cast<std::int32_t>(input.shape.d[3])),
+                      std::vector<__half>(half_size)};
+    for (std::size_t index = 0; index < half_size; ++index) {
+        output.values[index] = to_half(to_float(input.values[index]) +
+                                       to_float(input.values[index + half_size]));
+    }
+    return output;
+}
+
+HostTensor reduce_masked_halves(
+    const HostTensor& input, const HostTensor& mask, std::string name) {
+    HostTensor masked = input;
+    for (std::size_t index = 0; index < masked.values.size(); ++index) {
+        masked.values[index] = to_half(
+            to_float(masked.values[index]) * to_float(mask.values[index]));
+    }
+    return reduce_halves(masked, std::move(name));
+}
+
+HostTensor restore_halves(
+    const HostTensor& symbols, const HostTensor& means, const HostTensor& mask) {
+    HostTensor output{"reconstructed", means.shape, std::vector<__half>(means.values.size())};
+    const auto half_size = output.values.size() / 2;
+    for (std::size_t index = 0; index < half_size; ++index) {
+        const float symbol = to_float(symbols.values[index]);
+        for (std::size_t half = 0; half < 2; ++half) {
+            const auto destination = index + half * half_size;
+            output.values[destination] = to_half(
+                (symbol + to_float(means.values[destination])) *
+                to_float(mask.values[destination]));
+        }
+    }
+    return output;
+}
+
+std::uint8_t scale_index(__half value) {
+    constexpr float minimum = 0.11F;
+    constexpr float maximum = 16.0F;
+    const float log_minimum = std::log(minimum);
+    const float reciprocal = 127.0F / (std::log(maximum) - log_minimum);
+    const float scale = std::clamp(to_float(value), minimum, maximum);
+    return static_cast<std::uint8_t>((std::log(scale) - log_minimum) * reciprocal);
+}
+
+std::vector<std::int16_t> build_encode_indexes(
+    const HostTensor& symbols, const HostTensor& scales) {
+    std::vector<std::int16_t> output(symbols.values.size());
+    for (std::size_t index = 0; index < output.size(); ++index) {
+        const auto symbol = static_cast<std::int16_t>(to_float(symbols.values[index]));
+        output[index] = static_cast<std::int16_t>(
+            (static_cast<std::uint16_t>(symbol) << 8U) | scale_index(scales.values[index]));
+    }
+    return output;
+}
+
+std::vector<std::uint8_t> build_decode_indexes(const HostTensor& scales) {
+    std::vector<std::uint8_t> output(scales.values.size());
+    std::transform(scales.values.begin(), scales.values.end(), output.begin(), scale_index);
+    return output;
+}
+
+class AssetReader final {
+public:
+    AssetReader(fs::path path, std::span<const std::byte> bytes)
+        : path_(std::move(path)), bytes_(bytes) {}
+
+    Result<void> expect_magic(std::string_view magic) {
+        if (remaining() < magic.size()) return truncated();
+        for (std::size_t index = 0; index < magic.size(); ++index) {
+            if (std::to_integer<unsigned char>(bytes_[offset_ + index]) !=
+                static_cast<unsigned char>(magic[index])) {
+                return backend_error("invalid asset magic in " + path_.string());
+            }
+        }
+        offset_ += magic.size();
+        return {};
+    }
+
+    Result<std::uint32_t> read_u32() {
+        if (remaining() < 4) return truncated();
+        std::uint32_t value = 0;
+        for (std::size_t index = 0; index < 4; ++index) {
+            value |= static_cast<std::uint32_t>(
+                std::to_integer<unsigned char>(bytes_[offset_ + index])) << (8U * index);
+        }
+        offset_ += 4;
+        return value;
+    }
+
+    Result<std::int32_t> read_i32() {
+        auto value = read_u32();
+        if (!value) return value.error();
+        return std::bit_cast<std::int32_t>(value.value());
+    }
+
+    Result<float> read_f32() {
+        auto value = read_u32();
+        if (!value) return value.error();
+        return std::bit_cast<float>(value.value());
+    }
+
+    Result<std::string> read_string(std::size_t size) {
+        if (remaining() < size) return truncated();
+        std::string output(size, char{});
+        for (std::size_t index = 0; index < size; ++index) {
+            output[index] = static_cast<char>(
+                std::to_integer<unsigned char>(bytes_[offset_ + index]));
+        }
+        offset_ += size;
+        return output;
+    }
+
+    [[nodiscard]] bool done() const noexcept { return offset_ == bytes_.size(); }
+
+private:
+    [[nodiscard]] std::size_t remaining() const noexcept { return bytes_.size() - offset_; }
+    Error truncated() const {
+        return backend_error("truncated asset file: " + path_.string());
+    }
+
+    fs::path path_;
+    std::span<const std::byte> bytes_;
+    std::size_t offset_{};
+};
+
+struct RuntimeAssets final {
+    std::size_t image_z_group{std::numeric_limits<std::size_t>::max()};
+    std::size_t gaussian_y_group{std::numeric_limits<std::size_t>::max()};
+    std::size_t video_z_group{std::numeric_limits<std::size_t>::max()};
+    std::size_t video_gaussian_y_group{std::numeric_limits<std::size_t>::max()};
+    std::uint32_t qp_count{};
+    std::uint32_t quant_channels{};
+    std::vector<float> q_enc;
+    std::vector<float> q_dec;
+    std::vector<float> p_q_encoder;
+    std::vector<float> p_q_decoder;
+    std::vector<float> p_q_feature;
+    std::vector<float> p_q_recon;
+};
+
+Result<RuntimeAssets> load_runtime_assets(const fs::path& root, RansCodec& rans) {
+    const auto entropy_path = root / "i_entropy.bin";
+    auto entropy_bytes = read_binary(entropy_path);
+    if (!entropy_bytes) return entropy_bytes.error();
+    AssetReader entropy_reader(entropy_path, entropy_bytes.value());
+    auto entropy_magic = entropy_reader.expect_magic("NVCRENT1");
+    if (!entropy_magic) return entropy_magic.error();
+    auto group_count = entropy_reader.read_u32();
+    if (!group_count) return group_count.error();
+    if (group_count.value() != 2) {
+        return backend_error("I-frame entropy asset must contain exactly two CDF groups");
+    }
+
+    RuntimeAssets assets;
+    for (std::uint32_t group_index = 0; group_index < group_count.value(); ++group_index) {
+        auto name_size = entropy_reader.read_u32();
+        auto row_count = entropy_reader.read_u32();
+        if (!name_size) return name_size.error();
+        if (!row_count) return row_count.error();
+        if (name_size.value() == 0 || name_size.value() > 64 ||
+            row_count.value() == 0 || row_count.value() > 16384) {
+            return backend_error("invalid CDF group dimensions in " + entropy_path.string());
+        }
+        auto name = entropy_reader.read_string(name_size.value());
+        if (!name) return name.error();
+
+        RansCdfTable table;
+        table.values.reserve(row_count.value());
+        table.sizes.reserve(row_count.value());
+        table.offsets.reserve(row_count.value());
+        for (std::uint32_t row_index = 0; row_index < row_count.value(); ++row_index) {
+            auto size = entropy_reader.read_i32();
+            auto offset = entropy_reader.read_i32();
+            if (!size) return size.error();
+            if (!offset) return offset.error();
+            if (size.value() < 2 || size.value() > 1024) {
+                return backend_error("invalid CDF row size in " + entropy_path.string());
+            }
+            std::vector<std::int32_t> values;
+            values.reserve(static_cast<std::size_t>(size.value()));
+            for (std::int32_t value_index = 0; value_index < size.value(); ++value_index) {
+                auto value = entropy_reader.read_i32();
+                if (!value) return value.error();
+                values.push_back(value.value());
+            }
+            table.values.push_back(std::move(values));
+            table.sizes.push_back(size.value());
+            table.offsets.push_back(offset.value());
+        }
+        auto registered = rans.add_cdf(std::move(table));
+        if (!registered) return registered.error();
+        if (name.value() == "image_z") {
+            assets.image_z_group = registered.value();
+        } else if (name.value() == "gaussian_y") {
+            assets.gaussian_y_group = registered.value();
+        } else {
+            return backend_error("unknown CDF group " + name.value());
+        }
+    }
+    if (!entropy_reader.done() ||
+        assets.image_z_group == std::numeric_limits<std::size_t>::max() ||
+        assets.gaussian_y_group == std::numeric_limits<std::size_t>::max()) {
+        return backend_error("incomplete I-frame entropy asset");
+    }
+
+    const auto quant_path = root / "i_quant.bin";
+    auto quant_bytes = read_binary(quant_path);
+    if (!quant_bytes) return quant_bytes.error();
+    AssetReader quant_reader(quant_path, quant_bytes.value());
+    auto quant_magic = quant_reader.expect_magic("NVCRQNT1");
+    if (!quant_magic) return quant_magic.error();
+    auto qp_count = quant_reader.read_u32();
+    auto channels = quant_reader.read_u32();
+    if (!qp_count) return qp_count.error();
+    if (!channels) return channels.error();
+    if (qp_count.value() != 64 || channels.value() != 368) {
+        return backend_error("unexpected I-frame quantization tensor shape");
+    }
+    assets.qp_count = qp_count.value();
+    assets.quant_channels = channels.value();
+    const auto value_count = static_cast<std::size_t>(qp_count.value()) * channels.value();
+    assets.q_enc.reserve(value_count);
+    assets.q_dec.reserve(value_count);
+    for (auto* destination : {&assets.q_enc, &assets.q_dec}) {
+        for (std::size_t index = 0; index < value_count; ++index) {
+            auto value = quant_reader.read_f32();
+            if (!value) return value.error();
+            if (!std::isfinite(value.value())) {
+                return backend_error("invalid quantization value in " + quant_path.string());
+            }
+            destination->push_back(value.value());
+        }
+    }
+    if (!quant_reader.done()) return backend_error("trailing data in " + quant_path.string());
+
+    const auto p_entropy_path = root / "p_entropy.bin";
+    auto p_entropy_bytes = read_binary(p_entropy_path);
+    if (!p_entropy_bytes) return p_entropy_bytes.error();
+    AssetReader p_entropy_reader(p_entropy_path, p_entropy_bytes.value());
+    auto p_entropy_magic = p_entropy_reader.expect_magic("NVCRPEN1");
+    if (!p_entropy_magic) return p_entropy_magic.error();
+    auto p_group_count = p_entropy_reader.read_u32();
+    if (!p_group_count) return p_group_count.error();
+    if (p_group_count.value() != 2) {
+        return backend_error("P-frame entropy asset must contain exactly two CDF groups");
+    }
+    for (std::uint32_t group_index = 0; group_index < p_group_count.value(); ++group_index) {
+        auto name_size = p_entropy_reader.read_u32();
+        auto row_count = p_entropy_reader.read_u32();
+        if (!name_size) return name_size.error();
+        if (!row_count) return row_count.error();
+        if (name_size.value() == 0 || name_size.value() > 64 ||
+            row_count.value() == 0 || row_count.value() > 16384) {
+            return backend_error("invalid P-frame CDF group dimensions");
+        }
+        auto name = p_entropy_reader.read_string(name_size.value());
+        if (!name) return name.error();
+        RansCdfTable table;
+        table.values.reserve(row_count.value());
+        table.sizes.reserve(row_count.value());
+        table.offsets.reserve(row_count.value());
+        for (std::uint32_t row = 0; row < row_count.value(); ++row) {
+            auto size = p_entropy_reader.read_i32();
+            auto offset = p_entropy_reader.read_i32();
+            if (!size) return size.error();
+            if (!offset) return offset.error();
+            if (size.value() < 2 || size.value() > 1024) {
+                return backend_error("invalid P-frame CDF row size");
+            }
+            std::vector<std::int32_t> values;
+            values.reserve(static_cast<std::size_t>(size.value()));
+            for (std::int32_t value_index = 0; value_index < size.value(); ++value_index) {
+                auto value = p_entropy_reader.read_i32();
+                if (!value) return value.error();
+                values.push_back(value.value());
+            }
+            table.values.push_back(std::move(values));
+            table.sizes.push_back(size.value());
+            table.offsets.push_back(offset.value());
+        }
+        auto registered = rans.add_cdf(std::move(table));
+        if (!registered) return registered.error();
+        if (name.value() == "video_z") {
+            assets.video_z_group = registered.value();
+        } else if (name.value() == "gaussian_y") {
+            assets.video_gaussian_y_group = registered.value();
+        } else {
+            return backend_error("unknown P-frame CDF group " + name.value());
+        }
+    }
+    if (!p_entropy_reader.done() ||
+        assets.video_z_group == std::numeric_limits<std::size_t>::max() ||
+        assets.video_gaussian_y_group == std::numeric_limits<std::size_t>::max()) {
+        return backend_error("incomplete P-frame entropy asset");
+    }
+
+    const auto p_quant_path = root / "p_quant.bin";
+    auto p_quant_bytes = read_binary(p_quant_path);
+    if (!p_quant_bytes) return p_quant_bytes.error();
+    AssetReader p_quant_reader(p_quant_path, p_quant_bytes.value());
+    auto p_quant_magic = p_quant_reader.expect_magic("NVCRPQN1");
+    if (!p_quant_magic) return p_quant_magic.error();
+    auto array_count = p_quant_reader.read_u32();
+    if (!array_count) return array_count.error();
+    if (array_count.value() != 4) return backend_error("P-frame quant asset must contain four arrays");
+    for (std::uint32_t array_index = 0; array_index < array_count.value(); ++array_index) {
+        auto name_size = p_quant_reader.read_u32();
+        auto qps = p_quant_reader.read_u32();
+        auto p_channels = p_quant_reader.read_u32();
+        if (!name_size) return name_size.error();
+        if (!qps) return qps.error();
+        if (!p_channels) return p_channels.error();
+        auto name = p_quant_reader.read_string(name_size.value());
+        if (!name) return name.error();
+        const std::uint32_t expected_channels = name.value() == "q_recon" ? 320U : 256U;
+        if (qps.value() != 72 || p_channels.value() != expected_channels) {
+            return backend_error("unexpected P-frame quantization tensor shape for " + name.value());
+        }
+        std::vector<float>* destination = nullptr;
+        if (name.value() == "q_encoder") destination = &assets.p_q_encoder;
+        else if (name.value() == "q_decoder") destination = &assets.p_q_decoder;
+        else if (name.value() == "q_feature") destination = &assets.p_q_feature;
+        else if (name.value() == "q_recon") destination = &assets.p_q_recon;
+        else return backend_error("unknown P-frame quant array " + name.value());
+        destination->reserve(static_cast<std::size_t>(qps.value()) * p_channels.value());
+        for (std::size_t index = 0; index < static_cast<std::size_t>(qps.value()) * p_channels.value(); ++index) {
+            auto value = p_quant_reader.read_f32();
+            if (!value) return value.error();
+            if (!std::isfinite(value.value())) return backend_error("invalid P-frame quantization value");
+            destination->push_back(value.value());
+        }
+    }
+    if (!p_quant_reader.done() || assets.p_q_encoder.empty() || assets.p_q_decoder.empty() ||
+        assets.p_q_feature.empty() || assets.p_q_recon.empty()) {
+        return backend_error("incomplete P-frame quantization asset");
+    }
+    return assets;
+}
+
+HostTensor make_quant_tensor(
+    const RuntimeAssets& assets, bool encoder, std::uint32_t qp, std::string name) {
+    HostTensor output{std::move(name), make_dims(368, 1, 1), std::vector<__half>(368)};
+    const auto& source = encoder ? assets.q_enc : assets.q_dec;
+    const auto first = static_cast<std::size_t>(qp) * 368;
+    for (std::size_t index = 0; index < 368; ++index) {
+        output.values[index] = to_half(source[first + index]);
+    }
+    return output;
+}
+
+HostTensor make_video_quant_tensor(
+    const RuntimeAssets& assets, std::string_view kind, std::uint32_t qp) {
+    const std::vector<float>* source = nullptr;
+    std::int32_t channels = 256;
+    if (kind == "q_encoder") source = &assets.p_q_encoder;
+    else if (kind == "q_decoder") source = &assets.p_q_decoder;
+    else if (kind == "q_feature") source = &assets.p_q_feature;
+    else { source = &assets.p_q_recon; channels = 320; }
+    HostTensor output{std::string(kind), make_dims(channels, 1, 1),
+                      std::vector<__half>(static_cast<std::size_t>(channels))};
+    const auto first = static_cast<std::size_t>(qp) * channels;
+    for (std::int32_t index = 0; index < channels; ++index) {
+        output.values[static_cast<std::size_t>(index)] =
+            to_half((*source)[first + static_cast<std::size_t>(index)]);
+    }
+    return output;
+}
+
+std::uint32_t video_qp(std::uint32_t base_qp, std::uint64_t frame_index) {
+    constexpr std::array<std::uint32_t, 8> index_map{0, 1, 0, 2, 0, 2, 0, 2};
+    constexpr std::array<std::uint32_t, 3> shifts{0, 8, 4};
+    return base_qp + shifts[index_map[frame_index % index_map.size()]];
+}
+
+Result<HostTensor> take_tensor(std::vector<HostTensor>& tensors, std::string_view name) {
+    for (auto& tensor : tensors) {
+        if (tensor.name == name) return std::move(tensor);
+    }
+    return backend_error("TensorRT output is missing " + std::string(name));
+}
+
+void append_u32(std::vector<std::byte>& output, std::uint32_t value) {
+    for (std::uint32_t shift = 0; shift < 32; shift += 8) {
+        output.push_back(static_cast<std::byte>((value >> shift) & 0xffU));
+    }
+}
+
+Result<std::uint32_t> read_u32(
+    std::span<const std::byte> input, std::size_t& offset) {
+    if (input.size() - offset < 4) {
+        return Error(ErrorCode::malformed_bitstream, "truncated I-frame header",
+                     std::string(subsystem));
+    }
+    std::uint32_t value = 0;
+    for (std::uint32_t index = 0; index < 4; ++index) {
+        value |= static_cast<std::uint32_t>(
+            std::to_integer<unsigned char>(input[offset + index])) << (index * 8U);
+    }
+    offset += 4;
+    return value;
+}
+
+struct DpbState final {
+    HostTensor frame;
+    std::optional<HostTensor> feature;
+};
+
+std::vector<std::byte> serialize_dpb(
+    const HostTensor& frame, const HostTensor* feature = nullptr) {
+    std::vector<std::byte> output;
+    const auto frame_bytes = frame.values.size() * sizeof(__half);
+    const auto feature_bytes = feature == nullptr ? 0 : feature->values.size() * sizeof(__half);
+    output.reserve(24 + frame_bytes + feature_bytes);
+    output.insert(output.end(), {std::byte{0x4e}, std::byte{0x56},
+                                 std::byte{0x44}, std::byte{0x31}});
+    append_u32(output, static_cast<std::uint32_t>(frame.shape.d[2]));
+    append_u32(output, static_cast<std::uint32_t>(frame.shape.d[3]));
+    append_u32(output, feature == nullptr ? 0U : static_cast<std::uint32_t>(feature->shape.d[2]));
+    append_u32(output, feature == nullptr ? 0U : static_cast<std::uint32_t>(feature->shape.d[3]));
+    const auto* frame_data = reinterpret_cast<const std::byte*>(frame.values.data());
+    output.insert(output.end(), frame_data, frame_data + frame_bytes);
+    if (feature != nullptr) {
+        const auto* feature_data = reinterpret_cast<const std::byte*>(feature->values.data());
+        output.insert(output.end(), feature_data, feature_data + feature_bytes);
+    }
+    return output;
+}
+
+Result<DpbState> parse_dpb(std::span<const std::byte> input) {
+    constexpr std::array<std::byte, 4> magic{
+        std::byte{0x4e}, std::byte{0x56}, std::byte{0x44}, std::byte{0x31}};
+    if (input.size() < 20 || !std::equal(magic.begin(), magic.end(), input.begin())) {
+        return Error(ErrorCode::invalid_state, "missing native DCVC-RT DPB state",
+                     std::string(subsystem));
+    }
+    std::size_t offset = 4;
+    auto frame_height = read_u32(input, offset);
+    auto frame_width = read_u32(input, offset);
+    auto feature_height = read_u32(input, offset);
+    auto feature_width = read_u32(input, offset);
+    if (!frame_height) return frame_height.error();
+    if (!frame_width) return frame_width.error();
+    if (!feature_height) return feature_height.error();
+    if (!feature_width) return feature_width.error();
+    if (frame_height.value() == 0 || frame_width.value() == 0 ||
+        (feature_height.value() == 0) != (feature_width.value() == 0)) {
+        return Error(ErrorCode::invalid_state, "invalid native DCVC-RT DPB dimensions",
+                     std::string(subsystem));
+    }
+    const auto frame_elements = static_cast<std::size_t>(3) * frame_height.value() * frame_width.value();
+    const auto feature_elements = static_cast<std::size_t>(256) * feature_height.value() * feature_width.value();
+    const auto expected = offset + (frame_elements + feature_elements) * sizeof(__half);
+    if (expected != input.size()) {
+        return Error(ErrorCode::invalid_state, "truncated native DCVC-RT DPB state",
+                     std::string(subsystem));
+    }
+    HostTensor frame{"reference_frame",
+                     make_dims(3, static_cast<std::int32_t>(frame_height.value()),
+                               static_cast<std::int32_t>(frame_width.value())),
+                     std::vector<__half>(frame_elements)};
+    std::memcpy(frame.values.data(), input.data() + offset, frame_elements * sizeof(__half));
+    offset += frame_elements * sizeof(__half);
+    std::optional<HostTensor> feature;
+    if (feature_elements != 0) {
+        feature.emplace(HostTensor{
+            "reference_feature",
+            make_dims(256, static_cast<std::int32_t>(feature_height.value()),
+                      static_cast<std::int32_t>(feature_width.value())),
+            std::vector<__half>(feature_elements)});
+        std::memcpy(feature->values.data(), input.data() + offset,
+                    feature_elements * sizeof(__half));
+    }
+    return DpbState{std::move(frame), std::move(feature)};
+}
+
+struct IntraPayload final {
+    std::uint32_t width;
+    std::uint32_t height;
+    std::uint32_t qp;
+    bool two_coders;
+    std::span<const std::byte> rans;
+};
+
+std::vector<std::byte> make_intra_payload(
+    std::uint32_t width, std::uint32_t height, std::uint32_t qp,
+    bool two_coders, std::span<const std::byte> rans) {
+    std::vector<std::byte> output;
+    output.reserve(20 + rans.size());
+    output.insert(output.end(), {std::byte{0x4e}, std::byte{0x56},
+                                 std::byte{0x49}, std::byte{0x31}});
+    append_u32(output, width);
+    append_u32(output, height);
+    append_u32(output, qp);
+    append_u32(output, two_coders ? 1U : 0U);
+    output.insert(output.end(), rans.begin(), rans.end());
+    return output;
+}
+
+Result<IntraPayload> parse_intra_payload(std::span<const std::byte> payload) {
+    constexpr std::array<std::byte, 4> magic{
+        std::byte{0x4e}, std::byte{0x56}, std::byte{0x49}, std::byte{0x31}};
+    if (payload.size() < 24 || !std::equal(magic.begin(), magic.end(), payload.begin())) {
+        return Error(ErrorCode::malformed_bitstream, "invalid NVCR I-frame payload",
+                     std::string(subsystem));
+    }
+    std::size_t offset = 4;
+    auto width = read_u32(payload, offset);
+    auto height = read_u32(payload, offset);
+    auto qp = read_u32(payload, offset);
+    auto flags = read_u32(payload, offset);
+    if (!width) return width.error();
+    if (!height) return height.error();
+    if (!qp) return qp.error();
+    if (!flags) return flags.error();
+    if (width.value() == 0 || height.value() == 0 || qp.value() >= 64 || flags.value() > 1) {
+        return Error(ErrorCode::malformed_bitstream, "invalid NVCR I-frame fields",
+                     std::string(subsystem));
+    }
+    return IntraPayload{width.value(), height.value(), qp.value(), flags.value() == 1,
+                        payload.subspan(offset)};
+}
+
+struct PredictedPayload final {
+    std::uint32_t width;
+    std::uint32_t height;
+    std::uint32_t qp;
+    bool two_coders;
+    bool use_frame_reference;
+    std::span<const std::byte> rans;
+};
+
+std::vector<std::byte> make_predicted_payload(
+    std::uint32_t width, std::uint32_t height, std::uint32_t qp,
+    bool two_coders, bool use_frame_reference, std::span<const std::byte> rans) {
+    std::vector<std::byte> output;
+    output.reserve(20 + rans.size());
+    output.insert(output.end(), {std::byte{0x4e}, std::byte{0x56},
+                                 std::byte{0x50}, std::byte{0x31}});
+    append_u32(output, width);
+    append_u32(output, height);
+    append_u32(output, qp);
+    append_u32(output, (two_coders ? 1U : 0U) | (use_frame_reference ? 2U : 0U));
+    output.insert(output.end(), rans.begin(), rans.end());
+    return output;
+}
+
+Result<PredictedPayload> parse_predicted_payload(std::span<const std::byte> payload) {
+    constexpr std::array<std::byte, 4> magic{
+        std::byte{0x4e}, std::byte{0x56}, std::byte{0x50}, std::byte{0x31}};
+    if (payload.size() < 24 || !std::equal(magic.begin(), magic.end(), payload.begin())) {
+        return Error(ErrorCode::malformed_bitstream, "invalid NVCR P-frame payload",
+                     std::string(subsystem));
+    }
+    std::size_t offset = 4;
+    auto width = read_u32(payload, offset);
+    auto height = read_u32(payload, offset);
+    auto qp = read_u32(payload, offset);
+    auto flags = read_u32(payload, offset);
+    if (!width) return width.error();
+    if (!height) return height.error();
+    if (!qp) return qp.error();
+    if (!flags) return flags.error();
+    if (width.value() == 0 || height.value() == 0 || qp.value() >= 72 || flags.value() > 3) {
+        return Error(ErrorCode::malformed_bitstream, "invalid NVCR P-frame fields",
+                     std::string(subsystem));
+    }
+    return PredictedPayload{width.value(), height.value(), qp.value(),
+                            (flags.value() & 1U) != 0, (flags.value() & 2U) != 0,
+                            payload.subspan(offset)};
+}
+
+Result<CodecEncodeResult> encode_intra(
+    const Frame& frame,
+    std::uint32_t qp,
+    const SequenceStateView& state,
+    DeviceDpb& device_dpb,
+    std::vector<EngineInstance>& engines,
+    RansCodec& rans,
+    const RuntimeAssets& assets,
+    cudaStream_t stream) {
+    if (frame.pixel_format() != PixelFormat::rgb24 &&
+        frame.pixel_format() != PixelFormat::yuv420p8) {
+        return Error(ErrorCode::invalid_argument,
+                     "native I-frame encoding requires RGB24 or YUV420P8",
+                     std::string(subsystem));
+    }
+    if (frame.width() < 64 || frame.height() < 64 || frame.width() > 1920 ||
+        frame.height() > 1080) {
+        return Error(ErrorCode::invalid_argument,
+                     "native I-frame dimensions must be within 64x64 and 1920x1080",
+                     std::string(subsystem));
+    }
+
+    auto input_frame = frame.pixel_format() == PixelFormat::yuv420p8 ?
+        yuv420p8_to_ycbcr(frame) : rgb_to_ycbcr(frame);
+    std::vector<HostTensor> analysis_inputs;
+    analysis_inputs.push_back(std::move(input_frame));
+    analysis_inputs.push_back(make_quant_tensor(assets, true, qp, "q_enc"));
+    auto analysis_outputs = run_host_engine(
+        engines[0], engine_specs[0], analysis_inputs, stream);
+    if (!analysis_outputs) return analysis_outputs.error();
+    auto y_result = take_tensor(analysis_outputs.value(), "y");
+    if (!y_result) return y_result.error();
+    HostTensor y = std::move(y_result.value());
+    const auto y_height = static_cast<std::int32_t>(y.shape.d[2]);
+    const auto y_width = static_cast<std::int32_t>(y.shape.d[3]);
+
+    std::vector<HostTensor> hyper_analysis_inputs;
+    hyper_analysis_inputs.push_back(replicate_pad_host(
+        y, "y_padded", round_up(y_height, 4), round_up(y_width, 4)));
+    auto hyper_analysis_outputs = run_host_engine(
+        engines[1], engine_specs[1], hyper_analysis_inputs, stream);
+    if (!hyper_analysis_outputs) return hyper_analysis_outputs.error();
+    auto z_result = take_tensor(hyper_analysis_outputs.value(), "z");
+    if (!z_result) return z_result.error();
+    HostTensor z = std::move(z_result.value());
+    std::vector<std::int8_t> z_symbols(z.values.size());
+    for (std::size_t index = 0; index < z.values.size(); ++index) {
+        const float value = std::clamp(
+            std::round(to_float(z.values[index])), -128.0F, 127.0F);
+        z.values[index] = to_half(value);
+        z_symbols[index] = static_cast<std::int8_t>(value);
+    }
+    z.name = "z_hat";
+
+    std::vector<HostTensor> hyper_synthesis_inputs;
+    hyper_synthesis_inputs.push_back(z);
+    auto hyper_synthesis_outputs = run_host_engine(
+        engines[2], engine_specs[2], hyper_synthesis_inputs, stream);
+    if (!hyper_synthesis_outputs) return hyper_synthesis_outputs.error();
+    auto params_result = take_tensor(hyper_synthesis_outputs.value(), "params_padded");
+    auto common_result = take_tensor(hyper_synthesis_outputs.value(), "common_padded");
+    if (!params_result) return params_result.error();
+    if (!common_result) return common_result.error();
+    auto params = crop_spatial(params_result.value(), "params", y_height, y_width);
+    auto common = crop_spatial(common_result.value(), "common", y_height, y_width);
+    auto prior = separate_image_prior(params);
+    multiply_broadcast_in_place(y, prior.q_enc);
+
+    std::array<HostTensor, 4> encoded_symbols;
+    std::array<HostTensor, 4> encoded_scales;
+    HostTensor y_hat;
+    HostTensor current_scales = std::move(prior.scales);
+    HostTensor current_means = std::move(prior.means);
+    for (std::int32_t stage = 0; stage < 4; ++stage) {
+        auto mask = make_mask(y, stage);
+        auto processed = process_mask(y, current_scales, current_means, mask);
+        encoded_symbols[static_cast<std::size_t>(stage)] =
+            reduce_quarters(processed.symbols, "symbols");
+        encoded_scales[static_cast<std::size_t>(stage)] =
+            reduce_quarters(processed.scales, "scales");
+        if (stage == 0) {
+            y_hat = std::move(processed.reconstructed);
+        } else {
+            add_in_place(y_hat, processed.reconstructed);
+        }
+        if (stage < 3) {
+            std::vector<HostTensor> spatial_inputs;
+            spatial_inputs.push_back(concat_channels(y_hat, common, "context"));
+            const auto engine_index = static_cast<std::size_t>(3 + stage);
+            auto spatial_outputs = run_host_engine(
+                engines[engine_index], engine_specs[engine_index], spatial_inputs, stream);
+            if (!spatial_outputs) return spatial_outputs.error();
+            auto spatial_result = take_tensor(spatial_outputs.value(), "scales_means");
+            if (!spatial_result) return spatial_result.error();
+            current_scales = slice_channels(spatial_result.value(), "scales", 0, 256);
+            current_means = slice_channels(spatial_result.value(), "means", 256, 256);
+        }
+    }
+    multiply_broadcast_in_place(y_hat, prior.q_dec);
+    y_hat.name = "y_hat";
+
+    std::vector<HostTensor> synthesis_inputs;
+    synthesis_inputs.push_back(y_hat);
+    synthesis_inputs.push_back(make_quant_tensor(assets, false, qp, "q_dec"));
+    auto synthesis_outputs = run_host_engine(
+        engines[6], engine_specs[6], synthesis_inputs, stream);
+    if (!synthesis_outputs) return synthesis_outputs.error();
+    auto reconstructed_result = take_tensor(synthesis_outputs.value(), "frame_hat");
+    if (!reconstructed_result) return reconstructed_result.error();
+    auto reconstructed = ycbcr_to_rgb(
+        reconstructed_result.value(), frame.width(), frame.height(), frame.timestamp());
+    if (!reconstructed) return reconstructed.error();
+
+    const bool two_coders =
+        static_cast<std::uint64_t>(frame.width()) * frame.height() > 1280ULL * 720ULL;
+    rans.reset_encoder();
+    auto mode = rans.set_use_two_coders(two_coders);
+    if (!mode) return mode.error();
+    const auto per_channel = static_cast<std::size_t>(z.shape.d[2] * z.shape.d[3]);
+    auto encoded_z = rans.encode_z(
+        z_symbols, assets.image_z_group, static_cast<std::size_t>(qp) * 128, per_channel);
+    if (!encoded_z) return encoded_z.error();
+    for (std::size_t stage = 0; stage < 4; ++stage) {
+        auto indexes = build_encode_indexes(encoded_symbols[stage], encoded_scales[stage]);
+        auto encoded_y = rans.encode_y(indexes, assets.gaussian_y_group);
+        if (!encoded_y) return encoded_y.error();
+    }
+    auto stream_bytes = rans.finish_encode();
+    if (!stream_bytes) return stream_bytes.error();
+    auto payload = make_intra_payload(
+        frame.width(), frame.height(), qp, two_coders, stream_bytes.value());
+    auto reference_device = upload_tensor(
+        reconstructed_result.value(), "reference_frame", stream);
+    if (!reference_device) return reference_device.error();
+    device_dpb.clear();
+    device_dpb.frame = std::move(reference_device.value());
+    device_dpb.next_frame_index = state.frame_index + 1;
+    device_dpb.generation = state.generation;
+    auto latent_state = serialize_dpb(reconstructed_result.value());
+    return CodecEncodeResult{
+        std::move(payload), std::move(reconstructed.value()), std::move(latent_state)};
+}
+
+Result<CodecDecodeResult> decode_intra(
+    std::span<const std::byte> payload,
+    Timestamp timestamp,
+    const SequenceStateView& state,
+    DeviceDpb& device_dpb,
+    std::vector<EngineInstance>& engines,
+    RansCodec& rans,
+    const RuntimeAssets& assets,
+    cudaStream_t stream) {
+    auto parsed = parse_intra_payload(payload);
+    if (!parsed) return parsed.error();
+    const auto info = parsed.value();
+    const auto padded_height = round_up(static_cast<std::int32_t>(info.height), 16);
+    const auto padded_width = round_up(static_cast<std::int32_t>(info.width), 16);
+    const auto y_height = padded_height / 16;
+    const auto y_width = padded_width / 16;
+    const auto z_height = round_up(y_height, 4) / 4;
+    const auto z_width = round_up(y_width, 4) / 4;
+
+    rans.reset_encoder();
+    auto mode = rans.set_use_two_coders(info.two_coders);
+    if (!mode) return mode.error();
+    auto stream_set = rans.set_stream(info.rans);
+    if (!stream_set) return stream_set.error();
+    const auto per_channel = static_cast<std::size_t>(z_height * z_width);
+    auto z_values = rans.decode_z(
+        128 * per_channel, assets.image_z_group,
+        static_cast<std::size_t>(info.qp) * 128, per_channel);
+    if (!z_values) return z_values.error();
+    HostTensor z{"z_hat", make_dims(128, z_height, z_width),
+                 std::vector<__half>(z_values.value().size())};
+    std::transform(z_values.value().begin(), z_values.value().end(), z.values.begin(),
+                   [](std::int8_t value) { return to_half(static_cast<float>(value)); });
+
+    std::vector<HostTensor> hyper_inputs;
+    hyper_inputs.push_back(std::move(z));
+    auto hyper_outputs = run_host_engine(
+        engines[2], engine_specs[2], hyper_inputs, stream);
+    if (!hyper_outputs) return hyper_outputs.error();
+    auto params_result = take_tensor(hyper_outputs.value(), "params_padded");
+    auto common_result = take_tensor(hyper_outputs.value(), "common_padded");
+    if (!params_result) return params_result.error();
+    if (!common_result) return common_result.error();
+    auto params = crop_spatial(params_result.value(), "params", y_height, y_width);
+    auto common = crop_spatial(common_result.value(), "common", y_height, y_width);
+    auto prior = separate_image_prior(params);
+    HostTensor current_scales = std::move(prior.scales);
+    HostTensor current_means = std::move(prior.means);
+    HostTensor y_hat;
+    for (std::int32_t stage = 0; stage < 4; ++stage) {
+        auto mask = make_mask(current_scales, stage);
+        auto scales = reduce_masked_quarters(current_scales, mask, "scales");
+        auto indexes = build_decode_indexes(scales);
+        auto decoded = rans.decode_y(indexes, assets.gaussian_y_group);
+        if (!decoded) return decoded.error();
+        HostTensor symbols{"symbols", scales.shape,
+                           std::vector<__half>(decoded.value().size())};
+        std::transform(decoded.value().begin(), decoded.value().end(), symbols.values.begin(),
+                       [](std::int8_t value) { return to_half(static_cast<float>(value)); });
+        auto reconstructed = restore_quarters(symbols, current_means, mask);
+        if (stage == 0) {
+            y_hat = std::move(reconstructed);
+        } else {
+            add_in_place(y_hat, reconstructed);
+        }
+        if (stage < 3) {
+            std::vector<HostTensor> spatial_inputs;
+            spatial_inputs.push_back(concat_channels(y_hat, common, "context"));
+            const auto engine_index = static_cast<std::size_t>(3 + stage);
+            auto spatial_outputs = run_host_engine(
+                engines[engine_index], engine_specs[engine_index], spatial_inputs, stream);
+            if (!spatial_outputs) return spatial_outputs.error();
+            auto spatial_result = take_tensor(spatial_outputs.value(), "scales_means");
+            if (!spatial_result) return spatial_result.error();
+            current_scales = slice_channels(spatial_result.value(), "scales", 0, 256);
+            current_means = slice_channels(spatial_result.value(), "means", 256, 256);
+        }
+    }
+    multiply_broadcast_in_place(y_hat, prior.q_dec);
+    y_hat.name = "y_hat";
+    std::vector<HostTensor> synthesis_inputs;
+    synthesis_inputs.push_back(std::move(y_hat));
+    synthesis_inputs.push_back(make_quant_tensor(assets, false, info.qp, "q_dec"));
+    auto synthesis_outputs = run_host_engine(
+        engines[6], engine_specs[6], synthesis_inputs, stream);
+    if (!synthesis_outputs) return synthesis_outputs.error();
+    auto frame_result = take_tensor(synthesis_outputs.value(), "frame_hat");
+    if (!frame_result) return frame_result.error();
+    auto frame = ycbcr_to_rgb(frame_result.value(), info.width, info.height, timestamp);
+    if (!frame) return frame.error();
+    auto reference_device = upload_tensor(frame_result.value(), "reference_frame", stream);
+    if (!reference_device) return reference_device.error();
+    device_dpb.clear();
+    device_dpb.frame = std::move(reference_device.value());
+    device_dpb.next_frame_index = state.frame_index + 1;
+    device_dpb.generation = state.generation;
+    auto latent_state = serialize_dpb(frame_result.value());
+    return CodecDecodeResult{std::move(frame.value()), std::move(latent_state)};
+}
+
+Result<CodecEncodeResult> encode_predicted(
+    const Frame& frame, std::uint32_t base_qp, const SequenceStateView& state,
+    DeviceDpb& device_dpb,
+    std::vector<EngineInstance>& engines, RansCodec& rans,
+    const RuntimeAssets& assets, cudaStream_t stream) {
+    if (frame.pixel_format() != PixelFormat::rgb24 &&
+        frame.pixel_format() != PixelFormat::yuv420p8) {
+        return Error(ErrorCode::invalid_argument, "native P-frame encoding requires RGB24 or YUV420P8",
+                     std::string(subsystem));
+    }
+    if (!device_dpb.matches(state)) {
+        return Error(ErrorCode::invalid_state, "encoder device DPB is unavailable",
+                     std::string(subsystem));
+    }
+    const bool use_frame_reference = !device_dpb.feature || (state.frame_index % 32U) == 1U;
+    const auto qp = video_qp(base_qp, state.frame_index);
+
+    const std::string reference_name = use_frame_reference ? "reference_frame" : "reference_feature";
+    auto* reference_device = use_frame_reference ? &*device_dpb.frame : &*device_dpb.feature;
+    reference_device->name = reference_name;
+    auto q_feature_host = make_video_quant_tensor(assets, "q_feature", qp);
+    auto q_feature_device = upload_tensor(q_feature_host, "q_feature", stream);
+    if (!q_feature_device) return q_feature_device.error();
+    std::array<DeviceTensor*, 2> reference_inputs{
+        reference_device, &q_feature_device.value()};
+    const auto reference_engine = use_frame_reference ? 7U : 8U;
+    auto reference_outputs = run_device_engine(
+        engines[reference_engine], engine_specs[reference_engine], reference_inputs, stream);
+    if (!reference_outputs) return reference_outputs.error();
+    auto context_result = take_device_tensor(reference_outputs.value(), "context");
+    auto temporal_result = take_device_tensor(reference_outputs.value(), "temporal_context");
+    if (!context_result) return context_result.error();
+    if (!temporal_result) return temporal_result.error();
+    auto context = std::move(context_result.value());
+    auto temporal_context = std::move(temporal_result.value());
+
+    auto input_frame_host = rgb_to_ycbcr(frame);
+    auto input_frame = upload_tensor(input_frame_host, "frame", stream);
+    if (!input_frame) return input_frame.error();
+    auto q_encoder_host = make_video_quant_tensor(assets, "q_encoder", qp);
+    auto q_encoder = upload_tensor(q_encoder_host, "q_encoder", stream);
+    if (!q_encoder) return q_encoder.error();
+    std::array<DeviceTensor*, 3> analysis_inputs{
+        &input_frame.value(), &context, &q_encoder.value()};
+    auto analysis_outputs = run_device_engine(
+        engines[9], engine_specs[9], analysis_inputs, stream);
+    if (!analysis_outputs) return analysis_outputs.error();
+    auto y_result = take_device_tensor(analysis_outputs.value(), "y");
+    if (!y_result) return y_result.error();
+    auto y_device = std::move(y_result.value());
+    const auto y_height = static_cast<std::int32_t>(y_device.shape.d[2]);
+    const auto y_width = static_cast<std::int32_t>(y_device.shape.d[3]);
+
+    auto y_padded = allocate_device_tensor(
+        "y_padded", make_dims(128, round_up(y_height, 4), round_up(y_width, 4)));
+    if (!y_padded) return y_padded.error();
+    const cuda_ops::Shape4D y_shape{1, 128, y_height, y_width};
+    const auto padded = cuda_ops::replicate_pad(
+        y_device.storage.data, y_padded.value().storage.data, y_shape,
+        static_cast<std::int32_t>(y_padded.value().shape.d[2]),
+        static_cast<std::int32_t>(y_padded.value().shape.d[3]), stream);
+    if (padded != cudaSuccess) return cuda_error("cuda_ops::replicate_pad", padded);
+    std::array<DeviceTensor*, 1> hyper_inputs{&y_padded.value()};
+    auto hyper_outputs = run_device_engine(
+        engines[10], engine_specs[10], hyper_inputs, stream);
+    if (!hyper_outputs) return hyper_outputs.error();
+    auto z_result = take_device_tensor(hyper_outputs.value(), "z");
+    if (!z_result) return z_result.error();
+    auto z_device = std::move(z_result.value());
+    z_device.name = "z_hat";
+    const auto z_count = element_count(z_device.shape);
+    auto z_symbol_device = allocate_cuda(z_count * sizeof(std::int8_t));
+    if (!z_symbol_device) return z_symbol_device.error();
+    const auto rounded = cuda_ops::round_to_int8(
+        z_device.storage.data, static_cast<std::int8_t*>(z_symbol_device.value().data),
+        z_count, stream);
+    if (rounded != cudaSuccess) return cuda_error("cuda_ops::round_to_int8", rounded);
+
+    std::array<DeviceTensor*, 2> prior_inputs{&z_device, &temporal_context};
+    auto prior_outputs = run_device_engine(
+        engines[11], engine_specs[11], prior_inputs, stream);
+    if (!prior_outputs) return prior_outputs.error();
+    auto params_result = take_device_tensor(prior_outputs.value(), "params");
+    if (!params_result) return params_result.error();
+    auto params_device = std::move(params_result.value());
+
+    const cuda_ops::Shape4D prior_shape{1, 128, y_height, y_width};
+    const auto prior_count = static_cast<std::size_t>(128) * y_height * y_width;
+    auto* params_values = static_cast<__half*>(params_device.storage.data);
+    auto* q_dec_values = params_values;
+    auto* scales_values = params_values + prior_count;
+    auto* means_values = params_values + 2 * prior_count;
+    const auto quantized = cuda_ops::clamp_reciprocal_with_quant(
+        q_dec_values, y_device.storage.data, prior_count, stream);
+    if (quantized != cudaSuccess) {
+        return cuda_error("cuda_ops::clamp_reciprocal_with_quant", quantized);
+    }
+
+    auto mask0 = allocate_device_tensor("mask0", y_device.shape);
+    auto residual0 = allocate_device_tensor("residual0", y_device.shape);
+    auto symbols_full0 = allocate_device_tensor("symbols_full0", y_device.shape);
+    auto y_hat_device = allocate_device_tensor("y_hat", y_device.shape);
+    auto scales_full0 = allocate_device_tensor("scales_full0", y_device.shape);
+    if (!mask0) return mask0.error();
+    if (!residual0) return residual0.error();
+    if (!symbols_full0) return symbols_full0.error();
+    if (!y_hat_device) return y_hat_device.error();
+    if (!scales_full0) return scales_full0.error();
+    auto status = cuda_ops::make_two_way_mask(mask0.value().storage.data, prior_shape, 0, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::make_two_way_mask", status);
+    status = cuda_ops::process_with_mask(
+        y_device.storage.data, scales_values, means_values, mask0.value().storage.data,
+        residual0.value().storage.data, symbols_full0.value().storage.data,
+        y_hat_device.value().storage.data, scales_full0.value().storage.data, prior_count,
+        0.0F, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::process_with_mask", status);
+
+    const auto reduced_shape = make_dims(64, y_height, y_width);
+    auto symbols0 = allocate_device_tensor("symbols0", reduced_shape);
+    auto scales0 = allocate_device_tensor("scales0", reduced_shape);
+    if (!symbols0) return symbols0.error();
+    if (!scales0) return scales0.error();
+    status = cuda_ops::reduce_channel_halves(
+        symbols_full0.value().storage.data, symbols0.value().storage.data, prior_shape, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::reduce_channel_halves", status);
+    status = cuda_ops::reduce_channel_halves(
+        scales_full0.value().storage.data, scales0.value().storage.data, prior_shape, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::reduce_channel_halves", status);
+
+    auto spatial_context = allocate_device_tensor(
+        "context", make_dims(512, y_height, y_width));
+    if (!spatial_context) return spatial_context.error();
+    const auto y_bytes = prior_count * sizeof(__half);
+    const auto params_bytes = 3 * y_bytes;
+    status = cudaMemcpyAsync(spatial_context.value().storage.data,
+                             y_hat_device.value().storage.data, y_bytes,
+                             cudaMemcpyDeviceToDevice, stream);
+    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync spatial y", status);
+    status = cudaMemcpyAsync(static_cast<std::byte*>(spatial_context.value().storage.data) + y_bytes,
+                             params_device.storage.data, params_bytes,
+                             cudaMemcpyDeviceToDevice, stream);
+    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync spatial params", status);
+    std::array<DeviceTensor*, 1> spatial_inputs{&spatial_context.value()};
+    auto spatial_outputs = run_device_engine(
+        engines[12], engine_specs[12], spatial_inputs, stream);
+    if (!spatial_outputs) return spatial_outputs.error();
+    auto spatial_result = take_device_tensor(spatial_outputs.value(), "scales_means");
+    if (!spatial_result) return spatial_result.error();
+    auto spatial_params = std::move(spatial_result.value());
+    auto* spatial_values = static_cast<__half*>(spatial_params.storage.data);
+
+    auto mask1 = allocate_device_tensor("mask1", y_device.shape);
+    auto residual1 = allocate_device_tensor("residual1", y_device.shape);
+    auto symbols_full1 = allocate_device_tensor("symbols_full1", y_device.shape);
+    auto reconstructed1 = allocate_device_tensor("reconstructed1", y_device.shape);
+    auto scales_full1 = allocate_device_tensor("scales_full1", y_device.shape);
+    if (!mask1) return mask1.error();
+    if (!residual1) return residual1.error();
+    if (!symbols_full1) return symbols_full1.error();
+    if (!reconstructed1) return reconstructed1.error();
+    if (!scales_full1) return scales_full1.error();
+    status = cuda_ops::make_two_way_mask(mask1.value().storage.data, prior_shape, 1, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::make_two_way_mask", status);
+    status = cuda_ops::process_with_mask(
+        y_device.storage.data, spatial_values, spatial_values + prior_count,
+        mask1.value().storage.data, residual1.value().storage.data,
+        symbols_full1.value().storage.data, reconstructed1.value().storage.data,
+        scales_full1.value().storage.data, prior_count, 0.0F, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::process_with_mask", status);
+    auto symbols1 = allocate_device_tensor("symbols1", reduced_shape);
+    auto scales1 = allocate_device_tensor("scales1", reduced_shape);
+    if (!symbols1) return symbols1.error();
+    if (!scales1) return scales1.error();
+    status = cuda_ops::reduce_channel_halves(
+        symbols_full1.value().storage.data, symbols1.value().storage.data, prior_shape, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::reduce_channel_halves", status);
+    status = cuda_ops::reduce_channel_halves(
+        scales_full1.value().storage.data, scales1.value().storage.data, prior_shape, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::reduce_channel_halves", status);
+    status = cuda_ops::add_and_multiply(
+        y_hat_device.value().storage.data, reconstructed1.value().storage.data, q_dec_values,
+        prior_count, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::add_and_multiply", status);
+
+    const auto reduced_count = prior_count / 2;
+    auto indexes0_device = allocate_cuda(reduced_count * sizeof(std::int16_t));
+    auto indexes1_device = allocate_cuda(reduced_count * sizeof(std::int16_t));
+    if (!indexes0_device) return indexes0_device.error();
+    if (!indexes1_device) return indexes1_device.error();
+    status = cuda_ops::build_encode_indexes(
+        symbols0.value().storage.data, scales0.value().storage.data,
+        static_cast<std::int16_t*>(indexes0_device.value().data), reduced_count, 0.0F, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::build_encode_indexes", status);
+    status = cuda_ops::build_encode_indexes(
+        symbols1.value().storage.data, scales1.value().storage.data,
+        static_cast<std::int16_t*>(indexes1_device.value().data), reduced_count, 0.0F, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::build_encode_indexes", status);
+    std::vector<std::int8_t> z_symbols(z_count);
+    std::vector<std::int16_t> indexes0(reduced_count);
+    std::vector<std::int16_t> indexes1(reduced_count);
+    status = cudaMemcpyAsync(z_symbols.data(), z_symbol_device.value().data,
+                             z_count * sizeof(std::int8_t), cudaMemcpyDeviceToHost, stream);
+    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync z symbols", status);
+    status = cudaMemcpyAsync(indexes0.data(), indexes0_device.value().data,
+                             reduced_count * sizeof(std::int16_t), cudaMemcpyDeviceToHost, stream);
+    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync indexes0", status);
+    status = cudaMemcpyAsync(indexes1.data(), indexes1_device.value().data,
+                             reduced_count * sizeof(std::int16_t), cudaMemcpyDeviceToHost, stream);
+    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync indexes1", status);
+
+    CudaEvent entropy_ready;
+    status = cudaEventCreateWithFlags(&entropy_ready.data, cudaEventDisableTiming);
+    if (status != cudaSuccess) return cuda_error("cudaEventCreateWithFlags", status);
+    status = cudaEventRecord(entropy_ready.data, stream);
+    if (status != cudaSuccess) return cuda_error("cudaEventRecord entropy", status);
+
+    auto q_decoder_host = make_video_quant_tensor(assets, "q_decoder", qp);
+    auto q_decoder = upload_tensor(q_decoder_host, "q_decoder", stream);
+    if (!q_decoder) return q_decoder.error();
+    auto q_recon_host = make_video_quant_tensor(assets, "q_recon", qp);
+    auto q_recon = upload_tensor(q_recon_host, "q_recon", stream);
+    if (!q_recon) return q_recon.error();
+    std::array<DeviceTensor*, 4> synthesis_inputs{
+        &y_hat_device.value(), &context, &q_decoder.value(), &q_recon.value()};
+    auto synthesis_outputs = run_device_engine(
+        engines[13], engine_specs[13], synthesis_inputs, stream);
+    if (!synthesis_outputs) return synthesis_outputs.error();
+    auto frame_device_result = take_device_tensor(synthesis_outputs.value(), "frame_hat");
+    auto feature_device_result = take_device_tensor(synthesis_outputs.value(), "feature");
+    if (!frame_device_result) return frame_device_result.error();
+    if (!feature_device_result) return feature_device_result.error();
+    auto frame_device = std::move(frame_device_result.value());
+    auto feature_device = std::move(feature_device_result.value());
+    status = cudaEventSynchronize(entropy_ready.data);
+    if (status != cudaSuccess) return cuda_error("cudaEventSynchronize entropy", status);
+
+    const bool two_coders =
+        static_cast<std::uint64_t>(frame.width()) * frame.height() > 1280ULL * 720ULL;
+    rans.reset_encoder();
+    auto mode = rans.set_use_two_coders(two_coders);
+    if (!mode) return mode.error();
+    const auto per_channel = static_cast<std::size_t>(z_device.shape.d[2] * z_device.shape.d[3]);
+    auto encoded_z = rans.encode_z(
+        z_symbols, assets.video_z_group, static_cast<std::size_t>(qp) * 128, per_channel);
+    if (!encoded_z) return encoded_z.error();
+    auto encoded_y0 = rans.encode_y(indexes0, assets.video_gaussian_y_group);
+    if (!encoded_y0) return encoded_y0.error();
+    auto encoded_y1 = rans.encode_y(indexes1, assets.video_gaussian_y_group);
+    if (!encoded_y1) return encoded_y1.error();
+    auto stream_bytes = rans.finish_encode();
+    if (!stream_bytes) return stream_bytes.error();
+    auto payload = make_predicted_payload(
+        frame.width(), frame.height(), qp, two_coders, use_frame_reference, stream_bytes.value());
+
+    std::array<DeviceTensor*, 1> reconstruction_inputs{&frame_device};
+    auto reconstruction = download_tensors(reconstruction_inputs, stream);
+    if (!reconstruction) return reconstruction.error();
+    auto frame_result = take_tensor(reconstruction.value(), "frame_hat");
+    if (!frame_result) return frame_result.error();
+    auto reconstructed = ycbcr_to_rgb(
+        frame_result.value(), frame.width(), frame.height(), frame.timestamp());
+    if (!reconstructed) return reconstructed.error();
+
+    device_dpb.frame = std::move(frame_device);
+    device_dpb.feature = std::move(feature_device);
+    device_dpb.next_frame_index = state.frame_index + 1;
+    device_dpb.generation = state.generation;
+    std::vector<std::byte> latent_state;
+    return CodecEncodeResult{
+        std::move(payload), std::move(reconstructed.value()), std::move(latent_state)};
+}
+
+Result<CodecDecodeResult> decode_predicted(
+    std::span<const std::byte> payload, Timestamp timestamp, const SequenceStateView& state,
+    DeviceDpb& device_dpb,
+    std::vector<EngineInstance>& engines, RansCodec& rans,
+    const RuntimeAssets& assets, cudaStream_t stream) {
+    auto parsed = parse_predicted_payload(payload);
+    if (!parsed) return parsed.error();
+    const auto info = parsed.value();
+    if (!device_dpb.matches(state)) {
+        return Error(ErrorCode::invalid_state, "decoder device DPB is unavailable",
+                     std::string(subsystem));
+    }
+    if (!info.use_frame_reference && !device_dpb.feature) {
+        return Error(ErrorCode::invalid_state, "P-frame feature reference is unavailable",
+                     std::string(subsystem));
+    }
+    auto* reference_device = info.use_frame_reference ? &*device_dpb.frame :
+                                                        &*device_dpb.feature;
+    const std::string reference_name = info.use_frame_reference ?
+        "reference_frame" : "reference_feature";
+    reference_device->name = reference_name;
+    auto q_feature_host = make_video_quant_tensor(assets, "q_feature", info.qp);
+    auto q_feature_device = upload_tensor(q_feature_host, "q_feature", stream);
+    if (!q_feature_device) return q_feature_device.error();
+    std::array<DeviceTensor*, 2> reference_inputs{
+        reference_device, &q_feature_device.value()};
+    const auto reference_engine = info.use_frame_reference ? 7U : 8U;
+    auto reference_outputs = run_device_engine(
+        engines[reference_engine], engine_specs[reference_engine], reference_inputs, stream);
+    if (!reference_outputs) return reference_outputs.error();
+    auto context_result = take_device_tensor(reference_outputs.value(), "context");
+    auto temporal_result = take_device_tensor(reference_outputs.value(), "temporal_context");
+    if (!context_result) return context_result.error();
+    if (!temporal_result) return temporal_result.error();
+    auto context = std::move(context_result.value());
+    auto temporal_context = std::move(temporal_result.value());
+
+    const auto padded_height = round_up(static_cast<std::int32_t>(info.height), 16);
+    const auto padded_width = round_up(static_cast<std::int32_t>(info.width), 16);
+    const auto y_height = padded_height / 16;
+    const auto y_width = padded_width / 16;
+    const auto z_height = round_up(y_height, 4) / 4;
+    const auto z_width = round_up(y_width, 4) / 4;
+    rans.reset_encoder();
+    auto mode = rans.set_use_two_coders(info.two_coders);
+    if (!mode) return mode.error();
+    auto stream_set = rans.set_stream(info.rans);
+    if (!stream_set) return stream_set.error();
+    const auto per_channel = static_cast<std::size_t>(z_height * z_width);
+    auto z_values = rans.decode_z(128 * per_channel, assets.video_z_group,
+        static_cast<std::size_t>(info.qp) * 128, per_channel);
+    if (!z_values) return z_values.error();
+    HostTensor z_host{"z_hat", make_dims(128, z_height, z_width),
+                      std::vector<__half>(z_values.value().size())};
+    std::transform(z_values.value().begin(), z_values.value().end(), z_host.values.begin(),
+                   [](std::int8_t value) { return to_half(static_cast<float>(value)); });
+    auto z_device = upload_tensor(z_host, "z_hat", stream);
+    if (!z_device) return z_device.error();
+    std::array<DeviceTensor*, 2> prior_inputs{&z_device.value(), &temporal_context};
+    auto prior_outputs = run_device_engine(
+        engines[11], engine_specs[11], prior_inputs, stream);
+    if (!prior_outputs) return prior_outputs.error();
+    auto params_device_result = take_device_tensor(prior_outputs.value(), "params");
+    if (!params_device_result) return params_device_result.error();
+    auto params_device = std::move(params_device_result.value());
+    const cuda_ops::Shape4D prior_shape{1, 128, y_height, y_width};
+    const auto prior_count = static_cast<std::size_t>(128) * y_height * y_width;
+    const auto reduced_count = prior_count / 2;
+    const auto reduced_shape = make_dims(64, y_height, y_width);
+    auto* params_values = static_cast<__half*>(params_device.storage.data);
+    auto* q_dec_values = params_values;
+    auto* scales_values = params_values + prior_count;
+    auto* means_values = params_values + 2 * prior_count;
+    auto status = cuda_ops::clamp_min(q_dec_values, prior_count, 0.5F, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::clamp_min", status);
+
+    auto mask0 = allocate_device_tensor("mask0", make_dims(128, y_height, y_width));
+    auto scales0 = allocate_device_tensor("scales0", reduced_shape);
+    if (!mask0) return mask0.error();
+    if (!scales0) return scales0.error();
+    status = cuda_ops::make_two_way_mask(mask0.value().storage.data, prior_shape, 0, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::make_two_way_mask", status);
+    status = cuda_ops::reduce_masked_halves(
+        scales_values, mask0.value().storage.data, scales0.value().storage.data,
+        prior_shape, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::reduce_masked_halves", status);
+    auto indexes0_device = allocate_cuda(reduced_count * sizeof(std::uint8_t));
+    if (!indexes0_device) return indexes0_device.error();
+    status = cuda_ops::build_decode_indexes(
+        scales0.value().storage.data, static_cast<std::uint8_t*>(indexes0_device.value().data),
+        reduced_count, 0.0F, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::build_decode_indexes", status);
+    std::vector<std::uint8_t> indexes0(reduced_count);
+    status = cudaMemcpyAsync(indexes0.data(), indexes0_device.value().data, reduced_count,
+                             cudaMemcpyDeviceToHost, stream);
+    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync indexes0", status);
+    status = cudaStreamSynchronize(stream);
+    if (status != cudaSuccess) return cuda_error("cudaStreamSynchronize indexes0", status);
+    auto decoded0 = rans.decode_y(indexes0, assets.video_gaussian_y_group);
+    if (!decoded0) return decoded0.error();
+    HostTensor symbols0_host{"symbols0", reduced_shape,
+                             std::vector<__half>(decoded0.value().size())};
+    std::transform(decoded0.value().begin(), decoded0.value().end(),
+                   symbols0_host.values.begin(),
+                   [](std::int8_t value) { return to_half(static_cast<float>(value)); });
+    auto symbols0 = upload_tensor(symbols0_host, "symbols0", stream);
+    if (!symbols0) return symbols0.error();
+    auto y_hat_device = allocate_device_tensor("y_hat", make_dims(128, y_height, y_width));
+    if (!y_hat_device) return y_hat_device.error();
+    status = cuda_ops::restore_two_way(
+        symbols0.value().storage.data, means_values, mask0.value().storage.data,
+        y_hat_device.value().storage.data, prior_shape, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::restore_two_way", status);
+
+    auto spatial_context = allocate_device_tensor("context", make_dims(512, y_height, y_width));
+    if (!spatial_context) return spatial_context.error();
+    const auto y_bytes = prior_count * sizeof(__half);
+    const auto params_bytes = 3 * y_bytes;
+    status = cudaMemcpyAsync(spatial_context.value().storage.data,
+                             y_hat_device.value().storage.data, y_bytes,
+                             cudaMemcpyDeviceToDevice, stream);
+    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync spatial y", status);
+    status = cudaMemcpyAsync(static_cast<std::byte*>(spatial_context.value().storage.data) + y_bytes,
+                             params_device.storage.data, params_bytes,
+                             cudaMemcpyDeviceToDevice, stream);
+    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync spatial params", status);
+    std::array<DeviceTensor*, 1> spatial_inputs{&spatial_context.value()};
+    auto spatial_outputs = run_device_engine(
+        engines[12], engine_specs[12], spatial_inputs, stream);
+    if (!spatial_outputs) return spatial_outputs.error();
+    auto spatial_result = take_device_tensor(spatial_outputs.value(), "scales_means");
+    if (!spatial_result) return spatial_result.error();
+    auto spatial_params = std::move(spatial_result.value());
+    auto* spatial_values = static_cast<__half*>(spatial_params.storage.data);
+
+    auto mask1 = allocate_device_tensor("mask1", make_dims(128, y_height, y_width));
+    auto scales1 = allocate_device_tensor("scales1", reduced_shape);
+    if (!mask1) return mask1.error();
+    if (!scales1) return scales1.error();
+    status = cuda_ops::make_two_way_mask(mask1.value().storage.data, prior_shape, 1, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::make_two_way_mask", status);
+    status = cuda_ops::reduce_masked_halves(
+        spatial_values, mask1.value().storage.data, scales1.value().storage.data,
+        prior_shape, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::reduce_masked_halves", status);
+    auto indexes1_device = allocate_cuda(reduced_count * sizeof(std::uint8_t));
+    if (!indexes1_device) return indexes1_device.error();
+    status = cuda_ops::build_decode_indexes(
+        scales1.value().storage.data, static_cast<std::uint8_t*>(indexes1_device.value().data),
+        reduced_count, 0.0F, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::build_decode_indexes", status);
+    std::vector<std::uint8_t> indexes1(reduced_count);
+    status = cudaMemcpyAsync(indexes1.data(), indexes1_device.value().data, reduced_count,
+                             cudaMemcpyDeviceToHost, stream);
+    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync indexes1", status);
+    status = cudaStreamSynchronize(stream);
+    if (status != cudaSuccess) return cuda_error("cudaStreamSynchronize indexes1", status);
+    auto decoded1 = rans.decode_y(indexes1, assets.video_gaussian_y_group);
+    if (!decoded1) return decoded1.error();
+    HostTensor symbols1_host{"symbols1", reduced_shape,
+                             std::vector<__half>(decoded1.value().size())};
+    std::transform(decoded1.value().begin(), decoded1.value().end(),
+                   symbols1_host.values.begin(),
+                   [](std::int8_t value) { return to_half(static_cast<float>(value)); });
+    auto symbols1 = upload_tensor(symbols1_host, "symbols1", stream);
+    if (!symbols1) return symbols1.error();
+    auto reconstructed1 = allocate_device_tensor(
+        "reconstructed1", make_dims(128, y_height, y_width));
+    if (!reconstructed1) return reconstructed1.error();
+    status = cuda_ops::restore_two_way(
+        symbols1.value().storage.data, spatial_values + prior_count,
+        mask1.value().storage.data, reconstructed1.value().storage.data,
+        prior_shape, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::restore_two_way", status);
+    status = cuda_ops::add_and_multiply(
+        y_hat_device.value().storage.data, reconstructed1.value().storage.data,
+        q_dec_values, prior_count, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::add_and_multiply", status);
+
+    auto q_decoder_host = make_video_quant_tensor(assets, "q_decoder", info.qp);
+    auto q_decoder = upload_tensor(q_decoder_host, "q_decoder", stream);
+    if (!q_decoder) return q_decoder.error();
+    auto q_recon_host = make_video_quant_tensor(assets, "q_recon", info.qp);
+    auto q_recon = upload_tensor(q_recon_host, "q_recon", stream);
+    if (!q_recon) return q_recon.error();
+    std::array<DeviceTensor*, 4> synthesis_inputs{
+        &y_hat_device.value(), &context, &q_decoder.value(), &q_recon.value()};
+    auto synthesis_outputs = run_device_engine(
+        engines[13], engine_specs[13], synthesis_inputs, stream);
+    if (!synthesis_outputs) return synthesis_outputs.error();
+    auto frame_device_result = take_device_tensor(synthesis_outputs.value(), "frame_hat");
+    auto feature_device_result = take_device_tensor(synthesis_outputs.value(), "feature");
+    if (!frame_device_result) return frame_device_result.error();
+    if (!feature_device_result) return feature_device_result.error();
+    auto frame_device = std::move(frame_device_result.value());
+    auto feature_device = std::move(feature_device_result.value());
+    std::array<DeviceTensor*, 1> reconstruction_inputs{&frame_device};
+    auto reconstruction = download_tensors(reconstruction_inputs, stream);
+    if (!reconstruction) return reconstruction.error();
+    auto frame_result = take_tensor(reconstruction.value(), "frame_hat");
+    if (!frame_result) return frame_result.error();
+    auto frame = ycbcr_to_rgb(frame_result.value(), info.width, info.height, timestamp);
+    if (!frame) return frame.error();
+    device_dpb.frame = std::move(frame_device);
+    device_dpb.feature = std::move(feature_device);
+    device_dpb.next_frame_index = state.frame_index + 1;
+    device_dpb.generation = state.generation;
+    std::vector<std::byte> latent_state;
+    return CodecDecodeResult{std::move(frame.value()), std::move(latent_state)};
+}
+
+class TensorRTBackend final : public CodecBackend {
+public:
+    ~TensorRTBackend() override {
+        if (stream_ != nullptr) {
+            static_cast<void>(cudaStreamSynchronize(stream_));
+            encoder_dpb_.clear();
+            decoder_dpb_.clear();
+            static_cast<void>(cudaStreamSynchronize(stream_));
+            static_cast<void>(cudaStreamDestroy(stream_));
+            stream_ = nullptr;
+        }
+    }
+
+    Result<void> initialize(const RuntimeConfiguration& configuration) override {
+#ifndef NDEBUG
+        std::clog << "[nvcr.dcvcrt] warning: Debug build; codec timings are not "
+                     "representative. Configure with -DCMAKE_BUILD_TYPE=Release.\n";
+#endif
+        if (initialized_) {
+            return Error(
+                ErrorCode::invalid_state,
+                "TensorRT backend is already initialized",
+                std::string(subsystem));
+        }
+        if (configuration.intra_engine_path.empty()) {
+            return Error(
+                ErrorCode::invalid_argument,
+                "intra_engine_path must name the I-frame plan directory",
+                std::string(subsystem));
+        }
+
+        std::error_code filesystem_error;
+        if (!fs::is_directory(configuration.intra_engine_path, filesystem_error)) {
+            return Error(
+                ErrorCode::dependency_unavailable,
+                "I-frame plan directory is unavailable: " +
+                    configuration.intra_engine_path.string(),
+                std::string(subsystem));
+        }
+
+        const auto device_status = cudaSetDevice(configuration.device_id);
+        if (device_status != cudaSuccess) return cuda_error("cudaSetDevice", device_status);
+
+        try {
+            std::unique_ptr<nvinfer1::IRuntime> runtime(nvinfer1::createInferRuntime(logger_));
+            if (!runtime) return backend_error("failed to create TensorRT runtime");
+
+            RansCodec rans;
+            auto assets = load_runtime_assets(configuration.intra_engine_path, rans);
+            if (!assets) return assets.error();
+
+            std::vector<EngineInstance> engines;
+            engines.reserve(engine_specs.size());
+            for (const auto& specification : engine_specs) {
+                auto loaded = load_engine(
+                    *runtime, configuration.intra_engine_path, specification);
+                if (!loaded) return loaded.error();
+                engines.push_back(std::move(loaded.value()));
+            }
+
+            cudaStream_t stream{};
+            const auto stream_status = cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
+            if (stream_status != cudaSuccess) {
+                return cuda_error("cudaStreamCreateWithFlags", stream_status);
+            }
+            for (std::size_t index = 0; index < engines.size(); ++index) {
+                auto warmed = warm_up_engine(engines[index], engine_specs[index], stream);
+                if (!warmed) {
+                    static_cast<void>(cudaStreamDestroy(stream));
+                    return warmed.error();
+                }
+            }
+
+            runtime_ = std::move(runtime);
+            engines_ = std::move(engines);
+            rans_ = std::move(rans);
+            assets_ = std::move(assets.value());
+            stream_ = stream;
+            intra_qp_ = configuration.intra_qp;
+            initialized_ = true;
+            return {};
+        } catch (const std::exception& exception) {
+            return backend_error(
+                std::string("TensorRT initialization failed: ") + exception.what());
+        } catch (...) {
+            return backend_error("TensorRT initialization failed");
+        }
+    }
+
+    Result<CodecEncodeResult> encode(
+        const Frame& frame,
+        FrameType frame_type,
+        const SequenceStateView& state) override {
+        if (!initialized_) {
+            return Error(
+                ErrorCode::invalid_state,
+                "TensorRT backend is not initialized",
+                std::string(subsystem));
+        }
+        try {
+            CudaAllocationScope allocation_scope(stream_);
+            if (frame_type == FrameType::intra) {
+                return encode_intra(
+                    frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_, stream_);
+            }
+            return encode_predicted(
+                frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_, stream_);
+        } catch (const std::exception& exception) {
+            return backend_error(
+                std::string("native I-frame encoding failed: ") + exception.what());
+        } catch (...) {
+            return backend_error("native I-frame encoding failed");
+        }
+    }
+
+    Result<CodecDecodeResult> decode(
+        std::span<const std::byte> payload,
+        FrameType frame_type,
+        Timestamp timestamp,
+        const SequenceStateView& state) override {
+        if (!initialized_) {
+            return Error(
+                ErrorCode::invalid_state,
+                "TensorRT backend is not initialized",
+                std::string(subsystem));
+        }
+        try {
+            CudaAllocationScope allocation_scope(stream_);
+            if (frame_type == FrameType::intra) {
+                return decode_intra(
+                    payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_, stream_);
+            }
+            return decode_predicted(
+                payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_, stream_);
+        } catch (const std::exception& exception) {
+            return backend_error(
+                std::string("native I-frame decoding failed: ") + exception.what());
+        } catch (...) {
+            return backend_error("native I-frame decoding failed");
+        }
+    }
+
+    Result<void> flush() override {
+        if (!initialized_) {
+            return Error(
+                ErrorCode::invalid_state,
+                "TensorRT backend is not initialized",
+                std::string(subsystem));
+        }
+        const auto status = cudaStreamSynchronize(stream_);
+        if (status != cudaSuccess) return cuda_error("cudaStreamSynchronize", status);
+        return {};
+    }
+
+    void reset() noexcept override {
+        if (stream_ != nullptr) {
+            static_cast<void>(cudaStreamSynchronize(stream_));
+        }
+        encoder_dpb_.clear();
+        decoder_dpb_.clear();
+    }
+
+private:
+    TensorRTLogger logger_;
+    std::unique_ptr<nvinfer1::IRuntime> runtime_;
+    std::vector<EngineInstance> engines_;
+    RansCodec rans_;
+    RuntimeAssets assets_;
+    cudaStream_t stream_{};
+    DeviceDpb encoder_dpb_;
+    DeviceDpb decoder_dpb_;
+    std::uint32_t intra_qp_{};
+    bool initialized_{false};
+};
+
+}  // namespace
+
+Result<std::unique_ptr<CodecBackend>> make_tensorrt_backend() {
+    try {
+        return std::unique_ptr<CodecBackend>(std::make_unique<TensorRTBackend>());
+    } catch (const std::exception& exception) {
+        return backend_error(
+            std::string("failed to allocate TensorRT backend: ") + exception.what());
+    } catch (...) {
+        return backend_error("failed to allocate TensorRT backend");
+    }
+}
+
+}  // namespace nvcr::dcvcrt

@@ -1,0 +1,16 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+if(@spdlog_FOUND@)
+    find_dependency(spdlog 1.11)
+endif()
+
+if(@NVCR_ENABLE_TENSORRT@)
+    find_dependency(CUDAToolkit)
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
+    find_dependency(TensorRT)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/NVCRTargets.cmake")
+check_required_components(NVCR)

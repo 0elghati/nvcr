@@ -1,0 +1,3 @@
+add_executable(nvcr_packet_example packet_roundtrip.cpp)
+target_link_libraries(nvcr_packet_example PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_packet_example)

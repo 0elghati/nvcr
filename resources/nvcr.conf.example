@@ -1,0 +1,12 @@
+# Paths point to artifacts produced from the unmodified DCVC-RT models.
+intra_engine_path=/opt/nvcr/models/dcvcrt
+predicted_engine_path=/opt/nvcr/models/dcvcrt
+entropy_model_path=/opt/nvcr/models/dcvcrt
+device_id=0
+intra_qp=32
+gop_size=32
+memory_pool_bytes=268435456
+max_packet_bytes=67108864
+log_level=info
+enable_profiling=false
+

@@ -1,0 +1,3 @@
+add_executable(nvcr_rans_benchmark rans_benchmark.cpp)
+target_link_libraries(nvcr_rans_benchmark PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_rans_benchmark)
