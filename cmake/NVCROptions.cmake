@@ -20,3 +20,11 @@ set(
     ""
     CACHE PATH
     "Directory containing built DCVC-RT TensorRT plans for integration tests")
+
+set(NVCR_CUDA_ARCH_SET "auto" CACHE STRING
+    "CUDA architecture selection when CMAKE_CUDA_ARCHITECTURES is not set explicitly: \
+'auto' detects this build machine's GPU (fastest build, single-GPU dev/local installs); \
+'portable' builds a redistributable fat binary covering common Jetson and discrete \
+RTX/datacenter GPU architectures (slower build, for release packaging). Pass an explicit \
+-DCMAKE_CUDA_ARCHITECTURES=... to target something else entirely.")
+set_property(CACHE NVCR_CUDA_ARCH_SET PROPERTY STRINGS auto portable)

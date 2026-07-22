@@ -14,6 +14,20 @@ include(NVCROptions)
 include(NVCRDependencies)
 include(NVCRWarnings)
 find_package(Threads REQUIRED)
+
+# CMAKE_CUDA_ARCHITECTURES must be resolved and the CUDA language enabled
+# before any target is created, otherwise targets snapshot an empty
+# CUDA_ARCHITECTURES property. Auto-detect the CUDA compiler and the GPU
+# architecture (Jetson or discrete) here so a plain
+# `cmake -DNVCR_ENABLE_TENSORRT=ON` works without manual -D flags.
+if(NVCR_ENABLE_TENSORRT)
+    include(NVCRAutodetect)
+    nvcr_autodetect_cuda()
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    find_package(TensorRT REQUIRED)
+endif()
+
 add_subdirectory(third_party/dcvc_rans)
 
 
@@ -62,9 +76,6 @@ if(spdlog_FOUND)
 endif()
 
 if(NVCR_ENABLE_TENSORRT)
-    enable_language(CUDA)
-    find_package(CUDAToolkit REQUIRED)
-    find_package(TensorRT REQUIRED)
     target_sources(
         nvcr
         PRIVATE
