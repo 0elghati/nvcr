@@ -1,6 +1,6 @@
 # NVCR — Neural Video Codec Runtime
 
-NVCR is a modern C++20 deployment runtime for learned video codecs. Version 0.1.0 <!-- x-release-please-version -->
+NVCR is a modern C++20 deployment runtime for learned video codecs. Version 0.2.0 <!-- x-release-please-version -->
 targets one codec only: **DCVC-RT**.
 
 ## About
@@ -45,7 +45,7 @@ serve FFmpeg.
 ### Install a published release
 
 ```bash
-export NVCR_VERSION="v0.1.0" # x-release-please-version
+export NVCR_VERSION="v0.2.0" # x-release-please-version
 export NVCR_PLATFORM="linux-x86_64-discrete"   # or linux-x86_64-portable or linux-aarch64-jetson
 export NVCR_PREFIX="$HOME/.local/nvcr"
 

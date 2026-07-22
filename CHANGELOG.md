@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/0elghati/nvrc/compare/v0.1.0...v0.2.0) (2026-07-22)
+
+
+### Features
+
+* document portable binary platform in quick start ([#9](https://github.com/0elghati/nvrc/issues/9)) ([ab1297a](https://github.com/0elghati/nvrc/commit/ab1297a410596797db28ac13ce5bda0826583a30))
+
+
+### Bug Fixes
+
+* add GitHub About section description ([#7](https://github.com/0elghati/nvrc/issues/7)) ([0e7759a](https://github.com/0elghati/nvrc/commit/0e7759abe60568b7050ecc12548b2193449373b3))
+* **ci:** release please fix ([#11](https://github.com/0elghati/nvrc/issues/11)) ([86b0125](https://github.com/0elghati/nvrc/commit/86b01253ca6a28e38165cbcfd54a273496322711))
+
 ## [0.1.0](https://github.com/0elghati/nvrc/compare/v0.1.0...v0.1.0) (2026-07-22)
 
 
