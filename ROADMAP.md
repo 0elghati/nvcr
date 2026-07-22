@@ -696,6 +696,54 @@ Append evidence; never silently replace historical results.
   `RELEASE_PLEASE_TOKEN` if release-created workflows should trigger asset
   publication.
 
+### 2026-07-22 — PR validation CI and multi-architecture release CD
+
+- Fulfills the multi-architecture CI/CD packaging pipeline explicitly deferred
+  in the 2026-07-22 "Split CUDA architecture selection" decision below.
+- Added `.github/workflows/ci.yml`, triggered on every pull request and on
+  pushes to `main`, using only GitHub-hosted runners: `lint` (shell syntax,
+  shellcheck, Python syntax, release-please JSON validation); `build-cpu`, a
+  matrix of `{ubuntu-latest, ubuntu-24.04-arm}` x `{Debug, Release}` with
+  `-DNVCR_ENABLE_TENSORRT=OFF` running the full CTest suite, covering both
+  host CPU architectures NVCR ships for without needing GPU hardware; and
+  `build-cuda-portable`, a best-effort (`continue-on-error: true`)
+  compile-only check that installs the CUDA toolkit and TensorRT development
+  packages on a hosted runner and configures/builds with
+  `-DNVCR_ENABLE_TENSORRT=ON -DNVCR_CUDA_ARCH_SET=portable`, since no GPU is
+  present to run CUDA-executing tests there.
+- Added `scripts/ci/install_cuda_tensorrt.sh`, a shared installer for CUDA
+  toolkit and TensorRT development packages on GitHub-hosted Ubuntu x86_64
+  runners from NVIDIA's public apt repositories, used by both the new CI job
+  and the new release-asset job below.
+- Added a `build-portable` job to `.github/workflows/release-assets.yml` that
+  runs on a GitHub-hosted runner (no self-hosted GPU hardware required) and
+  packages a `linux-x86_64-portable` archive covering every GPU architecture
+  in the portable matrix, alongside the existing self-hosted `build-discrete`
+  and `build-jetson` jobs. The portable archive ships no engine bundle, same
+  as the other platforms.
+- Self-hosted GPU runners (`nvcr-release-discrete`, `nvcr-release-jetson`)
+  remain intentionally excluded from the `pull_request` trigger: wiring them
+  to PR validation would let a fork-opened PR run arbitrary code on that
+  hardware. Real GPU execution stays confined to the release asset workflow
+  and manual maintainer runs.
+- Updated `docs/releasing.md`, `scripts/README.md`, and
+  `docs/install-binary.md` to document the CI gate, the new installer script,
+  and the portable platform tag.
+- Validation: `bash -n scripts/ci/install_cuda_tensorrt.sh`, YAML parse of
+  both workflow files via `python3 -c "import yaml; yaml.safe_load(...)"`.
+  Not yet validated: an actual GitHub Actions run (workflow files have not
+  been pushed/merged yet), and the hosted-runner CUDA/TensorRT apt install
+  steps (no network access to NVIDIA's package repositories in this sandbox).
+- Follow-up: added a `changes` job (`dorny/paths-filter`) to `ci.yml` that
+  gates `build-cpu` and `build-cuda-portable` on whether the push/PR touched
+  any path that can affect the compiled output (CMake files, `src/`,
+  `include/`, `cli/`, `tests/`, `benchmarks/`, `examples/`, `third_party/`,
+  `tools/`, `scripts/`, or the CI workflow itself). Docs-only or
+  README/ROADMAP-only changes now skip both compile jobs instead of paying
+  for a full rebuild; `lint` still always runs. Skipped jobs report as
+  passing (not failing) for branch-protection required-status-check
+  purposes.
+
 ## Decision log
 
 Append decisions with date, rationale, and consequences.

@@ -38,6 +38,16 @@ it is orthogonal to host CPU architecture (x86_64 vs. aarch64 still need
 separate builds) and it does not bundle any TensorRT `.plan` engine files,
 which must always be generated per-target via `prepare_dcvcrt_artifacts.sh`.
 
+## CI CUDA/TensorRT install
+
+`ci/install_cuda_tensorrt.sh` installs the CUDA toolkit and TensorRT
+development packages on a GitHub-hosted Ubuntu x86_64 runner from NVIDIA's
+public apt repositories, for compile-only validation of the TensorRT backend
+where no GPU is present. Used by `.github/workflows/ci.yml` and the portable
+job in `.github/workflows/release-assets.yml`; see
+[docs/releasing.md](../docs/releasing.md) for how it fits into the release
+pipeline.
+
 ## Release packaging
 
 `package_release.sh` turns an installed NVCR prefix, and optionally a prepared
