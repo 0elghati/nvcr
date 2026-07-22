@@ -38,7 +38,7 @@ Pick the profile that matches what you want to run.
 Install from published artifacts:
 
 ```bash
-export NVCR_VERSION="v0.2.1" # x-release-please-version
+export NVCR_VERSION="v0.2.2" # x-release-please-version
 export NVCR_PLATFORM="linux-x86_64-discrete"   # or linux-aarch64-jetson
 export NVCR_PREFIX="$HOME/.local/nvcr"
 

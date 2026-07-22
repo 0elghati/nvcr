@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/0elghati/nvrc/compare/v0.2.1...v0.2.2) (2026-07-22)
+
+
+### Bug Fixes
+
+* **ci:** release binary runtime deps ([#14](https://github.com/0elghati/nvrc/issues/14)) ([c3eec5c](https://github.com/0elghati/nvrc/commit/c3eec5c159f00fb697782e957d9379f7d77790c5))
+
 ## [0.2.1](https://github.com/0elghati/nvrc/compare/v0.2.0...v0.2.1) (2026-07-22)
 
 
