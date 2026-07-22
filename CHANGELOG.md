@@ -3,6 +3,13 @@
 ## [0.1.0](https://github.com/0elghati/nvrc/compare/v0.1.0...v0.1.0) (2026-07-22)
 
 
+### Bug Fixes
+
+* add GitHub About section description ([#7](https://github.com/0elghati/nvrc/issues/7)) ([0e7759a](https://github.com/0elghati/nvrc/commit/0e7759abe60568b7050ecc12548b2193449373b3))
+
+## [0.1.0](https://github.com/0elghati/nvrc/compare/v0.1.0...v0.1.0) (2026-07-22)
+
+
 ### Features
 
 * **build:** auto-detect CUDA/TensorRT toolchain and add portable multi-arch option ([f3d2984](https://github.com/0elghati/nvrc/commit/f3d2984799beeecd1cfc78fd619355fde38985ea))
