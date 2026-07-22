@@ -11,7 +11,9 @@ A third workflow validates every pull request before it can be merged.
 3. Release Please opens or updates a release pull request.
 4. Merge the release pull request.
 5. Release Please creates the tag, updates [CHANGELOG.md](../CHANGELOG.md), and
-   publishes the GitHub Release.
+   publishes the GitHub Release, then explicitly dispatches the release asset
+   workflow for that tag (see "Why release assets are dispatched, not
+   triggered" below).
 6. The release asset workflow builds archives and uploads them to that GitHub
    Release: a portable x86_64 build on a GitHub-hosted runner, plus discrete
    and Jetson builds on self-hosted runners.
@@ -19,7 +21,7 @@ A third workflow validates every pull request before it can be merged.
 ## Continuous integration (pull requests)
 
 [.github/workflows/ci.yml](../.github/workflows/ci.yml) runs on every pull
-request and on pushes to `main`, using only GitHub-hosted runners:
+request, using only GitHub-hosted runners:
 
 - `changes`: uses `dorny/paths-filter` to check whether the push/PR touched
   anything that affects the compiled output (`CMakeLists.txt`, `cmake/`,
@@ -52,6 +54,33 @@ PR that runs arbitrary code on your hardware. Real GPU execution (CUDA ops
 tests, TensorRT engine round-trips) only runs in the release asset workflow or
 manually by a maintainer.
 
+## Why release assets are dispatched, not triggered
+
+[.github/workflows/release-assets.yml](../.github/workflows/release-assets.yml)
+only listens for `workflow_dispatch`, not `on: release`. That is deliberate:
+release-please creates the GitHub Release through the GitHub API using its own
+job's token, and GitHub does not let events created that way (`release:
+published`, `pull_request` opened, etc.) start further workflow runs, to
+prevent recursive automation loops. A repository-wide `RELEASE_PLEASE_TOKEN`
+personal access token would work around that, but adds a credential to
+manage and rotate. Instead,
+[.github/workflows/release-please.yml](../.github/workflows/release-please.yml)
+explicitly calls `gh workflow run release-assets.yml -f tag=<tag>` right after
+creating a release. `workflow_dispatch` is exempted from the
+GITHUB_TOKEN-cascade restriction, so this reliably starts the asset build with
+no extra secret required.
+
+If a release's assets are ever missing (for example, the very first release
+created before this mechanism existed, or a run that failed for another
+reason), rerun it manually. Using the `gh` CLI:
+
+```bash
+gh workflow run release-assets.yml --ref main -f tag=v0.1.0
+```
+
+or from the GitHub UI: Actions -> release-assets -> Run workflow, and enter
+the tag.
+
 ## Repository files
 
 Release automation is defined by:
@@ -69,8 +98,11 @@ Release automation is defined by:
 Set these once in GitHub:
 
 1. Enable GitHub Actions with permission to create and approve pull requests.
-2. Add a `RELEASE_PLEASE_TOKEN` secret if you want release-created workflows to
-   trigger other workflows such as release asset publishing.
+2. Optionally add a `RELEASE_PLEASE_TOKEN` secret (a personal access token or
+   GitHub App installation token) if you also want CI to run automatically on
+   the release-please pull request itself. This is not required for release
+   asset publishing, which uses the `workflow_dispatch` chain described above
+   regardless of which token release-please uses.
 3. Provide self-hosted runners with these labels when you want discrete or
    Jetson binary assets (the portable release build and all CI checks run on
    GitHub-hosted runners and need no setup):

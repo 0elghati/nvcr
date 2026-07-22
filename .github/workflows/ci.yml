@@ -7,10 +7,12 @@ name: ci
 # execution (CUDA ops tests, TensorRT engine round-trips) stays out of PR
 # validation and continues to run only on the self-hosted release pipeline in
 # release-assets.yml, and manually by maintainers as needed.
+# Runs on pull_request only. main only ever changes via a merged, already
+# -validated PR (or a release-please PR, which release-please itself opens
+# and merges), so a second push-triggered run on main would just re-check a
+# commit that already passed CI as part of its PR - pure duplication.
 on:
   pull_request:
-  push:
-    branches: [main]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
