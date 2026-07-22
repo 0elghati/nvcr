@@ -46,7 +46,7 @@ serve FFmpeg.
 
 ```bash
 export NVCR_VERSION="v0.1.0" # x-release-please-version
-export NVCR_PLATFORM="linux-x86_64-discrete"   # or linux-aarch64-jetson
+export NVCR_PLATFORM="linux-x86_64-discrete"   # or linux-x86_64-portable or linux-aarch64-jetson
 export NVCR_PREFIX="$HOME/.local/nvcr"
 
 mkdir -p "$NVCR_PREFIX"
@@ -55,6 +55,9 @@ tar -xzf /tmp/nvcr.tar.gz -C "$NVCR_PREFIX" --strip-components=1
 export PATH="$NVCR_PREFIX/bin:$PATH"
 nvcr --help
 ```
+
+Use `linux-x86_64-portable` when you want one x86_64 build that runs across
+multiple NVIDIA GPU architecture generations.
 
 If a matching engine bundle is published for your platform:
 
