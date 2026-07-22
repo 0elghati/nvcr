@@ -8,6 +8,31 @@ This guide gives two paths:
 For binary-release installation, use
 [Binary Install Guide](install-binary.md).
 
+## Requirements
+
+Pick the profile that matches what you want to run.
+
+### Binary release (recommended for users)
+
+- Linux host: `x86_64` or `aarch64`.
+- NVIDIA driver installed and working (`nvidia-smi` should succeed).
+- CUDA 12 runtime libraries available to the dynamic loader (for example
+  `libcudart.so.12`).
+- TensorRT runtime installed for your target platform.
+- Matching NVCR package tag for your host CPU architecture:
+  `linux-x86_64-discrete`, `linux-x86_64-portable`, or
+  `linux-aarch64-jetson`.
+- Matching engine bundle for your GPU/TensorRT runtime, or the ability to
+  generate engines locally.
+
+### Source build (developer path)
+
+- CMake 3.24 or newer.
+- C++20 compiler.
+- Optional CUDA/TensorRT for GPU backend (`NVCR_ENABLE_TENSORRT=ON`).
+- CPU-only build is possible with `--no-tensorrt` (or
+  `-DNVCR_ENABLE_TENSORRT=OFF`).
+
 ## Fast path
 
 Install from published artifacts:
@@ -35,11 +60,83 @@ tar -xzf /tmp/nvcr-engines.tar.gz -C "$NVCR_PREFIX/engines"
 If no engine bundle exists for your architecture, use
 [DCVC-RT artifact pipeline](dcvcrt-artifacts.md) to build local plans.
 
-## What you need
+### Common install pitfalls
 
-- CMake 3.24 or newer.
-- A C++20 compiler.
-- Optional: CUDA and TensorRT when you want the native DCVC-RT backend.
+These are three separate problems that can appear one after another. Each has
+a different cause and fix; do not treat them as the same issue.
+
+**1. `nvcr: command not found`**
+
+This is the shell telling you it could not find an `nvcr` executable at all,
+before any program ever ran. Two independent causes:
+
+- The archive was extracted, but the file is not marked executable yet:
+
+  ```bash
+  chmod +x /opt/nvcr/bin/nvcr
+  ```
+
+- `/opt/nvcr/bin` is not on `PATH` (add it to your shell startup file, not with
+  `sudo export`, which does not persist in your user shell):
+
+  ```bash
+  echo 'export PATH="/opt/nvcr/bin:$PATH"' >> ~/.bashrc
+  source ~/.bashrc
+  command -v nvcr
+  ```
+
+**2. `error while loading shared libraries: libcudart.so.12: ...`**
+
+This means the binary was found and started executing, but the dynamic linker
+could not resolve the CUDA runtime library. The CUDA runtime library path is
+missing from the loader search path.
+
+Temporary fix for the current shell:
+
+```bash
+if [[ -d /usr/local/cuda/lib64 ]]; then
+  export LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}"
+fi
+if [[ -d /usr/local/cuda/targets/aarch64-linux/lib ]]; then
+  export LD_LIBRARY_PATH="/usr/local/cuda/targets/aarch64-linux/lib:${LD_LIBRARY_PATH:-}"
+fi
+ldd /opt/nvcr/bin/nvcr | grep -E 'libcudart|not found'
+```
+
+Persistent system-wide fix (choose the path that exists on your machine):
+
+```bash
+echo '/usr/local/cuda/lib64' | sudo tee /etc/ld.so.conf.d/cuda.conf
+echo '/usr/local/cuda/targets/aarch64-linux/lib' | sudo tee /etc/ld.so.conf.d/cuda-aarch64.conf
+sudo ldconfig
+ldd /opt/nvcr/bin/nvcr | grep -E 'libcudart|not found'
+```
+
+If `libcudart.so.12` is still unresolved, install or repair your CUDA 12 runtime
+installation first, then re-run `ldconfig`.
+
+**3. `error while loading shared libraries: libnvinfer.so.<N>: ...`**
+
+This means CUDA resolved fine but the TensorRT runtime library is either
+missing or the wrong major version. `libnvinfer.so.<N>` is versioned per
+TensorRT major release (for example `.so.10` for TensorRT 10.x); a binary
+built against one major version cannot load against another, even if both are
+present.
+
+Check what is actually available:
+
+```bash
+ldd /opt/nvcr/bin/nvcr | grep -E 'libnvinfer|not found'
+dpkg -l | grep -i tensorrt
+```
+
+If the required version differs from what dpkg reports, install the matching
+TensorRT major version, or use a binary release built against the version you
+have installed. Release binaries are built against a pinned TensorRT version
+(see [scripts/ci/install_cuda_tensorrt.sh](../scripts/ci/install_cuda_tensorrt.sh));
+if your system has a different major version, generate a local build instead
+via `./scripts/install.sh --run-tests` (which auto-detects your installed
+TensorRT), rather than relying on the published archive.
 
 ## Build from source (developer path)
 
