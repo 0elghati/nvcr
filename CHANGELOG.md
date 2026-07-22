@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/0elghati/nvrc/compare/v0.2.0...v0.2.1) (2026-07-22)
+
+
+### Bug Fixes
+
+* **ci:** Pass repository path to fix release please issue ([#12](https://github.com/0elghati/nvrc/issues/12)) ([9c6d135](https://github.com/0elghati/nvrc/commit/9c6d13522d7949b86d158c02f68899d77e944910))
+
 ## [0.2.0](https://github.com/0elghati/nvrc/compare/v0.1.0...v0.2.0) (2026-07-22)
 
 
