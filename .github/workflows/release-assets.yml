@@ -1,9 +1,11 @@
 name: release-assets
 
+# Triggered by release-please.yml via `gh workflow run` right after it
+# publishes a GitHub Release (not by an `on: release` trigger: GitHub does
+# not let events created by a workflow's own GITHUB_TOKEN, such as the
+# release it just published, start further workflow runs). Also runnable
+# directly for manual/backfill releases.
 on:
-  release:
-    types:
-      - published
   workflow_dispatch:
     inputs:
       tag:
@@ -33,10 +35,10 @@ jobs:
     # not run CUDA-executing tests (no GPU on the runner) and does not ship
     # an engine bundle: users still need a per-GPU TensorRT plan, either
     # from a matching engine bundle or built locally (docs/dcvcrt-artifacts.md).
-    if: ${{ vars.NVCR_RELEASE_PORTABLE != 'false' && (github.event_name == 'release' || inputs.publish_portable) }}
+    if: ${{ vars.NVCR_RELEASE_PORTABLE != 'false' && inputs.publish_portable }}
     runs-on: ubuntu-latest
     env:
-      NVCR_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+      NVCR_TAG: ${{ inputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -66,12 +68,12 @@ jobs:
           gh release upload "$NVCR_TAG" "$RUNNER_TEMP"/nvcr-dist/* --clobber
 
   build-discrete:
-    if: ${{ vars.NVCR_RELEASE_DISCRETE == 'true' && (github.event_name == 'release' || inputs.publish_discrete) }}
+    if: ${{ vars.NVCR_RELEASE_DISCRETE == 'true' && inputs.publish_discrete }}
     runs-on:
       - self-hosted
       - nvcr-release-discrete
     env:
-      NVCR_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+      NVCR_TAG: ${{ inputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -114,12 +116,12 @@ jobs:
           gh release upload "$NVCR_TAG" "$RUNNER_TEMP"/nvcr-dist/* --clobber
 
   build-jetson:
-    if: ${{ vars.NVCR_RELEASE_JETSON == 'true' && (github.event_name == 'release' || inputs.publish_jetson) }}
+    if: ${{ vars.NVCR_RELEASE_JETSON == 'true' && inputs.publish_jetson }}
     runs-on:
       - self-hosted
       - nvcr-release-jetson
     env:
-      NVCR_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+      NVCR_TAG: ${{ inputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
