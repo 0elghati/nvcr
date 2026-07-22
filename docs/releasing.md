@@ -69,6 +69,11 @@ When the release pull request is merged:
 - a `vX.Y.Z` tag is created;
 - a GitHub Release is published.
 
+The current configuration uses a one-time `release-as: 0.1.0` bootstrap to cut
+the first tagged release from the existing history. Remove that override after
+the first release PR is merged so later releases return to normal
+conventional-commit versioning.
+
 ### Upload binary and engine assets
 
 The asset workflow runs automatically on `release.published`. It can also be
