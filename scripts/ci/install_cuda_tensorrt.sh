@@ -42,14 +42,25 @@ sudo dpkg -i "/tmp/${keyring_deb}"
 sudo apt-get update
 
 # CUDA toolkit provides nvcc; TensorRT dev packages provide headers/libs used
-# to configure and compile (not execute) the TensorRT backend. Pin the exact
-# TensorRT version so the compiled ABI (libnvinfer.so.<N>) matches what
-# release consumers actually have installed.
+# to configure and compile (not execute) the TensorRT backend. Pin every
+# TensorRT package explicitly, including transitive runtime/header
+# dependencies: the NVIDIA apt repo now serves multiple CUDA major suites
+# (12.6, 13.2, 13.3, ...) side by side, and apt resolves any dependency left
+# unpinned (libnvinfer-headers-dev, libnvinfer10, libnvinfer-headers-plugin-dev,
+# libnvinfer-plugin10, libnvonnxparsers10) to its newest candidate. That
+# breaks the exact-version depends of the pinned top-level dev packages
+# ("Depends: libnvinfer10 (= X) but Y is to be installed") and would
+# otherwise silently mix TensorRT major versions across one install.
 sudo apt-get install -y --no-install-recommends \
     "$cuda_toolkit_package" \
     "libnvinfer-dev=${tensorrt_package_version}" \
+    "libnvinfer-headers-dev=${tensorrt_package_version}" \
+    "libnvinfer10=${tensorrt_package_version}" \
     "libnvinfer-plugin-dev=${tensorrt_package_version}" \
-    "libnvonnxparsers-dev=${tensorrt_package_version}"
+    "libnvinfer-headers-plugin-dev=${tensorrt_package_version}" \
+    "libnvinfer-plugin10=${tensorrt_package_version}" \
+    "libnvonnxparsers-dev=${tensorrt_package_version}" \
+    "libnvonnxparsers10=${tensorrt_package_version}"
 
 cuda_root="$(compgen -G '/usr/local/cuda-*' | sort -V | tail -n1)"
 if [[ -z "$cuda_root" ]]; then
