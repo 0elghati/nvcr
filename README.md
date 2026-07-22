@@ -199,7 +199,7 @@ example:
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release --parallel
 cmake --install build-release --prefix /opt/nvcr
-sudo export PATH="/opt/nvcr/bin:$PATH"
+export PATH="/opt/nvcr/bin:$PATH"
 ```
 
 ```bash
