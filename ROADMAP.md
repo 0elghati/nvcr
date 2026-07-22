@@ -36,10 +36,17 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: add CUDA-event stage timing and allocation/transfer counters,
-then replace `run_host_engine` with reusable device-bound execution for both I-
-and P-frame graphs. Normal I/P encoding works, but remains performance-incomplete
-until intermediate tensors and the DPB stay GPU-resident.
+Current next action: replace the temporary low-memory workaround (per-engine
+context creation plus per-engine stream synchronization) with a bounded CUDA
+arena and reusable TensorRT device-address binding, then move input YUV
+conversion onto the GPU. Normal I/P encoding works, but remains
+performance-incomplete until steady-state allocations and host staging are
+removed. Use the Jetson energy harness to capture encode and decode
+joules/frame before and after each Orin performance change.
+
+Deployment next action: regenerate engine directories so they include
+`engine_manifest.json`, then validate that mismatched GPU/TensorRT bundles fail
+during initialization on both RTX 4070 and Orin-class targets.
 
 ## M0 — Baseline and entropy
 
@@ -63,8 +70,8 @@ State: **Active**
 
 Measurement:
 
-- [ ] Add per-stage CPU and CUDA-event timing.
-- [ ] Count per-frame allocations, transfers, bytes, and synchronizations.
+- [x] Add per-stage CPU and CUDA-event timing.
+- [x] Count per-frame allocations, transfers, bytes, and synchronizations.
 - [ ] Add warmed QCIF, 720p, and 1080p benchmarks with machine-readable output.
 
 Device execution:
@@ -121,7 +128,7 @@ State: **Active**
 
 - [x] Export and validate all seven P-frame TensorRT engines.
 - [x] Implement temporal context, residual prior, entropy, and reconstruction stages.
-- [ ] Keep DPB and latent references GPU-resident.
+- [x] Keep DPB and latent references GPU-resident.
 - [x] Implement QP shifts, feature adaptation, reset intervals, and GOP rules.
 - [ ] Implement deterministic drain, flush, reset, and seek recovery.
 
@@ -280,6 +287,378 @@ Append evidence; never silently replace historical results.
 - Remaining gates: CUDA spatial prior/index operations, device-resident DPB,
   allocation arena, I-frame device chain, and same-protocol Python decode evidence.
 
+### 2026-07-07 — Orin Nano TensorRT build bring-up
+
+- Hardware/software: Jetson Orin Nano, L4T 36.4.7, CUDA toolkit 12.6.68,
+  TensorRT 10.3.0.30.
+- Installed local CMake 3.29.8 under `.tools/` because Ubuntu Jammy provides
+  CMake 3.22.1 and the project requires 3.24 or newer.
+- Configured Release TensorRT build with explicit CUDA compiler and Orin
+  architecture:
+  `-DNVCR_ENABLE_TENSORRT=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.6/bin/nvcc
+  -DCUDAToolkit_ROOT=/usr/local/cuda-12.6 -DCMAKE_CUDA_ARCHITECTURES=87
+  -DTensorRT_ROOT=/usr`.
+- Built `libnvcr`, the `nvcr` CLI, CUDA ops tests, and TensorRT test targets in
+  `build-orin-release`; installed to `install-orin`.
+- Verification: sandboxed CTest passed CPU/rANS/CLI tests but could not open
+  Jetson GPU memory management. Re-running with direct device access passed all
+  four configured tests: `nvcr_smoke_tests`, `nvcr_rans_conformance`,
+  `nvcr_cli_accepts_inter_gop`, and `nvcr_cuda_ops`.
+- Runtime artifact blocker: no DCVC-RT ONNX files, entropy/quant assets, or
+  TensorRT plans were present. Upstream DCVC was cloned to the expected path, but
+  the recorded reference commit was not reachable from the current upstream clone,
+  and this machine lacks the Python export stack (`torch`, `onnx`, `onnxscript`)
+  plus the two pretrained checkpoints needed to generate engines.
+
+### 2026-07-07 — Checkpoint-to-engine artifact pipeline
+
+- Added `scripts/prepare_dcvcrt_artifacts.sh` as the end-user pipeline from the
+  public Microsoft DCVC checkout and `cvpr2025_*.pth.tar` checkpoints to
+  exported ONNX/runtime assets and target-local TensorRT plans.
+- Added `docs/dcvcrt-artifacts.md` with local and remote upstream paths,
+  checkpoint URLs, expected checkpoint hashes, Orin-local engine generation, and
+  direct `nvcr encode`/`decode` examples.
+- Updated README, Getting Started, CLI, scripts, and integration docs to separate
+  portable ONNX/assets from non-portable TensorRT `.plan` files and to document
+  the platform-tag mismatch recovery path.
+- Verification: `bash -n scripts/prepare_dcvcrt_artifacts.sh` passed and
+  `./scripts/prepare_dcvcrt_artifacts.sh --help` printed the expected options.
+- Remaining gate: actual ONNX export and engine generation still require the two
+  Microsoft checkpoint files and a Python environment with `torch`, `onnx`, and
+  `onnxscript`.
+
+### 2026-07-08 — Orin Nano local install verification
+
+- Configured a fresh Release TensorRT build in `build-orin-install` with
+  `-DNVCR_ENABLE_TENSORRT=ON`,
+  `-DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc`, and
+  `-DCMAKE_CUDA_ARCHITECTURES=87`.
+- Built `libnvcr`, `nvcr`, examples, CUDA ops tests, and TensorRT test targets.
+- Installed successfully to the local prefix `install-orin`; installed artifacts
+  include `bin/nvcr`, `lib/libnvcr.a`, public headers, and CMake package files
+  under `lib/cmake/NVCR`.
+- Verified `install-orin/bin/nvcr --help` runs from the installed prefix.
+- CTest evidence in the current sandbox: `nvcr_smoke_tests`,
+  `nvcr_rans_conformance`, and `nvcr_cli_accepts_inter_gop` passed;
+  `nvcr_cuda_ops` failed with `NvRmMemInitNvmap failed` because `/dev/nvmap` and
+  `/dev/nvhost-*` are not visible. This is a device-access limitation of the
+  current environment, not an install layout failure.
+- Documentation updated with the Jetson Orin Nano configure/install command,
+  local-prefix option, and CUDA device-node verification caveat.
+
+### 2026-07-08 — Orin Nano 1080p TensorRT engine generation
+
+- Confirmed copied `build/engines/dcvcrt-1080p` plans were not suitable evidence
+  for the current Orin runtime because TensorRT `.plan` files are target-specific.
+- Host memory before the successful build: 7.4 GiB total, about 5.6 GiB
+  available, swap mostly unused. The largest user processes were VS Code server
+  components; no heavyweight Python/export process needed to be stopped.
+- Initial 1080p TensorRT build with the default 2048 MiB workspace and builder
+  optimization level 3 hit Orin GPU/shared allocation pressure during tactic
+  search.
+- Added `--workspace-mib` and `--builder-optimization-level` knobs to
+  `prepare_dcvcrt_artifacts.sh` and `build_dcvcrt_tensorrt.sh`.
+- Generated all fourteen target-local 1080p Orin plans in
+  `build/engines/dcvcrt-1080p-orin` using:
+  `CUDA_MODULE_LOADING=LAZY ./scripts/prepare_dcvcrt_artifacts.sh --skip-clone
+  --skip-export --models build/models/dcvcrt --engines
+  build/engines/dcvcrt-1080p-orin --trtexec /usr/src/tensorrt/bin/trtexec
+  --optimization-point 1080p --workspace-mib 512
+  --builder-optimization-level 1 --skip-smoke`.
+- `sha256sum -c build/engines/dcvcrt-1080p-orin/engine.sha256` passed for all
+  fourteen plans.
+- `./build-orin-install/tests/nvcr_tensorrt_engine_tests
+  build/engines/dcvcrt-1080p-orin` passed.
+- `./build-orin-install/tests/nvcr_tensorrt_roundtrip_tests
+  build/engines/dcvcrt-1080p-orin` passed:
+  native DCVC-RT I/P round trip at 176x144, 165-byte payload.
+- Documentation updated with the tested low-memory Orin Nano 1080p engine
+  generation flags.
+
+### 2026-07-08 — TensorRT engine bundle compatibility guard
+
+- Trigger: observed RTX 4070 P-frame encode latency around 49-50 ms and confirmed
+  that reusing TensorRT `.plan` files across GPU models can deserialize with
+  warnings or performance loss instead of a clear NVCR-owned failure.
+- Added `scripts/write_tensorrt_engine_manifest.py` and updated
+  `scripts/build_dcvcrt_tensorrt.sh` to stamp each engine directory with
+  `engine_manifest.json` containing TensorRT version, precision, optimization
+  point, workspace, builder optimization level, GPU name, compute capability, and
+  multiprocessor count.
+- Added `--device-id` propagation to `prepare_dcvcrt_artifacts.sh` and passed the
+  same device to `trtexec` build and smoke commands.
+- Updated `TensorRTBackend::initialize` to require `engine_manifest.json` and to
+  reject bundles whose TensorRT version or selected CUDA device metadata differs
+  before deserializing any plan.
+- Updated README, Getting Started, CLI, scripts, artifact, and integration docs
+  to describe the new manifest requirement and rebuild rule.
+- Verification: `python3 -m py_compile scripts/write_tensorrt_engine_manifest.py`,
+  `bash -n scripts/build_dcvcrt_tensorrt.sh`, and
+  `bash -n scripts/prepare_dcvcrt_artifacts.sh` passed.
+- Verification: `cmake --build build-release --parallel` passed; existing
+  TensorRT backend unused-function warnings remain.
+- Verification: direct `build-release/tests/nvcr_tests`,
+  `build-release/tests/nvcr_rans_conformance_tests`, and
+  `build-release/cli/nvcr --help` passed. Full CTest could not run because no
+  `ctest` binary is installed in the environment.
+- Remaining gate: repeat manifest validation and encode/round-trip tests on the
+  RTX 4070 engine bundle before considering the cross-device guard complete
+  across the supported target set.
+
+### 2026-07-08 — Rebuilt Orin engines after manifest-only recovery failed
+
+- User reproduction: `nvcr encode -i BasketballDrive_1920x1080_50.yuv
+  -o /tmp/basketball.nvcr -s 1920x1080 -r 50 --frames 97 --gop-size 97
+  --qp 32 --engine-dir build/engines/dcvcrt-1080p-orin` failed during
+  initialization because `engine_manifest.json` was missing.
+- A manifest-only stamp allowed initialization but TensorRT still printed the
+  cross-device plan warning for all fourteen engines, and encode failed with
+  `cudaMallocAsync failed: out of memory`. Conclusion: the directory needed a
+  true target-local rebuild, not a metadata stamp.
+- Added `--stamp-only` recovery support to `build_dcvcrt_tensorrt.sh`, then
+  hardened it so stamp-only validation rejects directories when TensorRT reports
+  the cross-device plan warning.
+- Rebuilt all fourteen 1080p Orin plans in
+  `build/engines/dcvcrt-1080p-orin` with:
+  `./scripts/prepare_dcvcrt_artifacts.sh --skip-clone --skip-export --models
+  build/models/dcvcrt --engines build/engines/dcvcrt-1080p-orin --trtexec
+  /usr/src/tensorrt/bin/trtexec --optimization-point 1080p --workspace-mib 512
+  --builder-optimization-level 1 --device-id 0 --python python3 --skip-smoke`.
+- Verification: `sha256sum -c build/engines/dcvcrt-1080p-orin/engine.sha256`
+  passed for all fourteen plans.
+- Verification: hardened stamp-only check passed:
+  `./scripts/build_dcvcrt_tensorrt.sh --stamp-only --engines
+  build/engines/dcvcrt-1080p-orin --trtexec /usr/src/tensorrt/bin/trtexec
+  --optimization-point 1080p --workspace-mib 512 --builder-optimization-level 1
+  --device-id 0 --python python3`.
+- Verification: `./build-release/cli/nvcr encode ... --frames 97 --gop-size 97
+  --engine-dir build/engines/dcvcrt-1080p-orin` completed without TensorRT
+  cross-device warnings; output `/tmp/basketball.nvcr`, 97 frames, 339046
+  payload bytes, codec time 23.540 s, 4.121 fps.
+
+### 2026-07-08 — P-frame profiling and GPU-only encode DPB reference
+
+- Added CLI `--profile` and TensorRT backend per-frame profiling for CPU stages,
+  CUDA-event engine timings, allocation counts/bytes, transfer counts/bytes, and
+  stream synchronization counts.
+- Profiled `BasketballDrive_1920x1080_50.yuv`, 97-frame GOP, QP 32, target-local
+  Orin engine bundle. Before the encode-side P reconstruction removal, steady
+  P-frames allocated 32 buffers / 125535616 bytes, copied 12535936 bytes H2D,
+  14688000 bytes D2H, 8355840 bytes D2D, and synchronized once per frame.
+- Diagnosis: steady P-frame host stages included about 44-56 ms input color
+  conversion and about 112-117 ms reconstruction download/RGB conversion; CUDA
+  engine time was dominated by `p_reference_feature.plan` around 49-56 ms and
+  `p_synthesis.plan` around 78-82 ms.
+- Removed the encode-side P-frame reconstruction download/conversion. The device
+  DPB remains updated from TensorRT outputs, while sequence state now permits a
+  predicted commit with an empty host reference after an intra reference exists.
+- After removal, the same profile showed P-frame D2H reduced to 3 copies /
+  2154240 bytes and per-frame synchronizations reduced to zero.
+- Verification: `cmake --build build-release --parallel` passed.
+- Verification: `./build-release/tests/nvcr_tests` passed.
+- Verification: `./build-release/tests/nvcr_cuda_ops_tests` passed when run with
+  CUDA device access; the sandboxed run failed before kernels with NVIDIA memory
+  manager initialization unavailable.
+- Verification: `./build-release/cli/nvcr encode -i
+  /home/oelghati/datasets/hd/BasketballDrive_1920x1080_50.yuv -o
+  /tmp/basketball.nvcr -s 1920x1080 -r 50 --frames 97 --gop-size 97 --qp 32
+  --engine-dir build/engines/dcvcrt-1080p-orin` completed: 97 frames, 339046
+  payload bytes, codec time 18.293 s, 5.303 fps. Steady P-frames were mostly
+  176-180 ms; approximate P-frame average after the I-frame was 178.2 ms.
+
+### 2026-07-08 — Orin OOM mitigation for 1080p GOP encode
+
+- User reproduction on Orin: 1080p GOP encode failed with
+  `cudaMallocAsync failed: out of memory` and NVMap allocation errors.
+- Added allocator resilience in `tensorrt_backend.cpp`: when stream-ordered
+  `cudaMallocAsync` returns OOM, synchronize and retry, then fall back to
+  `cudaMalloc` for that allocation if needed.
+- Reduced TensorRT context residency by removing persistent
+  `IExecutionContext` storage from loaded engines; contexts are now created at
+  warm-up/invocation boundaries.
+- Added explicit device-engine stream synchronization before returning from
+  `run_device_engine` to bound in-flight context/device-memory lifetime.
+- Verification: `cmake --build build-orin-release --target nvcr --parallel`
+  passed.
+- Verification: `./build-orin-release/cli/nvcr encode -i
+  /home/oelghati/datasets/hd/BasketballDrive_1920x1080_50.yuv -o
+  /tmp/basketball.nvcr -s 1920x1080 -r 50 --frames 97 --gop-size 97 --qp 32
+  --engine-dir build/engines/dcvcrt-1080p-orin` completed: 97 frames, 339046
+  payload bytes, codec time 23.333 s, 4.157 fps.
+- Consequence: stability improved on constrained Orin memory, but latency
+  regressed due to per-engine synchronization/context churn; this remains a
+  temporary bridge until bounded reusable device memory/address binding lands.
+
+### 2026-07-08 — Adaptive TensorRT mode for speed vs memory headroom
+
+- Added adaptive TensorRT execution mode selection in
+  `tensorrt_backend.cpp`:
+  default `low-memory` on GPUs with <= 12 GiB VRAM, `performance` on larger
+  GPUs.
+- Added `NVCR_TENSORRT_LOW_MEMORY_MODE` environment override with accepted
+  values `0/1`, `true/false`, and `on/off`.
+- In `low-memory` mode, execution contexts are short-lived and device-engine
+  execution synchronizes per stage to reduce in-flight memory pressure.
+- In `performance` mode, per-engine execution contexts are cached and reused,
+  and the per-stage synchronization is skipped to recover throughput.
+- Verification on Orin 1080p GOP-97, QP 32, 20-frame run:
+  low-memory mode 2.256 fps, performance mode 4.354 fps.
+- Verification on Orin 1080p GOP-97, QP 32, 97-frame run:
+  performance mode completed successfully with 339046 payload bytes,
+  codec time 18.416 s, 5.267 fps.
+
+### 2026-07-08 — P-path host-staging trim (quant cache + pinned entropy buffers)
+
+- Added persistent device-side video quant cache for all QP values and all four
+  P-path quant tensors (`q_encoder`, `q_decoder`, `q_feature`, `q_recon`) to
+  remove per-frame host tensor creation and H2D uploads in predicted encode and
+  decode.
+- Added reusable pinned host buffers for predicted encode entropy staging
+  (`z_symbols`, `indexes0`, `indexes1`) and switched rANS encode calls to
+  consume `std::span` views directly from those buffers.
+- Verification: `cmake --build build-orin-release --target nvcr_cli --parallel`
+  passed.
+- Verification on Orin, performance mode, 1080p GOP-97, QP 32:
+  20-frame run completed at 4.389 fps (codec time 4.557 s), with steady
+  P-frames mostly around 175-179 ms.
+- Verification on Orin, performance mode, 1080p GOP-97, QP 32:
+  97-frame run completed at 5.322 fps (codec time 18.227 s), with steady
+  P-frames mostly around 176-179 ms.
+- Follow-up: improvements are incremental; to materially beat the current
+  ~176-179 ms steady P-frame band, the next larger step is full GPU input color
+  conversion and wider per-frame temporary tensor reuse/arena work under M1.
+
+### 2026-07-08 — GPU-native predicted input color conversion
+
+- Added CUDA kernels in `cuda_ops` to convert RGB24 and YUV420P8 input bytes
+  directly into padded FP16 YCbCr tensors:
+  `rgb24_to_ycbcr_padded` and `yuv420p8_to_ycbcr_padded`.
+- Switched predicted encode input path to GPU-native conversion before
+  `p_analysis` by uploading raw frame bytes once and launching the new kernels,
+  removing the per-frame CPU `rgb_to_ycbcr` / `yuv420p8_to_ycbcr` loop for
+  predicted frames.
+- Verification: `cmake --build build-orin-release --target nvcr_cli --parallel`
+  passed.
+- Verification on Orin, performance mode, 1080p GOP-97, QP 32:
+  20-frame run completed at 4.477 fps (codec time 4.467 s), with early P-frames
+  around 167-176 ms.
+- Verification on Orin, performance mode, 1080p GOP-97, QP 32:
+  97-frame run completed at 5.403 fps (codec time 17.954 s), with steady
+  P-frames mostly around 174-177 ms and occasional lower/high outliers.
+
+### 2026-07-08 — Jetson energy profiling harness
+
+- Added `scripts/profile_energy.py` to wrap encode/decode commands with
+  `tegrastats` rail sampling, idle baseline measurement, raw board energy,
+  idle-subtracted energy, joules/frame, wall fps, JSON output, and raw log
+  capture.
+- Updated `docs/performance.md` and `scripts/README.md` with the Orin energy
+  protocol. The preferred first-pass rail is `VDD_IN` when present.
+- Current interpretation guidance: a reported 240 ms/frame decode on Orin is
+  plausible for the present performance-incomplete native path, especially if
+  measured as a full CLI decode with reconstruction download, RGB-to-YUV output
+  conversion, file I/O, and any low-memory TensorRT context churn. It is not a
+  parity target; same-protocol Python decode and per-frame profile evidence are
+  still required.
+- Verification: `python3 -m py_compile scripts/profile_energy.py`,
+  `./scripts/profile_energy.py --help`, and a short `/bin/sleep` wrapper smoke
+  test passed on Orin, parsing `VDD_IN`.
+- Encode energy capture attempt, 1080p BasketballDrive GOP-97 QP 32, failed in
+  both performance and low-memory mode before frame 0 with NVMap/TensorRT OOM.
+  Concurrent `tegrastats` showed `RAM 3190/7620MB (lfb 14x4MB)`, so the blocker
+  is contiguous NVMap/GPU allocation pressure, not useful encode-energy data.
+- Decode energy capture completed in low-memory mode using `/tmp/basketball.nvcr`
+  and `build/engines/dcvcrt-1080p-orin`: 97 frames, codec time 32.509 s
+  (2.984 fps), wall time 34.945 s (2.776 fps), `VDD_IN` active energy
+  436.992 J, idle-adjusted energy 304.432 J, active 4.505 J/frame,
+  idle-adjusted 3.138 J/frame.
+- Decode post-warmup timing from frames 10-96 in that run: 87 frames averaged
+  327.451 ms/frame, min 277.840 ms, max 346.580 ms. This is slower than the
+  user's 240 ms/frame report and reinforces that low-memory context churn and
+  host/output staging remain performance blockers.
+- Next action: repeat encode energy after restoring contiguous NVMap headroom
+  (usually a reboot or stopping the processes that fragmented GPU memory), and
+  repeat decode in performance mode when it can initialize without OOM.
+
+### 2026-07-22 — Generalized build automation beyond Orin (device/arch auto-detect, one-command install, auto-tuned artifact pipeline)
+
+- Trigger: user reprioritization outside the active M1/M3 milestones, per
+  AGENTS.md §6 ("If requested work conflicts with the roadmap, explain the
+  conflict and update the roadmap only after the user chooses the new
+  priority"): the prior Orin bring-up left CUDA/TensorRT configure flags
+  (`CMAKE_CUDA_COMPILER`, `CMAKE_CUDA_ARCHITECTURES=87`, `TensorRT_ROOT`) and
+  artifact-pipeline tuning flags (`--workspace-mib 512`,
+  `--builder-optimization-level 1`, `--device-id 0`) hardcoded per the single
+  verified Orin Nano. The user asked for this to generalize to "linux machine
+  with RTX or any other GPU" and to anticipate (without yet building) a future
+  release-please multi-architecture packaging pipeline.
+- Added `cmake/NVCRAutodetect.cmake`: auto-detects `CMAKE_CUDA_COMPILER` (glob
+  `/usr/local/cuda*/bin/nvcc` when not on `PATH`) and, when
+  `CMAKE_CUDA_ARCHITECTURES` is unset, either single-GPU `compute_cap` via
+  `nvidia-smi` (`NVCR_CUDA_ARCH_SET=auto`, default) or a curated multi-arch
+  list `75;80;86;87;89;90` for redistributable builds
+  (`NVCR_CUDA_ARCH_SET=portable`, new `cmake/NVCROptions.cmake` cache option).
+  Wired into `CMakeLists.txt` before `add_library(nvcr)`/`enable_language(CUDA)`
+  (target `CUDA_ARCHITECTURES` is snapshotted at target-creation time, so
+  ordering is load-bearing).
+- Extended `cmake/FindTensorRT.cmake` with a Python `tensorrt` package fallback
+  for `TensorRT_ROOT` and multiarch (`aarch64-linux-gnu`/`x86_64-linux-gnu`)
+  search paths, plus `TensorRT_VERSION` parsing from `NvInferVersion.h`.
+- Added `scripts/detect_platform.sh`: shared helper reporting Jetson-vs-discrete
+  platform, GPU architecture/device index (`nvidia-smi
+  --query-gpu=index,compute_cap,memory.free`), CUDA/TensorRT locations, and a
+  memory-budget-derived `workspace-mib`/`builder-optimization-level` tier.
+- Added `scripts/install.sh`: one-command configure/build/install wrapper with
+  a `--arch-set {auto,portable}` flag (`auto` default maps to single-GPU
+  detection; `portable` selects `-DNVCR_CUDA_ARCH_SET=portable`); explicit
+  `--cuda-arch` always takes precedence over `--arch-set`.
+- `scripts/prepare_dcvcrt_artifacts.sh` now auto-tunes `--device-id`,
+  `--workspace-mib`, and `--builder-optimization-level` from
+  `detect_platform.sh` unless `--no-auto-tune` is passed; hardcoded
+  `/home/oelghati/nvcr` paths were removed from it and from
+  `scripts/export_dcvcrt_onnx.py`/`scripts/export_dcvcrt_p_onnx.py` in favor of
+  `$repo_root`/`NVCR_DCVCRT_ROOT`.
+- Updated `README.md`, `docs/getting-started.md`, `scripts/README.md`, and
+  `docs/dcvcrt-artifacts.md` to lead with `scripts/install.sh` and
+  `scripts/prepare_dcvcrt_artifacts.sh`, to document `--arch-set portable`, and
+  to state explicitly that GPU-architecture portability (the `portable` fat
+  binary) is independent of host CPU architecture, and that TensorRT `.plan`
+  files are never bundled as portable/prebuilt artifacts (always generated
+  per-target, guarded by `engine_manifest.json`, per the 2026-07-08 decision
+  below). Removed remaining Orin/user-specific hardcoded example paths from
+  `docs/dcvcrt-artifacts.md`'s direct-CLI examples.
+- Verification (on the same Jetson Orin Nano used for prior bring-up):
+  - `cmake -S . -B <tmp> -DNVCR_ENABLE_TENSORRT=ON` with no manual CUDA/TensorRT
+    flags auto-detected `CMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc`,
+    `CMAKE_CUDA_ARCHITECTURES=87` (via `nvidia-smi`), and
+    `Found TensorRT: /usr/include/aarch64-linux-gnu (found version "10.3.0")`;
+    `cmake --build <tmp> --target nvcr` compiled `cuda_ops.cu` for `sm_87` and
+    linked `libnvcr.a`.
+  - `cmake -S . -B <tmp> -DNVCR_ENABLE_TENSORRT=ON -DNVCR_CUDA_ARCH_SET=portable`
+    configured with `CMAKE_CUDA_ARCHITECTURES=75;80;86;87;89;90` and
+    `cmake --build <tmp> --target nvcr` succeeded in 29 s, compiling
+    `cuda_ops.cu` for all six architectures into one `libnvcr.a`.
+  - `./scripts/detect_platform.sh` reported platform=jetson, arch=87,
+    nvcc/CUDA-root/TensorRT-root/trtexec all correctly resolved, device id=0,
+    workspace=512 MiB, builder level=1 — matching the hand-tuned values from
+    the 2026-07-08 entries above.
+  - `./scripts/install.sh --no-tensorrt --build-dir <tmp> --prefix <tmp-prefix>`
+    ran end-to-end (bootstrap check, configure, build, install) and produced a
+    working install layout.
+  - `./scripts/prepare_dcvcrt_artifacts.sh --skip-clone` printed the correct
+    auto-tune report (workspace=512, level=1, device=0) before failing only on
+    missing Python `torch`/`onnx`/`onnxscript` (expected, unrelated to this
+    change).
+  - `bash -n` passed for `detect_platform.sh`, `install.sh`, and
+    `prepare_dcvcrt_artifacts.sh`; `python3 -m py_compile` passed for both
+    export scripts.
+- Remaining gate: this automation has only been exercised on one Jetson Orin
+  Nano; M4's checkpoint/engine redistribution-licensing and hash-validation
+  bullets remain open, and no discrete RTX/datacenter GPU run has yet
+  re-verified the `portable` arch-set path end-to-end (only configure+build
+  evidence exists, gathered on Jetson hardware). Release-please/CI packaging
+  automation was explicitly deferred at the user's request and is not started.
+
 ## Decision log
 
 Append decisions with date, rationale, and consequences.
@@ -303,3 +682,62 @@ Decision: codec access units and decoder configuration will not use the current
 Rationale: FFmpeg owns timestamps, packet metadata, and container framing.
 
 Consequence: current CLI framing remains a development format until M2/M7.
+
+### 2026-07-08 — Require device-stamped TensorRT engine bundles
+
+Decision: TensorRT plan directories must carry `engine_manifest.json`, and the
+runtime must reject missing or mismatched manifests before plan deserialization.
+
+Rationale: TensorRT plans are optimized executable artifacts for a specific build
+runtime and GPU class. A successfully deserialized plan can still carry suboptimal
+tactics for a different GPU model, so NVCR should fail early with a rebuild
+instruction instead of discovering the problem during encode latency or CUDA
+execution.
+
+Consequence: existing engine directories without `engine_manifest.json` must be
+rebuilt with the updated scripts before use.
+
+### 2026-07-08 — Encode-side predicted references may be GPU-only
+
+Decision: predicted-frame encode may advance `SequenceState` with an empty host
+reference when the backend owns the actual reconstructed reference in a validated
+GPU DPB.
+
+Rationale: TensorRT P-frame encode already feeds the next frame from device
+resident `frame` and `feature` tensors. Downloading and RGB-converting the
+reconstruction only to satisfy a host reference marker cost roughly 112-117 ms
+per 1080p P-frame on the Orin run.
+
+Consequence: generic sequence state now tracks reference availability separately
+from the optional host `Frame`. Backends that require a host reference must still
+return one; TensorRT can keep encode references GPU-resident.
+
+### 2026-07-22 — Split CUDA architecture selection into auto vs. portable, deferred release packaging
+
+Decision: add an explicit `NVCR_CUDA_ARCH_SET` CMake option (`auto` default,
+`portable`) and matching `scripts/install.sh --arch-set` flag, instead of
+always detecting the local build machine's single GPU or always building a
+fat binary.
+
+Rationale: the user clarified that NVCR must build correctly on any Jetson or
+discrete RTX/datacenter host (not just the Orin Nano used for bring-up), and
+that a future release process will need one executable per host CPU
+architecture that works out of the box across a range of GPU models on that
+architecture. Single-GPU auto-detection (via `nvidia-smi compute_cap`) is
+correct and fastest for local development or a single-machine install, but is
+the wrong default for a build meant to be redistributed to machines other than
+the one it was built on. Conflating the two would force every local developer
+build to pay the multi-architecture compile cost, or force every release build
+to silently target only the packaging machine's GPU.
+
+Consequence: `auto` remains the default so existing local/dev workflows and
+documentation are unaffected; `portable` is available and verified (configure
++ build) for future packaging use. GPU-architecture portability
+(`NVCR_CUDA_ARCH_SET=portable`) is explicitly documented as orthogonal to host
+CPU architecture portability — separate builds are still required per CPU
+arch — and TensorRT `.plan` engines are still never bundled as portable
+artifacts; they must always be generated per-target via
+`scripts/prepare_dcvcrt_artifacts.sh`, guarded by `engine_manifest.json`
+(2026-07-08 decision above). Building the actual release-please/CI
+multi-architecture packaging pipeline was explicitly deferred at the user's
+request ("don't do it now") and remains out of scope until requested.
