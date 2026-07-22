@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "061ee320b0244b98879f020ccd962b8dc522ad6b",
+  "include-v-in-tag": true,
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "nvcr",
+      "include-component-in-tag": false,
+      "changelog-path": "CHANGELOG.md",
+      "version-file": "version.txt",
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "CMakeLists.txt"
+        },
+        {
+          "type": "generic",
+          "path": "README.md"
+        },
+        {
+          "type": "generic",
+          "path": "docs/getting-started.md"
+        },
+        {
+          "type": "generic",
+          "path": "docs/install-binary.md"
+        }
+      ]
+    }
+  }
+}

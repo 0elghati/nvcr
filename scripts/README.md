@@ -38,6 +38,23 @@ it is orthogonal to host CPU architecture (x86_64 vs. aarch64 still need
 separate builds) and it does not bundle any TensorRT `.plan` engine files,
 which must always be generated per-target via `prepare_dcvcrt_artifacts.sh`.
 
+## Release packaging
+
+`package_release.sh` turns an installed NVCR prefix, and optionally a prepared
+engine directory, into release archives suitable for GitHub Releases:
+
+```bash
+./scripts/package_release.sh \
+  --version 0.1.0 \
+  --platform linux-x86_64-discrete \
+  --install-prefix /path/to/install-prefix \
+  --engine-dir /path/to/engines/dcvcrt \
+  --output-dir dist
+```
+
+The archive names match the download commands documented in
+[`docs/install-binary.md`](../docs/install-binary.md).
+
 ## DCVC-RT artifacts
 
 Use `prepare_dcvcrt_artifacts.sh` for the normal checkpoint-to-engine pipeline.
