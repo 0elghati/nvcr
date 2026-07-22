@@ -35,6 +35,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Keep release-assets publication choices aligned with repository variables.
           gh workflow run release-assets.yml \
+            --repo "${{ github.repository }}" \
             --ref main \
-            -f tag="${{ steps.release.outputs.tag_name }}"
+            -f tag="${{ steps.release.outputs.tag_name }}" \
+            -f publish_discrete="${{ vars.NVCR_RELEASE_DISCRETE == 'true' && 'true' || 'false' }}" \
+            -f publish_jetson="${{ vars.NVCR_RELEASE_JETSON == 'true' && 'true' || 'false' }}" \
+            -f publish_portable="${{ vars.NVCR_RELEASE_PORTABLE != 'false' && 'true' || 'false' }}"
