@@ -659,6 +659,21 @@ Append evidence; never silently replace historical results.
   evidence exists, gathered on Jetson hardware). Release-please/CI packaging
   automation was explicitly deferred at the user's request and is not started.
 
+### 2026-07-22 — Binary install and fallback engine-build docs
+
+- Added `docs/install-binary.md` with a binary-first install flow: platform
+  detection, release archive download, engine-bundle
+  download, and quick CLI verification.
+- Updated `docs/getting-started.md` to present a fast user path first and keep
+  source-build as a separate developer path.
+- Updated `docs/dcvcrt-artifacts.md` with explicit preflight checks and a
+  dedicated "no prebuilt engine bundle" fallback section for local
+  target-machine engine generation.
+- Updated `docs/README.md` reading order and quick links to include the new
+  binary install path.
+- Scope note: documentation-only restructure; no runtime or performance behavior
+  changes were introduced.
+
 ## Decision log
 
 Append decisions with date, rationale, and consequences.

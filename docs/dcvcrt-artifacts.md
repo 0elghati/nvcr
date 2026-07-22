@@ -4,6 +4,11 @@ NVCR does not load PyTorch checkpoints at runtime. The native backend needs a
 directory containing TensorRT plans plus copied entropy, quantization, and
 manifest assets.
 
+Use this page when:
+
+1. You are preparing release engine bundles.
+2. Your architecture has no prebuilt engine bundle and you must build locally.
+
 The artifact flow is:
 
 ```text
@@ -72,6 +77,10 @@ b12e7faf4ddb6126d8e138a627ed6a349b8e1052d3ed9e343e1ba266466675d6  cvpr2025_video
 After the Python export environment contains PyTorch, ONNX, and ONNXScript, run:
 
 ```bash
+python -c "import torch, onnx, onnxscript"
+```
+
+```bash
 cd /path/to/nvcr
 export PATH="$PWD/install-<platform>/bin:$PATH"  # from scripts/install.sh
 
@@ -79,6 +88,17 @@ export PATH="$PWD/install-<platform>/bin:$PATH"  # from scripts/install.sh
   --dcvcrt-root ./assets \
   --models build/models/dcvcrt \
   --engines build/engines/dcvcrt \
+  --skip-smoke
+```
+
+If `trtexec` is not on PATH, pass it explicitly (common location shown below):
+
+```bash
+./scripts/prepare_dcvcrt_artifacts.sh \
+  --dcvcrt-root ./assets \
+  --models build/models/dcvcrt \
+  --engines build/engines/dcvcrt \
+  --trtexec /usr/src/tensorrt/bin/trtexec \
   --skip-smoke
 ```
 
@@ -108,6 +128,30 @@ If ONNX/runtime assets were exported on another machine and copied to
   --models build/models/dcvcrt \
   --engines build/engines/dcvcrt \
   --skip-smoke
+```
+
+## No prebuilt engine bundle for this architecture
+
+If your release does not provide an engine bundle for this machine, build local
+engines and install them under your NVCR prefix:
+
+```bash
+export NVCR_PREFIX="$HOME/.local/nvcr"
+mkdir -p "$NVCR_PREFIX/engines"
+
+./scripts/prepare_dcvcrt_artifacts.sh \
+  --dcvcrt-root /path/to/DCVC-RT \
+  --models build/models/dcvcrt \
+  --engines "$NVCR_PREFIX/engines/dcvcrt" \
+  --trtexec /usr/src/tensorrt/bin/trtexec \
+  --python /path/to/DCVC-RT/src/venv/bin/python \
+  --skip-clone --skip-smoke
+```
+
+Then run NVCR with:
+
+```bash
+nvcr encode -i input.yuv -o output.nvcr -s 176x144 --frames 1 --engine-dir "$NVCR_PREFIX/engines/dcvcrt"
 ```
 
 ## Direct NVCR Call

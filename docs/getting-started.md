@@ -1,7 +1,39 @@
 # Getting Started
 
-This guide is the shortest path from a source checkout to a usable NVCR install
-on Linux.
+This guide gives two paths:
+
+1. Fast path: install from a published NVCR binary and ready engine bundle.
+2. Source path: build NVCR locally, then generate engines.
+
+For binary-release installation, use
+[Binary Install Guide](install-binary.md).
+
+## Fast path
+
+Install from published artifacts:
+
+```bash
+export NVCR_VERSION="v0.1.0"
+export NVCR_PLATFORM="linux-x86_64-discrete"   # or linux-aarch64-jetson
+export NVCR_PREFIX="$HOME/.local/nvcr"
+
+mkdir -p "$NVCR_PREFIX"
+curl -fL "https://github.com/<your-org>/NVCR/releases/download/${NVCR_VERSION}/nvcr-${NVCR_VERSION}-${NVCR_PLATFORM}.tar.gz" -o /tmp/nvcr.tar.gz
+tar -xzf /tmp/nvcr.tar.gz -C "$NVCR_PREFIX" --strip-components=1
+export PATH="$NVCR_PREFIX/bin:$PATH"
+nvcr --help
+```
+
+Then install ready engine assets for your platform:
+
+```bash
+curl -fL "https://github.com/<your-org>/NVCR/releases/download/${NVCR_VERSION}/dcvcrt-engines-${NVCR_VERSION}-${NVCR_PLATFORM}.tar.gz" -o /tmp/nvcr-engines.tar.gz
+mkdir -p "$NVCR_PREFIX/engines"
+tar -xzf /tmp/nvcr-engines.tar.gz -C "$NVCR_PREFIX/engines"
+```
+
+If no engine bundle exists for your architecture, use
+[DCVC-RT artifact pipeline](dcvcrt-artifacts.md) to build local plans.
 
 ## What you need
 
@@ -9,7 +41,7 @@ on Linux.
 - A C++20 compiler.
 - Optional: CUDA and TensorRT when you want the native DCVC-RT backend.
 
-## Build the project
+## Build from source (developer path)
 
 ### Quick install (recommended)
 
@@ -127,6 +159,9 @@ The native DCVC-RT backend needs TensorRT plans plus copied entropy,
 quantization, and manifest assets. PyTorch checkpoints are used only during
 offline export; `nvcr` does not load `.pth.tar` files at runtime.
 
+For published user installs, prebuilt engine bundles are preferred. Local engine
+generation is the fallback path for unsupported architectures or custom targets.
+
 The shortest path is the artifact wrapper. It auto-detects the platform,
 device id, and a safe TensorRT workspace/builder-optimization budget via
 [scripts/detect_platform.sh](../scripts/detect_platform.sh), so no manual
@@ -137,6 +172,19 @@ memory-tuning flags are required on either an 8 GB Orin Nano or a discrete GPU:
   --dcvcrt-root ./assets \
   --engines build/engines/dcvcrt \
   --skip-smoke
+```
+
+If your checkpoints are already in a separate DCVC-RT checkout and you have a
+known Python environment there, use explicit paths:
+
+```bash
+./scripts/prepare_dcvcrt_artifacts.sh \
+  --dcvcrt-root /path/to/DCVC-RT \
+  --models build/models/dcvcrt \
+  --engines build/engines/dcvcrt \
+  --trtexec /usr/src/tensorrt/bin/trtexec \
+  --python /path/to/DCVC-RT/src/venv/bin/python \
+  --skip-clone --skip-smoke
 ```
 
 Pass `--no-auto-tune` plus explicit `--workspace-mib`, `--builder-optimization-level`,
