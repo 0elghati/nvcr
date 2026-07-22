@@ -10,6 +10,13 @@
 set -euo pipefail
 
 cuda_toolkit_package="${NVCR_CI_CUDA_TOOLKIT_PACKAGE:-cuda-toolkit-12-6}"
+# Pin TensorRT to the project's validated 10.x baseline (see ROADMAP.md,
+# TensorRT 10.3.0.30 on Jetson / 10.7.0 on discrete dev hosts). Leaving this
+# unpinned lets apt silently install whatever NVIDIA currently ships as
+# "latest" libnvinfer-dev (for example a TensorRT 11.x ABI break), producing
+# portable release binaries that fail to load anywhere still running
+# TensorRT 10.x: `libnvinfer.so.11: cannot open shared object file`.
+tensorrt_package_version="${NVCR_CI_TENSORRT_VERSION:-10.7.0.23-1+cuda12.6}"
 
 if [[ "$(uname -m)" != "x86_64" ]]; then
     echo "install_cuda_tensorrt.sh only supports x86_64 hosted runners" >&2
@@ -35,12 +42,14 @@ sudo dpkg -i "/tmp/${keyring_deb}"
 sudo apt-get update
 
 # CUDA toolkit provides nvcc; TensorRT dev packages provide headers/libs used
-# to configure and compile (not execute) the TensorRT backend.
+# to configure and compile (not execute) the TensorRT backend. Pin the exact
+# TensorRT version so the compiled ABI (libnvinfer.so.<N>) matches what
+# release consumers actually have installed.
 sudo apt-get install -y --no-install-recommends \
     "$cuda_toolkit_package" \
-    libnvinfer-dev \
-    libnvinfer-plugin-dev \
-    libnvonnxparsers-dev
+    "libnvinfer-dev=${tensorrt_package_version}" \
+    "libnvinfer-plugin-dev=${tensorrt_package_version}" \
+    "libnvonnxparsers-dev=${tensorrt_package_version}"
 
 cuda_root="$(compgen -G '/usr/local/cuda-*' | sort -V | tail -n1)"
 if [[ -z "$cuda_root" ]]; then
