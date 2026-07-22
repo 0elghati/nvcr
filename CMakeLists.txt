@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 
 project(
     NVCR
-    VERSION 0.2.2 # x-release-please-version
+    VERSION 0.2.3 # x-release-please-version
     DESCRIPTION "Production-oriented runtime for the DCVC-RT neural video codec"
     LANGUAGES CXX)
 

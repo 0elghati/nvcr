@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/0elghati/nvrc/compare/v0.2.2...v0.2.3) (2026-07-22)
+
+
+### Bug Fixes
+
+* **ci:** pin transitive TensorRT apt dependencies ([#16](https://github.com/0elghati/nvrc/issues/16)) ([16bda86](https://github.com/0elghati/nvrc/commit/16bda867bed1e6696c428adb333fad588a6d1f84))
+
 ## [0.2.2](https://github.com/0elghati/nvrc/compare/v0.2.1...v0.2.2) (2026-07-22)
 
 
