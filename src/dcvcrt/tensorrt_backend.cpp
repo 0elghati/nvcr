@@ -5,18 +5,23 @@
 #include "nvcr/dcvcrt/rans_codec.hpp"
 
 #include <NvInfer.h>
+#include <NvInferVersion.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime_api.h>
 
 #include <array>
 #include <bit>
+#include <chrono>
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -141,6 +146,65 @@ struct EngineInstance final {
     std::unique_ptr<nvinfer1::IExecutionContext> context;
 };
 
+Result<bool> determine_low_memory_mode(std::int32_t device_id) {
+    if (const char* raw = std::getenv("NVCR_TENSORRT_LOW_MEMORY_MODE"); raw != nullptr) {
+        const std::string_view value(raw);
+        if (value == "1" || value == "true" || value == "TRUE" ||
+            value == "on" || value == "ON") {
+            return true;
+        }
+        if (value == "0" || value == "false" || value == "FALSE" ||
+            value == "off" || value == "OFF") {
+            return false;
+        }
+        return Error(
+            ErrorCode::invalid_argument,
+            "NVCR_TENSORRT_LOW_MEMORY_MODE must be one of 0/1, true/false, or on/off",
+            std::string(subsystem));
+    }
+
+    cudaDeviceProp properties{};
+    const auto status = cudaGetDeviceProperties(&properties, device_id);
+    if (status != cudaSuccess) {
+        return Error(
+            ErrorCode::backend_error,
+            std::string("cudaGetDeviceProperties failed: ") + cudaGetErrorString(status),
+            std::string(subsystem));
+    }
+
+    // Keep constrained Jetson-class devices on the safer path by default.
+    constexpr std::size_t threshold_bytes = 12ULL * 1024ULL * 1024ULL * 1024ULL;
+    return static_cast<std::size_t>(properties.totalGlobalMem) <= threshold_bytes;
+}
+
+bool tensorrt_low_memory_mode = true;
+
+Result<nvinfer1::IExecutionContext*> acquire_context(EngineInstance& instance) {
+    const bool low_memory_mode = tensorrt_low_memory_mode;
+    if (!low_memory_mode) {
+        if (!instance.context) {
+            instance.context.reset(instance.engine->createExecutionContext());
+            if (!instance.context) {
+                return Error(
+                    ErrorCode::backend_error,
+                    "failed to create execution context: " + instance.path.string(),
+                    std::string(subsystem));
+            }
+        }
+        return instance.context.get();
+    }
+
+    // Low-memory mode creates short-lived contexts to minimize steady residency.
+    instance.context.reset(instance.engine->createExecutionContext());
+    if (!instance.context) {
+        return Error(
+            ErrorCode::backend_error,
+            "failed to create execution context: " + instance.path.string(),
+            std::string(subsystem));
+    }
+    return instance.context.get();
+}
+
 Error backend_error(std::string message) {
     return Error(ErrorCode::backend_error, std::move(message), std::string(subsystem));
 }
@@ -176,6 +240,193 @@ Result<std::vector<std::byte>> read_binary(const fs::path& path) {
             std::string(subsystem));
     }
     return bytes;
+}
+
+Result<std::string> read_text_file(const fs::path& path) {
+    auto bytes = read_binary(path);
+    if (!bytes) return bytes.error();
+    std::string text;
+    text.reserve(bytes.value().size());
+    for (const auto byte : bytes.value()) {
+        text.push_back(static_cast<char>(std::to_integer<unsigned char>(byte)));
+    }
+    return text;
+}
+
+Result<std::size_t> find_json_value(std::string_view text, std::string_view key) {
+    const auto key_position = text.find('"' + std::string(key) + '"');
+    if (key_position == std::string_view::npos) {
+        return backend_error("engine_manifest.json is missing key '" + std::string(key) + "'");
+    }
+    const auto colon = text.find(':', key_position + key.size() + 2);
+    if (colon == std::string_view::npos) {
+        return backend_error("engine_manifest.json has invalid key '" + std::string(key) + "'");
+    }
+    auto value = colon + 1;
+    while (value < text.size() &&
+           std::isspace(static_cast<unsigned char>(text[value])) != 0) {
+        ++value;
+    }
+    if (value == text.size()) {
+        return backend_error("engine_manifest.json has empty key '" + std::string(key) + "'");
+    }
+    return value;
+}
+
+Result<std::string> read_json_string(std::string_view text, std::string_view key) {
+    auto value = find_json_value(text, key);
+    if (!value) return value.error();
+    if (text[value.value()] != '"') {
+        return backend_error("engine_manifest.json key '" + std::string(key) + "' is not a string");
+    }
+    std::string output;
+    for (auto index = value.value() + 1; index < text.size(); ++index) {
+        const char current = text[index];
+        if (current == '"') return output;
+        if (current == '\\') {
+            return backend_error(
+                "engine_manifest.json key '" + std::string(key) + "' must not use escapes");
+        }
+        output.push_back(current);
+    }
+    return backend_error("engine_manifest.json has unterminated key '" + std::string(key) + "'");
+}
+
+Result<std::int64_t> read_json_integer(std::string_view text, std::string_view key) {
+    auto value = find_json_value(text, key);
+    if (!value) return value.error();
+    auto index = value.value();
+    bool negative = false;
+    if (text[index] == '-') {
+        negative = true;
+        ++index;
+    }
+    if (index == text.size() || std::isdigit(static_cast<unsigned char>(text[index])) == 0) {
+        return backend_error("engine_manifest.json key '" + std::string(key) + "' is not an integer");
+    }
+    std::int64_t output = 0;
+    while (index < text.size() &&
+           std::isdigit(static_cast<unsigned char>(text[index])) != 0) {
+        output = output * 10 + static_cast<std::int64_t>(text[index] - '0');
+        ++index;
+    }
+    return negative ? -output : output;
+}
+
+struct EngineManifest final {
+    std::string kind;
+    std::string precision;
+    std::string optimization_point;
+    std::string device_name;
+    std::int32_t tensorrt_major{};
+    std::int32_t tensorrt_minor{};
+    std::int32_t tensorrt_patch{};
+    std::int32_t compute_major{};
+    std::int32_t compute_minor{};
+    std::int32_t multiprocessor_count{};
+};
+
+Result<std::int32_t> checked_manifest_i32(
+    std::string_view text, std::string_view key, std::int32_t minimum = 0) {
+    auto value = read_json_integer(text, key);
+    if (!value) return value.error();
+    if (value.value() < minimum || value.value() > std::numeric_limits<std::int32_t>::max()) {
+        return backend_error("engine_manifest.json key '" + std::string(key) + "' is out of range");
+    }
+    return static_cast<std::int32_t>(value.value());
+}
+
+Result<EngineManifest> load_engine_manifest(const fs::path& root) {
+    const auto path = root / "engine_manifest.json";
+    if (!fs::is_regular_file(path)) {
+        return backend_error(
+            "missing engine_manifest.json in " + root.string() +
+            "; rebuild TensorRT plans on the target device with scripts/build_dcvcrt_tensorrt.sh");
+    }
+    auto text = read_text_file(path);
+    if (!text) return text.error();
+    auto format = checked_manifest_i32(text.value(), "format", 1);
+    if (!format) return format.error();
+    if (format.value() != 1) {
+        return backend_error("unsupported engine_manifest.json format: " +
+                             std::to_string(format.value()));
+    }
+    EngineManifest manifest;
+    auto kind = read_json_string(text.value(), "kind");
+    auto precision = read_json_string(text.value(), "precision");
+    auto profile = read_json_string(text.value(), "optimization_point");
+    auto device_name = read_json_string(text.value(), "device_name");
+    auto trt_major = checked_manifest_i32(text.value(), "tensorrt_version_major");
+    auto trt_minor = checked_manifest_i32(text.value(), "tensorrt_version_minor");
+    auto trt_patch = checked_manifest_i32(text.value(), "tensorrt_version_patch");
+    auto cc_major = checked_manifest_i32(text.value(), "compute_capability_major");
+    auto cc_minor = checked_manifest_i32(text.value(), "compute_capability_minor");
+    auto sm_count = checked_manifest_i32(text.value(), "multiprocessor_count", 1);
+    if (!kind) return kind.error();
+    if (!precision) return precision.error();
+    if (!profile) return profile.error();
+    if (!device_name) return device_name.error();
+    if (!trt_major) return trt_major.error();
+    if (!trt_minor) return trt_minor.error();
+    if (!trt_patch) return trt_patch.error();
+    if (!cc_major) return cc_major.error();
+    if (!cc_minor) return cc_minor.error();
+    if (!sm_count) return sm_count.error();
+    manifest.kind = std::move(kind.value());
+    manifest.precision = std::move(precision.value());
+    manifest.optimization_point = std::move(profile.value());
+    manifest.device_name = std::move(device_name.value());
+    manifest.tensorrt_major = trt_major.value();
+    manifest.tensorrt_minor = trt_minor.value();
+    manifest.tensorrt_patch = trt_patch.value();
+    manifest.compute_major = cc_major.value();
+    manifest.compute_minor = cc_minor.value();
+    manifest.multiprocessor_count = sm_count.value();
+    return manifest;
+}
+
+Result<void> validate_engine_manifest(const fs::path& root, std::int32_t device_id) {
+    auto manifest = load_engine_manifest(root);
+    if (!manifest) return manifest.error();
+    if (manifest.value().kind != "nvcr-tensorrt-engine-bundle") {
+        return backend_error("engine_manifest.json has unexpected kind: " + manifest.value().kind);
+    }
+    if (manifest.value().precision != "fp16" && manifest.value().precision != "int8_fp16") {
+        return backend_error("engine_manifest.json has unsupported precision: " +
+                             manifest.value().precision);
+    }
+    if (manifest.value().tensorrt_major != NV_TENSORRT_MAJOR ||
+        manifest.value().tensorrt_minor != NV_TENSORRT_MINOR ||
+        manifest.value().tensorrt_patch != NV_TENSORRT_PATCH) {
+        return backend_error(
+            "TensorRT engine bundle was built with TensorRT " +
+            std::to_string(manifest.value().tensorrt_major) + "." +
+            std::to_string(manifest.value().tensorrt_minor) + "." +
+            std::to_string(manifest.value().tensorrt_patch) +
+            " but runtime is TensorRT " + std::to_string(NV_TENSORRT_MAJOR) + "." +
+            std::to_string(NV_TENSORRT_MINOR) + "." + std::to_string(NV_TENSORRT_PATCH) +
+            "; rebuild the engine directory on this runtime");
+    }
+
+    cudaDeviceProp properties{};
+    const auto status = cudaGetDeviceProperties(&properties, device_id);
+    if (status != cudaSuccess) return cuda_error("cudaGetDeviceProperties", status);
+    if (manifest.value().device_name != properties.name ||
+        manifest.value().compute_major != properties.major ||
+        manifest.value().compute_minor != properties.minor ||
+        manifest.value().multiprocessor_count != properties.multiProcessorCount) {
+        return backend_error(
+            "TensorRT engine bundle was built for " + manifest.value().device_name +
+            " (SM " + std::to_string(manifest.value().compute_major) + "." +
+            std::to_string(manifest.value().compute_minor) + ", " +
+            std::to_string(manifest.value().multiprocessor_count) +
+            " multiprocessors) but selected device " + std::to_string(device_id) +
+            " is " + properties.name + " (SM " + std::to_string(properties.major) + "." +
+            std::to_string(properties.minor) + ", " +
+            std::to_string(properties.multiProcessorCount) +
+            " multiprocessors); rebuild the engine directory on the selected device");
+    }
+    return {};
 }
 
 std::string dimensions_string(const nvinfer1::Dims& dimensions) {
@@ -241,25 +492,177 @@ Result<EngineInstance> load_engine(
     auto valid = validate_engine(*engine, specification);
     if (!valid) return valid.error();
 
-    std::unique_ptr<nvinfer1::IExecutionContext> context(engine->createExecutionContext());
-    if (!context) {
-        return backend_error("failed to create execution context: " + path.string());
-    }
-    return EngineInstance{path, std::move(engine), std::move(context)};
+    return EngineInstance{path, std::move(engine), nullptr};
 }
 
+struct ProfileStage final {
+    std::string name;
+    double cpu_ms{};
+    double cuda_ms{};
+    bool has_cuda{};
+};
+
+struct ProfileCounters final {
+    std::size_t allocations{};
+    std::size_t allocation_bytes{};
+    std::size_t h2d_copies{};
+    std::size_t h2d_bytes{};
+    std::size_t d2h_copies{};
+    std::size_t d2h_bytes{};
+    std::size_t d2d_copies{};
+    std::size_t d2d_bytes{};
+    std::size_t synchronizations{};
+};
+
+struct PendingCudaStage final {
+    std::string name;
+    cudaEvent_t start{};
+    cudaEvent_t stop{};
+};
+
+class BackendProfiler final {
+public:
+    explicit BackendProfiler(bool enabled) : enabled_(enabled) {}
+
+    [[nodiscard]] bool enabled() const noexcept { return enabled_; }
+
+    void begin(std::string operation, FrameType frame_type, std::uint64_t frame_index) {
+        operation_ = std::move(operation);
+        frame_type_ = frame_type;
+        frame_index_ = frame_index;
+        counters_ = {};
+        stages_.clear();
+        pending_cuda_stages_.clear();
+    }
+
+    void record_allocation(std::size_t bytes) noexcept {
+        if (!enabled_) return;
+        ++counters_.allocations;
+        counters_.allocation_bytes += bytes;
+    }
+
+    void record_transfer(cudaMemcpyKind kind, std::size_t bytes) noexcept {
+        if (!enabled_) return;
+        switch (kind) {
+        case cudaMemcpyHostToDevice:
+            ++counters_.h2d_copies;
+            counters_.h2d_bytes += bytes;
+            break;
+        case cudaMemcpyDeviceToHost:
+            ++counters_.d2h_copies;
+            counters_.d2h_bytes += bytes;
+            break;
+        case cudaMemcpyDeviceToDevice:
+            ++counters_.d2d_copies;
+            counters_.d2d_bytes += bytes;
+            break;
+        default:
+            break;
+        }
+    }
+
+    void record_synchronization() noexcept {
+        if (enabled_) ++counters_.synchronizations;
+    }
+
+    void record_cpu_stage(std::string name, double cpu_ms) {
+        if (!enabled_) return;
+        stages_.push_back(ProfileStage{std::move(name), cpu_ms, 0.0, false});
+    }
+
+    void record_cuda_stage(std::string name, cudaEvent_t start, cudaEvent_t stop) {
+        if (!enabled_) return;
+        pending_cuda_stages_.push_back(PendingCudaStage{std::move(name), start, stop});
+    }
+
+    void finish() noexcept {
+        if (!enabled_) return;
+        for (auto& pending : pending_cuda_stages_) {
+            const auto synchronized = cudaEventSynchronize(pending.stop);
+            float elapsed_ms = 0.0F;
+            if (synchronized == cudaSuccess) {
+                static_cast<void>(cudaEventElapsedTime(&elapsed_ms, pending.start, pending.stop));
+            }
+            static_cast<void>(cudaEventDestroy(pending.start));
+            static_cast<void>(cudaEventDestroy(pending.stop));
+            stages_.push_back(ProfileStage{
+                std::move(pending.name), 0.0, static_cast<double>(elapsed_ms),
+                synchronized == cudaSuccess});
+        }
+        pending_cuda_stages_.clear();
+
+        const char type = frame_type_ == FrameType::intra ? 'I' : 'P';
+        std::clog << "[nvcr.profile] " << operation_ << " frame=" << frame_index_
+                  << " type=" << type
+                  << " allocs=" << counters_.allocations
+                  << " alloc_bytes=" << counters_.allocation_bytes
+                  << " h2d=" << counters_.h2d_copies << '/' << counters_.h2d_bytes
+                  << " d2h=" << counters_.d2h_copies << '/' << counters_.d2h_bytes
+                  << " d2d=" << counters_.d2d_copies << '/' << counters_.d2d_bytes
+                  << " syncs=" << counters_.synchronizations << '\n';
+        for (const auto& stage : stages_) {
+            std::clog << "[nvcr.profile] stage " << stage.name;
+            if (stage.cpu_ms > 0.0) {
+                std::clog << " cpu_ms=" << std::fixed << std::setprecision(3)
+                          << stage.cpu_ms;
+            }
+            if (stage.has_cuda) {
+                std::clog << " cuda_ms=" << std::fixed << std::setprecision(3)
+                          << stage.cuda_ms;
+            }
+            std::clog << '\n';
+        }
+    }
+
+private:
+    bool enabled_{};
+    std::string operation_;
+    FrameType frame_type_{FrameType::intra};
+    std::uint64_t frame_index_{};
+    ProfileCounters counters_;
+    std::vector<ProfileStage> stages_;
+    std::vector<PendingCudaStage> pending_cuda_stages_;
+};
+
 thread_local cudaStream_t allocation_stream = nullptr;
+thread_local BackendProfiler* active_profiler = nullptr;
+
+class CpuProfileScope final {
+public:
+    explicit CpuProfileScope(std::string name)
+        : profiler_(active_profiler),
+          name_(std::move(name)),
+          start_(std::chrono::steady_clock::now()) {}
+    ~CpuProfileScope() {
+        if (profiler_ == nullptr || !profiler_->enabled()) return;
+        const auto elapsed = std::chrono::steady_clock::now() - start_;
+        profiler_->record_cpu_stage(
+            std::move(name_), std::chrono::duration<double, std::milli>(elapsed).count());
+    }
+    CpuProfileScope(const CpuProfileScope&) = delete;
+    CpuProfileScope& operator=(const CpuProfileScope&) = delete;
+
+private:
+    BackendProfiler* profiler_{};
+    std::string name_;
+    std::chrono::steady_clock::time_point start_;
+};
 
 class CudaAllocationScope final {
 public:
-    explicit CudaAllocationScope(cudaStream_t stream)
-        : previous_(std::exchange(allocation_stream, stream)) {}
-    ~CudaAllocationScope() { allocation_stream = previous_; }
+    CudaAllocationScope(cudaStream_t stream, BackendProfiler* profiler)
+        : previous_stream_(std::exchange(allocation_stream, stream)),
+          previous_profiler_(std::exchange(active_profiler, profiler)) {}
+    ~CudaAllocationScope() {
+        allocation_stream = previous_stream_;
+        active_profiler = previous_profiler_;
+    }
     CudaAllocationScope(const CudaAllocationScope&) = delete;
     CudaAllocationScope& operator=(const CudaAllocationScope&) = delete;
 
 private:
-    cudaStream_t previous_{};
+    cudaStream_t previous_stream_{};
+    BackendProfiler* previous_profiler_{};
 };
 
 void release_cuda(void* pointer, cudaStream_t stream) noexcept {
@@ -307,15 +710,116 @@ struct CudaEvent final {
     cudaEvent_t data{};
 };
 
+template <typename T>
+struct PinnedHostBuffer final {
+    ~PinnedHostBuffer() {
+        if (data != nullptr) static_cast<void>(cudaFreeHost(data));
+    }
+    PinnedHostBuffer(const PinnedHostBuffer&) = delete;
+    PinnedHostBuffer& operator=(const PinnedHostBuffer&) = delete;
+    PinnedHostBuffer() = default;
+    PinnedHostBuffer(PinnedHostBuffer&& other) noexcept
+        : data(std::exchange(other.data, nullptr)),
+          capacity(std::exchange(other.capacity, 0)) {}
+    PinnedHostBuffer& operator=(PinnedHostBuffer&& other) noexcept {
+        if (this != &other) {
+            if (data != nullptr) static_cast<void>(cudaFreeHost(data));
+            data = std::exchange(other.data, nullptr);
+            capacity = std::exchange(other.capacity, 0);
+        }
+        return *this;
+    }
+
+    Result<void> ensure(std::size_t required_count, std::string_view name) {
+        if (required_count <= capacity) return {};
+        if (data != nullptr) {
+            static_cast<void>(cudaFreeHost(data));
+            data = nullptr;
+            capacity = 0;
+        }
+        void* pointer = nullptr;
+        const auto status = cudaMallocHost(&pointer, required_count * sizeof(T));
+        if (status != cudaSuccess) {
+            return backend_error(
+                std::string("cudaMallocHost failed for ") + std::string(name) +
+                ": " + cudaGetErrorString(status));
+        }
+        data = static_cast<T*>(pointer);
+        capacity = required_count;
+        return {};
+    }
+
+    T* data{};
+    std::size_t capacity{};
+};
+
 Result<CudaAllocation> allocate_cuda(std::size_t bytes) {
     void* pointer = nullptr;
     const auto stream = allocation_stream;
-    const auto status = stream != nullptr ? cudaMallocAsync(&pointer, bytes, stream)
-                                          : cudaMalloc(&pointer, bytes);
-    if (status != cudaSuccess) {
-        return cuda_error(stream != nullptr ? "cudaMallocAsync" : "cudaMalloc", status);
+    if (stream != nullptr) {
+        auto status = cudaMallocAsync(&pointer, bytes, stream);
+        if (status == cudaErrorMemoryAllocation) {
+            // Give stream-ordered frees a chance to retire before retrying.
+            const auto synchronized = cudaStreamSynchronize(stream);
+            if (synchronized == cudaSuccess) {
+                status = cudaMallocAsync(&pointer, bytes, stream);
+            }
+            if (status == cudaErrorMemoryAllocation) {
+                // Fallback for devices where async-pool growth/fragmentation is constrained.
+                status = cudaMalloc(&pointer, bytes);
+                if (status == cudaSuccess) {
+                    if (active_profiler != nullptr) active_profiler->record_allocation(bytes);
+                    return CudaAllocation(pointer, bytes, nullptr);
+                }
+                return cuda_error("cudaMalloc (fallback after cudaMallocAsync)", status);
+            }
+        }
+        if (status != cudaSuccess) return cuda_error("cudaMallocAsync", status);
+    } else {
+        const auto status = cudaMalloc(&pointer, bytes);
+        if (status != cudaSuccess) return cuda_error("cudaMalloc", status);
     }
+    if (active_profiler != nullptr) active_profiler->record_allocation(bytes);
     return CudaAllocation(pointer, bytes, stream);
+}
+
+Result<void> copy_async(
+    void* destination,
+    const void* source,
+    std::size_t bytes,
+    cudaMemcpyKind kind,
+    cudaStream_t stream,
+    std::string_view operation) {
+    const auto copied = cudaMemcpyAsync(destination, source, bytes, kind, stream);
+    if (copied != cudaSuccess) return cuda_error(operation, copied);
+    if (active_profiler != nullptr) active_profiler->record_transfer(kind, bytes);
+    return {};
+}
+
+Result<void> synchronize_stream(cudaStream_t stream, std::string_view operation) {
+    if (active_profiler != nullptr) active_profiler->record_synchronization();
+    const auto synchronized = cudaStreamSynchronize(stream);
+    if (synchronized != cudaSuccess) return cuda_error(operation, synchronized);
+    return {};
+}
+
+Result<void> record_cuda_event(cudaEvent_t event, cudaStream_t stream, std::string_view operation) {
+    const auto status = cudaEventRecord(event, stream);
+    if (status != cudaSuccess) return cuda_error(operation, status);
+    return {};
+}
+
+Result<std::pair<cudaEvent_t, cudaEvent_t>> create_profile_events(std::string_view operation) {
+    cudaEvent_t start{};
+    cudaEvent_t stop{};
+    auto status = cudaEventCreate(&start);
+    if (status != cudaSuccess) return cuda_error(operation, status);
+    status = cudaEventCreate(&stop);
+    if (status != cudaSuccess) {
+        static_cast<void>(cudaEventDestroy(start));
+        return cuda_error(operation, status);
+    }
+    return std::pair<cudaEvent_t, cudaEvent_t>{start, stop};
 }
 
 Result<std::size_t> tensor_bytes(const nvinfer1::Dims& shape) {
@@ -359,13 +863,16 @@ nvinfer1::Dims warmup_shape(
 
 Result<void> warm_up_engine(
     EngineInstance& instance, const EngineSpec& specification, cudaStream_t stream) {
+    auto context_result = acquire_context(instance);
+    if (!context_result) return context_result.error();
+    auto* context = context_result.value();
     for (const auto& tensor : specification.tensors) {
         if (tensor.mode != nvinfer1::TensorIOMode::kINPUT) continue;
         const std::string name(tensor.name);
         const auto shape = warmup_shape(
             specification.filename, tensor.name,
             instance.engine->getTensorShape(name.c_str()));
-        if (!instance.context->setInputShape(name.c_str(), shape)) {
+        if (!context->setInputShape(name.c_str(), shape)) {
             return backend_error(
                 std::string(specification.filename) + " rejected warm-up shape for " + name);
         }
@@ -375,7 +882,7 @@ Result<void> warm_up_engine(
     allocations.reserve(specification.tensors.size());
     for (const auto& tensor : specification.tensors) {
         const std::string name(tensor.name);
-        const auto shape = instance.context->getTensorShape(name.c_str());
+        const auto shape = context->getTensorShape(name.c_str());
         auto bytes = tensor_bytes(shape);
         if (!bytes) return bytes.error();
         auto allocation = allocate_cuda(bytes.value());
@@ -383,13 +890,13 @@ Result<void> warm_up_engine(
         const auto cleared = cudaMemsetAsync(
             allocation.value().data, 0, allocation.value().bytes, stream);
         if (cleared != cudaSuccess) return cuda_error("cudaMemsetAsync", cleared);
-        if (!instance.context->setTensorAddress(name.c_str(), allocation.value().data)) {
+        if (!context->setTensorAddress(name.c_str(), allocation.value().data)) {
             return backend_error(
                 std::string(specification.filename) + " rejected address for " + name);
         }
         allocations.push_back(std::move(allocation.value()));
     }
-    if (!instance.context->enqueueV3(stream)) {
+    if (!context->enqueueV3(stream)) {
         return backend_error(std::string(specification.filename) + " enqueueV3 failed");
     }
     const auto synchronized = cudaStreamSynchronize(stream);
@@ -407,6 +914,10 @@ struct HostTensor final {
     nvinfer1::Dims shape;
     std::vector<__half> values;
 };
+
+struct RuntimeAssets;
+HostTensor make_video_quant_tensor(
+    const RuntimeAssets& assets, std::string_view kind, std::uint32_t qp);
 
 nvinfer1::Dims make_dims(
     std::int32_t channels, std::int32_t height, std::int32_t width) {
@@ -440,6 +951,13 @@ struct DeviceTensor final {
     CudaAllocation storage;
 };
 
+struct VideoQuantDeviceCache final {
+    std::array<std::optional<DeviceTensor>, 64> q_encoder;
+    std::array<std::optional<DeviceTensor>, 64> q_decoder;
+    std::array<std::optional<DeviceTensor>, 64> q_feature;
+    std::array<std::optional<DeviceTensor>, 64> q_recon;
+};
+
 struct DeviceDpb final {
     std::optional<DeviceTensor> frame;
     std::optional<DeviceTensor> feature;
@@ -459,7 +977,7 @@ struct DeviceDpb final {
 };
 
 const DeviceTensor* find_device_tensor(
-    std::span<DeviceTensor* const> tensors, std::string_view name) {
+    std::span<const DeviceTensor* const> tensors, std::string_view name) {
     for (const auto* tensor : tensors) {
         if (tensor != nullptr && tensor->name == name) return tensor;
     }
@@ -471,9 +989,10 @@ Result<DeviceTensor> upload_tensor(
     const auto bytes = input.values.size() * sizeof(__half);
     auto storage = allocate_cuda(bytes);
     if (!storage) return storage.error();
-    const auto copied = cudaMemcpyAsync(storage.value().data, input.values.data(), bytes,
-                                        cudaMemcpyHostToDevice, stream);
-    if (copied != cudaSuccess) return cuda_error("cudaMemcpyAsync upload", copied);
+    auto copied = copy_async(
+        storage.value().data, input.values.data(), bytes, cudaMemcpyHostToDevice, stream,
+        "cudaMemcpyAsync upload");
+    if (!copied) return copied.error();
     return DeviceTensor{std::move(name), input.shape, std::move(storage.value())};
 }
 
@@ -486,11 +1005,44 @@ Result<DeviceTensor> allocate_device_tensor(
     return DeviceTensor{std::move(name), shape, std::move(storage.value())};
 }
 
+Result<void> populate_video_quant_cache(
+    const RuntimeAssets& assets, VideoQuantDeviceCache& cache, cudaStream_t stream) {
+    for (std::uint32_t qp = 0; qp < 64; ++qp) {
+        auto q_encoder = upload_tensor(
+            make_video_quant_tensor(assets, "q_encoder", qp), "q_encoder", stream);
+        if (!q_encoder) return q_encoder.error();
+        cache.q_encoder[qp] = std::move(q_encoder.value());
+
+        auto q_decoder = upload_tensor(
+            make_video_quant_tensor(assets, "q_decoder", qp), "q_decoder", stream);
+        if (!q_decoder) return q_decoder.error();
+        cache.q_decoder[qp] = std::move(q_decoder.value());
+
+        auto q_feature = upload_tensor(
+            make_video_quant_tensor(assets, "q_feature", qp), "q_feature", stream);
+        if (!q_feature) return q_feature.error();
+        cache.q_feature[qp] = std::move(q_feature.value());
+
+        auto q_recon = upload_tensor(
+            make_video_quant_tensor(assets, "q_recon", qp), "q_recon", stream);
+        if (!q_recon) return q_recon.error();
+        cache.q_recon[qp] = std::move(q_recon.value());
+    }
+    auto synchronized = synchronize_stream(stream, "cudaStreamSynchronize quant cache");
+    if (!synchronized) return synchronized.error();
+    return {};
+}
+
 Result<std::vector<DeviceTensor>> run_device_engine(
     EngineInstance& instance,
     const EngineSpec& specification,
-    std::span<DeviceTensor* const> inputs,
+    std::span<const DeviceTensor* const> inputs,
     cudaStream_t stream) {
+    auto context_result = acquire_context(instance);
+    if (!context_result) return context_result.error();
+    auto* context = context_result.value();
+    const bool low_memory_mode = tensorrt_low_memory_mode;
+    const auto cpu_start = std::chrono::steady_clock::now();
     for (const auto& tensor : specification.tensors) {
         if (tensor.mode != nvinfer1::TensorIOMode::kINPUT) continue;
         const auto* input = find_device_tensor(inputs, tensor.name);
@@ -499,7 +1051,7 @@ Result<std::vector<DeviceTensor>> run_device_engine(
                                  " missing device input " + std::string(tensor.name));
         }
         const std::string name(tensor.name);
-        if (!instance.context->setInputShape(name.c_str(), input->shape)) {
+        if (!context->setInputShape(name.c_str(), input->shape)) {
             return backend_error(std::string(specification.filename) +
                                  " rejected device input shape for " + name);
         }
@@ -511,23 +1063,61 @@ Result<std::vector<DeviceTensor>> run_device_engine(
         const std::string name(tensor.name);
         if (tensor.mode == nvinfer1::TensorIOMode::kINPUT) {
             const auto* input = find_device_tensor(inputs, tensor.name);
-            if (!instance.context->setTensorAddress(name.c_str(), input->storage.data)) {
+            if (!context->setTensorAddress(name.c_str(), input->storage.data)) {
                 return backend_error(std::string(specification.filename) +
                                      " rejected device address for " + name);
             }
             continue;
         }
-        const auto shape = instance.context->getTensorShape(name.c_str());
+        const auto shape = context->getTensorShape(name.c_str());
         auto output = allocate_device_tensor(name, shape);
         if (!output) return output.error();
-        if (!instance.context->setTensorAddress(name.c_str(), output.value().storage.data)) {
+        if (!context->setTensorAddress(name.c_str(), output.value().storage.data)) {
             return backend_error(std::string(specification.filename) +
                                  " rejected device output address for " + name);
         }
         outputs.push_back(std::move(output.value()));
     }
-    if (!instance.context->enqueueV3(stream)) {
+    std::pair<cudaEvent_t, cudaEvent_t> events{};
+    bool profile_cuda = active_profiler != nullptr && active_profiler->enabled();
+    if (profile_cuda) {
+        auto created = create_profile_events("cudaEventCreate engine profile");
+        if (!created) return created.error();
+        events = created.value();
+        auto recorded = record_cuda_event(events.first, stream, "cudaEventRecord engine start");
+        if (!recorded) {
+            static_cast<void>(cudaEventDestroy(events.first));
+            static_cast<void>(cudaEventDestroy(events.second));
+            return recorded.error();
+        }
+    }
+    if (!context->enqueueV3(stream)) {
+        if (profile_cuda) {
+            static_cast<void>(cudaEventDestroy(events.first));
+            static_cast<void>(cudaEventDestroy(events.second));
+        }
         return backend_error(std::string(specification.filename) + " enqueueV3 failed");
+    }
+    if (profile_cuda) {
+        auto recorded = record_cuda_event(events.second, stream, "cudaEventRecord engine stop");
+        if (!recorded) {
+            static_cast<void>(cudaEventDestroy(events.first));
+            static_cast<void>(cudaEventDestroy(events.second));
+            return recorded.error();
+        }
+        active_profiler->record_cuda_stage(
+            std::string(specification.filename) + " enqueue", events.first, events.second);
+    }
+    if (low_memory_mode) {
+        auto synchronized = synchronize_stream(stream, "cudaStreamSynchronize device engine");
+        if (!synchronized) return synchronized.error();
+        instance.context.reset();
+    }
+    if (active_profiler != nullptr && active_profiler->enabled()) {
+        const auto cpu_elapsed = std::chrono::steady_clock::now() - cpu_start;
+        active_profiler->record_cpu_stage(
+            std::string(specification.filename) + " setup",
+            std::chrono::duration<double, std::milli>(cpu_elapsed).count());
     }
     return outputs;
 }
@@ -541,20 +1131,21 @@ Result<DeviceTensor> take_device_tensor(
 }
 
 Result<std::vector<HostTensor>> download_tensors(
-    std::span<DeviceTensor* const> inputs, cudaStream_t stream) {
+    std::span<const DeviceTensor* const> inputs, cudaStream_t stream) {
     std::vector<HostTensor> outputs;
     outputs.reserve(inputs.size());
     for (const auto* input : inputs) {
         if (input == nullptr) return backend_error("null device tensor download");
         outputs.push_back(HostTensor{input->name, input->shape,
                                      std::vector<__half>(element_count(input->shape))});
-        const auto copied = cudaMemcpyAsync(
+        auto copied = copy_async(
             outputs.back().values.data(), input->storage.data,
-            outputs.back().values.size() * sizeof(__half), cudaMemcpyDeviceToHost, stream);
-        if (copied != cudaSuccess) return cuda_error("cudaMemcpyAsync download", copied);
+            outputs.back().values.size() * sizeof(__half), cudaMemcpyDeviceToHost, stream,
+            "cudaMemcpyAsync download");
+        if (!copied) return copied.error();
     }
-    const auto synchronized = cudaStreamSynchronize(stream);
-    if (synchronized != cudaSuccess) return cuda_error("cudaStreamSynchronize", synchronized);
+    auto synchronized = synchronize_stream(stream, "cudaStreamSynchronize");
+    if (!synchronized) return synchronized.error();
     return outputs;
 }
 
@@ -563,6 +1154,11 @@ Result<std::vector<HostTensor>> run_host_engine(
     const EngineSpec& specification,
     std::span<const HostTensor> inputs,
     cudaStream_t stream) {
+    auto context_result = acquire_context(instance);
+    if (!context_result) return context_result.error();
+    auto* context = context_result.value();
+    const bool low_memory_mode = tensorrt_low_memory_mode;
+    const auto cpu_start = std::chrono::steady_clock::now();
     for (const auto& tensor : specification.tensors) {
         if (tensor.mode != nvinfer1::TensorIOMode::kINPUT) continue;
         const auto* input = find_tensor(inputs, tensor.name);
@@ -572,7 +1168,7 @@ Result<std::vector<HostTensor>> run_host_engine(
                 std::string(tensor.name));
         }
         const std::string name(tensor.name);
-        if (!instance.context->setInputShape(name.c_str(), input->shape)) {
+        if (!context->setInputShape(name.c_str(), input->shape)) {
             return backend_error(
                 std::string(specification.filename) + " rejected input shape for " + name);
         }
@@ -590,7 +1186,7 @@ Result<std::vector<HostTensor>> run_host_engine(
             input = find_tensor(inputs, tensor.name);
             shape = input->shape;
         } else {
-            shape = instance.context->getTensorShape(name.c_str());
+            shape = context->getTensorShape(name.c_str());
         }
         auto bytes = tensor_bytes(shape);
         if (!bytes) return bytes.error();
@@ -601,34 +1197,68 @@ Result<std::vector<HostTensor>> run_host_engine(
                 return backend_error(
                     std::string(specification.filename) + " input size mismatch for " + name);
             }
-            const auto copied = cudaMemcpyAsync(
+            auto copied = copy_async(
                 allocation.value().data, input->values.data(), bytes.value(),
-                cudaMemcpyHostToDevice, stream);
-            if (copied != cudaSuccess) return cuda_error("cudaMemcpyAsync input", copied);
+                cudaMemcpyHostToDevice, stream, "cudaMemcpyAsync input");
+            if (!copied) return copied.error();
         } else {
             output_allocation_indexes.push_back(allocations.size());
             outputs.push_back(HostTensor{name, shape, std::vector<__half>(element_count(shape))});
         }
-        if (!instance.context->setTensorAddress(name.c_str(), allocation.value().data)) {
+        if (!context->setTensorAddress(name.c_str(), allocation.value().data)) {
             return backend_error(
                 std::string(specification.filename) + " rejected address for " + name);
         }
         allocations.push_back(std::move(allocation.value()));
     }
 
-    if (!instance.context->enqueueV3(stream)) {
+    std::pair<cudaEvent_t, cudaEvent_t> events{};
+    bool profile_cuda = active_profiler != nullptr && active_profiler->enabled();
+    if (profile_cuda) {
+        auto created = create_profile_events("cudaEventCreate host engine profile");
+        if (!created) return created.error();
+        events = created.value();
+        auto recorded = record_cuda_event(events.first, stream, "cudaEventRecord host engine start");
+        if (!recorded) {
+            static_cast<void>(cudaEventDestroy(events.first));
+            static_cast<void>(cudaEventDestroy(events.second));
+            return recorded.error();
+        }
+    }
+    if (!context->enqueueV3(stream)) {
+        if (profile_cuda) {
+            static_cast<void>(cudaEventDestroy(events.first));
+            static_cast<void>(cudaEventDestroy(events.second));
+        }
         return backend_error(std::string(specification.filename) + " enqueueV3 failed");
     }
     for (std::size_t index = 0; index < outputs.size(); ++index) {
-        const auto copied = cudaMemcpyAsync(
+        auto copied = copy_async(
             outputs[index].values.data(),
             allocations[output_allocation_indexes[index]].data,
             outputs[index].values.size() * sizeof(__half),
-            cudaMemcpyDeviceToHost, stream);
-        if (copied != cudaSuccess) return cuda_error("cudaMemcpyAsync output", copied);
+            cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync output");
+        if (!copied) return copied.error();
     }
-    const auto synchronized = cudaStreamSynchronize(stream);
-    if (synchronized != cudaSuccess) return cuda_error("cudaStreamSynchronize", synchronized);
+    if (profile_cuda) {
+        auto recorded = record_cuda_event(events.second, stream, "cudaEventRecord host engine stop");
+        if (!recorded) {
+            static_cast<void>(cudaEventDestroy(events.first));
+            static_cast<void>(cudaEventDestroy(events.second));
+            return recorded.error();
+        }
+        active_profiler->record_cuda_stage(
+            std::string(specification.filename) + " host", events.first, events.second);
+    }
+    auto synchronized = synchronize_stream(stream, "cudaStreamSynchronize");
+    if (!synchronized) return synchronized.error();
+    if (low_memory_mode) instance.context.reset();
+    if (active_profiler != nullptr && active_profiler->enabled()) {
+        const auto cpu_elapsed = std::chrono::steady_clock::now() - cpu_start;
+        active_profiler->record_cpu_stage(
+            std::string(specification.filename) + " host",
+            std::chrono::duration<double, std::milli>(cpu_elapsed).count());
+    }
     return outputs;
 }
 
@@ -819,21 +1449,6 @@ void multiply_broadcast_in_place(HostTensor& tensor, const HostTensor& factor) {
     }
 }
 
-void multiply_in_place(HostTensor& tensor, const HostTensor& factor) {
-    for (std::size_t index = 0; index < tensor.values.size(); ++index) {
-        tensor.values[index] = to_half(
-            to_float(tensor.values[index]) * to_float(factor.values[index]));
-    }
-}
-
-void clamp_min_in_place(HostTensor& tensor, float minimum) {
-    for (auto& value : tensor.values) value = to_half(std::max(to_float(value), minimum));
-}
-
-void reciprocal_in_place(HostTensor& tensor) {
-    for (auto& value : tensor.values) value = to_half(1.0F / to_float(value));
-}
-
 struct ImagePrior final {
     HostTensor q_enc;
     HostTensor q_dec;
@@ -936,64 +1551,6 @@ HostTensor restore_quarters(
         const float symbol = to_float(symbols.values[index]);
         for (std::size_t quarter = 0; quarter < 4; ++quarter) {
             const auto destination = index + quarter * quarter_size;
-            output.values[destination] = to_half(
-                (symbol + to_float(means.values[destination])) *
-                to_float(mask.values[destination]));
-        }
-    }
-    return output;
-}
-
-HostTensor make_video_mask(const HostTensor& like, std::int32_t stage) {
-    HostTensor mask{"mask", like.shape, std::vector<__half>(like.values.size())};
-    const auto half_channels = like.shape.d[1] / 2;
-    for (std::int32_t channel = 0; channel < like.shape.d[1]; ++channel) {
-        const bool first_half = channel < half_channels;
-        for (std::int32_t y = 0; y < like.shape.d[2]; ++y) {
-            for (std::int32_t x = 0; x < like.shape.d[3]; ++x) {
-                const bool diagonal = (y & 1) == (x & 1);
-                const bool selected = stage == 0 ? (first_half == diagonal) :
-                    (first_half != diagonal);
-                mask.values[tensor_offset(mask, channel, y, x)] =
-                    to_half(selected ? 1.0F : 0.0F);
-            }
-        }
-    }
-    return mask;
-}
-
-HostTensor reduce_halves(const HostTensor& input, std::string name) {
-    const auto half_size = input.values.size() / 2;
-    HostTensor output{std::move(name),
-                      make_dims(static_cast<std::int32_t>(input.shape.d[1] / 2),
-                                static_cast<std::int32_t>(input.shape.d[2]),
-                                static_cast<std::int32_t>(input.shape.d[3])),
-                      std::vector<__half>(half_size)};
-    for (std::size_t index = 0; index < half_size; ++index) {
-        output.values[index] = to_half(to_float(input.values[index]) +
-                                       to_float(input.values[index + half_size]));
-    }
-    return output;
-}
-
-HostTensor reduce_masked_halves(
-    const HostTensor& input, const HostTensor& mask, std::string name) {
-    HostTensor masked = input;
-    for (std::size_t index = 0; index < masked.values.size(); ++index) {
-        masked.values[index] = to_half(
-            to_float(masked.values[index]) * to_float(mask.values[index]));
-    }
-    return reduce_halves(masked, std::move(name));
-}
-
-HostTensor restore_halves(
-    const HostTensor& symbols, const HostTensor& means, const HostTensor& mask) {
-    HostTensor output{"reconstructed", means.shape, std::vector<__half>(means.values.size())};
-    const auto half_size = output.values.size() / 2;
-    for (std::size_t index = 0; index < half_size; ++index) {
-        const float symbol = to_float(symbols.values[index]);
-        for (std::size_t half = 0; half < 2; ++half) {
-            const auto destination = index + half * half_size;
             output.values[destination] = to_half(
                 (symbol + to_float(means.values[destination])) *
                 to_float(mask.values[destination]));
@@ -1395,53 +1952,6 @@ std::vector<std::byte> serialize_dpb(
     return output;
 }
 
-Result<DpbState> parse_dpb(std::span<const std::byte> input) {
-    constexpr std::array<std::byte, 4> magic{
-        std::byte{0x4e}, std::byte{0x56}, std::byte{0x44}, std::byte{0x31}};
-    if (input.size() < 20 || !std::equal(magic.begin(), magic.end(), input.begin())) {
-        return Error(ErrorCode::invalid_state, "missing native DCVC-RT DPB state",
-                     std::string(subsystem));
-    }
-    std::size_t offset = 4;
-    auto frame_height = read_u32(input, offset);
-    auto frame_width = read_u32(input, offset);
-    auto feature_height = read_u32(input, offset);
-    auto feature_width = read_u32(input, offset);
-    if (!frame_height) return frame_height.error();
-    if (!frame_width) return frame_width.error();
-    if (!feature_height) return feature_height.error();
-    if (!feature_width) return feature_width.error();
-    if (frame_height.value() == 0 || frame_width.value() == 0 ||
-        (feature_height.value() == 0) != (feature_width.value() == 0)) {
-        return Error(ErrorCode::invalid_state, "invalid native DCVC-RT DPB dimensions",
-                     std::string(subsystem));
-    }
-    const auto frame_elements = static_cast<std::size_t>(3) * frame_height.value() * frame_width.value();
-    const auto feature_elements = static_cast<std::size_t>(256) * feature_height.value() * feature_width.value();
-    const auto expected = offset + (frame_elements + feature_elements) * sizeof(__half);
-    if (expected != input.size()) {
-        return Error(ErrorCode::invalid_state, "truncated native DCVC-RT DPB state",
-                     std::string(subsystem));
-    }
-    HostTensor frame{"reference_frame",
-                     make_dims(3, static_cast<std::int32_t>(frame_height.value()),
-                               static_cast<std::int32_t>(frame_width.value())),
-                     std::vector<__half>(frame_elements)};
-    std::memcpy(frame.values.data(), input.data() + offset, frame_elements * sizeof(__half));
-    offset += frame_elements * sizeof(__half);
-    std::optional<HostTensor> feature;
-    if (feature_elements != 0) {
-        feature.emplace(HostTensor{
-            "reference_feature",
-            make_dims(256, static_cast<std::int32_t>(feature_height.value()),
-                      static_cast<std::int32_t>(feature_width.value())),
-            std::vector<__half>(feature_elements)});
-        std::memcpy(feature->values.data(), input.data() + offset,
-                    feature_elements * sizeof(__half));
-    }
-    return DpbState{std::move(frame), std::move(feature)};
-}
-
 struct IntraPayload final {
     std::uint32_t width;
     std::uint32_t height;
@@ -1785,7 +2295,11 @@ Result<CodecEncodeResult> encode_predicted(
     const Frame& frame, std::uint32_t base_qp, const SequenceStateView& state,
     DeviceDpb& device_dpb,
     std::vector<EngineInstance>& engines, RansCodec& rans,
-    const RuntimeAssets& assets, cudaStream_t stream) {
+    const RuntimeAssets& assets, VideoQuantDeviceCache& quant_cache,
+    PinnedHostBuffer<std::int8_t>& z_symbols_buffer,
+    PinnedHostBuffer<std::int16_t>& indexes0_buffer,
+    PinnedHostBuffer<std::int16_t>& indexes1_buffer,
+    cudaStream_t stream) {
     if (frame.pixel_format() != PixelFormat::rgb24 &&
         frame.pixel_format() != PixelFormat::yuv420p8) {
         return Error(ErrorCode::invalid_argument, "native P-frame encoding requires RGB24 or YUV420P8",
@@ -1801,11 +2315,11 @@ Result<CodecEncodeResult> encode_predicted(
     const std::string reference_name = use_frame_reference ? "reference_frame" : "reference_feature";
     auto* reference_device = use_frame_reference ? &*device_dpb.frame : &*device_dpb.feature;
     reference_device->name = reference_name;
-    auto q_feature_host = make_video_quant_tensor(assets, "q_feature", qp);
-    auto q_feature_device = upload_tensor(q_feature_host, "q_feature", stream);
-    if (!q_feature_device) return q_feature_device.error();
+    auto& q_feature_opt = quant_cache.q_feature[qp];
+    if (!q_feature_opt.has_value()) return backend_error("missing cached q_feature tensor");
+    auto* q_feature_device = &q_feature_opt.value();
     std::array<DeviceTensor*, 2> reference_inputs{
-        reference_device, &q_feature_device.value()};
+        reference_device, q_feature_device};
     const auto reference_engine = use_frame_reference ? 7U : 8U;
     auto reference_outputs = run_device_engine(
         engines[reference_engine], engine_specs[reference_engine], reference_inputs, stream);
@@ -1817,15 +2331,48 @@ Result<CodecEncodeResult> encode_predicted(
     auto context = std::move(context_result.value());
     auto temporal_context = std::move(temporal_result.value());
 
-    auto input_frame_host = frame.pixel_format() == PixelFormat::yuv420p8 ?
-        yuv420p8_to_ycbcr(frame) : rgb_to_ycbcr(frame);
-    auto input_frame = upload_tensor(input_frame_host, "frame", stream);
+    const auto padded_height = round_up(static_cast<std::int32_t>(frame.height()), 16);
+    const auto padded_width = round_up(static_cast<std::int32_t>(frame.width()), 16);
+    auto input_frame = allocate_device_tensor(
+        "frame", make_dims(3, padded_height, padded_width));
     if (!input_frame) return input_frame.error();
-    auto q_encoder_host = make_video_quant_tensor(assets, "q_encoder", qp);
-    auto q_encoder = upload_tensor(q_encoder_host, "q_encoder", stream);
-    if (!q_encoder) return q_encoder.error();
+    auto input_bytes_device = allocate_cuda(frame.data().size());
+    if (!input_bytes_device) return input_bytes_device.error();
+    auto input_bytes_copied = copy_async(
+        input_bytes_device.value().data, frame.data().data(), frame.data().size(),
+        cudaMemcpyHostToDevice, stream, "cudaMemcpyAsync frame input bytes");
+    if (!input_bytes_copied) return input_bytes_copied.error();
+    {
+        CpuProfileScope stage("p_input_color_convert_gpu");
+        cudaError_t converted = cudaSuccess;
+        if (frame.pixel_format() == PixelFormat::yuv420p8) {
+            converted = cuda_ops::yuv420p8_to_ycbcr_padded(
+                input_bytes_device.value().data,
+                static_cast<std::int32_t>(frame.width()),
+                static_cast<std::int32_t>(frame.height()),
+                input_frame.value().storage.data,
+                padded_height,
+                padded_width,
+                stream);
+        } else {
+            converted = cuda_ops::rgb24_to_ycbcr_padded(
+                input_bytes_device.value().data,
+                static_cast<std::int32_t>(frame.width()),
+                static_cast<std::int32_t>(frame.height()),
+                input_frame.value().storage.data,
+                padded_height,
+                padded_width,
+                stream);
+        }
+        if (converted != cudaSuccess) {
+            return cuda_error("cuda_ops input color convert", converted);
+        }
+    }
+    auto& q_encoder_opt = quant_cache.q_encoder[qp];
+    if (!q_encoder_opt.has_value()) return backend_error("missing cached q_encoder tensor");
+    auto* q_encoder = &q_encoder_opt.value();
     std::array<DeviceTensor*, 3> analysis_inputs{
-        &input_frame.value(), &context, &q_encoder.value()};
+        &input_frame.value(), &context, q_encoder};
     auto analysis_outputs = run_device_engine(
         engines[9], engine_specs[9], analysis_inputs, stream);
     if (!analysis_outputs) return analysis_outputs.error();
@@ -1916,14 +2463,15 @@ Result<CodecEncodeResult> encode_predicted(
     if (!spatial_context) return spatial_context.error();
     const auto y_bytes = prior_count * sizeof(__half);
     const auto params_bytes = 3 * y_bytes;
-    status = cudaMemcpyAsync(spatial_context.value().storage.data,
-                             y_hat_device.value().storage.data, y_bytes,
-                             cudaMemcpyDeviceToDevice, stream);
-    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync spatial y", status);
-    status = cudaMemcpyAsync(static_cast<std::byte*>(spatial_context.value().storage.data) + y_bytes,
-                             params_device.storage.data, params_bytes,
-                             cudaMemcpyDeviceToDevice, stream);
-    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync spatial params", status);
+    auto copied = copy_async(
+        spatial_context.value().storage.data, y_hat_device.value().storage.data, y_bytes,
+        cudaMemcpyDeviceToDevice, stream, "cudaMemcpyAsync spatial y");
+    if (!copied) return copied.error();
+    copied = copy_async(
+        static_cast<std::byte*>(spatial_context.value().storage.data) + y_bytes,
+        params_device.storage.data, params_bytes, cudaMemcpyDeviceToDevice, stream,
+        "cudaMemcpyAsync spatial params");
+    if (!copied) return copied.error();
     std::array<DeviceTensor*, 1> spatial_inputs{&spatial_context.value()};
     auto spatial_outputs = run_device_engine(
         engines[12], engine_specs[12], spatial_inputs, stream);
@@ -1979,18 +2527,30 @@ Result<CodecEncodeResult> encode_predicted(
         symbols1.value().storage.data, scales1.value().storage.data,
         static_cast<std::int16_t*>(indexes1_device.value().data), reduced_count, 0.0F, stream);
     if (status != cudaSuccess) return cuda_error("cuda_ops::build_encode_indexes", status);
-    std::vector<std::int8_t> z_symbols(z_count);
-    std::vector<std::int16_t> indexes0(reduced_count);
-    std::vector<std::int16_t> indexes1(reduced_count);
-    status = cudaMemcpyAsync(z_symbols.data(), z_symbol_device.value().data,
-                             z_count * sizeof(std::int8_t), cudaMemcpyDeviceToHost, stream);
-    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync z symbols", status);
-    status = cudaMemcpyAsync(indexes0.data(), indexes0_device.value().data,
-                             reduced_count * sizeof(std::int16_t), cudaMemcpyDeviceToHost, stream);
-    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync indexes0", status);
-    status = cudaMemcpyAsync(indexes1.data(), indexes1_device.value().data,
-                             reduced_count * sizeof(std::int16_t), cudaMemcpyDeviceToHost, stream);
-    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync indexes1", status);
+    auto z_buffer_ready = z_symbols_buffer.ensure(z_count, "z_symbols");
+    if (!z_buffer_ready) return z_buffer_ready.error();
+    auto indexes0_ready = indexes0_buffer.ensure(reduced_count, "indexes0");
+    if (!indexes0_ready) return indexes0_ready.error();
+    auto indexes1_ready = indexes1_buffer.ensure(reduced_count, "indexes1");
+    if (!indexes1_ready) return indexes1_ready.error();
+
+    std::span<std::int8_t> z_symbols(z_symbols_buffer.data, z_count);
+    std::span<std::int16_t> indexes0(indexes0_buffer.data, reduced_count);
+    std::span<std::int16_t> indexes1(indexes1_buffer.data, reduced_count);
+    copied = copy_async(
+        z_symbols.data(), z_symbol_device.value().data, z_count * sizeof(std::int8_t),
+        cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync z symbols");
+    if (!copied) return copied.error();
+    copied = copy_async(
+        indexes0.data(), indexes0_device.value().data,
+        reduced_count * sizeof(std::int16_t), cudaMemcpyDeviceToHost, stream,
+        "cudaMemcpyAsync indexes0");
+    if (!copied) return copied.error();
+    copied = copy_async(
+        indexes1.data(), indexes1_device.value().data,
+        reduced_count * sizeof(std::int16_t), cudaMemcpyDeviceToHost, stream,
+        "cudaMemcpyAsync indexes1");
+    if (!copied) return copied.error();
 
     CudaEvent entropy_ready;
     status = cudaEventCreateWithFlags(&entropy_ready.data, cudaEventDisableTiming);
@@ -1998,14 +2558,14 @@ Result<CodecEncodeResult> encode_predicted(
     status = cudaEventRecord(entropy_ready.data, stream);
     if (status != cudaSuccess) return cuda_error("cudaEventRecord entropy", status);
 
-    auto q_decoder_host = make_video_quant_tensor(assets, "q_decoder", qp);
-    auto q_decoder = upload_tensor(q_decoder_host, "q_decoder", stream);
-    if (!q_decoder) return q_decoder.error();
-    auto q_recon_host = make_video_quant_tensor(assets, "q_recon", qp);
-    auto q_recon = upload_tensor(q_recon_host, "q_recon", stream);
-    if (!q_recon) return q_recon.error();
+    auto& q_decoder_opt = quant_cache.q_decoder[qp];
+    if (!q_decoder_opt.has_value()) return backend_error("missing cached q_decoder tensor");
+    auto& q_recon_opt = quant_cache.q_recon[qp];
+    if (!q_recon_opt.has_value()) return backend_error("missing cached q_recon tensor");
+    auto* q_decoder = &q_decoder_opt.value();
+    auto* q_recon = &q_recon_opt.value();
     std::array<DeviceTensor*, 4> synthesis_inputs{
-        &y_hat_device.value(), &context, &q_decoder.value(), &q_recon.value()};
+        &y_hat_device.value(), &context, q_decoder, q_recon};
     auto synthesis_outputs = run_device_engine(
         engines[13], engine_specs[13], synthesis_inputs, stream);
     if (!synthesis_outputs) return synthesis_outputs.error();
@@ -2018,6 +2578,7 @@ Result<CodecEncodeResult> encode_predicted(
     status = cudaEventSynchronize(entropy_ready.data);
     if (status != cudaSuccess) return cuda_error("cudaEventSynchronize entropy", status);
 
+    const auto entropy_start = std::chrono::steady_clock::now();
     const bool two_coders =
         static_cast<std::uint64_t>(frame.width()) * frame.height() > 1280ULL * 720ULL;
     rans.reset_encoder();
@@ -2033,17 +2594,14 @@ Result<CodecEncodeResult> encode_predicted(
     if (!encoded_y1) return encoded_y1.error();
     auto stream_bytes = rans.finish_encode();
     if (!stream_bytes) return stream_bytes.error();
+    if (active_profiler != nullptr && active_profiler->enabled()) {
+        active_profiler->record_cpu_stage(
+            "p_entropy_encode",
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - entropy_start).count());
+    }
     auto payload = make_predicted_payload(
         frame.width(), frame.height(), qp, two_coders, use_frame_reference, stream_bytes.value());
-
-    std::array<DeviceTensor*, 1> reconstruction_inputs{&frame_device};
-    auto reconstruction = download_tensors(reconstruction_inputs, stream);
-    if (!reconstruction) return reconstruction.error();
-    auto frame_result = take_tensor(reconstruction.value(), "frame_hat");
-    if (!frame_result) return frame_result.error();
-    auto reconstructed = ycbcr_to_rgb(
-        frame_result.value(), frame.width(), frame.height(), frame.timestamp());
-    if (!reconstructed) return reconstructed.error();
 
     device_dpb.frame = std::move(frame_device);
     device_dpb.feature = std::move(feature_device);
@@ -2051,14 +2609,15 @@ Result<CodecEncodeResult> encode_predicted(
     device_dpb.generation = state.generation;
     std::vector<std::byte> latent_state;
     return CodecEncodeResult{
-        std::move(payload), std::move(reconstructed.value()), std::move(latent_state)};
+        std::move(payload), Frame{}, std::move(latent_state)};
 }
 
 Result<CodecDecodeResult> decode_predicted(
     std::span<const std::byte> payload, Timestamp timestamp, const SequenceStateView& state,
     DeviceDpb& device_dpb,
     std::vector<EngineInstance>& engines, RansCodec& rans,
-    const RuntimeAssets& assets, cudaStream_t stream) {
+    const RuntimeAssets& assets, VideoQuantDeviceCache& quant_cache,
+    cudaStream_t stream) {
     auto parsed = parse_predicted_payload(payload);
     if (!parsed) return parsed.error();
     const auto info = parsed.value();
@@ -2075,11 +2634,11 @@ Result<CodecDecodeResult> decode_predicted(
     const std::string reference_name = info.use_frame_reference ?
         "reference_frame" : "reference_feature";
     reference_device->name = reference_name;
-    auto q_feature_host = make_video_quant_tensor(assets, "q_feature", info.qp);
-    auto q_feature_device = upload_tensor(q_feature_host, "q_feature", stream);
-    if (!q_feature_device) return q_feature_device.error();
+    auto& q_feature_opt = quant_cache.q_feature[info.qp];
+    if (!q_feature_opt.has_value()) return backend_error("missing cached q_feature tensor");
+    auto* q_feature_device = &q_feature_opt.value();
     std::array<DeviceTensor*, 2> reference_inputs{
-        reference_device, &q_feature_device.value()};
+        reference_device, q_feature_device};
     const auto reference_engine = info.use_frame_reference ? 7U : 8U;
     auto reference_outputs = run_device_engine(
         engines[reference_engine], engine_specs[reference_engine], reference_inputs, stream);
@@ -2147,11 +2706,12 @@ Result<CodecDecodeResult> decode_predicted(
         reduced_count, 0.0F, stream);
     if (status != cudaSuccess) return cuda_error("cuda_ops::build_decode_indexes", status);
     std::vector<std::uint8_t> indexes0(reduced_count);
-    status = cudaMemcpyAsync(indexes0.data(), indexes0_device.value().data, reduced_count,
-                             cudaMemcpyDeviceToHost, stream);
-    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync indexes0", status);
-    status = cudaStreamSynchronize(stream);
-    if (status != cudaSuccess) return cuda_error("cudaStreamSynchronize indexes0", status);
+    auto copied = copy_async(
+        indexes0.data(), indexes0_device.value().data, reduced_count,
+        cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync indexes0");
+    if (!copied) return copied.error();
+    auto synchronized = synchronize_stream(stream, "cudaStreamSynchronize indexes0");
+    if (!synchronized) return synchronized.error();
     auto decoded0 = rans.decode_y(indexes0, assets.video_gaussian_y_group);
     if (!decoded0) return decoded0.error();
     HostTensor symbols0_host{"symbols0", reduced_shape,
@@ -2172,14 +2732,15 @@ Result<CodecDecodeResult> decode_predicted(
     if (!spatial_context) return spatial_context.error();
     const auto y_bytes = prior_count * sizeof(__half);
     const auto params_bytes = 3 * y_bytes;
-    status = cudaMemcpyAsync(spatial_context.value().storage.data,
-                             y_hat_device.value().storage.data, y_bytes,
-                             cudaMemcpyDeviceToDevice, stream);
-    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync spatial y", status);
-    status = cudaMemcpyAsync(static_cast<std::byte*>(spatial_context.value().storage.data) + y_bytes,
-                             params_device.storage.data, params_bytes,
-                             cudaMemcpyDeviceToDevice, stream);
-    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync spatial params", status);
+    copied = copy_async(
+        spatial_context.value().storage.data, y_hat_device.value().storage.data, y_bytes,
+        cudaMemcpyDeviceToDevice, stream, "cudaMemcpyAsync spatial y");
+    if (!copied) return copied.error();
+    copied = copy_async(
+        static_cast<std::byte*>(spatial_context.value().storage.data) + y_bytes,
+        params_device.storage.data, params_bytes, cudaMemcpyDeviceToDevice, stream,
+        "cudaMemcpyAsync spatial params");
+    if (!copied) return copied.error();
     std::array<DeviceTensor*, 1> spatial_inputs{&spatial_context.value()};
     auto spatial_outputs = run_device_engine(
         engines[12], engine_specs[12], spatial_inputs, stream);
@@ -2206,11 +2767,12 @@ Result<CodecDecodeResult> decode_predicted(
         reduced_count, 0.0F, stream);
     if (status != cudaSuccess) return cuda_error("cuda_ops::build_decode_indexes", status);
     std::vector<std::uint8_t> indexes1(reduced_count);
-    status = cudaMemcpyAsync(indexes1.data(), indexes1_device.value().data, reduced_count,
-                             cudaMemcpyDeviceToHost, stream);
-    if (status != cudaSuccess) return cuda_error("cudaMemcpyAsync indexes1", status);
-    status = cudaStreamSynchronize(stream);
-    if (status != cudaSuccess) return cuda_error("cudaStreamSynchronize indexes1", status);
+    copied = copy_async(
+        indexes1.data(), indexes1_device.value().data, reduced_count,
+        cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync indexes1");
+    if (!copied) return copied.error();
+    synchronized = synchronize_stream(stream, "cudaStreamSynchronize indexes1");
+    if (!synchronized) return synchronized.error();
     auto decoded1 = rans.decode_y(indexes1, assets.video_gaussian_y_group);
     if (!decoded1) return decoded1.error();
     HostTensor symbols1_host{"symbols1", reduced_shape,
@@ -2233,14 +2795,14 @@ Result<CodecDecodeResult> decode_predicted(
         q_dec_values, prior_count, stream);
     if (status != cudaSuccess) return cuda_error("cuda_ops::add_and_multiply", status);
 
-    auto q_decoder_host = make_video_quant_tensor(assets, "q_decoder", info.qp);
-    auto q_decoder = upload_tensor(q_decoder_host, "q_decoder", stream);
-    if (!q_decoder) return q_decoder.error();
-    auto q_recon_host = make_video_quant_tensor(assets, "q_recon", info.qp);
-    auto q_recon = upload_tensor(q_recon_host, "q_recon", stream);
-    if (!q_recon) return q_recon.error();
+    auto& q_decoder_opt = quant_cache.q_decoder[info.qp];
+    if (!q_decoder_opt.has_value()) return backend_error("missing cached q_decoder tensor");
+    auto& q_recon_opt = quant_cache.q_recon[info.qp];
+    if (!q_recon_opt.has_value()) return backend_error("missing cached q_recon tensor");
+    auto* q_decoder = &q_decoder_opt.value();
+    auto* q_recon = &q_recon_opt.value();
     std::array<DeviceTensor*, 4> synthesis_inputs{
-        &y_hat_device.value(), &context, &q_decoder.value(), &q_recon.value()};
+        &y_hat_device.value(), &context, q_decoder, q_recon};
     auto synthesis_outputs = run_device_engine(
         engines[13], engine_specs[13], synthesis_inputs, stream);
     if (!synthesis_outputs) return synthesis_outputs.error();
@@ -2307,6 +2869,11 @@ public:
 
         const auto device_status = cudaSetDevice(configuration.device_id);
         if (device_status != cudaSuccess) return cuda_error("cudaSetDevice", device_status);
+        auto low_memory_mode = determine_low_memory_mode(configuration.device_id);
+        if (!low_memory_mode) return low_memory_mode.error();
+        auto manifest = validate_engine_manifest(
+            configuration.intra_engine_path, configuration.device_id);
+        if (!manifest) return manifest.error();
 
         try {
             std::unique_ptr<nvinfer1::IRuntime> runtime(nvinfer1::createInferRuntime(logger_));
@@ -2330,7 +2897,14 @@ public:
             if (stream_status != cudaSuccess) {
                 return cuda_error("cudaStreamCreateWithFlags", stream_status);
             }
+            VideoQuantDeviceCache video_quant_cache;
+            auto quant_cache_loaded = populate_video_quant_cache(assets.value(), video_quant_cache, stream);
+            if (!quant_cache_loaded) {
+                static_cast<void>(cudaStreamDestroy(stream));
+                return quant_cache_loaded.error();
+            }
             for (std::size_t index = 0; index < engines.size(); ++index) {
+                tensorrt_low_memory_mode = low_memory_mode.value();
                 auto warmed = warm_up_engine(engines[index], engine_specs[index], stream);
                 if (!warmed) {
                     static_cast<void>(cudaStreamDestroy(stream));
@@ -2342,8 +2916,15 @@ public:
             engines_ = std::move(engines);
             rans_ = std::move(rans);
             assets_ = std::move(assets.value());
+            video_quant_cache_ = std::move(video_quant_cache);
             stream_ = stream;
             intra_qp_ = configuration.intra_qp;
+            profiling_enabled_ = configuration.enable_profiling;
+            low_memory_mode_ = low_memory_mode.value();
+            tensorrt_low_memory_mode = low_memory_mode_;
+            std::clog << "[nvcr.dcvcrt] [info] TensorRT mode: "
+                      << (low_memory_mode_ ? "low-memory" : "performance")
+                      << '\n';
             initialized_ = true;
             return {};
         } catch (const std::exception& exception) {
@@ -2365,13 +2946,22 @@ public:
                 std::string(subsystem));
         }
         try {
-            CudaAllocationScope allocation_scope(stream_);
+            tensorrt_low_memory_mode = low_memory_mode_;
+            BackendProfiler profiler(profiling_enabled_);
+            profiler.begin("encode", frame_type, state.frame_index);
+            CudaAllocationScope allocation_scope(stream_, &profiler);
             if (frame_type == FrameType::intra) {
-                return encode_intra(
+                auto result = encode_intra(
                     frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_, stream_);
+                profiler.finish();
+                return result;
             }
-            return encode_predicted(
-                frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_, stream_);
+            auto result = encode_predicted(
+                frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_,
+                video_quant_cache_, z_symbols_buffer_, indexes0_buffer_,
+                indexes1_buffer_, stream_);
+            profiler.finish();
+            return result;
         } catch (const std::exception& exception) {
             return backend_error(
                 std::string("native I-frame encoding failed: ") + exception.what());
@@ -2392,13 +2982,21 @@ public:
                 std::string(subsystem));
         }
         try {
-            CudaAllocationScope allocation_scope(stream_);
+            tensorrt_low_memory_mode = low_memory_mode_;
+            BackendProfiler profiler(profiling_enabled_);
+            profiler.begin("decode", frame_type, state.frame_index);
+            CudaAllocationScope allocation_scope(stream_, &profiler);
             if (frame_type == FrameType::intra) {
-                return decode_intra(
+                auto result = decode_intra(
                     payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_, stream_);
+                profiler.finish();
+                return result;
             }
-            return decode_predicted(
-                payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_, stream_);
+            auto result = decode_predicted(
+                payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_,
+                video_quant_cache_, stream_);
+            profiler.finish();
+            return result;
         } catch (const std::exception& exception) {
             return backend_error(
                 std::string("native I-frame decoding failed: ") + exception.what());
@@ -2433,10 +3031,16 @@ private:
     std::vector<EngineInstance> engines_;
     RansCodec rans_;
     RuntimeAssets assets_;
+    VideoQuantDeviceCache video_quant_cache_;
+    PinnedHostBuffer<std::int8_t> z_symbols_buffer_;
+    PinnedHostBuffer<std::int16_t> indexes0_buffer_;
+    PinnedHostBuffer<std::int16_t> indexes1_buffer_;
     cudaStream_t stream_{};
     DeviceDpb encoder_dpb_;
     DeviceDpb decoder_dpb_;
     std::uint32_t intra_qp_{};
+    bool profiling_enabled_{false};
+    bool low_memory_mode_{true};
     bool initialized_{false};
 };
 

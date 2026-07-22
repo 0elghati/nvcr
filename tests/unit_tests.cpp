@@ -64,3 +64,16 @@ TEST(SequenceState, PredictedFramesAreValidatedWithoutGopBoundaryDependency) {
     EXPECT_TRUE(state.validate_packet(nvcr::FrameType::predicted));
 }
 
+TEST(SequenceState, PredictedCommitCanAdvanceWithoutHostReference) {
+    nvcr::dcvcrt::SequenceState state(32);
+    auto reference = nvcr::Frame::create(2, 2, nvcr::PixelFormat::gray8);
+    ASSERT_TRUE(reference);
+    ASSERT_TRUE(state.commit(std::move(reference.value()), {}, nvcr::FrameType::intra));
+
+    ASSERT_TRUE(state.commit(nvcr::Frame{}, {}, nvcr::FrameType::predicted));
+    EXPECT_TRUE(state.has_reference());
+    EXPECT_EQ(state.frame_index(), 2U);
+    auto type = state.next_frame_type();
+    ASSERT_TRUE(type);
+    EXPECT_EQ(type.value(), nvcr::FrameType::predicted);
+}

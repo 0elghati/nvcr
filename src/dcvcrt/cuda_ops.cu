@@ -66,6 +66,74 @@ __global__ void replicate_pad_kernel(
     output[index] = input[source];
 }
 
+__global__ void rgb24_to_ycbcr_padded_kernel(
+    const std::uint8_t* input,
+    std::int32_t source_width,
+    std::int32_t source_height,
+    __half* output,
+    std::int32_t padded_height,
+    std::int32_t padded_width,
+    std::size_t count) {
+    const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (index >= count) return;
+    const auto x = static_cast<std::int32_t>(index % static_cast<std::size_t>(padded_width));
+    const auto y = static_cast<std::int32_t>(index / static_cast<std::size_t>(padded_width));
+    const auto source_x = x < source_width ? x : source_width - 1;
+    const auto source_y = y < source_height ? y : source_height - 1;
+    const auto source =
+        (static_cast<std::size_t>(source_y) * source_width + source_x) * 3U;
+
+    constexpr float kr = 0.2126F;
+    constexpr float kg = 0.7152F;
+    constexpr float kb = 0.0722F;
+    const float r = static_cast<float>(input[source]) / 255.0F;
+    const float g = static_cast<float>(input[source + 1]) / 255.0F;
+    const float b = static_cast<float>(input[source + 2]) / 255.0F;
+    const float luma = kr * r + kg * g + kb * b;
+    const float cb = 0.5F * (b - luma) / (1.0F - kb) + 0.5F;
+    const float cr = 0.5F * (r - luma) / (1.0F - kr) + 0.5F;
+
+    const auto plane = static_cast<std::size_t>(padded_height) * padded_width;
+    const auto offset = static_cast<std::size_t>(y) * padded_width + x;
+    output[offset] = __float2half_rn(luma);
+    output[plane + offset] = __float2half_rn(cb);
+    output[2 * plane + offset] = __float2half_rn(cr);
+}
+
+__global__ void yuv420p8_to_ycbcr_padded_kernel(
+    const std::uint8_t* input,
+    std::int32_t source_width,
+    std::int32_t source_height,
+    __half* output,
+    std::int32_t padded_height,
+    std::int32_t padded_width,
+    std::size_t count) {
+    const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (index >= count) return;
+    const auto x = static_cast<std::int32_t>(index % static_cast<std::size_t>(padded_width));
+    const auto y = static_cast<std::int32_t>(index / static_cast<std::size_t>(padded_width));
+    const auto source_x = x < source_width ? x : source_width - 1;
+    const auto source_y = y < source_height ? y : source_height - 1;
+
+    const auto y_size = static_cast<std::size_t>(source_width) * source_height;
+    const auto uv_width = source_width / 2;
+    const auto uv_size = static_cast<std::size_t>(uv_width) * (source_height / 2);
+    const auto y_index = static_cast<std::size_t>(source_y) * source_width + source_x;
+    const auto uv_index = static_cast<std::size_t>(source_y / 2) * uv_width + source_x / 2;
+
+    const auto* u_plane = input + y_size;
+    const auto* v_plane = input + y_size + uv_size;
+    const float luma = static_cast<float>(input[y_index]) / 255.0F;
+    const float cb = static_cast<float>(u_plane[uv_index]) / 255.0F;
+    const float cr = static_cast<float>(v_plane[uv_index]) / 255.0F;
+
+    const auto plane = static_cast<std::size_t>(padded_height) * padded_width;
+    const auto offset = static_cast<std::size_t>(y) * padded_width + x;
+    output[offset] = __float2half_rn(luma);
+    output[plane + offset] = __float2half_rn(cb);
+    output[2 * plane + offset] = __float2half_rn(cr);
+}
+
 __global__ void make_four_way_mask_kernel(
     __half* mask, Shape4D shape, std::int32_t stage, std::size_t count) {
     const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
@@ -294,6 +362,45 @@ cudaError_t make_four_way_mask(
     const auto count = volume(shape);
     make_four_way_mask_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
         static_cast<__half*>(mask), shape, stage, count);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t rgb24_to_ycbcr_padded(
+    const void* input,
+    std::int32_t source_width,
+    std::int32_t source_height,
+    void* output,
+    std::int32_t padded_height,
+    std::int32_t padded_width,
+    cudaStream_t stream) noexcept {
+    if (input == nullptr || output == nullptr || source_width <= 0 || source_height <= 0 ||
+        padded_height < source_height || padded_width < source_width) {
+        return cudaErrorInvalidValue;
+    }
+    const auto count = static_cast<std::size_t>(padded_height) * padded_width;
+    rgb24_to_ycbcr_padded_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
+        static_cast<const std::uint8_t*>(input), source_width, source_height,
+        static_cast<__half*>(output), padded_height, padded_width, count);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t yuv420p8_to_ycbcr_padded(
+    const void* input,
+    std::int32_t source_width,
+    std::int32_t source_height,
+    void* output,
+    std::int32_t padded_height,
+    std::int32_t padded_width,
+    cudaStream_t stream) noexcept {
+    if (input == nullptr || output == nullptr || source_width <= 0 || source_height <= 0 ||
+        (source_width & 1) != 0 || (source_height & 1) != 0 ||
+        padded_height < source_height || padded_width < source_width) {
+        return cudaErrorInvalidValue;
+    }
+    const auto count = static_cast<std::size_t>(padded_height) * padded_width;
+    yuv420p8_to_ycbcr_padded_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
+        static_cast<const std::uint8_t*>(input), source_width, source_height,
+        static_cast<__half*>(output), padded_height, padded_width, count);
     return cudaPeekAtLastError();
 }
 

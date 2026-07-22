@@ -43,7 +43,7 @@ private:
     std::vector<std::byte> latent_state_;
     std::uint64_t frame_index_{};
     std::uint64_t generation_{};
+    bool has_reference_{false};
 };
 
 }  // namespace nvcr::dcvcrt
-

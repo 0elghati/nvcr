@@ -42,6 +42,7 @@ struct Options final {
     std::uint32_t gop_size{32};
     std::int64_t frame_period_us{16'667};
     std::int32_t device_id{};
+    bool profile{};
     bool help{};
 };
 
@@ -53,8 +54,8 @@ void usage(std::ostream& out) {
         << "  nvcr decode -i INPUT.nvcr -o OUTPUT.yuv --engine-dir DIR\n"
         << "              [--frames N] [--device-id N]\n\n"
         << "Input and output video use planar 8-bit YUV 4:2:0. A frame count of zero\n"
-        << "means process until end of input. Native predicted-frame encoding is not\n"
-        << "implemented; multi-frame all-intra mode must be requested explicitly.\n\n"
+        << "means process until end of input. Normal encoding uses the configured I/P\n"
+        << "GOP; --gop-size 1 explicitly requests all-intra development mode.\n\n"
         << "Options:\n"
         << "  -i, --input FILE          Input file\n"
         << "  -o, --output FILE         Output file\n"
@@ -68,6 +69,7 @@ void usage(std::ostream& out) {
         << "  -r, --fps FPS             Input frame rate (default: 60)\n"
         << "      --frame-period-us N   Exact timestamp interval (alternative to --fps)\n"
         << "      --device-id N         CUDA device (default: 0)\n"
+        << "      --profile             Print TensorRT/CUDA per-frame profiling counters\n"
         << "  -h, --help                Show this help\n";
 }
 
@@ -196,6 +198,8 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 std::cerr << "nvcr: invalid frame period: " << value << '\n';
                 return false;
             }
+        } else if (argument == "--profile") {
+            options.profile = true;
         } else {
             std::cerr << "nvcr: unknown option: " << argument << '\n';
             return false;
@@ -355,6 +359,7 @@ nvcr::Result<nvcr::Runtime> create_runtime(const Options& options) {
     configuration.device_id = options.device_id;
     configuration.intra_qp = options.qp;
     configuration.gop_size = options.gop_size;
+    configuration.enable_profiling = options.profile;
     nvcr::dcvcrt::Components components;
     components.codec = std::move(backend.value());
     return nvcr::Runtime::create(configuration, std::move(components));

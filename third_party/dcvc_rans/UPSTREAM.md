@@ -1,7 +1,7 @@
 # DCVC-RT native rANS core
 
 Source: `LMC-UCA/DCVC`, working reference checkout
-`/home/oelghati/DCVC/DCVC-RT`.
+`/home/oelghati/nvcr/assets`.
 
 Pinned reference commit: `dae827ffcc812566adbeaf4554f0fe2d9b4b9e0c`.
 

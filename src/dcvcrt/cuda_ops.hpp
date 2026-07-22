@@ -28,6 +28,24 @@ cudaError_t replicate_pad(
     std::int32_t padded_width,
     cudaStream_t stream) noexcept;
 
+cudaError_t rgb24_to_ycbcr_padded(
+    const void* input,
+    std::int32_t source_width,
+    std::int32_t source_height,
+    void* output,
+    std::int32_t padded_height,
+    std::int32_t padded_width,
+    cudaStream_t stream) noexcept;
+
+cudaError_t yuv420p8_to_ycbcr_padded(
+    const void* input,
+    std::int32_t source_width,
+    std::int32_t source_height,
+    void* output,
+    std::int32_t padded_height,
+    std::int32_t padded_width,
+    cudaStream_t stream) noexcept;
+
 cudaError_t make_four_way_mask(
     void* mask,
     Shape4D shape,
