@@ -17,11 +17,54 @@ on:
         description: Build and upload the aarch64 Jetson package
         type: boolean
         default: false
+      publish_portable:
+        description: Build and upload the portable multi-GPU-arch x86_64 package
+        type: boolean
+        default: true
 
 permissions:
   contents: write
 
 jobs:
+  build-portable:
+    # Hosted runner, no self-hosted GPU hardware required: compiles a single
+    # x86_64 binary that targets every GPU architecture in the portable
+    # matrix (see NVCR_CUDA_ARCH_SET in cmake/NVCROptions.cmake). This does
+    # not run CUDA-executing tests (no GPU on the runner) and does not ship
+    # an engine bundle: users still need a per-GPU TensorRT plan, either
+    # from a matching engine bundle or built locally (docs/dcvcrt-artifacts.md).
+    if: ${{ vars.NVCR_RELEASE_PORTABLE != 'false' && (github.event_name == 'release' || inputs.publish_portable) }}
+    runs-on: ubuntu-latest
+    env:
+      NVCR_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CUDA toolkit and TensorRT development packages
+        run: ./scripts/ci/install_cuda_tensorrt.sh
+
+      - name: Build and install
+        run: |
+          ./scripts/install.sh \
+            --build-type Release \
+            --build-dir build-release-portable \
+            --prefix "$RUNNER_TEMP/nvcr-install" \
+            --arch-set portable
+
+      - name: Package release archives
+        run: |
+          ./scripts/package_release.sh \
+            --version "${NVCR_TAG#v}" \
+            --platform linux-x86_64-portable \
+            --install-prefix "$RUNNER_TEMP/nvcr-install" \
+            --output-dir "$RUNNER_TEMP/nvcr-dist"
+
+      - name: Upload release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$NVCR_TAG" "$RUNNER_TEMP"/nvcr-dist/* --clobber
+
   build-discrete:
     if: ${{ vars.NVCR_RELEASE_DISCRETE == 'true' && (github.event_name == 'release' || inputs.publish_discrete) }}
     runs-on:

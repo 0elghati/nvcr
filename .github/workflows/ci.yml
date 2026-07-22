@@ -1,0 +1,141 @@
+name: ci
+
+# Validates pull requests before merge. Only GitHub-hosted runners are used
+# here on purpose: self-hosted GPU runners (nvcr-release-discrete,
+# nvcr-release-jetson) must never be wired to the pull_request trigger,
+# because a fork could open a PR that runs arbitrary code on them. Real GPU
+# execution (CUDA ops tests, TensorRT engine round-trips) stays out of PR
+# validation and continues to run only on the self-hosted release pipeline in
+# release-assets.yml, and manually by maintainers as needed.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    # Detects whether this push/PR touched anything that can affect the
+    # compiled C++ output, so doc-only changes don't pay for a full
+    # configure/build/test cycle. Docs, README, ROADMAP, etc. fall through to
+    # "false" and the build-cpu/build-cuda-portable jobs below are skipped
+    # (not failed) for them.
+    runs-on: ubuntu-latest
+    outputs:
+      cpp: ${{ steps.filter.outputs.cpp }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            cpp:
+              - 'CMakeLists.txt'
+              - 'cmake/**'
+              - 'src/**'
+              - 'include/**'
+              - 'cli/**'
+              - 'tests/**'
+              - 'benchmarks/**'
+              - 'examples/**'
+              - 'third_party/**'
+              - 'tools/**'
+              - 'scripts/**'
+              - '.github/workflows/ci.yml'
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax and shellcheck
+        run: |
+          set -euo pipefail
+          shopt -s globstar
+          for f in scripts/**/*.sh; do
+            echo "== $f =="
+            bash -n "$f"
+          done
+          shellcheck scripts/*.sh scripts/ci/*.sh
+
+      - name: Python syntax check
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for f in scripts/*.py; do
+            echo "== $f =="
+            python3 -m py_compile "$f"
+          done
+
+      - name: Validate release-please JSON config
+        run: |
+          python3 -m json.tool release-please-config.json >/dev/null
+          python3 -m json.tool .release-please-manifest.json >/dev/null
+
+  build-cpu:
+    # Validates the CPU-only build (NVCR_ENABLE_TENSORRT=OFF) across both
+    # host CPU architectures NVCR ships for: x86_64 and aarch64 (Jetson's CPU
+    # architecture, exercised here without CUDA/TensorRT since hosted aarch64
+    # runners have no GPU). Skipped (not failed) when nothing under the
+    # `cpp` filter above changed, e.g. a docs-only PR.
+    needs: changes
+    if: needs.changes.outputs.cpp == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+        build_type: [Debug, Release]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DNVCR_ENABLE_TENSORRT=OFF \
+            -DNVCR_FETCH_DEPENDENCIES=ON \
+            -DNVCR_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  build-cuda-portable:
+    # Compile-only validation of the CUDA/TensorRT backend across every GPU
+    # architecture in the portable release matrix (see NVCR_CUDA_ARCH_SET in
+    # cmake/NVCROptions.cmake). Hosted runners have no GPU, so this only
+    # proves the code configures and compiles for all target architectures;
+    # it cannot run CUDA-executing tests. Best-effort: NVIDIA's public apt
+    # package names/versions can change, so this job does not block merges.
+    # Skipped (not failed) when nothing under the `cpp` filter above changed.
+    needs: changes
+    if: needs.changes.outputs.cpp == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CUDA toolkit and TensorRT development packages
+        run: ./scripts/ci/install_cuda_tensorrt.sh
+
+      - name: Configure (portable multi-arch)
+        run: |
+          cmake -S . -B build-portable \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNVCR_ENABLE_TENSORRT=ON \
+            -DNVCR_CUDA_ARCH_SET=portable \
+            -DNVCR_FETCH_DEPENDENCIES=ON \
+            -DNVCR_BUILD_TESTS=ON
+
+      - name: Build (compile-check only, no GPU present)
+        run: cmake --build build-portable --parallel

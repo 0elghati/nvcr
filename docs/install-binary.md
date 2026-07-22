@@ -18,7 +18,8 @@ Typical platform IDs:
 
 | Host | Platform tag | Notes |
 |---|---|---|
-| x86_64 + RTX/datacenter | `linux-x86_64-discrete` | Use discrete GPU release |
+| x86_64 + RTX/datacenter | `linux-x86_64-discrete` | Fastest build, targets only that GPU's architecture |
+| x86_64, any supported NVIDIA GPU | `linux-x86_64-portable` | Single build covering multiple GPU architectures, no bundled engines |
 | aarch64 Jetson Orin | `linux-aarch64-jetson` | Build and run on target device |
 
 ## 2) Download and install NVCR binary
