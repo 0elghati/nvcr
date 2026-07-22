@@ -5,15 +5,15 @@ targets one codec only: **DCVC-RT**.
 
 ## Documentation
 
-If you want to understand or publish the project, start with the docs index at
-[docs/README.md](docs/README.md). It gives the recommended reading order and the
-topic pages below.
+Start with [docs/getting-started.md](docs/getting-started.md) for installation
+and first-run steps, or use the quick-start commands below.
 
 Release automation and asset publishing are described in
 [docs/releasing.md](docs/releasing.md).
 
 ## Contents
 
+- [Quick Start](#quick-start)
 - [Why NVCR?](#why-nvcr)
 - [Architecture](#architecture)
 - [Current scope](#current-scope)
@@ -34,6 +34,53 @@ serve FFmpeg.
 > fourteen TensorRT plans and native rANS. It is **not yet a complete, production-
 > ready DCVC-RT codec**: upstream reconstruction/stream conformance, GPU-resident
 > orchestration, performance parity, and FFmpeg integration remain pending.
+
+## Quick Start
+
+### Install a published release
+
+```bash
+export NVCR_VERSION="v0.1.0" # x-release-please-version
+export NVCR_PLATFORM="linux-x86_64-discrete"   # or linux-aarch64-jetson
+export NVCR_PREFIX="$HOME/.local/nvcr"
+
+mkdir -p "$NVCR_PREFIX"
+curl -fL "https://github.com/<your-org>/NVCR/releases/download/${NVCR_VERSION}/nvcr-${NVCR_VERSION}-${NVCR_PLATFORM}.tar.gz" -o /tmp/nvcr.tar.gz
+tar -xzf /tmp/nvcr.tar.gz -C "$NVCR_PREFIX" --strip-components=1
+export PATH="$NVCR_PREFIX/bin:$PATH"
+nvcr --help
+```
+
+If a matching engine bundle is published for your platform:
+
+```bash
+curl -fL "https://github.com/<your-org>/NVCR/releases/download/${NVCR_VERSION}/dcvcrt-engines-${NVCR_VERSION}-${NVCR_PLATFORM}.tar.gz" -o /tmp/nvcr-engines.tar.gz
+mkdir -p "$NVCR_PREFIX/engines"
+tar -xzf /tmp/nvcr-engines.tar.gz -C "$NVCR_PREFIX/engines"
+```
+
+### Build from source
+
+```bash
+./scripts/install.sh --run-tests
+```
+
+### Build local TensorRT engines
+
+```bash
+./scripts/prepare_dcvcrt_artifacts.sh \
+  --dcvcrt-root /path/to/DCVC-RT \
+  --models build/models/dcvcrt \
+  --engines build/engines/dcvcrt \
+  --trtexec /usr/src/tensorrt/bin/trtexec \
+  --python /path/to/DCVC-RT/src/venv/bin/python \
+  --skip-clone --skip-smoke
+```
+
+For the full installation and packaging flow, see
+[docs/getting-started.md](docs/getting-started.md),
+[docs/install-binary.md](docs/install-binary.md), and
+[docs/dcvcrt-artifacts.md](docs/dcvcrt-artifacts.md).
 
 ## Why NVCR?
 
