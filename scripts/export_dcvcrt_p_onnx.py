@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import json
 import os
 from pathlib import Path
@@ -15,10 +16,11 @@ from typing import Any
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    default_dcvcrt_root = Path(__file__).resolve().parent.parent / "assets"
     parser.add_argument(
         "--dcvcrt-root",
         type=Path,
-        default=Path(os.environ.get("NVCR_DCVCRT_ROOT", "/home/oelghati/DCVC/DCVC-RT")),
+        default=Path(os.environ.get("NVCR_DCVCRT_ROOT", str(default_dcvcrt_root))),
     )
     parser.add_argument("--output-dir", type=Path, default=Path("build/models/dcvcrt"))
     parser.add_argument("--height", type=int, default=144)
@@ -40,6 +42,49 @@ def sha256(path: Path) -> str:
 def tensor_shape(value: Any) -> list[str]:
     return [dimension.dim_param or str(dimension.dim_value)
             for dimension in value.type.tensor_type.shape.dim]
+
+
+def resolve_export_device(requested: str, torch: Any) -> tuple[Any, Any]:
+    if requested == "cpu":
+        return torch.device("cpu"), torch.float32
+    if not torch.cuda.is_available():
+        print("CUDA export unavailable; falling back to CPU export.", file=sys.stderr)
+        return torch.device("cpu"), torch.float32
+    try:
+        _ = torch.zeros((1,), device="cuda")
+        torch.cuda.synchronize()
+    except Exception as exc:  # pragma: no cover - depends on local CUDA runtime
+        message = str(exc).lower()
+        if "no kernel image is available" in message or "cuda error" in message:
+            print(
+                "CUDA export failed on this runtime; falling back to CPU export.",
+                file=sys.stderr,
+            )
+            return torch.device("cpu"), torch.float32
+        raise
+    return torch.device("cuda"), torch.float16
+
+
+def derive_dynamic_axes(
+    input_names: list[str],
+    dynamic_shapes: tuple[Any, ...] | None,
+    dynamic_axes: dict[str, dict[int, str]] | None,
+) -> dict[str, dict[int, str]] | None:
+    if dynamic_axes is not None:
+        return dynamic_axes
+    if dynamic_shapes is None:
+        return None
+    axes: dict[str, dict[int, str]] = {}
+    for index, spec in enumerate(dynamic_shapes):
+        if index >= len(input_names) or not isinstance(spec, dict):
+            continue
+        names: dict[int, str] = {}
+        for axis, dim in spec.items():
+            if isinstance(axis, int):
+                names[axis] = str(dim)
+        if names:
+            axes[input_names[index]] = names
+    return axes or None
 
 
 def export_entropy(model: Any, output_dir: Path) -> dict[str, Any]:
@@ -117,15 +162,11 @@ def main() -> int:
     from src.models.video_model import DMC
     from src.utils.common import get_state_dict
 
-    if args.device == "cuda" and not torch.cuda.is_available():
-        raise SystemExit("CUDA export requested but torch.cuda.is_available() is false")
-
     checkpoint = args.dcvcrt_root / "checkpoints/cvpr2025_video.pth.tar"
     if not checkpoint.is_file():
         raise SystemExit(f"video checkpoint not found: {checkpoint}")
 
-    device = torch.device(args.device)
-    dtype = torch.float16 if device.type == "cuda" else torch.float32
+    device, dtype = resolve_export_device(args.device, torch)
     model = DMC()
     model.load_state_dict(get_state_dict(checkpoint))
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -223,18 +264,46 @@ def main() -> int:
     ) -> None:
         path = args.output_dir / f"{name}.onnx"
         with torch.no_grad():
-            torch.onnx.export(
-                module.eval(),
-                inputs,
-                path,
-                input_names=input_names,
-                output_names=output_names,
-                opset_version=args.opset,
-                dynamo=dynamo,
-                dynamic_shapes=dynamic_shapes if dynamo else None,
-                dynamic_axes=dynamic_axes if not dynamo else None,
-                external_data=False,
-            )
+            export_signature = inspect.signature(torch.onnx.export)
+            export_kwargs: dict[str, Any] = {
+                "input_names": input_names,
+                "output_names": output_names,
+                "opset_version": args.opset,
+            }
+            if "external_data" in export_signature.parameters:
+                export_kwargs["external_data"] = False
+            if "dynamo" in export_signature.parameters:
+                export_kwargs["dynamo"] = dynamo
+            if dynamic_shapes is not None and "dynamic_shapes" in export_signature.parameters:
+                export_kwargs["dynamic_shapes"] = dynamic_shapes
+            if dynamic_axes is not None and "dynamic_axes" in export_signature.parameters:
+                export_kwargs["dynamic_axes"] = dynamic_axes
+            try:
+                torch.onnx.export(
+                    module.eval(),
+                    inputs,
+                    path,
+                    **export_kwargs,
+                )
+            except Exception:
+                if not dynamo:
+                    raise
+                if "dynamo" in export_signature.parameters:
+                    export_kwargs["dynamo"] = False
+                export_kwargs.pop("dynamic_shapes", None)
+                compat_dynamic_axes = derive_dynamic_axes(input_names, dynamic_shapes, dynamic_axes)
+                if compat_dynamic_axes is not None and "dynamic_axes" in export_signature.parameters:
+                    export_kwargs["dynamic_axes"] = compat_dynamic_axes
+                print(
+                    f"dynamo ONNX export failed for {name}; retrying with legacy exporter",
+                    file=sys.stderr,
+                )
+                torch.onnx.export(
+                    module.eval(),
+                    inputs,
+                    path,
+                    **export_kwargs,
+                )
         graph = onnx.load(path)
         onnx.checker.check_model(graph)
         exports.append({
