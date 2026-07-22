@@ -3,6 +3,11 @@
 NVCR is a modern C++20 deployment runtime for learned video codecs. Version 0.1.0 <!-- x-release-please-version -->
 targets one codec only: **DCVC-RT**.
 
+## About
+
+Deployment-focused C++ runtime for DCVC-RT with deterministic lifecycle
+control, stable bitstream framing, and release-ready packaging.
+
 ## Documentation
 
 Start with [docs/getting-started.md](docs/getting-started.md) for installation
