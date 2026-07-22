@@ -7,7 +7,6 @@
       "release-type": "simple",
       "package-name": "nvcr",
       "include-component-in-tag": false,
-      "release-as": "0.1.0",
       "changelog-path": "CHANGELOG.md",
       "version-file": "version.txt",
       "extra-files": [
