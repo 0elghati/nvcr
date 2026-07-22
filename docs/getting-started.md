@@ -13,7 +13,7 @@ For binary-release installation, use
 Install from published artifacts:
 
 ```bash
-export NVCR_VERSION="v0.1.0"
+export NVCR_VERSION="v0.1.0" # x-release-please-version
 export NVCR_PLATFORM="linux-x86_64-discrete"   # or linux-aarch64-jetson
 export NVCR_PREFIX="$HOME/.local/nvcr"
 

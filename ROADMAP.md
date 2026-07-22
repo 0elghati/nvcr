@@ -674,6 +674,28 @@ Append evidence; never silently replace historical results.
 - Scope note: documentation-only restructure; no runtime or performance behavior
   changes were introduced.
 
+### 2026-07-22 — Release-please and GitHub release automation bootstrap
+
+- Added `release-please-config.json`, `.release-please-manifest.json`,
+  `version.txt`, and `CHANGELOG.md` to bootstrap manifest-driven
+  release-please for the root package.
+- Added `.github/workflows/release-please.yml` to open release pull requests,
+  bump versions, tag releases, and publish GitHub Releases from conventional
+  commits.
+- Added `.github/workflows/release-assets.yml` for self-hosted GPU runners to
+  build release installs, optionally generate target-local engine bundles, and
+  upload release archives to GitHub Releases.
+- Added `scripts/package_release.sh` and `docs/releasing.md` to document and
+  package binary and engine archives with stable names matching the install
+  guide.
+- Validation: `bash -n scripts/package_release.sh`,
+  `./scripts/package_release.sh --help`, `python3 -m json.tool` for both
+  release-please JSON files, and `git diff --check` passed locally.
+- Operational note: actual remote release creation still depends on pushing the
+  workflow files, enabling repository Actions permissions, and supplying a
+  `RELEASE_PLEASE_TOKEN` if release-created workflows should trigger asset
+  publication.
+
 ## Decision log
 
 Append decisions with date, rationale, and consequences.

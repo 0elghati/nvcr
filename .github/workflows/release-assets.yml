@@ -1,0 +1,119 @@
+name: release-assets
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to upload assets to, for example v0.1.0
+        required: true
+      publish_discrete:
+        description: Build and upload the x86_64 discrete package
+        type: boolean
+        default: true
+      publish_jetson:
+        description: Build and upload the aarch64 Jetson package
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-discrete:
+    if: ${{ vars.NVCR_RELEASE_DISCRETE == 'true' && (github.event_name == 'release' || inputs.publish_discrete) }}
+    runs-on:
+      - self-hosted
+      - nvcr-release-discrete
+    env:
+      NVCR_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and install
+        run: |
+          ./scripts/install.sh \
+            --build-type Release \
+            --build-dir build-release-discrete \
+            --prefix "$RUNNER_TEMP/nvcr-install" \
+            --run-tests
+
+      - name: Build local engine bundle when checkpoints are configured
+        if: ${{ vars.NVCR_DCVCRT_ROOT_DISCRETE != '' && vars.NVCR_DCVCRT_PYTHON_DISCRETE != '' }}
+        run: |
+          ./scripts/prepare_dcvcrt_artifacts.sh \
+            --dcvcrt-root "${{ vars.NVCR_DCVCRT_ROOT_DISCRETE }}" \
+            --models build/models/dcvcrt \
+            --engines "$RUNNER_TEMP/nvcr-engines/dcvcrt" \
+            --python "${{ vars.NVCR_DCVCRT_PYTHON_DISCRETE }}" \
+            --trtexec /usr/src/tensorrt/bin/trtexec \
+            --skip-clone --skip-smoke
+
+      - name: Package release archives
+        run: |
+          engine_args=()
+          if [[ -d "$RUNNER_TEMP/nvcr-engines/dcvcrt" ]]; then
+            engine_args+=(--engine-dir "$RUNNER_TEMP/nvcr-engines/dcvcrt")
+          fi
+          ./scripts/package_release.sh \
+            --version "${NVCR_TAG#v}" \
+            --platform linux-x86_64-discrete \
+            --install-prefix "$RUNNER_TEMP/nvcr-install" \
+            --output-dir "$RUNNER_TEMP/nvcr-dist" \
+            "${engine_args[@]}"
+
+      - name: Upload release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$NVCR_TAG" "$RUNNER_TEMP"/nvcr-dist/* --clobber
+
+  build-jetson:
+    if: ${{ vars.NVCR_RELEASE_JETSON == 'true' && (github.event_name == 'release' || inputs.publish_jetson) }}
+    runs-on:
+      - self-hosted
+      - nvcr-release-jetson
+    env:
+      NVCR_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and install
+        run: |
+          ./scripts/install.sh \
+            --build-type Release \
+            --build-dir build-release-jetson \
+            --prefix "$RUNNER_TEMP/nvcr-install" \
+            --run-tests
+
+      - name: Build local engine bundle when checkpoints are configured
+        if: ${{ vars.NVCR_DCVCRT_ROOT_JETSON != '' && vars.NVCR_DCVCRT_PYTHON_JETSON != '' }}
+        run: |
+          ./scripts/prepare_dcvcrt_artifacts.sh \
+            --dcvcrt-root "${{ vars.NVCR_DCVCRT_ROOT_JETSON }}" \
+            --models build/models/dcvcrt \
+            --engines "$RUNNER_TEMP/nvcr-engines/dcvcrt" \
+            --python "${{ vars.NVCR_DCVCRT_PYTHON_JETSON }}" \
+            --trtexec /usr/src/tensorrt/bin/trtexec \
+            --skip-clone --skip-smoke
+
+      - name: Package release archives
+        run: |
+          engine_args=()
+          if [[ -d "$RUNNER_TEMP/nvcr-engines/dcvcrt" ]]; then
+            engine_args+=(--engine-dir "$RUNNER_TEMP/nvcr-engines/dcvcrt")
+          fi
+          ./scripts/package_release.sh \
+            --version "${NVCR_TAG#v}" \
+            --platform linux-aarch64-jetson \
+            --install-prefix "$RUNNER_TEMP/nvcr-install" \
+            --output-dir "$RUNNER_TEMP/nvcr-dist" \
+            "${engine_args[@]}"
+
+      - name: Upload release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$NVCR_TAG" "$RUNNER_TEMP"/nvcr-dist/* --clobber
