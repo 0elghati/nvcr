@@ -16,6 +16,7 @@ if [[ "$(uname -m)" != "x86_64" ]]; then
     exit 1
 fi
 
+# shellcheck source=/dev/null
 . /etc/os-release
 case "$VERSION_ID" in
 24.04) distro=ubuntu2404 ;;
