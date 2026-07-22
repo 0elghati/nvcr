@@ -103,6 +103,37 @@ Requirements for the core build:
 - CMake 3.24 or newer;
 - a C++20 compiler (GCC, Clang, or MSVC).
 
+The fastest path on Linux is `scripts/install.sh`, which auto-detects the
+platform (Jetson vs. discrete GPU), CUDA compiler, GPU architecture, and
+TensorRT location, then configures/builds/installs with one command:
+
+```bash
+./scripts/install.sh --run-tests
+```
+
+This works unmodified on a Jetson Orin or a discrete-GPU host and installs to
+`install-<platform>/` by default. See [scripts/README.md](scripts/README.md)
+and [docs/getting-started.md](docs/getting-started.md) for override flags. The
+manual `cmake` steps below remain available for CI pipelines or advanced
+cross-compilation cases.
+
+By default the build targets only the GPU installed on the current machine
+(fastest for local/dev use). To build a single redistributable binary that
+works out of the box across a range of Jetson/RTX/datacenter GPUs, pass
+`--arch-set portable`:
+
+```bash
+./scripts/install.sh --arch-set portable --run-tests
+```
+
+This widens `CMAKE_CUDA_ARCHITECTURES` to a curated multi-arch list
+(`75;80;86;87;89;90`, see [cmake/NVCRAutodetect.cmake](cmake/NVCRAutodetect.cmake))
+at the cost of a longer build. It is independent of host CPU architecture —
+separate builds are still required per CPU arch (e.g. x86_64 vs. aarch64) —
+and it never bundles TensorRT `.plan` engine files, which are always tied to
+one exact GPU model/TensorRT runtime version and must be generated per-target
+with `scripts/prepare_dcvcrt_artifacts.sh`.
+
 On Linux, a release install can be used directly from the install prefix. For
 example:
 
@@ -110,7 +141,7 @@ example:
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release --parallel
 cmake --install build-release --prefix /opt/nvcr
-export PATH="/opt/nvcr/bin:$PATH"
+sudo export PATH="/opt/nvcr/bin:$PATH"
 ```
 
 ```bash
@@ -139,6 +170,33 @@ cmake -S . -B build \
   -DTensorRT_ROOT=/opt/TensorRT
 ```
 
+On Jetson Orin devices, `nvcc` may not be on `PATH` and CMake may fail to infer
+the GPU architecture. `-DNVCR_ENABLE_TENSORRT=ON` alone is normally enough:
+[cmake/NVCRAutodetect.cmake](cmake/NVCRAutodetect.cmake) auto-detects
+`CMAKE_CUDA_COMPILER` (searching `/usr/local/cuda*/bin/nvcc` when `nvcc` is not
+on `PATH`) and `CMAKE_CUDA_ARCHITECTURES` (via `nvidia-smi --query-gpu=compute_cap`,
+falling back to `native`). Override explicitly only when cross-compiling or
+targeting a GPU not attached to the build host. For a portable multi-arch
+build instead, set `-DNVCR_CUDA_ARCH_SET=portable` in place of an explicit
+`CMAKE_CUDA_ARCHITECTURES`:
+
+```bash
+cmake -S . -B build-orin-install \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DNVCR_ENABLE_TENSORRT=ON \
+  -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+  -DCMAKE_CUDA_ARCHITECTURES=87
+cmake --build build-orin-install --parallel
+cmake --install build-orin-install --prefix /opt/nvcr
+export PATH="/opt/nvcr/bin:$PATH"
+```
+
+For an unprivileged local install, use a repository-local prefix such as
+`--prefix "$PWD/install-orin"`. CUDA runtime tests on Jetson require direct
+access to NVIDIA device nodes such as `/dev/nvmap` and `/dev/nvhost-*`; in a
+sandbox or container without those devices, CPU tests and the installed CLI can
+pass while `nvcr_cuda_ops` fails during CUDA stream creation.
+
 The TensorRT option loads and validates the seven I-frame and seven P-frame plans.
 Native multi-frame encoding uses the configured I/P GOP (default 32);
 `--gop-size 1` remains an explicit development-only all-intra mode. The current
@@ -147,18 +205,44 @@ for meaningful timing and GPU-resident pipeline optimization is still in progres
 When `NVCR_TENSORRT_ENGINE_DIR` is set, CTest runs an end-to-end 176x144 native
 round trip and requires the encoder and decoder reconstructions to match exactly.
 
-Generate the TensorRT engines with the helper script before running the native
-sample or the `nvcr encode` / `nvcr decode` commands:
+Generate the DCVC-RT artifacts before running the native sample or the
+`nvcr encode` / `nvcr decode` commands. The wrapper starts from the public
+Microsoft DCVC-RT checkout plus the two `cvpr2025_*.pth.tar` checkpoints,
+exports ONNX/runtime assets, and builds target-local TensorRT plans. It
+auto-tunes `--device-id`, `--workspace-mib`, and `--builder-optimization-level`
+from [scripts/detect_platform.sh](scripts/detect_platform.sh):
 
 ```bash
-./scripts/build_dcvcrt_tensorrt.sh \
-  --models build/models/dcvcrt \
-  --engines build/engines/dcvcrt
+./scripts/prepare_dcvcrt_artifacts.sh \
+  --dcvcrt-root ./assets \
+  --engines build/engines/dcvcrt \
+  --skip-smoke
 ```
 
-The script expects `trtexec` from TensorRT and copies the runtime assets into the
-engine directory. For a release-style install, place or symlink that generated
-directory at `/opt/nvcr/engines/dcvcrt` and pass it to `--engine-dir`.
+On an 8 GB Orin Nano this auto-tunes to a lower workspace and builder
+optimization level, reducing TensorRT tactic-search memory pressure; pass
+`--no-auto-tune` plus explicit flags to pin a specific configuration instead.
+
+Place the checkpoints at:
+
+```text
+assets/checkpoints/cvpr2025_image.pth.tar
+assets/checkpoints/cvpr2025_video.pth.tar
+```
+
+The lower-level `scripts/build_dcvcrt_tensorrt.sh` script only converts an
+existing `build/models/dcvcrt` ONNX/runtime-asset directory into TensorRT plans.
+It also writes `engine_manifest.json` with the build GPU, compute capability,
+TensorRT version, precision, and profile settings. TensorRT `.plan` files are not
+portable across platforms or TensorRT runtimes; NVCR validates the manifest before
+loading plans and fails early if the selected `--device-id` does not match the
+engine bundle. Rebuild the engine directory on the target machine/device instead
+of copying plans across GPU models. For a release-style install, place or symlink
+the generated directory at `/opt/nvcr/engines/dcvcrt` and pass it to
+`--engine-dir`.
+
+See [DCVC-RT artifact pipeline](docs/dcvcrt-artifacts.md) for checkpoint download
+links, expected hashes, skip options, and direct Orin commands.
 
 ### Developer-only upstream reference
 
@@ -215,7 +299,7 @@ nvcr encode \
   -i /home/oelghati/DCVC/datasets/qcif/akiyo_qcif.yuv \
   -o /tmp/akiyo_qcif.nvcr \
   -s 176x144 -r 30 --frames 1 --qp 32 \
-  --engine-dir build/engines/dcvcrt
+  --engine-dir build/engines/dcvcrt-1080p-orin
 ```
 
 Decode it later in a separate process:
@@ -224,7 +308,7 @@ Decode it later in a separate process:
 nvcr decode \
   -i /tmp/akiyo_qcif.nvcr \
   -o /tmp/akiyo_qcif.decoded.yuv \
-  --engine-dir build/engines/dcvcrt
+  --engine-dir build/engines/dcvcrt-1080p-orin
 ```
 
 The encode command never invokes `Runtime::decode`; the decode command obtains
@@ -239,6 +323,7 @@ for more examples and current format limitations.
 - [Architecture](docs/architecture.md)
 - [Bitstream format](docs/bitstream.md)
 - [CLI usage](docs/cli.md)
+- [DCVC-RT artifact pipeline](docs/dcvcrt-artifacts.md)
 - [DCVC-RT integration](docs/dcvcrt-integration.md)
 - [Performance](docs/performance.md)
 

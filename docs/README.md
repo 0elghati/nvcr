@@ -10,9 +10,11 @@ library boundary down to the codec-specific internals.
 3. [Architecture](architecture.md) for ownership, lifecycle, and module boundaries.
 4. [Public API Reference](reference.md) for the exported runtime types.
 5. [Native command-line interface](cli.md) for installed CLI usage on Linux.
-6. [NVCR packet envelope](bitstream.md) for the wire format and sequence file layout.
-7. [DCVC-RT integration contract](dcvcrt-integration.md) for codec-specific behavior.
-8. [Performance](performance.md) for the current baseline and remaining work.
+6. [DCVC-RT artifact pipeline](dcvcrt-artifacts.md) for checkpoints, ONNX export,
+   and target-local TensorRT engine generation.
+7. [NVCR packet envelope](bitstream.md) for the wire format and sequence file layout.
+8. [DCVC-RT integration contract](dcvcrt-integration.md) for codec-specific behavior.
+9. [Performance](performance.md) for the current baseline and remaining work.
 
 ## Quick links
 
@@ -23,6 +25,7 @@ library boundary down to the codec-specific internals.
 | [API Reference](reference.md) | Public `nvcr` types and usage patterns |
 | [Bitstream](bitstream.md) | Packet envelope and sequence file format |
 | [CLI](cli.md) | `nvcr encode` and `nvcr decode` usage |
+| [DCVC-RT artifacts](dcvcrt-artifacts.md) | Checkpoints, ONNX export, and TensorRT engines |
 | [DCVC-RT integration](dcvcrt-integration.md) | TensorRT, rANS, and current codec status |
 | [Performance](performance.md) | Baselines, targets, and remaining optimization work |
 
@@ -42,8 +45,8 @@ docs/
 	reference.md              public API summary
 	architecture.md           ownership and lifecycle
 	cli.md                    command-line usage
+	dcvcrt-artifacts.md       checkpoint-to-engine artifact pipeline
 	bitstream.md              wire format
 	dcvcrt-integration.md     codec-specific integration contract
 	performance.md            current benchmark baselines
 ```
-

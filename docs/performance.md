@@ -59,6 +59,86 @@ The next performance milestone is a GPU-resident I-frame graph:
 4. Transfer only entropy symbols/indexes and the final reconstructed frame.
 5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
 
+## Jetson energy profiling
+
+On Orin-class targets, measure encode and decode energy with
+`scripts/profile_energy.py`. It wraps an `nvcr` command, samples `tegrastats`,
+integrates the selected power rail, and writes raw plus idle-subtracted
+joules/frame:
+
+```bash
+./scripts/profile_energy.py --idle-seconds 10 --interval-ms 100 \
+  --output-json /tmp/nvcr-energy.json \
+  -- ./build-orin-release/cli/nvcr encode ... --profile
+```
+
+Use `VDD_IN` when available; otherwise explicitly pass the board rail used by
+the target's `tegrastats` output with `--rail`. Treat the raw value as board
+energy for the whole command and the idle-subtracted value as the preferred
+codec-run estimate. Both still include initialization and file I/O unless the
+benchmarked command is structured to exclude them.
+
+## Comparative study — NVCR vs libx265 on Orin Nano
+
+Methodology: both codecs encode the same raw YUV420 source on the same device
+under `scripts/profile_energy.py` at idle-adjusted `VDD_IN` board power.
+The `--frames` argument is passed to the profiler so j/frame is consistent.
+Latency is wall-clock codec time reported by each tool; quality comparison
+requires separate PSNR/VMAF measurement (not included here) because
+QP and CRF are not the same scale.
+
+### Test conditions
+
+| Parameter | Value |
+|---|---|
+| Content | BasketballDrive 1920×1080 50 fps |
+| Frames | 97 |
+| GOP structure | All-I-plus-P single GOP (GOP 97) |
+| Device | Jetson Orin Nano, 8 SMs SM 8.7 |
+| Power rail | VDD\_IN |
+| Idle sample duration | 10 s |
+| Sample interval | 100 ms |
+
+### Commands
+
+```bash
+# NVCR / DCVC-RT — FP16 TensorRT, performance mode
+NVCR_TENSORRT_LOW_MEMORY_MODE=0 \
+./scripts/profile_energy.py --idle-seconds 10 --interval-ms 100 \
+  --output-json /tmp/nvcr-energy.json --frames 97 \
+  -- nvcr encode \
+       -i /home/oelghati/datasets/hd/BasketballDrive_1920x1080_50.yuv \
+       -o /tmp/basketball.nvcr \
+       -s 1920x1080 -r 50 --frames 97 --gop-size 97 --qp 32 \
+       --engine-dir build/engines/dcvcrt-1080p-orin
+
+# libx265 via FFmpeg — software H.265 reference
+./scripts/profile_energy.py --idle-seconds 10 --interval-ms 100 \
+  --output-json /tmp/x265-energy.json --frames 97 \
+  -- ffmpeg -f rawvideo -pix_fmt yuv420p -s:v 1920x1080 -r 50 \
+       -i /home/oelghati/datasets/hd/BasketballDrive_1920x1080_50.yuv \
+       -vframes 97 -c:v libx265 -preset medium -crf 28 \
+       /tmp/encoded.mp4
+```
+
+### Results
+
+| Codec | Setting | fps (wall) | Active energy (J) | J/frame (idle-adj.) | Active avg power (W) |
+|---|---|---:|---:|---:|---:|
+| NVCR DCVC-RT | QP 32, GOP 97, FP16 | 5.12 | 390.7 | 2.81 | 20.7 |
+| libx265 (FFmpeg) | CRF 28, preset medium | 2.61 | 383.0 | 1.53 | 10.4 |
+
+### Notes
+
+- Quality is not directly comparable: DCVC-RT QP 32 and x265 CRF 28 are
+  independent scales. Use PSNR or VMAF on the reconstructed output for a
+  fair quality-efficiency comparison.
+- NVCR active energy includes TensorRT initialization (~1.2 s) and one I-frame.
+  Steady-state P-frame GPU time is ~175 ms/frame (all CUDA kernel execution;
+  CPU overhead is < 3 ms/frame after current optimizations).
+- libx265 is CPU-only on Orin; its power draw will come from the CPU/DRAM rails
+  rather than the GPU, so VDD\_IN captures both.
+
 ## See also
 
 - [Architecture](architecture.md)

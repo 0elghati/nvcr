@@ -9,39 +9,51 @@ currently use planar 8-bit YUV 4:2:0 at the CLI boundary.
 
 The CLI expects a generated engine directory. By default the helper script writes
 one to `build/engines/dcvcrt`, and release-style installs can point to a copied
-or symlinked `/opt/nvcr/engines/dcvcrt` directory instead.
+or symlinked `/opt/nvcr/engines/dcvcrt` directory instead. Build TensorRT plans
+on the final target runtime and selected CUDA device. The directory must contain
+`engine_manifest.json`; NVCR validates it before loading plans and rejects
+bundles built for a different GPU model, compute capability, multiprocessor
+count, or TensorRT version.
 
-The native backend currently implements I-frames only. NVCR does not treat that as
-complete video encoding and does not silently force normal multi-frame input into
-an all-I stream.
+The native backend supports configured I/P GOPs through fourteen TensorRT plans.
+It remains correctness-first and performance work is still active, so use Release
+builds for timing.
 
 ## Encode
 
-Encode one supported I-frame:
+Encode one frame:
 
 ```bash
 nvcr encode \
   -i /home/oelghati/DCVC/datasets/qcif/akiyo_qcif.yuv \
   -o /tmp/akiyo_qcif.nvcr \
   -s 176x144 -r 30 --frames 1 --qp 32 \
-  --engine-dir build/engines/dcvcrt
+  --engine-dir build/engines/dcvcrt-1080p-orin
 ```
 
-The default GOP size is 32. Until the P-frame backend lands, requests for more
-than one frame with a normal GOP fail before creating an output stream. For
-explicit all-intra development or benchmarking only, pass `--gop-size 1`:
+The default GOP size is 32. For explicit all-intra development or benchmarking
+only, pass `--gop-size 1`:
 
 ```bash
 nvcr encode \
   -i /home/oelghati/DCVC/datasets/qcif/akiyo_qcif.yuv \
   -o /tmp/akiyo_qcif.all-intra.nvcr \
   -s 176x144 -r 30 --frames 4 --qp 32 --gop-size 1 \
-  --engine-dir build/engines/dcvcrt
+  --engine-dir build/engines/dcvcrt-1080p-orin
 ```
 
 That mode is not equivalent to normal DCVC-RT I/P encoding and is not a completed
-video-codec milestone. `--frames 0` reads until EOF and therefore also requires
-`--gop-size 1` while predicted frames remain unavailable.
+video-codec milestone.
+
+Encode a normal 1080p I/P GOP sequence:
+
+```bash
+nvcr encode \
+  -i /home/oelghati/datasets/hd/BasketballDrive_1920x1080_50.yuv \
+  -o /tmp/basketball_hd.nvcr \
+  -s 1920x1080 -r 50 --frames 97 --qp 32 \
+  --engine-dir build/engines/dcvcrt-1080p-orin
+```
 
 ## Decode
 
@@ -49,7 +61,7 @@ video-codec milestone. `--frames 0` reads until EOF and therefore also requires
 nvcr decode \
   -i /tmp/akiyo_qcif.nvcr \
   -o /tmp/akiyo_qcif.decoded.yuv \
-  --engine-dir build/engines/dcvcrt
+  --engine-dir build/engines/dcvcrt-1080p-orin
 ```
 
 The decoder reads dimensions, QP, frame type, and timestamp information from the
@@ -71,7 +83,7 @@ A single frame can be used to measure the currently supported HD I-frame path:
 nvcr encode \
   -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
   -o /tmp/fourpeople-i.nvcr -s 1280x720 -r 60 --frames 1 \
-  --engine-dir build/engines/dcvcrt
+  --engine-dir build/engines/dcvcrt-1080p-orin
 ```
 
 The `.nvcr` sequence wrapper is versioned and bounds-checked, but it is an

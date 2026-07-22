@@ -4,22 +4,30 @@ Return to the [docs index](README.md) or the [project overview](../README.md).
 
 ## Current native status
 
-NVCR now runs the DCVC-RT I-frame path entirely in C++, TensorRT, CUDA, and the
-vendored rANS implementation. `TensorRTBackend` loads seven I-frame plans from
-`intra_engine_path`, stores `intra_qp` during initialization, and serves encode/
-decode through one nonblocking CUDA stream.
+NVCR now runs configured DCVC-RT I/P GOPs in C++, TensorRT, CUDA, and the
+vendored rANS implementation. `TensorRTBackend` loads seven I-frame plans and
+seven P-frame plans, stores the configured QP/GOP state, and serves encode/decode
+through CUDA-backed TensorRT execution.
 
-The native codec path accepts RGB24 frames only. The `nvcr` CLI converts planar
-YUV420p8 input to RGB24 when encoding and converts decoded RGB24 frames back to
-YUV420p8. Its `encode` and `decode` commands run independently and exchange a
-persistent NVCR sequence file. Predicted frames remain
-`not_implemented`, so `gop_size=1` is required.
+The `nvcr` CLI accepts planar YUV420P8 input and writes planar YUV420P8 output.
+Its `encode` and `decode` commands run independently and exchange a persistent
+NVCR sequence file. The current path is correctness-first; GPU-resident state and
+performance parity remain active roadmap work.
 
-Engine artifacts are generated outside the repository source tree by
-`scripts/build_dcvcrt_tensorrt.sh`. The script copies the runtime assets from
-`build/models/dcvcrt` into the chosen engine directory and writes the plan files
-there as well. The CLI then consumes that directory via `--engine-dir`, and the
-same path can be provided to `NVCR_TENSORRT_ENGINE_DIR` for native test runs.
+Engine artifacts are generated outside the repository source tree. The normal
+pipeline is `scripts/prepare_dcvcrt_artifacts.sh`: it verifies the public
+Microsoft DCVC-RT checkout and pretrained checkpoints, exports ONNX/runtime
+assets into `build/models/dcvcrt`, then calls `scripts/build_dcvcrt_tensorrt.sh`
+to build target-local plans in the chosen engine directory. The CLI consumes that
+directory via `--engine-dir`, and the same path can be provided to
+`NVCR_TENSORRT_ENGINE_DIR` for native test runs.
+
+TensorRT `.plan` files are not portable across platforms or TensorRT runtimes.
+If deserialization reports a platform tag mismatch, keep the exported ONNX/assets
+and rebuild the engine directory on the target machine. Engine directories also
+carry `engine_manifest.json`; initialization rejects bundles whose recorded GPU
+model, compute capability, multiprocessor count, or TensorRT version does not
+match the selected runtime device.
 
 This is an internal NVCR encode/decode path, not a declaration of byte-for-byte
 compatibility with the upstream DCVC-RT Python payloads or containers. Current
@@ -56,16 +64,25 @@ The current TensorRT backend owns the seven I-frame plans:
 - `i_spatial_prior_3`
 - `i_synthesis`
 
-During `initialize`, the backend validates the plan directory, loads
-`i_entropy.bin`, `i_quant.bin`, and `i_frame_manifest.json`, creates execution
-contexts, creates a single nonblocking CUDA stream, warms the engines, and stores
-the configured intra QP.
+and seven P-frame plans:
 
-`encode_intra` and `decode_intra` are correctness-first host-staged pipelines.
-They convert RGB24 to YCbCr and back, run the analysis/hyper-analysis/hyper-
-synthesis stages, iterate the four spatial-prior passes, and then hand the result
-to the vendored rANS wrapper. Predicted-frame encode/decode are still reported as
-`not_implemented`.
+- `p_reference_frame`
+- `p_reference_feature`
+- `p_analysis`
+- `p_hyper_analysis`
+- `p_prior`
+- `p_spatial_prior`
+- `p_synthesis`
+
+During `initialize`, the backend validates the plan directory, loads
+`engine_manifest.json`, checks it against `--device-id`, loads `i_entropy.bin`,
+`i_quant.bin`, `i_frame_manifest.json`, `p_entropy.bin`, `p_quant.bin`, and
+`p_frame_manifest.json`, creates execution contexts, creates a CUDA stream, warms
+the engines, and stores the configured QP.
+
+Encode/decode are correctness-first staged pipelines. They run analysis,
+hyper-analysis, prior, spatial-prior, synthesis, and rANS stages while preserving
+explicit sequence state for references and GOP rules.
 
 No TensorRT type, CUDA type, or exception crosses the public `CodecBackend`
 boundary.
@@ -75,12 +92,13 @@ boundary.
 Current checks in the tree cover:
 
 - native I-frame encode/decode reconstruction;
+- native I/P frame encode/decode reconstruction;
 - engine directory validation and warm-up;
 - vendored rANS synthetic vectors;
 - packet framing and malformed-packet rejection;
 - repeated sequence reuse through the runtime and pool layers.
 
-Deferred until P-frames land:
+Deferred until later roadmap gates:
 
 - upstream golden I/P payloads;
 - at least two complete GOPs;
