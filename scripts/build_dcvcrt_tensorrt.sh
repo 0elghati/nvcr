@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 model_dir="build/models/dcvcrt"
 engine_dir="build/engines/dcvcrt"
 trtexec_bin="${TRTEXEC:-}"
@@ -12,9 +13,36 @@ builder_optimization_level=3
 device_id=0
 python_bin="${PYTHON:-python3}"
 enable_int8=0
+model_profile_id=dcvcrt-cvpr2025
+target_profile_id=local-auto
+model_profile_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/configs/models/dcvcrt-cvpr2025.json"
+engine_profile_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/configs/engine-profiles/1080p-fp16.json"
+target_profile_path=""
+engine_profile_explicit=0
 
 while (($#)); do
     case "$1" in
+    --model-profile-id)
+        model_profile_id="$2"
+        shift 2
+        ;;
+    --model-profile-path)
+        model_profile_path="$2"
+        shift 2
+        ;;
+    --target-profile-id)
+        target_profile_id="$2"
+        shift 2
+        ;;
+    --target-profile-path)
+        target_profile_path="$2"
+        shift 2
+        ;;
+    --engine-profile-path)
+        engine_profile_path="$2"
+        engine_profile_explicit=1
+        shift 2
+        ;;
     --models)
         model_dir="$2"
         shift 2
@@ -65,6 +93,21 @@ while (($#)); do
         ;;
     esac
 done
+
+if ((engine_profile_explicit == 0 && optimization_point == "qcif")); then
+    engine_profile_path="$(cd "$script_dir/.." && pwd)/configs/engine-profiles/qcif-fp16.json"
+fi
+
+for profile_path in "$model_profile_path" "$engine_profile_path"; do
+    if [[ ! -f "$profile_path" ]]; then
+        echo "missing profile: $profile_path" >&2
+        exit 1
+    fi
+done
+if [[ -n "$target_profile_path" && ! -f "$target_profile_path" ]]; then
+    echo "missing target profile: $target_profile_path" >&2
+    exit 1
+fi
 
 case "$optimization_point" in
 qcif)
@@ -244,7 +287,6 @@ for plan in i_analysis.plan i_hyper_analysis.plan i_hyper_synthesis.plan \
     fi
 done
 
-sha256sum "$engine_dir"/*.plan >"$engine_dir/engine.sha256"
 manifest_args=(
     --engines "$engine_dir"
     --trtexec "$trtexec_bin"
@@ -252,12 +294,19 @@ manifest_args=(
     --optimization-point "$optimization_point"
     --workspace-mib "$workspace_mib"
     --builder-optimization-level "$builder_optimization_level"
+    --model-profile-id "$model_profile_id"
+    --target-profile-id "$target_profile_id"
+    --model-profile-path "$model_profile_path"
+    --engine-profile-path "$engine_profile_path"
 )
+if [[ -n "$target_profile_path" ]]; then
+    manifest_args+=(--target-profile-path "$target_profile_path")
+fi
 if ((stamp_only)); then
     manifest_args+=(--reject-device-warning)
 fi
 if ((enable_int8)); then
     manifest_args+=(--enable-int8)
 fi
-"$python_bin" scripts/write_tensorrt_engine_manifest.py "${manifest_args[@]}"
+"$python_bin" "$script_dir/write_tensorrt_engine_manifest.py" "${manifest_args[@]}"
 echo "TensorRT engines are ready in $engine_dir"

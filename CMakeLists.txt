@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(
     NVCR
     VERSION 0.2.3 # x-release-please-version
-    DESCRIPTION "Production-oriented runtime for the DCVC-RT neural video codec"
+    DESCRIPTION "C++ and TensorRT runtime for the pinned DCVC-RT model profile"
     LANGUAGES CXX)
 
 include(GNUInstallDirs)
@@ -37,8 +37,10 @@ add_library(NVCR::nvcr ALIAS nvcr)
 target_sources(
     nvcr
     PRIVATE
+        src/bitstream/access_unit.cpp
         src/bitstream/packet_io.cpp
         src/common/error.cpp
+        src/common/sha256.cpp
         src/configuration/configuration.cpp
         src/dcvcrt/rans_codec.cpp
         src/dcvcrt/runtime.cpp
@@ -125,7 +127,38 @@ install(
 if(TARGET nvcr_cli)
     install(TARGETS nvcr_cli RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 endif()
-install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+install(
+    PROGRAMS scripts/nvcr_artifacts.py
+    DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    RENAME nvcr-artifacts)
+install(
+    PROGRAMS
+        scripts/prepare_dcvcrt_artifacts.sh
+        scripts/build_dcvcrt_tensorrt.sh
+        scripts/detect_platform.sh
+        scripts/export_dcvcrt_onnx.py
+        scripts/export_dcvcrt_p_onnx.py
+        scripts/write_tensorrt_engine_manifest.py
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/nvcr/scripts")
+install(DIRECTORY configs/ DESTINATION "${CMAKE_INSTALL_DATADIR}/nvcr/configs")
+install(
+    FILES resources/nvcr.conf.example
+    DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/nvcr")
+install(
+    FILES README.md ROADMAP.md CHANGELOG.md LICENSE
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr")
+install(
+    DIRECTORY docs/
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr/docs")
+install(
+    FILES
+        third_party/dcvc_rans/LICENSE.MIT
+        third_party/dcvc_rans/NOTICE.txt
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr/third_party/dcvc_rans")
+install(
+    DIRECTORY include/
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    FILES_MATCHING PATTERN "*.hpp")
 install(
     EXPORT NVCRTargets
     FILE NVCRTargets.cmake

@@ -9,8 +9,25 @@ import inspect
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 from typing import Any
+
+
+PINNED_REFERENCE_COMMIT = "48ab0ac5e5199d78fffb944bfbafafb2b6142f7b"
+EXPECTED_CHECKPOINT_SHA256 = "555eff5f4026774f477bebdcbb3b52548e0da230803959dcebcea4d732a90dd9"
+
+
+def verified_reference_commit(root: Path) -> str:
+    try:
+        commit = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError) as error:
+        raise SystemExit(f"cannot verify DCVC-RT git checkout: {error}") from error
+    if commit != PINNED_REFERENCE_COMMIT:
+        raise SystemExit(
+            f"DCVC-RT checkout is {commit}; expected {PINNED_REFERENCE_COMMIT}")
+    return commit
 
 
 def parse_args() -> argparse.Namespace:
@@ -146,6 +163,12 @@ def main() -> int:
     checkpoint = args.dcvcrt_root / "checkpoints/cvpr2025_image.pth.tar"
     if not checkpoint.is_file():
         raise SystemExit(f"image checkpoint not found: {checkpoint}")
+    reference_commit = verified_reference_commit(args.dcvcrt_root)
+    checkpoint_sha256 = sha256(checkpoint)
+    if checkpoint_sha256 != EXPECTED_CHECKPOINT_SHA256:
+        raise SystemExit(
+            f"image checkpoint SHA-256 is {checkpoint_sha256}; "
+            f"expected {EXPECTED_CHECKPOINT_SHA256}")
 
     device, dtype = resolve_export_device(args.device, torch)
     model = DMCI()
@@ -322,11 +345,15 @@ def main() -> int:
     )
 
     manifest = {
-        "format": 1,
+        "format": 2,
+        "schema": "nvcr.model-manifest.v2",
+        "model_profile_id": "dcvcrt-cvpr2025",
+        "exporter": "nvcr-export-v2",
         "codec": "DCVC-RT",
-        "reference_commit": "dae827ffcc812566adbeaf4554f0fe2d9b4b9e0c",
-        "checkpoint": str(checkpoint),
-        "checkpoint_sha256": sha256(checkpoint),
+        "frame_type": "I",
+        "reference_commit": reference_commit,
+        "checkpoint_file": checkpoint.name,
+        "checkpoint_sha256": checkpoint_sha256,
         "torch_version": torch.__version__,
         "onnx_version": onnx.__version__,
         "opset": args.opset,

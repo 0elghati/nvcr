@@ -1,0 +1,18 @@
+{
+  "schema": "nvcr.target-profile.v1",
+  "id": "rtx4070-ubuntu2404",
+  "status": "validation-in-progress",
+  "host": {
+    "os": "Ubuntu 24.04",
+    "architecture": "x86_64",
+    "compiler": "GCC 13.3"
+  },
+  "gpu": {
+    "name": "NVIDIA GeForce RTX 4070",
+    "compute_capability": "8.9",
+    "multiprocessor_count": 46
+  },
+  "cuda": "12.6",
+  "tensorrt": "10.7.0",
+  "precision": "fp16"
+}

@@ -1,3 +1,12 @@
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME nvcr_artifact_profiles
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/artifact_tool_tests.py")
+else()
+    message(WARNING "Python 3 not found; artifact/profile validation test is not registered")
+endif()
+
 if(TARGET GTest::gtest_main)
     add_executable(nvcr_tests unit_tests.cpp)
     target_link_libraries(nvcr_tests PRIVATE NVCR::nvcr GTest::gtest_main)
@@ -9,6 +18,11 @@ else()
     target_link_libraries(nvcr_tests PRIVATE NVCR::nvcr)
     add_test(NAME nvcr_smoke_tests COMMAND nvcr_tests)
 endif()
+
+add_executable(nvcr_parser_fuzz_tests parser_fuzz_tests.cpp)
+target_link_libraries(nvcr_parser_fuzz_tests PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_parser_fuzz_tests)
+add_test(NAME nvcr_parser_fuzz_boundaries COMMAND nvcr_parser_fuzz_tests)
 nvcr_set_project_warnings(nvcr_tests)
 
 add_executable(nvcr_rans_conformance_tests rans_conformance_tests.cpp)

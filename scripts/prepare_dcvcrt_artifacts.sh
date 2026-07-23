@@ -5,8 +5,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 
 dcvcrt_root="${NVCR_DCVCRT_ROOT:-$repo_root/assets}"
-dcvcrt_repo="https://github.com/microsoft/DCVC.git"
-dcvcrt_ref="${NVCR_DCVCRT_REF:-}"
+dcvcrt_repo="https://github.com/0elghati/DCVC-RT.git"
+dcvcrt_ref="${NVCR_DCVCRT_REF:-48ab0ac5e5199d78fffb944bfbafafb2b6142f7b}"
 models_dir="build/models/dcvcrt"
 engines_dir="build/engines/dcvcrt-1080p"
 trtexec_bin="${TRTEXEC:-}"
@@ -23,6 +23,12 @@ skip_export=0
 skip_engine=0
 skip_smoke=0
 enable_int8=0
+model_profile_id=dcvcrt-cvpr2025
+target_profile_id=local-auto
+model_profile_path="$repo_root/configs/models/dcvcrt-cvpr2025.json"
+engine_profile_path="$repo_root/configs/engine-profiles/1080p-fp16.json"
+target_profile_path=""
+engine_profile_explicit=0
 
 checkpoint_url="https://1drv.ms/f/c/2866592d5c55df8c/Esu0KJ-I2kxCjEP565ARx_YB88i0UnR6XnODqFcvZs4LcA?e=by8CO8"
 checkpoint_backup_url="https://1drv.ms/f/c/2866592d5c55df8c/EozfVVwtWWYggCitBAAAAAABbT4z2Z10fMXISnan72UtSA?e=BID7DA"
@@ -32,15 +38,23 @@ usage() {
 Usage: $0 [options]
 
 Prepare NVCR DCVC-RT artifacts:
-  1. ensure the Microsoft DCVC-RT checkout exists;
+  1. ensure the pinned DCVC-RT source checkout exists;
   2. verify the two cvpr2025 .pth.tar checkpoints;
   3. export ONNX graphs plus entropy/quant assets;
   4. build target-local TensorRT .plan files.
 
 Options:
+  --model-profile-id ID    Model profile identity (default: dcvcrt-cvpr2025)
+  --model-profile-path FILE
+                           Versioned model profile bound to the bundle
+  --engine-profile-path FILE
+                           Versioned engine profile bound to the bundle
+  --target-profile-id ID   Target profile identity (default: local-auto)
+  --target-profile-path FILE
+                           Versioned target profile bound to the bundle
   --dcvcrt-root DIR        Upstream DCVC-RT checkout (default: $dcvcrt_root)
   --dcvcrt-repo URL        Upstream repo URL (default: $dcvcrt_repo)
-  --dcvcrt-ref REF         Optional git ref to checkout after clone/fetch
+  --dcvcrt-ref REF         Pinned git ref to checkout after clone/fetch
   --models DIR             ONNX/runtime asset output (default: $models_dir)
   --engines DIR            TensorRT engine output (default: $engines_dir)
   --trtexec PATH           TensorRT trtexec path
@@ -69,6 +83,27 @@ EOF
 
 while (($#)); do
     case "$1" in
+    --model-profile-id)
+        model_profile_id="$2"
+        shift 2
+        ;;
+    --model-profile-path)
+        model_profile_path="$2"
+        shift 2
+        ;;
+    --engine-profile-path)
+        engine_profile_path="$2"
+        engine_profile_explicit=1
+        shift 2
+        ;;
+    --target-profile-id)
+        target_profile_id="$2"
+        shift 2
+        ;;
+    --target-profile-path)
+        target_profile_path="$2"
+        shift 2
+        ;;
     --dcvcrt-root)
         dcvcrt_root="$2"
         shift 2
@@ -149,6 +184,21 @@ while (($#)); do
     esac
 done
 
+if ((engine_profile_explicit == 0 && optimization_point == "qcif")); then
+    engine_profile_path="$repo_root/configs/engine-profiles/qcif-fp16.json"
+fi
+
+for profile_path in "$model_profile_path" "$engine_profile_path"; do
+    if [[ ! -f "$profile_path" ]]; then
+        echo "missing profile: $profile_path" >&2
+        exit 1
+    fi
+done
+if [[ -n "$target_profile_path" && ! -f "$target_profile_path" ]]; then
+    echo "missing target profile: $target_profile_path" >&2
+    exit 1
+fi
+
 if ((auto_tune)); then
     # shellcheck source=scripts/detect_platform.sh
     source "$script_dir/detect_platform.sh"
@@ -197,7 +247,7 @@ if [[ ! -f "$image_checkpoint" || ! -f "$video_checkpoint" ]]; then
     cat >&2 <<EOF
 Missing DCVC-RT checkpoints.
 
-Download the Microsoft DCVC-RT pretrained models and place them here:
+Download the pinned DCVC-RT pretrained models and place them here:
   $image_checkpoint
   $video_checkpoint
 
@@ -223,7 +273,7 @@ if missing:
 PY
 
     echo "Exporting I-frame ONNX/runtime assets to $models_dir"
-    "$python_bin" scripts/export_dcvcrt_onnx.py \
+    "$python_bin" "$script_dir/export_dcvcrt_onnx.py" \
         --dcvcrt-root "$dcvcrt_root" \
         --output-dir "$models_dir" \
         --height 144 \
@@ -231,7 +281,7 @@ PY
         --qp 0
 
     echo "Exporting P-frame ONNX/runtime assets to $models_dir"
-    "$python_bin" scripts/export_dcvcrt_p_onnx.py \
+    "$python_bin" "$script_dir/export_dcvcrt_p_onnx.py" \
         --dcvcrt-root "$dcvcrt_root" \
         --output-dir "$models_dir" \
         --height 192 \
@@ -274,6 +324,10 @@ if ((skip_engine == 0)); then
         exit 1
     fi
     engine_args=(
+        --model-profile-id "$model_profile_id"
+        --model-profile-path "$model_profile_path"
+        --target-profile-id "$target_profile_id"
+        --engine-profile-path "$engine_profile_path"
         --models "$models_dir"
         --engines "$engines_dir"
         --trtexec "$trtexec_bin"
@@ -283,6 +337,9 @@ if ((skip_engine == 0)); then
         --device-id "$device_id"
         --python "$python_bin"
     )
+    if [[ -n "$target_profile_path" ]]; then
+        engine_args+=(--target-profile-path "$target_profile_path")
+    fi
     if ((skip_smoke)); then
         engine_args+=(--skip-smoke)
     fi
@@ -290,7 +347,7 @@ if ((skip_engine == 0)); then
         engine_args+=(--enable-int8)
     fi
     echo "Building target-local TensorRT engines in $engines_dir"
-    ./scripts/build_dcvcrt_tensorrt.sh "${engine_args[@]}"
+    "$script_dir/build_dcvcrt_tensorrt.sh" "${engine_args[@]}"
 fi
 
 cat <<EOF

@@ -54,6 +54,17 @@ Result<LogLevel> parse_log_level(std::string_view value) {
     return Error(ErrorCode::invalid_argument, "invalid log_level", "configuration");
 }
 
+Result<TensorRTExecutionMode> parse_execution_mode(std::string_view value) {
+    if (value == "automatic" || value == "auto") {
+        return TensorRTExecutionMode::automatic;
+    }
+    if (value == "low-memory" || value == "low_memory") {
+        return TensorRTExecutionMode::low_memory;
+    }
+    if (value == "performance") return TensorRTExecutionMode::performance;
+    return Error(ErrorCode::invalid_argument, "invalid tensorrt_execution_mode", "configuration");
+}
+
 Result<void> apply_setting(
     RuntimeConfiguration& configuration,
     std::string_view key,
@@ -64,6 +75,8 @@ Result<void> apply_setting(
         configuration.predicted_engine_path = value;
     } else if (key == "entropy_model_path") {
         configuration.entropy_model_path = value;
+    } else if (key == "model_id") {
+        configuration.model_id = value;
     } else if (key == "device_id") {
         auto parsed = parse_integer<std::int32_t>(value, key);
         if (!parsed) return parsed.error();
@@ -80,6 +93,10 @@ Result<void> apply_setting(
         auto parsed = parse_integer<std::size_t>(value, key);
         if (!parsed) return parsed.error();
         configuration.memory_pool_bytes = parsed.value();
+    } else if (key == "device_arena_bytes") {
+        auto parsed = parse_integer<std::size_t>(value, key);
+        if (!parsed) return parsed.error();
+        configuration.device_arena_bytes = parsed.value();
     } else if (key == "max_packet_bytes") {
         auto parsed = parse_integer<std::size_t>(value, key);
         if (!parsed) return parsed.error();
@@ -88,6 +105,18 @@ Result<void> apply_setting(
         auto parsed = parse_bool(value, key);
         if (!parsed) return parsed.error();
         configuration.enable_profiling = parsed.value();
+    } else if (key == "allow_legacy_access_units") {
+        auto parsed = parse_bool(value, key);
+        if (!parsed) return parsed.error();
+        configuration.allow_legacy_access_units = parsed.value();
+    } else if (key == "verify_encoder_reconstruction") {
+        auto parsed = parse_bool(value, key);
+        if (!parsed) return parsed.error();
+        configuration.verify_encoder_reconstruction = parsed.value();
+    } else if (key == "tensorrt_execution_mode") {
+        auto parsed = parse_execution_mode(value);
+        if (!parsed) return parsed.error();
+        configuration.tensorrt_execution_mode = parsed.value();
     } else if (key == "log_level") {
         auto parsed = parse_log_level(value);
         if (!parsed) return parsed.error();
@@ -148,6 +177,13 @@ Result<RuntimeConfiguration> ConfigurationLoader::from_file(
 }
 
 Result<void> ConfigurationLoader::validate(const RuntimeConfiguration& configuration) {
+    if (configuration.model_id.empty() || configuration.model_id.size() > 128U ||
+        !std::ranges::all_of(configuration.model_id, [](unsigned char character) {
+            return std::isalnum(character) != 0 || character == '.' ||
+                character == '_' || character == '-';
+        })) {
+        return Error(ErrorCode::invalid_argument, "invalid model_id", "configuration");
+    }
     if (configuration.device_id < 0) {
         return Error(ErrorCode::invalid_argument, "device_id cannot be negative", "configuration");
     }
@@ -157,7 +193,7 @@ Result<void> ConfigurationLoader::validate(const RuntimeConfiguration& configura
     if (configuration.intra_qp >= 64) {
         return Error(ErrorCode::invalid_argument, "intra_qp must be in [0, 63]", "configuration");
     }
-    if (configuration.memory_pool_bytes == 0 || configuration.max_packet_bytes == 0) {
+    if (configuration.memory_pool_bytes == 0 || configuration.device_arena_bytes == 0 || configuration.max_packet_bytes == 0) {
         return Error(
             ErrorCode::invalid_argument,
             "memory and packet limits must be greater than zero",
@@ -174,6 +210,15 @@ std::string_view to_string(LogLevel level) noexcept {
     case LogLevel::warning: return "warning";
     case LogLevel::error: return "error";
     case LogLevel::off: return "off";
+    }
+    return "unknown";
+}
+
+std::string_view to_string(TensorRTExecutionMode mode) noexcept {
+    switch (mode) {
+    case TensorRTExecutionMode::automatic: return "automatic";
+    case TensorRTExecutionMode::low_memory: return "low-memory";
+    case TensorRTExecutionMode::performance: return "performance";
     }
     return "unknown";
 }

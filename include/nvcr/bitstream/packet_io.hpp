@@ -50,6 +50,8 @@ private:
 class PacketIO final {
 public:
     static constexpr std::uint16_t format_version = 1;
+    static constexpr std::uint16_t maximum_metadata_entries = 1'024;
+    static constexpr std::size_t maximum_metadata_bytes = 1U * 1024U * 1024U;
 
     [[nodiscard]] static Result<std::vector<std::byte>> serialize(const Packet& packet);
     [[nodiscard]] static Result<Packet> deserialize(

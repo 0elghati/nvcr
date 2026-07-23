@@ -1,6 +1,9 @@
 #include "nvcr/dcvcrt/runtime.hpp"
 
+#include "nvcr/bitstream/access_unit.hpp"
+
 #include <chrono>
+#include <optional>
 #include <utility>
 
 namespace nvcr::dcvcrt {
@@ -48,22 +51,20 @@ Result<Packet> Runtime::encode(const Frame& frame) {
     auto encoded = components_.codec->encode(
         frame, frame_type.value(), encoder_state_.view());
     if (!encoded) return encoded.error();
-    if (encoded.value().payload.size() > configuration_.max_packet_bytes) {
-        return Error(
-            ErrorCode::resource_exhausted,
-            "encoded packet exceeds configured limit",
-            "dcvcrt");
-    }
-
-    PacketMetadata metadata{
-        {"height", std::to_string(frame.height())},
-        {"width", std::to_string(frame.width())},
-    };
-    Packet packet(
-        std::move(encoded.value().payload),
-        frame.timestamp(),
+    AccessUnit access_unit{
+        configuration_.model_id,
+        frame.width(),
+        frame.height(),
+        encoded.value().effective_qp,
         frame_type.value(),
-        std::move(metadata));
+        frame_type.value() == FrameType::intra,
+        std::move(encoded.value().payload)};
+    auto serialized = AccessUnitIO::serialize(access_unit, configuration_.max_packet_bytes);
+    if (!serialized) return serialized.error();
+    Packet packet(
+        std::move(serialized.value()),
+        frame.timestamp(),
+        frame_type.value());
     auto committed = encoder_state_.commit(
         std::move(encoded.value().reconstructed_frame),
         std::move(encoded.value().latent_state),
@@ -80,14 +81,55 @@ Result<Frame> Runtime::decode(const Packet& packet) {
     if (!initialized_) {
         return Error(ErrorCode::invalid_state, "runtime is not initialized", "dcvcrt");
     }
+    if (packet.size() > configuration_.max_packet_bytes) {
+        return Error(
+            ErrorCode::resource_exhausted,
+            "packet exceeds configured limit",
+            "dcvcrt");
+    }
+    std::optional<AccessUnit> access_unit;
+    std::span<const std::byte> codec_payload = packet.data();
+    if (AccessUnitIO::has_magic(packet.data())) {
+        auto parsed = AccessUnitIO::deserialize(packet.data(), configuration_.max_packet_bytes);
+        if (!parsed) return parsed.error();
+        if (parsed.value().model_id != configuration_.model_id) {
+            return Error(
+                ErrorCode::malformed_bitstream,
+                "access-unit model identity does not match the configured bundle",
+                "dcvcrt");
+        }
+        if (parsed.value().frame_type != packet.frame_type()) {
+            return Error(
+                ErrorCode::malformed_bitstream,
+                "packet and access-unit frame types disagree",
+                "dcvcrt");
+        }
+        access_unit = std::move(parsed.value());
+        if (access_unit->reset_state) {
+            decoder_state_.reset();
+        }
+        codec_payload = access_unit->payload;
+    } else if (!configuration_.allow_legacy_access_units) {
+        return Error(
+            ErrorCode::malformed_bitstream,
+            "legacy codec payload rejected by configuration",
+            "dcvcrt");
+    }
     auto valid = decoder_state_.validate_packet(packet.frame_type());
     if (!valid) return valid.error();
     const auto started = std::chrono::steady_clock::now();
     auto decoded = components_.codec->decode(
-        packet.data(), packet.frame_type(), packet.timestamp(), decoder_state_.view());
+        codec_payload, packet.frame_type(), packet.timestamp(), decoder_state_.view());
     if (!decoded) return decoded.error();
 
     Frame output = std::move(decoded.value().frame);
+    if (access_unit &&
+        (output.width() != access_unit->width || output.height() != access_unit->height)) {
+        return Error(
+            ErrorCode::malformed_bitstream,
+            "decoded dimensions do not match the access unit",
+            "dcvcrt");
+    }
     auto reference = Frame::copy_from(
         output.width(),
         output.height(),

@@ -1,5 +1,6 @@
 #include "nvcr/dcvcrt/tensorrt_backend.hpp"
 
+#include "../common/sha256.hpp"
 #include "cuda_ops.hpp"
 
 #include "nvcr/dcvcrt/rans_codec.hpp"
@@ -9,6 +10,7 @@
 #include <cuda_fp16.h>
 #include <cuda_runtime_api.h>
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <chrono>
@@ -22,7 +24,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <map>
 #include <iostream>
+#include <sstream>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -38,6 +42,16 @@ namespace {
 namespace fs = std::filesystem;
 
 constexpr std::string_view subsystem = "dcvcrt.tensorrt";
+constexpr std::size_t video_qp_count = 72U;
+constexpr std::uint32_t minimum_frame_dimension = 64U;
+constexpr std::uint32_t maximum_frame_width = 1920U;
+constexpr std::uint32_t maximum_frame_height = 1080U;
+
+bool supported_frame_dimensions(std::uint32_t width, std::uint32_t height) {
+    return width >= minimum_frame_dimension && height >= minimum_frame_dimension &&
+        width <= maximum_frame_width && height <= maximum_frame_height &&
+        (width & 1U) == 0U && (height & 1U) == 0U;
+}
 
 struct TensorSpec final {
     std::string_view name;
@@ -144,9 +158,18 @@ struct EngineInstance final {
     fs::path path;
     std::unique_ptr<nvinfer1::ICudaEngine> engine;
     std::unique_ptr<nvinfer1::IExecutionContext> context;
+    // Execution mode is owned by this backend session, never process-global.
+    bool low_memory_mode{true};
 };
 
-Result<bool> determine_low_memory_mode(std::int32_t device_id) {
+Result<bool> determine_low_memory_mode(const RuntimeConfiguration& configuration) {
+    if (configuration.tensorrt_execution_mode == TensorRTExecutionMode::low_memory) {
+        return true;
+    }
+    if (configuration.tensorrt_execution_mode == TensorRTExecutionMode::performance) {
+        return false;
+    }
+    const auto device_id = configuration.device_id;
     if (const char* raw = std::getenv("NVCR_TENSORRT_LOW_MEMORY_MODE"); raw != nullptr) {
         const std::string_view value(raw);
         if (value == "1" || value == "true" || value == "TRUE" ||
@@ -177,11 +200,9 @@ Result<bool> determine_low_memory_mode(std::int32_t device_id) {
     return static_cast<std::size_t>(properties.totalGlobalMem) <= threshold_bytes;
 }
 
-bool tensorrt_low_memory_mode = true;
 
 Result<nvinfer1::IExecutionContext*> acquire_context(EngineInstance& instance) {
-    const bool low_memory_mode = tensorrt_low_memory_mode;
-    if (!low_memory_mode) {
+    if (!instance.low_memory_mode) {
         if (!instance.context) {
             instance.context.reset(instance.engine->createExecutionContext());
             if (!instance.context) {
@@ -314,10 +335,22 @@ Result<std::int64_t> read_json_integer(std::string_view text, std::string_view k
 }
 
 struct EngineManifest final {
+    std::string schema;
     std::string kind;
+    std::string model_profile_id;
+    std::string target_profile_id;
+    std::string engine_profile_id;
+    std::string model_profile_sha256;
+    std::string engine_profile_sha256;
+    std::string target_profile_sha256;
     std::string precision;
     std::string optimization_point;
     std::string device_name;
+    std::string checksum_manifest;
+    std::string checksum_manifest_sha256;
+    std::string i_model_manifest_sha256;
+    std::string p_model_manifest_sha256;
+    std::int32_t cuda_runtime_version{};
     std::int32_t tensorrt_major{};
     std::int32_t tensorrt_minor{};
     std::int32_t tensorrt_patch{};
@@ -341,41 +374,82 @@ Result<EngineManifest> load_engine_manifest(const fs::path& root) {
     if (!fs::is_regular_file(path)) {
         return backend_error(
             "missing engine_manifest.json in " + root.string() +
-            "; rebuild TensorRT plans on the target device with scripts/build_dcvcrt_tensorrt.sh");
+            "; rebuild TensorRT plans on the target device with scripts/nvcr_artifacts.py build");
+    }
+    std::error_code filesystem_error;
+    if (fs::file_size(path, filesystem_error) > 4U * 1024U * 1024U || filesystem_error) {
+        return backend_error("engine_manifest.json is unavailable or exceeds 4 MiB");
     }
     auto text = read_text_file(path);
     if (!text) return text.error();
-    auto format = checked_manifest_i32(text.value(), "format", 1);
+    auto format = checked_manifest_i32(text.value(), "format", 2);
     if (!format) return format.error();
-    if (format.value() != 1) {
+    if (format.value() != 2) {
         return backend_error("unsupported engine_manifest.json format: " +
                              std::to_string(format.value()));
     }
     EngineManifest manifest;
+    auto schema = read_json_string(text.value(), "schema");
     auto kind = read_json_string(text.value(), "kind");
+    auto model_profile_id = read_json_string(text.value(), "model_profile_id");
+    auto target_profile_id = read_json_string(text.value(), "target_profile_id");
+    auto engine_profile_id = read_json_string(text.value(), "engine_profile_id");
+    auto model_profile_sha256 = read_json_string(text.value(), "model_profile_sha256");
+    auto engine_profile_sha256 = read_json_string(text.value(), "engine_profile_sha256");
+    auto target_profile_sha256 = read_json_string(text.value(), "target_profile_sha256");
     auto precision = read_json_string(text.value(), "precision");
     auto profile = read_json_string(text.value(), "optimization_point");
     auto device_name = read_json_string(text.value(), "device_name");
+    auto checksum_manifest = read_json_string(text.value(), "checksum_manifest");
+    auto checksum_manifest_sha256 =
+        read_json_string(text.value(), "checksum_manifest_sha256");
+    auto i_manifest_sha256 = read_json_string(text.value(), "i_model_manifest_sha256");
+    auto p_manifest_sha256 = read_json_string(text.value(), "p_model_manifest_sha256");
+    auto cuda_version = checked_manifest_i32(text.value(), "cuda_runtime_version", 1);
     auto trt_major = checked_manifest_i32(text.value(), "tensorrt_version_major");
     auto trt_minor = checked_manifest_i32(text.value(), "tensorrt_version_minor");
     auto trt_patch = checked_manifest_i32(text.value(), "tensorrt_version_patch");
     auto cc_major = checked_manifest_i32(text.value(), "compute_capability_major");
     auto cc_minor = checked_manifest_i32(text.value(), "compute_capability_minor");
     auto sm_count = checked_manifest_i32(text.value(), "multiprocessor_count", 1);
+    if (!schema) return schema.error();
     if (!kind) return kind.error();
+    if (!model_profile_id) return model_profile_id.error();
+    if (!target_profile_id) return target_profile_id.error();
+    if (!engine_profile_id) return engine_profile_id.error();
+    if (!model_profile_sha256) return model_profile_sha256.error();
+    if (!engine_profile_sha256) return engine_profile_sha256.error();
+    if (!target_profile_sha256) return target_profile_sha256.error();
     if (!precision) return precision.error();
     if (!profile) return profile.error();
     if (!device_name) return device_name.error();
+    if (!checksum_manifest) return checksum_manifest.error();
+    if (!checksum_manifest_sha256) return checksum_manifest_sha256.error();
+    if (!i_manifest_sha256) return i_manifest_sha256.error();
+    if (!p_manifest_sha256) return p_manifest_sha256.error();
+    if (!cuda_version) return cuda_version.error();
     if (!trt_major) return trt_major.error();
     if (!trt_minor) return trt_minor.error();
     if (!trt_patch) return trt_patch.error();
     if (!cc_major) return cc_major.error();
     if (!cc_minor) return cc_minor.error();
     if (!sm_count) return sm_count.error();
+    manifest.schema = std::move(schema.value());
     manifest.kind = std::move(kind.value());
+    manifest.model_profile_id = std::move(model_profile_id.value());
+    manifest.target_profile_id = std::move(target_profile_id.value());
+    manifest.engine_profile_id = std::move(engine_profile_id.value());
+    manifest.model_profile_sha256 = std::move(model_profile_sha256.value());
+    manifest.engine_profile_sha256 = std::move(engine_profile_sha256.value());
+    manifest.target_profile_sha256 = std::move(target_profile_sha256.value());
     manifest.precision = std::move(precision.value());
     manifest.optimization_point = std::move(profile.value());
     manifest.device_name = std::move(device_name.value());
+    manifest.checksum_manifest = std::move(checksum_manifest.value());
+    manifest.checksum_manifest_sha256 = std::move(checksum_manifest_sha256.value());
+    manifest.i_model_manifest_sha256 = std::move(i_manifest_sha256.value());
+    manifest.p_model_manifest_sha256 = std::move(p_manifest_sha256.value());
+    manifest.cuda_runtime_version = cuda_version.value();
     manifest.tensorrt_major = trt_major.value();
     manifest.tensorrt_minor = trt_minor.value();
     manifest.tensorrt_patch = trt_patch.value();
@@ -385,15 +459,130 @@ Result<EngineManifest> load_engine_manifest(const fs::path& root) {
     return manifest;
 }
 
-Result<void> validate_engine_manifest(const fs::path& root, std::int32_t device_id) {
+bool valid_profile_id(std::string_view value) {
+    if (value.empty() || value.size() > 128U) return false;
+    return std::ranges::all_of(value, [](unsigned char character) {
+        return std::isalnum(character) != 0 || character == '.' ||
+            character == '_' || character == '-';
+    });
+}
+
+bool valid_sha256(std::string_view value) {
+    if (value.size() != 64U) return false;
+    for (const char character : value) {
+        if (!((character >= '0' && character <= '9') ||
+              (character >= 'a' && character <= 'f'))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+Result<void> validate_bundle_hashes(const fs::path& root, const EngineManifest& manifest) {
+    if (manifest.checksum_manifest != "engine.sha256") {
+        return backend_error("engine manifest must reference portable engine.sha256");
+    }
+    const auto checksum_path = root / manifest.checksum_manifest;
+    std::error_code filesystem_error;
+    if (!fs::is_regular_file(checksum_path, filesystem_error) ||
+        fs::file_size(checksum_path, filesystem_error) > 64U * 1024U || filesystem_error) {
+        return backend_error("engine.sha256 is missing, unavailable, or oversized");
+    }
+    auto checksum_hash = detail::sha256_file(checksum_path, subsystem);
+    if (!checksum_hash) return checksum_hash.error();
+    if (!valid_sha256(manifest.checksum_manifest_sha256) ||
+        checksum_hash.value() != manifest.checksum_manifest_sha256) {
+        return backend_error("engine.sha256 digest does not match engine_manifest.json");
+    }
+    auto text = read_text_file(checksum_path);
+    if (!text) return text.error();
+    std::map<std::string, std::string> checksums;
+    std::istringstream input(text.value());
+    std::string line;
+    while (std::getline(input, line)) {
+        std::istringstream fields(line);
+        std::string digest;
+        std::string name;
+        std::string extra;
+        if (!(fields >> digest >> name) || (fields >> extra) || !valid_sha256(digest) ||
+            name.empty() || name == "." || name == ".." || name.find('/') != std::string::npos ||
+            name.find('\\') != std::string::npos || !checksums.emplace(name, digest).second) {
+            return backend_error("engine.sha256 contains an invalid or duplicate entry");
+        }
+    }
+    constexpr std::array<std::string_view, 20> required_files{
+        "i_analysis.plan", "i_hyper_analysis.plan", "i_hyper_synthesis.plan",
+        "i_spatial_prior_1.plan", "i_spatial_prior_2.plan", "i_spatial_prior_3.plan",
+        "i_synthesis.plan", "p_reference_frame.plan", "p_reference_feature.plan",
+        "p_analysis.plan", "p_hyper_analysis.plan", "p_prior.plan",
+        "p_spatial_prior.plan", "p_synthesis.plan", "i_entropy.bin", "i_quant.bin",
+        "i_frame_manifest.json", "p_entropy.bin", "p_quant.bin", "p_frame_manifest.json",
+    };
+    if (checksums.size() != required_files.size()) {
+        return backend_error("engine.sha256 does not describe the exact runtime bundle");
+    }
+    for (const auto required : required_files) {
+        const auto entry = checksums.find(std::string(required));
+        if (entry == checksums.end()) {
+            return backend_error("engine.sha256 is missing " + std::string(required));
+        }
+        auto actual = detail::sha256_file(root / required, subsystem);
+        if (!actual) return actual.error();
+        if (actual.value() != entry->second) {
+            return backend_error("engine bundle SHA-256 mismatch: " + std::string(required));
+        }
+    }
+    if (!valid_sha256(manifest.i_model_manifest_sha256) ||
+        !valid_sha256(manifest.p_model_manifest_sha256) ||
+        checksums.at("i_frame_manifest.json") != manifest.i_model_manifest_sha256 ||
+        checksums.at("p_frame_manifest.json") != manifest.p_model_manifest_sha256) {
+        return backend_error("engine bundle does not match its model manifest identities");
+    }
+    return {};
+}
+
+Result<void> validate_engine_manifest(
+    const fs::path& root,
+    std::int32_t device_id,
+    std::string_view expected_model_profile) {
     auto manifest = load_engine_manifest(root);
     if (!manifest) return manifest.error();
-    if (manifest.value().kind != "nvcr-tensorrt-engine-bundle") {
-        return backend_error("engine_manifest.json has unexpected kind: " + manifest.value().kind);
+    if (manifest.value().schema != "nvcr.engine-bundle.v2" ||
+        manifest.value().kind != "nvcr-tensorrt-engine-bundle") {
+        return backend_error("engine_manifest.json has an unsupported schema or kind");
     }
-    if (manifest.value().precision != "fp16" && manifest.value().precision != "int8_fp16") {
-        return backend_error("engine_manifest.json has unsupported precision: " +
-                             manifest.value().precision);
+    if (manifest.value().model_profile_id != expected_model_profile) {
+        return backend_error(
+            "TensorRT engine bundle model '" + manifest.value().model_profile_id +
+            "' does not match configured model '" + std::string(expected_model_profile) + "'");
+    }
+    if (manifest.value().precision != "fp16") {
+        return backend_error(
+            "engine_manifest.json precision is not supported by v1: " +
+            manifest.value().precision);
+    }
+    if (!valid_profile_id(manifest.value().model_profile_id) ||
+        !valid_profile_id(manifest.value().target_profile_id) ||
+        !valid_profile_id(manifest.value().engine_profile_id) ||
+        manifest.value().engine_profile_id != manifest.value().optimization_point + "-fp16" ||
+        !valid_sha256(manifest.value().model_profile_sha256) ||
+        !valid_sha256(manifest.value().engine_profile_sha256) ||
+        !valid_sha256(manifest.value().target_profile_sha256)) {
+        return backend_error(
+            "engine_manifest.json has invalid model/target/engine profile identity or digest");
+    }
+    auto hashes = validate_bundle_hashes(root, manifest.value());
+    if (!hashes) return hashes.error();
+    int cuda_runtime_version = 0;
+    const auto cuda_version_status = cudaRuntimeGetVersion(&cuda_runtime_version);
+    if (cuda_version_status != cudaSuccess) {
+        return cuda_error("cudaRuntimeGetVersion", cuda_version_status);
+    }
+    if (manifest.value().cuda_runtime_version != cuda_runtime_version) {
+        return backend_error(
+            "TensorRT engine bundle CUDA runtime " +
+            std::to_string(manifest.value().cuda_runtime_version) +
+            " does not match active CUDA runtime " + std::to_string(cuda_runtime_version));
     }
     if (manifest.value().tensorrt_major != NV_TENSORRT_MAJOR ||
         manifest.value().tensorrt_minor != NV_TENSORRT_MINOR ||
@@ -952,10 +1141,10 @@ struct DeviceTensor final {
 };
 
 struct VideoQuantDeviceCache final {
-    std::array<std::optional<DeviceTensor>, 64> q_encoder;
-    std::array<std::optional<DeviceTensor>, 64> q_decoder;
-    std::array<std::optional<DeviceTensor>, 64> q_feature;
-    std::array<std::optional<DeviceTensor>, 64> q_recon;
+    std::array<std::optional<DeviceTensor>, video_qp_count> q_encoder;
+    std::array<std::optional<DeviceTensor>, video_qp_count> q_decoder;
+    std::array<std::optional<DeviceTensor>, video_qp_count> q_feature;
+    std::array<std::optional<DeviceTensor>, video_qp_count> q_recon;
 };
 
 struct DeviceDpb final {
@@ -1007,7 +1196,7 @@ Result<DeviceTensor> allocate_device_tensor(
 
 Result<void> populate_video_quant_cache(
     const RuntimeAssets& assets, VideoQuantDeviceCache& cache, cudaStream_t stream) {
-    for (std::uint32_t qp = 0; qp < 64; ++qp) {
+    for (std::uint32_t qp = 0; qp < video_qp_count; ++qp) {
         auto q_encoder = upload_tensor(
             make_video_quant_tensor(assets, "q_encoder", qp), "q_encoder", stream);
         if (!q_encoder) return q_encoder.error();
@@ -1041,7 +1230,6 @@ Result<std::vector<DeviceTensor>> run_device_engine(
     auto context_result = acquire_context(instance);
     if (!context_result) return context_result.error();
     auto* context = context_result.value();
-    const bool low_memory_mode = tensorrt_low_memory_mode;
     const auto cpu_start = std::chrono::steady_clock::now();
     for (const auto& tensor : specification.tensors) {
         if (tensor.mode != nvinfer1::TensorIOMode::kINPUT) continue;
@@ -1108,7 +1296,7 @@ Result<std::vector<DeviceTensor>> run_device_engine(
         active_profiler->record_cuda_stage(
             std::string(specification.filename) + " enqueue", events.first, events.second);
     }
-    if (low_memory_mode) {
+    if (instance.low_memory_mode) {
         auto synchronized = synchronize_stream(stream, "cudaStreamSynchronize device engine");
         if (!synchronized) return synchronized.error();
         instance.context.reset();
@@ -1157,7 +1345,6 @@ Result<std::vector<HostTensor>> run_host_engine(
     auto context_result = acquire_context(instance);
     if (!context_result) return context_result.error();
     auto* context = context_result.value();
-    const bool low_memory_mode = tensorrt_low_memory_mode;
     const auto cpu_start = std::chrono::steady_clock::now();
     for (const auto& tensor : specification.tensors) {
         if (tensor.mode != nvinfer1::TensorIOMode::kINPUT) continue;
@@ -1252,7 +1439,7 @@ Result<std::vector<HostTensor>> run_host_engine(
     }
     auto synchronized = synchronize_stream(stream, "cudaStreamSynchronize");
     if (!synchronized) return synchronized.error();
-    if (low_memory_mode) instance.context.reset();
+    if (instance.low_memory_mode) instance.context.reset();
     if (active_profiler != nullptr && active_profiler->enabled()) {
         const auto cpu_elapsed = std::chrono::steady_clock::now() - cpu_start;
         active_profiler->record_cpu_stage(
@@ -1892,10 +2079,15 @@ HostTensor make_video_quant_tensor(
     return output;
 }
 
-std::uint32_t video_qp(std::uint32_t base_qp, std::uint64_t frame_index) {
+Result<std::uint32_t> video_qp(std::uint32_t base_qp, std::uint64_t frame_index) {
     constexpr std::array<std::uint32_t, 8> index_map{0, 1, 0, 2, 0, 2, 0, 2};
     constexpr std::array<std::uint32_t, 3> shifts{0, 8, 4};
-    return base_qp + shifts[index_map[frame_index % index_map.size()]];
+    if (base_qp >= 64U) return backend_error("base P-frame QP must be in [0, 63]");
+    const auto effective_qp = base_qp + shifts[index_map[frame_index % index_map.size()]];
+    if (effective_qp >= video_qp_count) {
+        return backend_error("effective P-frame QP exceeds the 72-entry model table");
+    }
+    return effective_qp;
 }
 
 Result<HostTensor> take_tensor(std::vector<HostTensor>& tensors, std::string_view name) {
@@ -1913,7 +2105,7 @@ void append_u32(std::vector<std::byte>& output, std::uint32_t value) {
 
 Result<std::uint32_t> read_u32(
     std::span<const std::byte> input, std::size_t& offset) {
-    if (input.size() - offset < 4) {
+    if (offset > input.size() || input.size() - offset < 4) {
         return Error(ErrorCode::malformed_bitstream, "truncated I-frame header",
                      std::string(subsystem));
     }
@@ -1991,7 +2183,8 @@ Result<IntraPayload> parse_intra_payload(std::span<const std::byte> payload) {
     if (!height) return height.error();
     if (!qp) return qp.error();
     if (!flags) return flags.error();
-    if (width.value() == 0 || height.value() == 0 || qp.value() >= 64 || flags.value() > 1) {
+    if (!supported_frame_dimensions(width.value(), height.value()) ||
+        qp.value() >= 64 || flags.value() > 1) {
         return Error(ErrorCode::malformed_bitstream, "invalid NVCR I-frame fields",
                      std::string(subsystem));
     }
@@ -2039,7 +2232,8 @@ Result<PredictedPayload> parse_predicted_payload(std::span<const std::byte> payl
     if (!height) return height.error();
     if (!qp) return qp.error();
     if (!flags) return flags.error();
-    if (width.value() == 0 || height.value() == 0 || qp.value() >= 72 || flags.value() > 3) {
+    if (!supported_frame_dimensions(width.value(), height.value()) ||
+        qp.value() >= video_qp_count || flags.value() > 3) {
         return Error(ErrorCode::malformed_bitstream, "invalid NVCR P-frame fields",
                      std::string(subsystem));
     }
@@ -2063,8 +2257,7 @@ Result<CodecEncodeResult> encode_intra(
                      "native I-frame encoding requires RGB24 or YUV420P8",
                      std::string(subsystem));
     }
-    if (frame.width() < 64 || frame.height() < 64 || frame.width() > 1920 ||
-        frame.height() > 1080) {
+    if (!supported_frame_dimensions(frame.width(), frame.height())) {
         return Error(ErrorCode::invalid_argument,
                      "native I-frame dimensions must be within 64x64 and 1920x1080",
                      std::string(subsystem));
@@ -2188,7 +2381,7 @@ Result<CodecEncodeResult> encode_intra(
     device_dpb.generation = state.generation;
     auto latent_state = serialize_dpb(reconstructed_result.value());
     return CodecEncodeResult{
-        std::move(payload), std::move(reconstructed.value()), std::move(latent_state)};
+        std::move(payload), std::move(reconstructed.value()), std::move(latent_state), qp};
 }
 
 Result<CodecDecodeResult> decode_intra(
@@ -2299,10 +2492,15 @@ Result<CodecEncodeResult> encode_predicted(
     PinnedHostBuffer<std::int8_t>& z_symbols_buffer,
     PinnedHostBuffer<std::int16_t>& indexes0_buffer,
     PinnedHostBuffer<std::int16_t>& indexes1_buffer,
-    cudaStream_t stream) {
+    bool verify_reconstruction, cudaStream_t stream) {
     if (frame.pixel_format() != PixelFormat::rgb24 &&
         frame.pixel_format() != PixelFormat::yuv420p8) {
         return Error(ErrorCode::invalid_argument, "native P-frame encoding requires RGB24 or YUV420P8",
+                     std::string(subsystem));
+    }
+    if (!supported_frame_dimensions(frame.width(), frame.height())) {
+        return Error(ErrorCode::invalid_argument,
+                     "native P-frame dimensions must be even and within 64x64 and 1920x1080",
                      std::string(subsystem));
     }
     if (!device_dpb.matches(state)) {
@@ -2310,7 +2508,9 @@ Result<CodecEncodeResult> encode_predicted(
                      std::string(subsystem));
     }
     const bool use_frame_reference = !device_dpb.feature || (state.frame_index % 32U) == 1U;
-    const auto qp = video_qp(base_qp, state.frame_index);
+    auto qp_result = video_qp(base_qp, state.frame_index);
+    if (!qp_result) return qp_result.error();
+    const auto qp = qp_result.value();
 
     const std::string reference_name = use_frame_reference ? "reference_frame" : "reference_feature";
     auto* reference_device = use_frame_reference ? &*device_dpb.frame : &*device_dpb.feature;
@@ -2603,13 +2803,23 @@ Result<CodecEncodeResult> encode_predicted(
     auto payload = make_predicted_payload(
         frame.width(), frame.height(), qp, two_coders, use_frame_reference, stream_bytes.value());
 
+    Frame reconstructed_frame;
+    if (verify_reconstruction) {
+        std::array<const DeviceTensor*, 1> tensors{&frame_device};
+        auto downloaded = download_tensors(tensors, stream);
+        if (!downloaded) return downloaded.error();
+        auto reconstructed = ycbcr_to_rgb(
+            downloaded.value().front(), frame.width(), frame.height(), frame.timestamp());
+        if (!reconstructed) return reconstructed.error();
+        reconstructed_frame = std::move(reconstructed.value());
+    }
     device_dpb.frame = std::move(frame_device);
     device_dpb.feature = std::move(feature_device);
     device_dpb.next_frame_index = state.frame_index + 1;
     device_dpb.generation = state.generation;
     std::vector<std::byte> latent_state;
     return CodecEncodeResult{
-        std::move(payload), Frame{}, std::move(latent_state)};
+        std::move(payload), std::move(reconstructed_frame), std::move(latent_state), qp};
 }
 
 Result<CodecDecodeResult> decode_predicted(
@@ -2869,10 +3079,10 @@ public:
 
         const auto device_status = cudaSetDevice(configuration.device_id);
         if (device_status != cudaSuccess) return cuda_error("cudaSetDevice", device_status);
-        auto low_memory_mode = determine_low_memory_mode(configuration.device_id);
+        auto low_memory_mode = determine_low_memory_mode(configuration);
         if (!low_memory_mode) return low_memory_mode.error();
         auto manifest = validate_engine_manifest(
-            configuration.intra_engine_path, configuration.device_id);
+            configuration.intra_engine_path, configuration.device_id, configuration.model_id);
         if (!manifest) return manifest.error();
 
         try {
@@ -2904,7 +3114,7 @@ public:
                 return quant_cache_loaded.error();
             }
             for (std::size_t index = 0; index < engines.size(); ++index) {
-                tensorrt_low_memory_mode = low_memory_mode.value();
+                engines[index].low_memory_mode = low_memory_mode.value();
                 auto warmed = warm_up_engine(engines[index], engine_specs[index], stream);
                 if (!warmed) {
                     static_cast<void>(cudaStreamDestroy(stream));
@@ -2920,8 +3130,8 @@ public:
             stream_ = stream;
             intra_qp_ = configuration.intra_qp;
             profiling_enabled_ = configuration.enable_profiling;
+            verify_encoder_reconstruction_ = configuration.verify_encoder_reconstruction;
             low_memory_mode_ = low_memory_mode.value();
-            tensorrt_low_memory_mode = low_memory_mode_;
             std::clog << "[nvcr.dcvcrt] [info] TensorRT mode: "
                       << (low_memory_mode_ ? "low-memory" : "performance")
                       << '\n';
@@ -2946,7 +3156,6 @@ public:
                 std::string(subsystem));
         }
         try {
-            tensorrt_low_memory_mode = low_memory_mode_;
             BackendProfiler profiler(profiling_enabled_);
             profiler.begin("encode", frame_type, state.frame_index);
             CudaAllocationScope allocation_scope(stream_, &profiler);
@@ -2959,7 +3168,7 @@ public:
             auto result = encode_predicted(
                 frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_,
                 video_quant_cache_, z_symbols_buffer_, indexes0_buffer_,
-                indexes1_buffer_, stream_);
+                indexes1_buffer_, verify_encoder_reconstruction_, stream_);
             profiler.finish();
             return result;
         } catch (const std::exception& exception) {
@@ -2982,7 +3191,6 @@ public:
                 std::string(subsystem));
         }
         try {
-            tensorrt_low_memory_mode = low_memory_mode_;
             BackendProfiler profiler(profiling_enabled_);
             profiler.begin("decode", frame_type, state.frame_index);
             CudaAllocationScope allocation_scope(stream_, &profiler);
@@ -3040,6 +3248,7 @@ private:
     DeviceDpb decoder_dpb_;
     std::uint32_t intra_qp_{};
     bool profiling_enabled_{false};
+    bool verify_encoder_reconstruction_{false};
     bool low_memory_mode_{true};
     bool initialized_{false};
 };

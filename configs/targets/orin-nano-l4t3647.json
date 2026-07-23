@@ -1,0 +1,20 @@
+{
+  "schema": "nvcr.target-profile.v1",
+  "id": "orin-nano-l4t3647",
+  "status": "validation-incomplete",
+  "host": {
+    "os": "L4T 36.4.7",
+    "architecture": "aarch64",
+    "compiler": "record-at-validation"
+  },
+  "gpu": {
+    "name": "Jetson Orin Nano",
+    "compute_capability": "8.7",
+    "multiprocessor_count": 8
+  },
+  "cuda": "12.6.68",
+  "tensorrt": "10.3.0.30",
+  "power_mode": "record-at-validation",
+  "clocks": "record-at-validation",
+  "precision": "fp16"
+}

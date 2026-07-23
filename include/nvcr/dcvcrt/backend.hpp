@@ -16,6 +16,7 @@ struct CodecEncodeResult final {
     std::vector<std::byte> payload;
     Frame reconstructed_frame;
     std::vector<std::byte> latent_state;
+    std::uint32_t effective_qp{};
 };
 
 struct CodecDecodeResult final {
