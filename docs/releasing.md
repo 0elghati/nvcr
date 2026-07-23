@@ -26,7 +26,7 @@ a tagged draft release and dispatches
 On GitHub's standard hosted runners, that workflow currently:
 
 1. checks out the exact requested tag and verifies it matches `version.txt`;
-2. installs CUDA and TensorRT development packages on hosted Ubuntu 24.04 x86_64;
+2. installs minimal CUDA/TensorRT compile dependencies on hosted Ubuntu 24.04 x86_64;
 3. configures a portable TensorRT-enabled Release build;
 4. runs the hosted-safe test subset (artifact/profile, smoke/access-unit,
    parser-fuzz boundaries, and rANS);

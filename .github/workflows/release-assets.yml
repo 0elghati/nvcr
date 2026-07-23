@@ -32,7 +32,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$NVCR_TAG")"
           test "$(cat version.txt)" = "${NVCR_TAG#v}"
 
-      - name: Install CUDA toolkit and TensorRT development packages
+      - name: Install minimal CUDA/TensorRT compile dependencies
         run: ./scripts/ci/install_cuda_tensorrt.sh
 
       - name: Configure hosted portable release build

@@ -280,10 +280,11 @@ Append evidence; never silently replace historical results.
   evidence instead of unreachable self-hosted Actions jobs.
 - Converted the old main-push GPU workflow into an optional manual self-hosted
   helper disabled by default, pinned the hosted CUDA/TensorRT CI gate to
-  Ubuntu 24.04, and reduced hosted CPU CI to Release-only coverage on the
-  standard x86_64 and arm64 runners.
+  Ubuntu 24.04, minimized its CUDA/TensorRT package install to avoid
+  hosted-runner disk pressure, and reduced hosted CPU CI to Release-only
+  coverage on the standard x86_64 and arm64 runners.
 - Validation: YAML parse of all workflow files, release-please JSON validation,
-  and `git diff --check`.
+  `bash -n scripts/ci/install_cuda_tensorrt.sh`, and `git diff --check`.
 
 
 ### 2026-07-02 — M0 baseline and entropy optimization

@@ -128,7 +128,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install CUDA toolkit and TensorRT development packages
+      - name: Install minimal CUDA/TensorRT compile dependencies
         run: ./scripts/ci/install_cuda_tensorrt.sh
 
       - name: Configure (portable multi-arch)
