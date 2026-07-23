@@ -248,8 +248,41 @@ Append evidence; never silently replace historical results.
 - CPU Release configuration passed all 4 registered tests: artifact/profile validation, smoke/access-unit boundaries, deterministic parser fuzz boundaries, and rANS conformance.
 - CUDA/TensorRT Release configuration with a profile-bound v2 engine bundle passed all 7 registered tests, including CUDA operators, model/target/engine manifest validation, high-QP P-frame round trip through effective QP 71, two GOPs, reset/reuse, native I-P reconstruction equality, and recorded profile digest plus engine checksum validation.
 - Installed CLI completed a two-frame 176x144 YUV420P8 I-P encode/decode; output framing and reconstructed dimensions were validated.
-- Release install and target-specific RTX/Orin package archives passed required-file, forbidden-asset, internal manifest, and SHA-256 checks; the packaged contents contained the required documentation, licenses, notices, and manifests and excluded checkpoints plus derived model and engine assets.
+- Release install and the public x86_64 NVIDIA / Jetson L4T 36 package archives passed required-file, forbidden-asset, internal manifest, and SHA-256 checks; the packaged contents contained the required documentation, licenses, notices, and manifests and excluded checkpoints plus derived model and engine assets.
 - Status: exact-tag clean-room execution, pinned Python cross-runtime golden vectors, performance/rate-distortion evidence, and the Jetson Orin Nano target matrix remain open; v0.3 and v1.0 are not complete.
+
+### 2026-07-23 — Generic public package families with explicit validation targets
+
+- Updated release packaging and docs so public archives use generic family names
+  (`linux-x86_64-nvidia`, `linux-aarch64-jetson-l4t36`) while release gating
+  and evidence remain tied to `rtx4070-ubuntu2404` and `orin-nano-l4t3647`.
+- Kept TensorRT engine generation target-local in the public workflow and docs;
+  engine bundles remain release test inputs rather than release outputs.
+- Hardened PR CI so workflow files are parsed during linting,
+  `release-assets.yml` edits trigger hosted packaging coverage, and the hosted
+  portable CUDA/TensorRT job now hard-gates the generic
+  `linux-x86_64-nvidia` archive smoke package with checksum, manifest-presence,
+  and forbidden-asset checks.
+- Validation: `bash -n scripts/package_release.sh`,
+  `./scripts/package_release.sh --help`, YAML parse of
+  `.github/workflows/release-assets.yml` and `.github/workflows/ci.yml`,
+  release-please JSON validation, and `git diff --check`.
+
+
+### 2026-07-23 — Align release automation with standard GitHub-hosted runners
+
+- Reworked release automation so the default repository contract assumes only
+  GitHub standard hosted runners: `release-assets.yml` now builds and uploads
+  the generic x86_64 NVIDIA package on hosted Ubuntu 24.04 and leaves the
+  release in draft.
+- Moved exact RTX 4070 / Jetson Orin Nano validation, Jetson package creation,
+  and final publication to explicit manual release steps recorded in roadmap
+  evidence instead of unreachable self-hosted Actions jobs.
+- Converted the old main-push GPU workflow into an optional manual self-hosted
+  helper disabled by default, and pinned the hosted CUDA/TensorRT CI gate to
+  Ubuntu 24.04 to match the supported hosted install path.
+- Validation: YAML parse of all workflow files, release-please JSON validation,
+  and `git diff --check`.
 
 
 ### 2026-07-02 — M0 baseline and entropy optimization
@@ -844,3 +877,39 @@ artifacts; they must always be generated per-target via
 `scripts/prepare_dcvcrt_artifacts.sh`, guarded by `engine_manifest.json`
 (2026-07-08 decision above). Release packaging automation remained out of scope
 for that change.
+
+### 2026-07-23 — Keep public package families broader than validated reference hardware
+
+Decision: public archive names identify a Linux/NVIDIA package family, while the
+validated support claim remains anchored to explicit target profiles in configs,
+release automation, and roadmap evidence.
+
+Rationale: package filenames should not imply that NVCR only installs on one
+exact GPU SKU when the portable binary may run on a broader NVIDIA/Linux family.
+At the same time, TensorRT plans and support evidence remain narrower than the
+binary package family, so archive naming must not replace the target matrix.
+
+Consequence: release packages now use generic family labels such as
+`linux-x86_64-nvidia` and `linux-aarch64-jetson-l4t36`, while the workflow still
+builds and validates against `rtx4070-ubuntu2404` and
+`orin-nano-l4t3647`. Public releases remain engine-free and target-local engine
+generation remains the default path. If reviewer-convenience compatibility-mode
+engines are added later, they stay a non-default discrete-GPU class and not a
+Jetson portability path.
+
+### 2026-07-23 — Treat standard GitHub-hosted runners as packaging helpers, not target-evidence gates
+
+Decision: the default Actions contract uses standard GitHub-hosted runners for
+lint, CPU tests, hosted CUDA/TensorRT compile/package smoke, and draft x86_64
+package upload only. Reference-target validation and Jetson release deliverables
+remain explicit external/manual steps until dedicated runner capability exists.
+
+Rationale: standard GitHub-hosted runners provide general-purpose x86_64 and
+arm64 Linux VMs, but not the recorded RTX 4070 or Jetson Orin Nano deployment
+environments required for target-local TensorRT plan generation, the full GPU
+suite, or Jetson/L4T packaging evidence.
+
+Consequence: hosted automation may upload the generic x86_64 package to a draft
+release, but it does not publish the release. The Jetson archive, exact target
+matrices, and final publication remain manual release responsibilities recorded
+in the roadmap.

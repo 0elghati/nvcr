@@ -1,171 +1,86 @@
 name: release-assets
 
-# Release Please creates a draft release and dispatches this workflow. A release
-# remains a draft unless the required clean target gates below succeed.
+# Default repository automation assumes GitHub's standard hosted runners.
+# They can build and upload the generic x86_64 package family, but they do not
+# provide the reference GPU/Jetson environments required for support evidence or
+# Jetson packaging. Draft releases therefore remain unpublished until those
+# external gates are completed and recorded.
 on:
   workflow_dispatch:
     inputs:
       tag:
         description: Exact release tag, for example v0.3.0 or v1.0.0
         required: true
-      publish_jetson:
-        description: Run the Orin Nano gate for a pre-v1 foundation release
-        type: boolean
-        default: false
 
 permissions:
   contents: write
 
 jobs:
-  build-discrete:
-    runs-on:
-      - self-hosted
-      - nvcr-release-discrete
+  build-hosted-x86_64:
+    runs-on: ubuntu-24.04
     env:
       NVCR_TAG: ${{ inputs.tag }}
-      NVCR_REFERENCE_ROOT: ${{ vars.NVCR_DCVCRT_ROOT_DISCRETE }}
-      NVCR_REFERENCE_PYTHON: ${{ vars.NVCR_DCVCRT_PYTHON_DISCRETE }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
 
-      - name: Verify exact tagged source and release inputs
+      - name: Verify exact tagged source
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$NVCR_TAG")"
           test "$(cat version.txt)" = "${NVCR_TAG#v}"
-          test -n "$NVCR_REFERENCE_ROOT"
-          test -x "$NVCR_REFERENCE_PYTHON"
 
-      - name: Generate and validate the declared RTX 4070 bundle
+      - name: Install CUDA toolkit and TensorRT development packages
+        run: ./scripts/ci/install_cuda_tensorrt.sh
+
+      - name: Configure hosted portable release build
         run: |
           set -euo pipefail
-          ./scripts/nvcr_artifacts.py prepare \
-            --model-profile configs/models/dcvcrt-cvpr2025.json \
-            --engine-profile configs/engine-profiles/1080p-fp16.json \
-            --target-profile configs/targets/rtx4070-ubuntu2404.json \
-            --dcvcrt-root "$NVCR_REFERENCE_ROOT" \
-            --models "$RUNNER_TEMP/nvcr-models" \
-            --engines "$RUNNER_TEMP/nvcr-engines" \
-            --python "$NVCR_REFERENCE_PYTHON" \
-            --skip-clone
-          ./scripts/nvcr_artifacts.py validate "$RUNNER_TEMP/nvcr-models" --json
-          ./scripts/nvcr_artifacts.py validate "$RUNNER_TEMP/nvcr-engines" --json
+          cmake -S . -B build-release-hosted -DCMAKE_BUILD_TYPE=Release -DNVCR_ENABLE_TENSORRT=ON -DNVCR_CUDA_ARCH_SET=portable -DNVCR_FETCH_DEPENDENCIES=ON -DNVCR_BUILD_TESTS=ON
 
-      - name: Release build, full registered suite, and install
+      - name: Build and run hosted-safe tests
         run: |
           set -euo pipefail
-          ./scripts/install.sh \
-            --build-type Release \
-            --build-dir build-release-discrete \
-            --prefix "$RUNNER_TEMP/nvcr-install" \
-            --run-tests \
-            --cmake-arg "-DNVCR_TENSORRT_ENGINE_DIR=$RUNNER_TEMP/nvcr-engines"
-          ctest --test-dir build-release-discrete -N
+          cmake --build build-release-hosted --parallel
+          ctest --test-dir build-release-hosted --output-on-failure -R 'nvcr_(artifact_profiles|smoke_tests|parser_fuzz_boundaries|rans_conformance)'
 
-      - name: Package code, docs, profiles, licenses, notices, and manifests
+      - name: Install, package, and verify the generic x86_64 archive
         run: |
-          ./scripts/package_release.sh \
-            --version "${NVCR_TAG#v}" \
-            --platform linux-x86_64-rtx4070 \
-            --install-prefix "$RUNNER_TEMP/nvcr-install" \
-            --output-dir "$RUNNER_TEMP/nvcr-dist"
+          set -euo pipefail
+          archive="$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-x86_64-nvidia.tar.gz"
+          checksum="$archive.sha256"
+          cmake --install build-release-hosted --prefix "$RUNNER_TEMP/nvcr-install"
+          ./scripts/package_release.sh --version "${NVCR_TAG#v}" --platform linux-x86_64-nvidia --install-prefix "$RUNNER_TEMP/nvcr-install" --output-dir "$RUNNER_TEMP/nvcr-dist"
+          test -f "$archive"
+          test -f "$checksum"
+          (cd "$RUNNER_TEMP/nvcr-dist" && sha256sum -c "$(basename "$checksum")")
+          tar -tzf "$archive" | grep -qx "nvcr-$NVCR_TAG-linux-x86_64-nvidia/PACKAGE-MANIFEST.sha256"
+          if tar -tzf "$archive" | grep -Eq '(\.plan|\.engine|\.onnx|\.pth(\.tar)?)$|/(i|p)_(entropy|quant)\.bin$|/engine_manifest\.json$|/engine\.sha256$'; then
+            echo "release archive contains forbidden model or engine assets" >&2
+            exit 1
+          fi
 
-      - name: Upload to draft release
+      - name: Upload x86_64 archive to draft release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "$NVCR_TAG" \
-            "$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-x86_64-rtx4070.tar.gz" \
-            "$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-x86_64-rtx4070.tar.gz.sha256" \
-            --clobber
+          gh release upload "$NVCR_TAG" "$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-x86_64-nvidia.tar.gz" "$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-x86_64-nvidia.tar.gz.sha256" --clobber
 
-  build-jetson:
-    if: ${{ inputs.publish_jetson || startsWith(inputs.tag, 'v1.') }}
-    runs-on:
-      - self-hosted
-      - nvcr-release-jetson
-    env:
-      NVCR_TAG: ${{ inputs.tag }}
-      NVCR_REFERENCE_ROOT: ${{ vars.NVCR_DCVCRT_ROOT_JETSON }}
-      NVCR_REFERENCE_PYTHON: ${{ vars.NVCR_DCVCRT_PYTHON_JETSON }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag }}
-          fetch-depth: 0
-
-      - name: Verify exact tagged source and release inputs
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$NVCR_TAG")"
-          test "$(cat version.txt)" = "${NVCR_TAG#v}"
-          test -n "$NVCR_REFERENCE_ROOT"
-          test -x "$NVCR_REFERENCE_PYTHON"
-
-      - name: Generate and validate the declared Orin Nano bundle
-        run: |
-          set -euo pipefail
-          ./scripts/nvcr_artifacts.py prepare \
-            --model-profile configs/models/dcvcrt-cvpr2025.json \
-            --engine-profile configs/engine-profiles/1080p-fp16.json \
-            --target-profile configs/targets/orin-nano-l4t3647.json \
-            --dcvcrt-root "$NVCR_REFERENCE_ROOT" \
-            --models "$RUNNER_TEMP/nvcr-models" \
-            --engines "$RUNNER_TEMP/nvcr-engines" \
-            --python "$NVCR_REFERENCE_PYTHON" \
-            --skip-clone
-          ./scripts/nvcr_artifacts.py validate "$RUNNER_TEMP/nvcr-models" --json
-          ./scripts/nvcr_artifacts.py validate "$RUNNER_TEMP/nvcr-engines" --json
-
-      - name: Release build, full registered suite, and install
-        run: |
-          set -euo pipefail
-          ./scripts/install.sh \
-            --build-type Release \
-            --build-dir build-release-jetson \
-            --prefix "$RUNNER_TEMP/nvcr-install" \
-            --run-tests \
-            --cmake-arg "-DNVCR_TENSORRT_ENGINE_DIR=$RUNNER_TEMP/nvcr-engines"
-          ctest --test-dir build-release-jetson -N
-
-      - name: Package code, docs, profiles, licenses, notices, and manifests
-        run: |
-          ./scripts/package_release.sh \
-            --version "${NVCR_TAG#v}" \
-            --platform linux-aarch64-orin-nano \
-            --install-prefix "$RUNNER_TEMP/nvcr-install" \
-            --output-dir "$RUNNER_TEMP/nvcr-dist"
-
-      - name: Upload to draft release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "$NVCR_TAG" \
-            "$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-aarch64-orin-nano.tar.gz" \
-            "$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-aarch64-orin-nano.tar.gz.sha256" \
-            --clobber
-
-  publish-foundation-release:
-    needs: [build-discrete, build-jetson]
-    if: ${{ always() && !startsWith(inputs.tag, 'v1.') && needs.build-discrete.result == 'success' && (needs.build-jetson.result == 'success' || needs.build-jetson.result == 'skipped') }}
+  manual-reference-gates:
+    needs: [build-hosted-x86_64]
     runs-on: ubuntu-latest
-    env:
-      NVCR_TAG: ${{ inputs.tag }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Publish the RTX-gated pre-v1 release
-        run: gh release edit "$NVCR_TAG" --draft=false --repo "${{ github.repository }}"
+      - name: Record remaining manual gates
+        run: |
+          cat <<'EOF' >>"$GITHUB_STEP_SUMMARY"
+          Draft release remains unpublished by design on standard GitHub-hosted runners.
 
-  publish-v1-release:
-    needs: [build-discrete, build-jetson]
-    if: ${{ always() && startsWith(inputs.tag, 'v1.') && needs.build-discrete.result == 'success' && needs.build-jetson.result == 'success' }}
-    runs-on: ubuntu-latest
-    env:
-      NVCR_TAG: ${{ inputs.tag }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - name: Publish only after both v1 target gates pass
-        run: gh release edit "$NVCR_TAG" --draft=false --repo "${{ github.repository }}"
+          Remaining manual deliverables and gates:
+          - run clean-room target validation on the recorded RTX 4070 reference target;
+          - run clean-room target validation on the recorded Jetson Orin Nano reference target;
+          - build and upload the `linux-aarch64-jetson-l4t36` archive on the validated Jetson target;
+          - record correctness, performance, memory, and energy evidence in `ROADMAP.md`;
+          - publish the draft release manually only after the required release-track gates pass.
+          EOF

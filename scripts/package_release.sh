@@ -15,7 +15,7 @@ and engine bundles are deliberately rejected and never included.
 
 Options:
   --version X.Y.Z        Release version without leading v
-  --platform TAG         Validated target tag
+  --platform TAG         Public package family tag
   --install-prefix DIR   Installed NVCR prefix to package
   --output-dir DIR       Archive output directory (default: dist)
   -h, --help             Show this help
@@ -47,14 +47,14 @@ if [[ "$version" == v* || "$version" =~ [^0-9A-Za-z.+-] ||
     exit 2
 fi
 case "$platform" in
-linux-x86_64-rtx4070)
+linux-x86_64-nvidia)
     target_profile="rtx4070-ubuntu2404.json"
     ;;
-linux-aarch64-orin-nano)
+linux-aarch64-jetson-l4t36)
     target_profile="orin-nano-l4t3647.json"
     ;;
 *)
-    echo "unsupported release platform: $platform (expected linux-x86_64-rtx4070 or linux-aarch64-orin-nano)" >&2
+    echo "unsupported release platform: $platform (expected linux-x86_64-nvidia or linux-aarch64-jetson-l4t36)" >&2
     exit 2
     ;;
 esac

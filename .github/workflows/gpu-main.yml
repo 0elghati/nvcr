@@ -1,38 +1,55 @@
-name: trusted-main-gpu
+name: optional-self-hosted-reference-gpu
 
-# Trusted push-only GPU validation for `main`.
-# Keep self-hosted GPU runners off `pull_request`.
+# Default repository automation assumes GitHub's standard hosted runners.
+# This workflow is an opt-in helper if a self-hosted RTX reference runner is
+# added later; it stays manual and disabled by default.
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to validate on an optional self-hosted RTX runner
+        required: false
+        default: main
 
 permissions:
   contents: read
 
 concurrency:
-  group: trusted-main-gpu
+  group: optional-self-hosted-reference-gpu
   cancel-in-progress: true
 
 jobs:
-  rtx-merge-gate:
+  rtx-reference-gate:
+    if: ${{ vars.NVCR_ENABLE_SELF_HOSTED_REFERENCE_GATES == 'true' }}
     runs-on:
       - self-hosted
       - nvcr-release-discrete
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Configure release build on the reference GPU
         run: |
-          cmake -S . -B build-main-gpu \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DNVCR_ENABLE_TENSORRT=ON \
-            -DNVCR_BUILD_TESTS=ON
+          cmake -S . -B build-main-gpu -DCMAKE_BUILD_TYPE=Release -DNVCR_ENABLE_TENSORRT=ON -DNVCR_BUILD_TESTS=ON
 
       - name: Build
         run: cmake --build build-main-gpu --parallel
 
       - name: CPU, parser fuzz/boundary, manifest/profile, rANS, and CUDA tests
         run: |
-          ctest --test-dir build-main-gpu --output-on-failure \
-            -R 'nvcr_(artifact_profiles|smoke_tests|parser_fuzz_boundaries|rans_conformance|cuda_ops)'
+          ctest --test-dir build-main-gpu --output-on-failure -R 'nvcr_(artifact_profiles|smoke_tests|parser_fuzz_boundaries|rans_conformance|cuda_ops)'
+
+  self-hosted-disabled-summary:
+    if: ${{ vars.NVCR_ENABLE_SELF_HOSTED_REFERENCE_GATES != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain disabled optional workflow
+        run: |
+          cat <<'EOF' >>"$GITHUB_STEP_SUMMARY"
+          This optional workflow is disabled by default.
+
+          The repository's default automation assumes GitHub standard hosted runners only.
+          Enable `NVCR_ENABLE_SELF_HOSTED_REFERENCE_GATES=true` only after you add a
+          matching `nvcr-release-discrete` self-hosted runner.
+          EOF
