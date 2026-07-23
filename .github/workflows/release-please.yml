@@ -25,14 +25,9 @@ jobs:
 
       # GitHub API-created draft releases do not trigger downstream workflows,
       # so dispatch `release-assets.yml` directly when a release is created.
-      - name: Trigger release asset builds
+      - name: Trigger hosted release asset build
         if: ${{ steps.release.outputs.release_created == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Request Jetson assets only when the repository variable enables them.
-          gh workflow run release-assets.yml \
-            --repo "${{ github.repository }}" \
-            --ref main \
-            -f tag="${{ steps.release.outputs.tag_name }}" \
-            -f publish_jetson="${{ vars.NVCR_RELEASE_JETSON == 'true' && 'true' || 'false' }}" \
+          gh workflow run release-assets.yml --repo "${{ github.repository }}" --ref main -f tag="${{ steps.release.outputs.tag_name }}"

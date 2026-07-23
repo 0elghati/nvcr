@@ -14,7 +14,7 @@ or TensorRT engines.
 A future validated archive can be installed as follows:
 
 ```bash
-export NVCR_ARCHIVE=nvcr-vX.Y.Z-linux-x86_64-rtx4070.tar.gz
+export NVCR_ARCHIVE=nvcr-vX.Y.Z-linux-x86_64-nvidia.tar.gz
 export NVCR_PREFIX="$HOME/.local/nvcr"
 mkdir -p "$NVCR_PREFIX"
 sha256sum -c "$NVCR_ARCHIVE.sha256"
@@ -28,6 +28,10 @@ The package must match the recorded target runtime. Build the pinned model and
 engines locally with [Model and engine preparation](dcvcrt-artifacts.md), validate
 them, and pass their directory to `nvcr --engine-dir`. Never substitute an engine
 from another GPU, CUDA/TensorRT runtime, or model manifest.
+
+The public archive family name is generic. It does not broaden the current
+support claim beyond the validated reference targets recorded in the roadmap and
+compatibility matrix.
 
 See [Compatibility](compatibility.md) for support status and
 [Releasing](releasing.md) for the publication gates.

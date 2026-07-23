@@ -45,6 +45,22 @@ Git commit and both checkpoint hashes; it does not trust filenames alone.
 and the manifest writer are retained as implementation helpers. Direct use is an
 expert/development path and does not define another supported workflow.
 
+## Artifact identity model
+
+NVCR identifies prepared artifacts by the tuple
+`(model_profile_id, target_profile_id, engine_profile_id)`.
+
+- the model profile binds the pinned upstream commit, checkpoints, exporter
+  inputs, and portable model-bundle identity;
+- the target profile binds the validated deployment environment and runtime
+  compatibility checks;
+- the engine profile binds visible dimensions, optimization shapes, precision,
+  workspace, and builder-level choices.
+
+Resolution is therefore one field inside the engine profile, not the whole
+portability contract. Do not manage or retain engine bundles by resolution name
+alone.
+
 ## Prepare from checkpoints
 
 Create a Python environment with PyTorch, ONNX, and ONNXScript, then select one
@@ -99,6 +115,15 @@ there, selecting that target's profile:
 
 Never copy an RTX plan to Orin, or an engine across a different GPU model,
 CUDA/TensorRT runtime, or model export. Rebuild on the final target.
+
+If engine bundles are retained internally for CI or reviewer convenience, store
+them under `dcvcrt-cvpr2025/<target-profile>/<engine-profile>/` rather than by
+resolution name alone.
+
+If a future reviewer-convenience path adds compatibility-mode discrete-GPU
+engines, treat them as a separate non-default engine class and record the chosen
+compatibility mode in the engine manifest and support docs. Jetson/L4T is not
+part of that portability path; build Jetson engines on the final target.
 
 ## Model bundle contract
 

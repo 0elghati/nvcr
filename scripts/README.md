@@ -55,13 +55,15 @@ It does not make the runtime universal or make TensorRT plans portable.
 ```bash
 ./scripts/package_release.sh \
   --version 0.3.0 \
-  --platform linux-x86_64-rtx4070 \
+  --platform linux-x86_64-nvidia \
   --install-prefix /path/to/install \
   --output-dir dist
 ```
 
 The archive contains a file-hash manifest and required docs/licenses/profiles. It
-never contains checkpoints or derived model/engine assets.
+never contains checkpoints or derived model/engine assets. The public package
+family name is generic; support evidence remains tied to the recorded reference
+target profiles.
 
 ## Jetson energy
 

@@ -36,6 +36,13 @@ in the target profile and roadmap evidence. Other NVIDIA Linux hosts may build o
 run but are experimental/community-supported until their own evidence is added.
 Windows, macOS, non-NVIDIA GPUs, and non-Linux deployment are unsupported in v1.
 
+## Public package families
+
+Published binary archives use generic family names such as
+`linux-x86_64-nvidia` and `linux-aarch64-jetson-l4t36`. These identifiers are
+package labels, not support claims. The current validated reference targets and
+evidence requirements remain the RTX 4070 and Jetson Orin Nano profiles above.
+
 ## Engine compatibility
 
 TensorRT plans are target-local. An engine bundle is compatible only when all of
@@ -51,6 +58,15 @@ these match its v2 manifest and checksum set:
 NVCR rejects a stale, edited, wrong-model, cross-GPU, cross-CUDA, or
 cross-TensorRT bundle during initialization. A multi-architecture CUDA library
 does not relax TensorRT plan compatibility. Rebuild engines on the final target.
+
+TensorRT does provide optional discrete-GPU hardware-compatibility modes for some
+deployment environments, but NVCR does not currently ship public compatibility-
+mode engines. Jetson/L4T remains a target-local engine-build path.
+
+If reviewer-convenience compatibility-mode bundles are added later, prefer
+`SAME_COMPUTE_CAPABILITY` for discrete x86_64 NVIDIA targets. Treat broader
+`AMPERE_PLUS` bundles as a separate non-default class with explicit correctness
+and performance evidence, and not as a Jetson portability path.
 
 ## Feature matrix
 

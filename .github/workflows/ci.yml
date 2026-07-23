@@ -1,8 +1,8 @@
 name: ci
 
 # PR validation runs only on GitHub-hosted runners.
-# Self-hosted GPU runners stay off `pull_request`; trusted GPU execution remains
-# in `release-assets.yml` and `trusted-main-gpu`.
+# Reference-target GPU/Jetson validation remains external by default; the
+# repository does not depend on self-hosted hardware for pull requests.
 on:
   pull_request:
 
@@ -16,10 +16,11 @@ permissions:
 
 jobs:
   changes:
-    # Skip compile jobs when a change cannot affect compiled output.
-    runs-on: ubuntu-latest
+    # Skip heavier jobs when a change cannot affect compiled or release-packaged output.
+    runs-on: ubuntu-24.04
     outputs:
       cpp: ${{ steps.filter.outputs.cpp }}
+      release_surface: ${{ steps.filter.outputs.release_surface }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -41,6 +42,22 @@ jobs:
               - 'tools/**'
               - 'scripts/**'
               - '.github/workflows/ci.yml'
+            release_surface:
+              - 'CMakeLists.txt'
+              - 'cmake/**'
+              - 'configs/**'
+              - 'resources/**'
+              - 'src/**'
+              - 'include/**'
+              - 'cli/**'
+              - 'tests/**'
+              - 'benchmarks/**'
+              - 'examples/**'
+              - 'third_party/**'
+              - 'tools/**'
+              - 'scripts/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/release-assets.yml'
 
   lint:
     runs-on: ubuntu-latest
@@ -71,15 +88,18 @@ jobs:
           python3 -m json.tool release-please-config.json >/dev/null
           python3 -m json.tool .release-please-manifest.json >/dev/null
 
+      - name: Validate workflow YAML
+        run: |
+          ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].sort.each { |f| YAML.load_file(f, aliases: true) }'
+
   build-cpu:
-    # CPU-only coverage for the shipped host CPU architectures.
+    # Release-only CPU coverage for the shipped host CPU architectures.
     needs: changes
     if: needs.changes.outputs.cpp == 'true'
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm]
-        build_type: [Debug, Release]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -87,7 +107,7 @@ jobs:
       - name: Configure
         run: |
           cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_BUILD_TYPE=Release \
             -DNVCR_ENABLE_TENSORRT=OFF \
             -DNVCR_FETCH_DEPENDENCIES=ON \
             -DNVCR_BUILD_TESTS=ON
@@ -99,16 +119,16 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   build-cuda-portable:
-    # Compile-only CUDA/TensorRT coverage for the portable GPU-architecture
-    # matrix. Hosted runners have no GPU, so this job does not run CUDA tests.
+    # Hosted CUDA/TensorRT build plus generic x86_64 packaging smoke coverage.
+    # This is a required PR gate for release-surface changes.
+    # Hosted runners have no GPU, so this job does not run CUDA tests.
     needs: changes
-    if: needs.changes.outputs.cpp == 'true'
-    runs-on: ubuntu-latest
-    continue-on-error: true
+    if: needs.changes.outputs.release_surface == 'true'
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install CUDA toolkit and TensorRT development packages
+      - name: Install minimal CUDA/TensorRT compile dependencies
         run: ./scripts/ci/install_cuda_tensorrt.sh
 
       - name: Configure (portable multi-arch)
@@ -122,3 +142,26 @@ jobs:
 
       - name: Build (compile-check only, no GPU present)
         run: cmake --build build-portable --parallel
+
+      - name: Install and smoke-package the generic x86_64 archive
+        run: |
+          set -euo pipefail
+          version="$(cat version.txt)"
+          archive="$RUNNER_TEMP/nvcr-dist/nvcr-v$version-linux-x86_64-nvidia.tar.gz"
+          checksum="$archive.sha256"
+          cmake --install build-portable --prefix "$RUNNER_TEMP/nvcr-install"
+          ./scripts/package_release.sh \
+            --version "$version" \
+            --platform linux-x86_64-nvidia \
+            --install-prefix "$RUNNER_TEMP/nvcr-install" \
+            --output-dir "$RUNNER_TEMP/nvcr-dist"
+          test -f "$archive"
+          test -f "$checksum"
+          (cd "$RUNNER_TEMP/nvcr-dist" && sha256sum -c "$(basename "$checksum")")
+          archive_list="$RUNNER_TEMP/nvcr-archive-list.txt"
+          tar -tzf "$archive" >"$archive_list"
+          grep -qx "nvcr-v$version-linux-x86_64-nvidia/PACKAGE-MANIFEST.sha256" "$archive_list"
+          if grep -Eq '(\.plan|\.engine|\.onnx|\.pth(\.tar)?)$|/(i|p)_(entropy|quant)\.bin$|/engine_manifest\.json$|/engine\.sha256$' "$archive_list"; then
+            echo "release archive contains forbidden model or engine assets" >&2
+            exit 1
+          fi
