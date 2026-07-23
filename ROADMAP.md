@@ -288,6 +288,30 @@ Append evidence; never silently replace historical results.
 - Validation: YAML parse of all workflow files, release-please JSON validation,
   `bash -n scripts/ci/install_cuda_tensorrt.sh`, and `git diff --check`.
 
+### 2026-07-23 — Optional engine assets distributed from GitHub Releases
+
+- Added a separate reviewer-convenience engine asset path that keeps the generic
+  binary packages engine-free while allowing validated target-specific TensorRT
+  bundles to be attached to a draft GitHub Release.
+- Added `scripts/package_engine_bundle.sh` so current RTX/Jetson engine
+  directories are packaged under manifest-derived names:
+  `nvcr-vX.Y.Z-dcvcrt-cvpr2025-<target-profile>-<engine-profile>-engines.tar.gz`.
+- Added a manual `upload-engine-assets.yml` workflow that downloads staged
+  archives, verifies caller-supplied SHA-256 digests, validates safe archive
+  structure, runs the tagged `nvcr-artifacts validate` against each extracted
+  bundle, checks filename-to-manifest identity, uploads the archive plus checksum
+  to the GitHub Release, and only publishes the release when explicitly
+  confirmed.
+- Decision: staging services such as OneDrive may be used as temporary upload
+  inputs, but public/reviewer downloads should come from GitHub Release assets.
+  These engine assets remain target-specific evidence artifacts, not generic
+  portability claims and not package-family contents.
+- Validation: `bash -n scripts/package_release.sh` and
+  `scripts/package_engine_bundle.sh`, Python compile of the engine upload helper,
+  workflow YAML parse, JSON validation, `git diff --check`, a fake public-package
+  manifest smoke test, and an end-to-end fake engine-bundle
+  package/download/validate smoke test.
+
 
 ### 2026-07-02 — M0 baseline and entropy optimization
 

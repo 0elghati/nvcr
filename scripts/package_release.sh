@@ -106,7 +106,7 @@ fi
 (
     cd "$package_root"
     manifest_tmp="PACKAGE-MANIFEST.sha256.tmp"
-    find . -type f ! -name PACKAGE-MANIFEST.sha256 -print0 |
+    find . -type f ! -name PACKAGE-MANIFEST.sha256 ! -name "$manifest_tmp" -print0 |
         LC_ALL=C sort -z |
         xargs -0 sha256sum >"$manifest_tmp"
     mv "$manifest_tmp" PACKAGE-MANIFEST.sha256

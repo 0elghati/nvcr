@@ -120,6 +120,26 @@ If engine bundles are retained internally for CI or reviewer convenience, store
 them under `dcvcrt-cvpr2025/<target-profile>/<engine-profile>/` rather than by
 resolution name alone.
 
+For a reviewer-convenience GitHub Release asset, package a validated bundle as:
+
+```bash
+./scripts/package_engine_bundle.sh \
+  --version 0.3.0 \
+  --engine-dir build/engines/dcvcrt \
+  --output-dir dist
+```
+
+The archive name is manifest-derived:
+
+```text
+nvcr-v0.3.0-dcvcrt-cvpr2025-<target-profile>-<engine-profile>-engines.tar.gz
+```
+
+The archive contains one `dcvcrt/` engine bundle plus
+`ENGINE-ASSET-MANIFEST.sha256`. It must remain a separate GitHub Release asset,
+not part of the generic `linux-x86_64-nvidia` or `linux-aarch64-jetson-l4t36`
+binary packages.
+
 If a future reviewer-convenience path adds compatibility-mode discrete-GPU
 engines, treat them as a separate non-default engine class and record the chosen
 compatibility mode in the engine manifest and support docs. Jetson/L4T is not

@@ -1,0 +1,83 @@
+name: upload-engine-assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact draft release tag, for example v0.3.0
+        required: true
+        type: string
+      engine_assets:
+        description: "Rows: <asset-file-name> <sha256> <staging-download-url>"
+        required: true
+        type: string
+      publish_release:
+        description: Publish the release after upload; use only after target evidence is recorded
+        required: true
+        default: false
+        type: boolean
+      publish_confirmation:
+        description: Type the exact tag again when publish_release is true
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  upload-engine-assets:
+    runs-on: ubuntu-24.04
+    env:
+      NVCR_TAG: ${{ inputs.tag }}
+      NVCR_ENGINE_RELEASE_ASSETS: ${{ inputs.engine_assets }}
+    steps:
+      - name: Checkout upload automation
+        uses: actions/checkout@v4
+
+      - name: Checkout exact release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          path: release-source
+          fetch-depth: 0
+
+      - name: Verify exact tagged source
+        working-directory: release-source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$NVCR_TAG")"
+          test "$(cat version.txt)" = "${NVCR_TAG#v}"
+
+      - name: Download, verify, and validate engine assets
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/download_engine_release_assets.py \
+            --tag "$NVCR_TAG" \
+            --download-dir "$RUNNER_TEMP/nvcr-engine-assets" \
+            --extract-dir "$RUNNER_TEMP/nvcr-engine-assets-extract" \
+            --summary "$RUNNER_TEMP/nvcr-engine-assets-summary.md" \
+            --nvcr-artifacts "$PWD/release-source/scripts/nvcr_artifacts.py"
+
+      - name: Upload engine assets to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mapfile -t upload_files <"$RUNNER_TEMP/nvcr-engine-assets/upload-files.txt"
+          gh release upload "$NVCR_TAG" "${upload_files[@]}" --clobber
+
+      - name: Write asset summary
+        run: cat "$RUNNER_TEMP/nvcr-engine-assets-summary.md" >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Publish release when explicitly confirmed
+        if: ${{ inputs.publish_release }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NVCR_PUBLISH_CONFIRMATION: ${{ inputs.publish_confirmation }}
+        run: |
+          set -euo pipefail
+          if [[ "$NVCR_PUBLISH_CONFIRMATION" != "$NVCR_TAG" ]]; then
+            echo "publish_confirmation must exactly match $NVCR_TAG" >&2
+            exit 1
+          fi
+          gh release edit "$NVCR_TAG" --draft=false

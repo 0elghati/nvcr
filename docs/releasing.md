@@ -59,8 +59,10 @@ Before publishing a draft release, complete and record the following:
    when required by the release track;
 3. build and validate the Jetson archive on the validated Jetson target;
 4. upload the Jetson archive and checksum to the draft release;
-5. record all required evidence in [ROADMAP.md](../ROADMAP.md);
-6. publish the draft release manually only after the release-track gates pass.
+5. optionally upload target-specific reviewer-convenience engine assets as
+   separate GitHub Release assets;
+6. record all required evidence in [ROADMAP.md](../ROADMAP.md);
+7. publish the draft release manually only after the release-track gates pass.
 
 ## Package policy
 
@@ -84,6 +86,74 @@ profiles, license/notice, CLI, and artifact tooling before packaging.
 The package script rejects checkpoints, `.pth`/`.pth.tar`, ONNX, entropy/quant
 model assets, TensorRT plans, and engine bundles. Generated bundles are release
 test inputs, never release outputs.
+
+## Optional engine assets
+
+Public binary packages stay engine-free. If reviewers need prebuilt engines, ship
+them as separate target-specific GitHub Release assets so downloads still come
+from the release page rather than a staging service.
+
+Create each archive on the machine where the engine bundle was built and
+validated:
+
+```bash
+./scripts/nvcr_artifacts.py validate build/engines/dcvcrt --json
+./scripts/package_engine_bundle.sh \
+  --version 0.3.0 \
+  --engine-dir build/engines/dcvcrt \
+  --output-dir dist
+```
+
+The archive filename is derived from `engine_manifest.json`:
+
+```text
+nvcr-v0.3.0-dcvcrt-cvpr2025-rtx4070-ubuntu2404-1080p-fp16-engines.tar.gz
+nvcr-v0.3.0-dcvcrt-cvpr2025-orin-nano-l4t3647-1080p-fp16-engines.tar.gz
+```
+
+Stage the `.tar.gz` files wherever the upload workflow can fetch them. The
+staging URLs are not the user-facing distribution channel; they are temporary
+inputs to the GitHub Release upload.
+
+After the workflow in this PR is merged to the default branch, upload staged
+engine assets to a draft GitHub Release with one row per asset:
+
+```text
+<asset-file-name> <sha256> <staging-download-url>
+```
+
+For example:
+
+```bash
+cat > /tmp/nvcr-engine-assets.txt <<'EOF'
+nvcr-v0.3.0-dcvcrt-cvpr2025-rtx4070-ubuntu2404-1080p-fp16-engines.tar.gz <rtx-archive-sha256> <rtx-staging-https-url>
+nvcr-v0.3.0-dcvcrt-cvpr2025-orin-nano-l4t3647-1080p-fp16-engines.tar.gz <orin-archive-sha256> <orin-staging-https-url>
+EOF
+
+gh workflow run upload-engine-assets.yml \
+  --ref main \
+  -f tag=v0.3.0 \
+  -F engine_assets=@/tmp/nvcr-engine-assets.txt
+```
+
+The workflow:
+
+1. checks out the exact release tag separately from the upload automation;
+2. downloads each staged archive;
+3. verifies the supplied archive SHA-256;
+4. rejects unsafe tar paths, source checkpoints, and ONNX files;
+5. extracts the bundle and runs the tagged `nvcr-artifacts validate`;
+6. confirms the archive filename matches the engine manifest identity;
+7. uploads the archive and generated `.sha256` to the GitHub Release.
+
+To publish from the same manual workflow after evidence is recorded, set
+`publish_release=true` and set `publish_confirmation` to the exact tag. Leaving
+`publish_release` unset keeps the release in draft status.
+
+GitHub Release assets are limited to files under 2 GiB. If a target/profile
+engine archive exceeds that limit, do not push it through Git LFS; split the
+engine profile strategy or keep the asset outside the GitHub Release and document
+that exception in the release notes.
 
 ## Continuous integration before release
 
@@ -117,6 +187,10 @@ Build and upload the Jetson package manually on the validated Jetson target:
 (cd dist && sha256sum -c nvcr-v0.3.0-linux-aarch64-jetson-l4t36.tar.gz.sha256)
 gh release upload v0.3.0 dist/nvcr-v0.3.0-linux-aarch64-jetson-l4t36.tar.gz dist/nvcr-v0.3.0-linux-aarch64-jetson-l4t36.tar.gz.sha256 --clobber
 ```
+
+Users and reviewers should download both generic packages and optional engine
+assets from the GitHub Release. Do not ask reviewers to use OneDrive or another
+staging URL directly.
 
 Performance, rate/distortion, memory, and Orin energy evidence are recorded in
 [ROADMAP.md](../ROADMAP.md) using [Performance](performance.md). Passing hosted
