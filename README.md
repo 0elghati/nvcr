@@ -3,7 +3,7 @@
 NVCR is a Linux C++20/CUDA/TensorRT runtime and reproducible deployment
 toolchain for one pinned DCVC-RT I/P model pair.
 
-> Repository status: development snapshot `0.2.3` <!-- x-release-please-version -->.
+> Repository status: development snapshot `0.3.0` <!-- x-release-please-version -->.
 > `v0.3` is the active scope-and-foundation target; `v1.0` is the first scoped
 > product release. This repository is not currently a validated v1 release.
 

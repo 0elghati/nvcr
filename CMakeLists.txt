@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 
 project(
     NVCR
-    VERSION 0.2.3 # x-release-please-version
+    VERSION 0.3.0 # x-release-please-version
     DESCRIPTION "C++ and TensorRT runtime for the pinned DCVC-RT model profile"
     LANGUAGES CXX)
 
