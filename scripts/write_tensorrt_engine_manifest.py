@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import hashlib
 import ctypes.util
 import json
 import re
@@ -176,11 +177,16 @@ def main() -> None:
     parser.add_argument("--engines", required=True, type=Path)
     parser.add_argument("--trtexec", required=True, type=Path)
     parser.add_argument("--device-id", type=int, default=0)
-    parser.add_argument("--optimization-point", required=True)
+    parser.add_argument("--optimization-point", required=True, choices=("qcif", "1080p"))
     parser.add_argument("--workspace-mib", required=True, type=int)
     parser.add_argument("--builder-optimization-level", required=True, type=int)
+    parser.add_argument("--model-profile-id", default="dcvcrt-cvpr2025")
+    parser.add_argument("--target-profile-id", default="local-auto")
+    parser.add_argument("--model-profile-path", required=True, type=Path)
+    parser.add_argument("--engine-profile-path", required=True, type=Path)
+    parser.add_argument("--target-profile-path", required=True, type=Path)
     parser.add_argument("--enable-int8", action="store_true",
-                        help="record precision as int8_fp16 (engines built with --int8 --fp16)")
+                        help="record experimental int8_fp16 precision")
     parser.add_argument(
         "--reject-device-warning",
         action="store_true",
@@ -188,17 +194,104 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    required_files = (
+        "i_analysis.plan",
+        "i_hyper_analysis.plan",
+        "i_hyper_synthesis.plan",
+        "i_spatial_prior_1.plan",
+        "i_spatial_prior_2.plan",
+        "i_spatial_prior_3.plan",
+        "i_synthesis.plan",
+        "p_reference_frame.plan",
+        "p_reference_feature.plan",
+        "p_analysis.plan",
+        "p_hyper_analysis.plan",
+        "p_prior.plan",
+        "p_spatial_prior.plan",
+        "p_synthesis.plan",
+        "i_entropy.bin",
+        "i_quant.bin",
+        "i_frame_manifest.json",
+        "p_entropy.bin",
+        "p_quant.bin",
+        "p_frame_manifest.json",
+    )
+
+    def sha256(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
+
+    profile_paths = {
+        "model_profile_sha256": args.model_profile_path,
+        "engine_profile_sha256": args.engine_profile_path,
+        "target_profile_sha256": args.target_profile_path,
+    }
+    missing_profiles = [str(path) for path in profile_paths.values() if not path.is_file()]
+    if missing_profiles:
+        raise SystemExit("missing profile file(s): " + ", ".join(missing_profiles))
+    profile_hashes = {key: sha256(path) for key, path in profile_paths.items()}
+
+    missing = [name for name in required_files if not (args.engines / name).is_file()]
+    if missing:
+        raise SystemExit("engine bundle is incomplete: " + ", ".join(missing))
+    file_hashes = {name: sha256(args.engines / name) for name in required_files}
+    checksum_path = args.engines / "engine.sha256"
+    checksum_path.write_text(
+        "".join(f"{file_hashes[name]}  {name}\n" for name in sorted(file_hashes)),
+        encoding="utf-8",
+    )
+
+    cuda_runtime_version: int | None = None
+    cudart = load_shared_library(
+        "cudart",
+        (
+            "/usr/local/cuda/lib64/libcudart.so",
+            "/usr/local/cuda/targets/aarch64-linux/lib/libcudart.so",
+            "/usr/local/cuda-12.6/targets/aarch64-linux/lib/libcudart.so",
+            "/usr/local/cuda-12.6/lib64/libcudart.so",
+        ),
+    )
+    if cudart is not None:
+        try:
+            get_version = cudart.cudaRuntimeGetVersion
+            get_version.argtypes = [ctypes.POINTER(ctypes.c_int)]
+            get_version.restype = ctypes.c_int
+            value = ctypes.c_int()
+            if get_version(ctypes.byref(value)) == 0:
+                cuda_runtime_version = int(value.value)
+        except (AttributeError, OSError):
+            pass
+
+    visible_profiles = {
+        "qcif": {"minimum": [64, 64], "optimum": [176, 144], "maximum": [176, 144]},
+        "1080p": {"minimum": [64, 64], "optimum": [1920, 1080], "maximum": [1920, 1080]},
+    }
     major, minor, patch = infer_tensorrt_version()
     metadata: dict[str, object] = {
-        "format": 1,
+        "format": 2,
+        "schema": "nvcr.engine-bundle.v2",
         "kind": "nvcr-tensorrt-engine-bundle",
+        "model_profile_id": args.model_profile_id,
+        **profile_hashes,
+        "target_profile_id": args.target_profile_id,
+        "engine_profile_id": f"{args.optimization_point}-fp16",
         "precision": "int8_fp16" if args.enable_int8 else "fp16",
         "optimization_point": args.optimization_point,
+        "visible_dimensions": visible_profiles[args.optimization_point],
         "workspace_mib": args.workspace_mib,
         "builder_optimization_level": args.builder_optimization_level,
+        "cuda_runtime_version": cuda_runtime_version,
         "tensorrt_version_major": major,
         "tensorrt_version_minor": minor,
         "tensorrt_version_patch": patch,
+        "i_model_manifest_sha256": file_hashes["i_frame_manifest.json"],
+        "p_model_manifest_sha256": file_hashes["p_frame_manifest.json"],
+        "checksum_manifest": checksum_path.name,
+        "checksum_manifest_sha256": sha256(checksum_path),
+        "files": file_hashes,
     }
     metadata.update(query_device_with_nvidia_smi(args.device_id))
     if args.reject_device_warning:
@@ -212,6 +305,7 @@ def main() -> None:
 
     for key in (
         "format",
+        "cuda_runtime_version",
         "tensorrt_version_major",
         "tensorrt_version_minor",
         "tensorrt_version_patch",
@@ -220,7 +314,13 @@ def main() -> None:
         "multiprocessor_count",
     ):
         require_int(metadata, key)
-    require_string(metadata, "device_name")
+    for key in (
+        "device_name",
+        "model_profile_id",
+        "engine_profile_id",
+        "checksum_manifest_sha256",
+    ):
+        require_string(metadata, key)
 
     path = args.engines / "engine_manifest.json"
     path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")

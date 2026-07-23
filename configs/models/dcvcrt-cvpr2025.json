@@ -1,0 +1,26 @@
+{
+  "schema": "nvcr.model-profile.v1",
+  "id": "dcvcrt-cvpr2025",
+  "codec": "DCVC-RT",
+  "upstream": {
+    "repository": "https://github.com/0elghati/DCVC-RT.git",
+    "commit": "48ab0ac5e5199d78fffb944bfbafafb2b6142f7b"
+  },
+  "checkpoints": {
+    "image": {
+      "file": "cvpr2025_image.pth.tar",
+      "sha256": "555eff5f4026774f477bebdcbb3b52548e0da230803959dcebcea4d732a90dd9"
+    },
+    "video": {
+      "file": "cvpr2025_video.pth.tar",
+      "sha256": "b12e7faf4ddb6126d8e138a627ed6a349b8e1052d3ed9e343e1ba266466675d6"
+    }
+  },
+  "precision": "fp16",
+  "pixel_format": "yuv420p8",
+  "qp": {
+    "base_minimum": 0,
+    "base_maximum": 63,
+    "predicted_effective_maximum": 71
+  }
+}

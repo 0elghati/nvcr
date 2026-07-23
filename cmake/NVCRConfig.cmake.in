@@ -2,6 +2,8 @@
 
 include(CMakeFindDependencyMacro)
 
+find_dependency(Threads)
+
 if(@spdlog_FOUND@)
     find_dependency(spdlog 1.11)
 endif()

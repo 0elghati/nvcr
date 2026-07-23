@@ -1,5 +1,6 @@
 #include "nvcr/bitstream/packet_io.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <limits>
 #include <new>
@@ -114,18 +115,32 @@ Result<std::string> ByteReader::read_string(std::size_t count) {
 std::size_t ByteReader::remaining() const noexcept { return data_.size() - offset_; }
 
 Result<std::vector<std::byte>> PacketIO::serialize(const Packet& packet) {
-    if (packet.metadata().size() > std::numeric_limits<std::uint16_t>::max()) {
+    if (packet.metadata().size() > maximum_metadata_entries) {
         return Error(ErrorCode::invalid_argument, "too many metadata entries", "bitstream");
     }
+    std::size_t metadata_bytes = 0;
     for (const auto& [key, value] : packet.metadata()) {
         if (key.size() > std::numeric_limits<std::uint16_t>::max() ||
             value.size() > std::numeric_limits<std::uint16_t>::max()) {
             return Error(ErrorCode::invalid_argument, "metadata entry is too large", "bitstream");
         }
+        constexpr std::size_t length_fields = 4U;
+        if (key.size() > maximum_metadata_bytes - length_fields ||
+            value.size() > maximum_metadata_bytes - length_fields - key.size() ||
+            metadata_bytes > maximum_metadata_bytes - length_fields - key.size() - value.size()) {
+            return Error(
+                ErrorCode::invalid_argument,
+                "aggregate metadata exceeds configured format limit",
+                "bitstream");
+        }
+        metadata_bytes += length_fields + key.size() + value.size();
     }
 
     try {
-        ByteWriter writer(packet.size() + 32U);
+        if (packet.size() > std::numeric_limits<std::size_t>::max() - metadata_bytes - 32U) {
+            return Error(ErrorCode::resource_exhausted, "packet size overflow", "bitstream");
+        }
+        ByteWriter writer(packet.size() + metadata_bytes + 32U);
         writer.write_bytes(magic);
         writer.write_u16(format_version);
         writer.write_u8(static_cast<std::uint8_t>(packet.frame_type()));
@@ -148,6 +163,10 @@ Result<std::vector<std::byte>> PacketIO::serialize(const Packet& packet) {
 
 Result<Packet> PacketIO::deserialize(
     std::span<const std::byte> bytes, std::size_t maximum_packet_bytes) {
+    if (bytes.size() > maximum_packet_bytes) {
+        return Error(
+            ErrorCode::resource_exhausted, "packet exceeds configured limit", "bitstream");
+    }
     ByteReader reader(bytes);
     auto wire_magic = reader.read_bytes(sizeof(magic));
     if (!wire_magic) return wire_magic.error();
@@ -174,14 +193,29 @@ Result<Packet> PacketIO::deserialize(
     if (!timestamp) return timestamp.error();
     auto metadata_count = reader.read_u16();
     if (!metadata_count) return metadata_count.error();
+    if (metadata_count.value() > maximum_metadata_entries) {
+        return Error(ErrorCode::resource_exhausted, "too many metadata entries", "bitstream");
+    }
 
     PacketMetadata metadata;
+    std::size_t metadata_bytes = 0;
     try {
         for (std::uint16_t index = 0; index < metadata_count.value(); ++index) {
             auto key_size = reader.read_u16();
             if (!key_size) return key_size.error();
             auto value_size = reader.read_u16();
             if (!value_size) return value_size.error();
+            constexpr std::size_t length_fields = 4U;
+            const auto entry_bytes = length_fields + static_cast<std::size_t>(key_size.value()) +
+                static_cast<std::size_t>(value_size.value());
+            if (entry_bytes > maximum_metadata_bytes ||
+                metadata_bytes > maximum_metadata_bytes - entry_bytes) {
+                return Error(
+                    ErrorCode::resource_exhausted,
+                    "aggregate metadata exceeds configured format limit",
+                    "bitstream");
+            }
+            metadata_bytes += entry_bytes;
             auto key = reader.read_string(key_size.value());
             if (!key) return key.error();
             auto value = reader.read_string(value_size.value());

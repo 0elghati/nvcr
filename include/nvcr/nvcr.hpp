@@ -1,5 +1,6 @@
 #pragma once
 
+#include "nvcr/bitstream/access_unit.hpp"
 #include "nvcr/bitstream/packet_io.hpp"
 #include "nvcr/common/error.hpp"
 #include "nvcr/configuration/configuration.hpp"
