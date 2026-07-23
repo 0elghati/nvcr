@@ -2,18 +2,18 @@
 
 Return to the [docs index](README.md) or the [project overview](../README.md).
 
-The release install places the CLI binary at `bin/nvcr` under the chosen install
+The local install places the CLI binary at `bin/nvcr` under the chosen install
 prefix. On Linux, add that `bin` directory to `PATH` and run `nvcr` directly.
 Encoding and decoding are separate commands and processes. Both commands
 currently use planar 8-bit YUV 4:2:0 at the CLI boundary.
 
 The CLI expects a generated engine directory. By default the helper script writes
-one to `build/engines/dcvcrt`, and release-style installs can point to a copied
+one to `build/engines/dcvcrt`, and local installs can point to a copied
 or symlinked `/opt/nvcr/engines/dcvcrt` directory instead. Build TensorRT plans
 on the final target runtime and selected CUDA device. The directory must contain
-`engine_manifest.json`; NVCR validates it before loading plans and rejects
+`engine_manifest.json` plus `engine.sha256`; NVCR hashes the complete bundle before loading plans and rejects
 bundles built for a different GPU model, compute capability, multiprocessor
-count, or TensorRT version.
+count, or CUDA/TensorRT version or model identity.
 
 The native backend supports configured I/P GOPs through fourteen TensorRT plans.
 It remains correctness-first and performance work is still active, so use Release
@@ -25,10 +25,10 @@ Encode one frame:
 
 ```bash
 nvcr encode \
-  -i /home/oelghati/DCVC/datasets/qcif/akiyo_qcif.yuv \
+  -i /path/to/akiyo_qcif.yuv \
   -o /tmp/akiyo_qcif.nvcr \
   -s 176x144 -r 30 --frames 1 --qp 32 \
-  --engine-dir build/engines/dcvcrt-1080p-orin
+  --engine-dir build/engines/dcvcrt
 ```
 
 The default GOP size is 32. For explicit all-intra development or benchmarking
@@ -36,10 +36,10 @@ only, pass `--gop-size 1`:
 
 ```bash
 nvcr encode \
-  -i /home/oelghati/DCVC/datasets/qcif/akiyo_qcif.yuv \
+  -i /path/to/akiyo_qcif.yuv \
   -o /tmp/akiyo_qcif.all-intra.nvcr \
   -s 176x144 -r 30 --frames 4 --qp 32 --gop-size 1 \
-  --engine-dir build/engines/dcvcrt-1080p-orin
+  --engine-dir build/engines/dcvcrt
 ```
 
 That mode is not equivalent to normal DCVC-RT I/P encoding and is not a completed
@@ -49,10 +49,10 @@ Encode a normal 1080p I/P GOP sequence:
 
 ```bash
 nvcr encode \
-  -i /home/oelghati/datasets/hd/BasketballDrive_1920x1080_50.yuv \
+  -i /path/to/BasketballDrive_1920x1080_50.yuv \
   -o /tmp/basketball_hd.nvcr \
   -s 1920x1080 -r 50 --frames 97 --qp 32 \
-  --engine-dir build/engines/dcvcrt-1080p-orin
+  --engine-dir build/engines/dcvcrt
 ```
 
 ## Decode
@@ -61,7 +61,7 @@ nvcr encode \
 nvcr decode \
   -i /tmp/akiyo_qcif.nvcr \
   -o /tmp/akiyo_qcif.decoded.yuv \
-  --engine-dir build/engines/dcvcrt-1080p-orin
+  --engine-dir build/engines/dcvcrt
 ```
 
 The decoder reads dimensions, QP, frame type, and timestamp information from the
@@ -77,13 +77,13 @@ ffplay -f rawvideo -pixel_format yuv420p -video_size 176x144 \
 
 ## HD I-frame benchmark
 
-A single frame can be used to measure the currently supported HD I-frame path:
+A single frame can be used to measure the implemented HD I-frame development path:
 
 ```bash
 nvcr encode \
-  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -i /path/to/FourPeople_1280x720_60.yuv \
   -o /tmp/fourpeople-i.nvcr -s 1280x720 -r 60 --frames 1 \
-  --engine-dir build/engines/dcvcrt-1080p-orin
+  --engine-dir build/engines/dcvcrt
 ```
 
 The `.nvcr` sequence wrapper is versioned and bounds-checked, but it is an

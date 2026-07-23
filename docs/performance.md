@@ -13,7 +13,25 @@ The entropy microbenchmark is a narrower regression signal. Build it with
 `NVCR_BUILD_BENCHMARKS=ON` and run `nvcr_rans_benchmark`; it models the I-frame
 symbol counts and wide CDFs used at 1080p.
 
-## Current baseline
+## Required protocol and evidence
+
+Performance evidence is valid only from a Release build after correctness and
+bundle validation pass. Record:
+
+- NVCR commit/tag, model/engine manifest digests, target/engine profile, and command;
+- OS, compiler, driver/JetPack, CUDA, TensorRT, GPU, power mode, and clocks;
+- input identity, pixel format, resolution, frame count, QP, GOP/reset pattern;
+- warm-up/discard count, repetitions, initialization inclusion, and statistic;
+- encode/decode latency, throughput, host/GPU peak memory, allocation/transfer counts;
+- payload bytes/bitrate and reconstructed PSNR or the declared distortion metric;
+- on Orin, rail, sample interval, idle method, raw and idle-adjusted energy;
+- matching pinned-Python command/protocol and any numerical tolerance.
+
+Preserve failed and superseded runs as labeled history. A point result on one
+sequence or a quality-mismatched x265 setting is not a support or parity claim.
+symbol counts and wide CDFs used at 1080p.
+
+## Historical development baselines
 
 Normal-GOP BQTerrace 1920×1080, QP 32, 97 frames, GOP 97, RTX 4070:
 
@@ -23,9 +41,10 @@ Normal-GOP BQTerrace 1920×1080, QP 32, 97 frames, GOP 97, RTX 4070:
 | Device-chained P stages | 5.321 fps (18.230 s) | 8.294 fps (11.695 s) |
 
 The reported Python encode result for the same 97-frame workload was about
-18.70 s (5.19 fps), so the current native encoder has crossed that observed
-end-to-end target. A same-protocol Python decode result and automated warmed
-stage gate are still required before declaring general parity.
+18.70 s (5.19 fps), so this particular native P-path run crossed that observed
+encode baseline. It is a historical development measurement, not a general
+performance or support claim: a same-protocol Python decode result, repeated
+release runs, and an automated warmed stage gate are still required.
 
 The earlier all-I point-in-time baseline from 2026-07-02 on an NVIDIA GeForce RTX 4070, using
 `FourPeople_1280x720_60.yuv`, QP 32, 15 I-frames, and five measured frames after
@@ -36,8 +55,8 @@ ten warm-up frames:
 | Pinned Python DCVC-RT | 23.976 ms | 21.294 ms |
 | Native NVCR release build | 153.674 ms | 101.174 ms |
 
-The end-to-end target is therefore not met yet. These numbers are a development
-baseline, not portable performance claims.
+The complete end-to-end target is therefore not met yet. These numbers are a
+development baseline, not portable performance claims or v1 release evidence.
 
 The rANS optimization in this tree reduced its synthetic 1080p-sized round trip
 from 91.6 to 46.6 ms with one coder and from 48.0 to 25.2 ms with two coders. The
@@ -78,7 +97,7 @@ energy for the whole command and the idle-subtracted value as the preferred
 codec-run estimate. Both still include initialization and file I/O unless the
 benchmarked command is structured to exclude them.
 
-## Comparative study — NVCR vs libx265 on Orin Nano
+## Historical incomplete study — NVCR vs libx265 on Orin Nano
 
 Methodology: both codecs encode the same raw YUV420 source on the same device
 under `scripts/profile_energy.py` at idle-adjusted `VDD_IN` board power.
@@ -107,16 +126,16 @@ NVCR_TENSORRT_LOW_MEMORY_MODE=0 \
 ./scripts/profile_energy.py --idle-seconds 10 --interval-ms 100 \
   --output-json /tmp/nvcr-energy.json --frames 97 \
   -- nvcr encode \
-       -i /home/oelghati/datasets/hd/BasketballDrive_1920x1080_50.yuv \
+       -i /path/to/BasketballDrive_1920x1080_50.yuv \
        -o /tmp/basketball.nvcr \
        -s 1920x1080 -r 50 --frames 97 --gop-size 97 --qp 32 \
-       --engine-dir build/engines/dcvcrt-1080p-orin
+       --engine-dir build/engines/dcvcrt
 
 # libx265 via FFmpeg — software H.265 reference
 ./scripts/profile_energy.py --idle-seconds 10 --interval-ms 100 \
   --output-json /tmp/x265-energy.json --frames 97 \
   -- ffmpeg -f rawvideo -pix_fmt yuv420p -s:v 1920x1080 -r 50 \
-       -i /home/oelghati/datasets/hd/BasketballDrive_1920x1080_50.yuv \
+       -i /path/to/BasketballDrive_1920x1080_50.yuv \
        -vframes 97 -c:v libx265 -preset medium -crf 28 \
        /tmp/encoded.mp4
 ```

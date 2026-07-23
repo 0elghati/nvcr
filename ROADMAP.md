@@ -1,20 +1,34 @@
-# NVCR DCVC-RT to FFmpeg roadmap
+# NVCR deployment roadmap
 
-This is the source of truth for work toward a fast, FFmpeg-integratable DCVC-RT
-implementation. Repository agents must follow `AGENTS.md` when updating it.
+This is the source of truth for the scoped DCVC-RT deployment runtime described
+in `docs/scope-and-support.md`.
 
-Last reviewed: 2026-07-02
+Last reviewed: 2026-07-23
 
 ## Objective
 
-Deliver a native DCVC-RT library that:
+Deliver NVCR v1 as a Linux C++20/CUDA/TensorRT runtime and reproducible local
+artifact toolchain for the pinned DCVC-RT CVPR 2025 I/P model pair that:
 
-- matches pinned Python DCVC-RT behavior;
+- matches pinned Python DCVC-RT behavior on the validated profiles;
 - meets or beats its warmed encode/decode latency on the same hardware;
-- supports complete I/P GOP operation, reset, seeking, drain, and flush;
-- exposes a versioned C ABI without C++/CUDA/TensorRT types;
-- supports FFmpeg `libdcvcrt` encoder and decoder wrappers;
-- defines an elementary stream and a usable FFmpeg container path.
+- supports complete I/P GOP operation, reset, drain, and flush;
+- validates model and target-local engine bundles before execution;
+- defines bounded versioned codec access units; and
+- records correctness, performance, memory, bitrate/distortion, and Orin energy
+  evidence for RTX 4070 and Jetson Orin Nano.
+
+A public C ABI, FFmpeg integration, and container mapping are post-v1 work.
+They remain in the roadmap but are not v1 exit criteria.
+
+## Release status
+
+| Release | State | Exit gate |
+|---|---|---|
+| 0.2.x | Historical development snapshots | No current readiness claim |
+| 0.3.0 — Scope and foundation | Active | Clean RTX checkpoint-to-native I/P workflow |
+| 1.0.0 — Scoped product | Pending | RTX 4070 and Orin Nano M1–M4 matrices pass |
+| Post-v1 | Pending | M5–M8 gates as separately scheduled |
 
 ## Milestone status
 
@@ -22,31 +36,30 @@ Deliver a native DCVC-RT library that:
 |---|---|---|
 | M0 — Baseline and entropy | Complete | Golden rANS tests and repeatable baseline |
 | M1 — GPU-resident I-frame | Active | Warmed native I-frame latency ≤ Python |
-| M2 — Elementary stream | Pending | Cross-runtime I/P golden streams |
+| M2 — Codec access unit and conformance | Active | Cross-runtime I/P golden streams |
 | M3 — Predicted frames | Active | Two complete conformant GOPs |
-| M4 — Deployment artifacts | Pending | Reproducible validated model/engine loading |
-| M5 — Stable C ABI | Pending | C-only encode/decode/drain/reset tests |
-| M6 — FFmpeg codec wrapper | Pending | `libdcvcrt` transcode tests |
-| M7 — Container integration | Pending | Seekable mux/demux round trip |
-| M8 — Zero-copy and hardening | Pending | CUDA-frame path and release matrix |
+| M4 — Deployment artifacts | Active | Reproducible validated model/engine loading |
+| M5 — Stable C ABI | Post-v1 | C-only encode/decode/drain/reset tests |
+| M6 — FFmpeg codec wrapper | Post-v1 | `libdcvcrt` transcode tests |
+| M7 — Container integration | Post-v1 | Seekable mux/demux round trip |
+| M8 — Zero-copy and hardening | Post-v1 | CUDA-frame path and expanded release matrix |
 
-Current milestones: **M1 — GPU-resident execution** and **M3 — Predicted frames**
+Current milestones: **M1–M4**, ordered by the 0.3/v1 release gates.
 
 Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: replace the temporary low-memory workaround (per-engine
-context creation plus per-engine stream synchronization) with a bounded CUDA
-arena and reusable TensorRT device-address binding, then move input YUV
-conversion onto the GPU. Normal I/P encoding works, but remains
-performance-incomplete until steady-state allocations and host staging are
-removed. Use the Jetson energy harness to capture encode and decode
-joules/frame before and after each Orin performance change.
+Current next action: repeat the exact-tag clean RTX checkpoint→artifact→engine→
+native I/P workflow, then run the Orin target matrix and pinned Python↔native I/P
+golden/performance gates. Reusable per-session CUDA arena work and remaining
+host-staging removal stay open under M1/M3; target support remains pending until
+that evidence is recorded.
 
-Deployment next action: regenerate engine directories so they include
-`engine_manifest.json`, then validate that mismatched GPU/TensorRT bundles fail
-during initialization on both RTX 4070 and Orin-class targets.
+Deployment next action: reproduce the v2 `nvcr-artifacts` workflow and full
+registered suite on Orin Nano, then record its clean target, correctness,
+performance, memory, rate/distortion, and energy matrix. Engine-cache reuse must
+be keyed by model, target, TensorRT/CUDA, precision, and shape profile.
 
 ## M0 — Baseline and entropy
 
@@ -76,7 +89,8 @@ Measurement:
 
 Device execution:
 
-- [ ] Add an owned `DeviceTensor` and bounded per-context CUDA arena.
+- [x] Add owned `DeviceTensor` storage.
+- [ ] Add a bounded per-session CUDA arena.
 - [ ] Replace `run_host_engine` with reusable device-address binding.
 - [ ] Bind TensorRT outputs directly to downstream inputs where possible.
 - [ ] Remove steady-state `cudaMalloc`, `cudaFree`, and unconditional syncs.
@@ -88,7 +102,7 @@ CUDA prior operations:
   restore, scale indexing, and combined-symbol generation on the GPU.
 - [ ] Copy only entropy symbols/indexes required by CPU rANS.
 
-FFmpeg-oriented frame boundary:
+v1 frame boundary:
 
 - [ ] Add planar frame views with per-plane strides.
 - [ ] Accept and produce YUV420P8 without RGB intermediates.
@@ -102,22 +116,23 @@ Exit criteria:
 - [ ] Warmed 720p and 1080p latency meets or beats Python under
   `docs/performance.md`.
 
-## M2 — Elementary stream
 
-State: **Pending**
+## M2 — Codec access unit and conformance
 
-- [ ] Decide and document upstream byte compatibility. Preferred: **yes**.
-- [ ] Separate codec access units from `NVCR`/`NVCS` envelopes.
-- [ ] Define versioned extradata with codec/model identity and required features.
-- [ ] Define frame syntax for type, QP, partitions, reset, and payload lengths.
-- [ ] Define limits, version behavior, parser/writer, and fuzz targets.
+State: **Active**
+
+- [ ] Decide and document upstream byte compatibility.
+- [x] Separate codec access units from `NVCR`/`NVCS` envelopes.
+- [x] Define a versioned access unit with model identity, dimensions, and features.
+- [x] Define syntax for frame type, effective QP, reset state, and payload lengths.
+- [x] Define bounds/version behavior and add parser/writer plus deterministic fuzz tests.
 - [ ] Add Python→native and native→Python I/P golden vectors.
 
 Exit criteria:
 
-- [ ] A normative syntax document is reviewed.
-- [ ] I/P access units work in both runtime directions.
-- [ ] Timestamps/container metadata are not duplicated in access units.
+- [ ] The normative syntax document and compatibility position are reviewed.
+- [x] I/P access units work in both native runtime directions.
+- [x] Timestamps/container metadata are not duplicated in access units.
 
 ## M3 — Predicted frames
 
@@ -125,39 +140,39 @@ State: **Active**
 
 - [x] Remove the CLI preflight that rejected normal multi-frame GOPs.
 - [x] Make default multi-frame encoding produce the configured I/P GOP.
-
 - [x] Export and validate all seven P-frame TensorRT engines.
 - [x] Implement temporal context, residual prior, entropy, and reconstruction stages.
-- [x] Keep DPB and latent references GPU-resident.
+- [x] Keep P-frame DPB frame/feature references GPU-resident.
 - [x] Implement QP shifts, feature adaptation, reset intervals, and GOP rules.
-- [ ] Implement deterministic drain, flush, reset, and seek recovery.
+- [x] Cover native two-GOP and reset/reuse behavior on the RTX integration bundle.
+- [ ] Complete deterministic drain/flush semantics and their pending-work tests.
 
 Exit criteria:
 
 - [ ] Two complete GOPs match pinned Python reconstruction.
 - [ ] Cross-runtime I/P stream tests pass.
 - [ ] Reset/drain tests and P-frame performance gates pass.
-- [ ] The CLI never silently substitutes all-I frames for a requested GOP.
+- [x] The CLI never silently substitutes all-I frames for a requested GOP.
 
 ## M4 — Deployment artifacts
 
-State: **Pending**
+State: **Active**
 
-- [ ] Version ONNX, entropy, quantization, and manifest files as one bundle.
-- [ ] Validate hashes and compatibility before frame processing.
-- [ ] Key TensorRT caches by GPU, TensorRT, precision, model, and profile.
-- [ ] Provide reproducible engine build/cache tooling and clear failures.
-- [ ] Resolve checkpoint and generated-engine redistribution licensing.
+- [x] Version ONNX, entropy, quantization, and model manifests as one v2 bundle.
+- [x] Validate model/engine hashes and compatibility before plan deserialization.
+- [ ] Key reusable TensorRT caches by GPU, TensorRT/CUDA, precision, model, and profile.
+- [x] Provide one profile-aware `prepare`/`build`/`inspect`/`validate` command.
+- [x] Adopt a local-build/no-redistribution policy pending an explicit rights review.
 
 Exit criteria:
 
-- [ ] A clean install can obtain/build compatible engines reproducibly.
-- [ ] Corrupt/incompatible bundles fail during initialization.
-- [ ] Stream model identity resolves to an installed decoder bundle.
+- [ ] An exact-tag clean install can build compatible engines reproducibly.
+- [x] Corrupt/incompatible bundles fail during initialization.
+- [x] Access-unit model identity resolves to the configured decoder bundle.
 
 ## M5 — Stable C ABI
 
-State: **Pending**
+State: **Post-v1**
 
 - [ ] Add opaque encoder/decoder handles and versioned configurations.
 - [ ] Add planar frame views and owned packet/frame release functions.
@@ -173,7 +188,7 @@ Exit criteria:
 
 ## M6 — FFmpeg codec wrapper
 
-State: **Pending**
+State: **Post-v1**
 
 FFmpeg support is a compile-time external-library wrapper, not a runtime plugin.
 Maintain a patch series or fork pinned to a tested FFmpeg revision.
@@ -193,7 +208,7 @@ Exit criteria:
 
 ## M7 — Container integration
 
-State: **Pending**
+State: **Post-v1**
 
 - [ ] Add an elementary-stream muxer/demuxer first.
 - [ ] Define experimental Matroska mapping and CodecPrivate contents.
@@ -209,7 +224,7 @@ Exit criteria:
 
 ## M8 — Zero-copy and hardening
 
-State: **Pending**
+State: **Post-v1**
 
 - [ ] Add optional CUDA frame descriptors to the C ABI.
 - [ ] Add FFmpeg `AV_PIX_FMT_CUDA` via `AVHWFramesContext`.
@@ -226,6 +241,16 @@ Exit criteria:
 ## Evidence log
 
 Append evidence; never silently replace historical results.
+
+### 2026-07-23 — Local RTX 4070 v0.3 foundation validation
+
+- Hardware: NVIDIA GeForce RTX 4070, driver 580.159.03, 12,282 MiB; CUDA 12.6.85 and TensorRT 10.7.0.
+- CPU Release configuration passed all 4 registered tests: artifact/profile validation, smoke/access-unit boundaries, deterministic parser fuzz boundaries, and rANS conformance.
+- CUDA/TensorRT Release configuration with a profile-bound v2 engine bundle passed all 7 registered tests, including CUDA operators, model/target/engine manifest validation, high-QP P-frame round trip through effective QP 71, two GOPs, reset/reuse, native I-P reconstruction equality, and recorded profile digest plus engine checksum validation.
+- Installed CLI completed a two-frame 176x144 YUV420P8 I-P encode/decode; output framing and reconstructed dimensions were validated.
+- Release install and target-specific RTX/Orin package archives passed required-file, forbidden-asset, internal manifest, and SHA-256 checks; the packaged contents contained the required documentation, licenses, notices, and manifests and excluded checkpoints plus derived model and engine assets.
+- Status: exact-tag clean-room execution, pinned Python cross-runtime golden vectors, performance/rate-distortion evidence, and the Jetson Orin Nano target matrix remain open; v0.3 and v1.0 are not complete.
+
 
 ### 2026-07-02 — M0 baseline and entropy optimization
 
@@ -338,11 +363,11 @@ Append evidence; never silently replace historical results.
   include `bin/nvcr`, `lib/libnvcr.a`, public headers, and CMake package files
   under `lib/cmake/NVCR`.
 - Verified `install-orin/bin/nvcr --help` runs from the installed prefix.
-- CTest evidence in the current sandbox: `nvcr_smoke_tests`,
+- In the available environment, `nvcr_smoke_tests`,
   `nvcr_rans_conformance`, and `nvcr_cli_accepts_inter_gop` passed;
   `nvcr_cuda_ops` failed with `NvRmMemInitNvmap failed` because `/dev/nvmap` and
-  `/dev/nvhost-*` are not visible. This is a device-access limitation of the
-  current environment, not an install layout failure.
+  `/dev/nvhost-*` were not visible. This reflects missing device-node access,
+  not an install layout failure.
 - Documentation updated with the Jetson Orin Nano configure/install command,
   local-prefix option, and CUDA device-node verification caveat.
 
@@ -407,7 +432,7 @@ Append evidence; never silently replace historical results.
 
 ### 2026-07-08 — Rebuilt Orin engines after manifest-only recovery failed
 
-- User reproduction: `nvcr encode -i BasketballDrive_1920x1080_50.yuv
+- Observed command: `nvcr encode -i BasketballDrive_1920x1080_50.yuv
   -o /tmp/basketball.nvcr -s 1920x1080 -r 50 --frames 97 --gop-size 97
   --qp 32 --engine-dir build/engines/dcvcrt-1080p-orin` failed during
   initialization because `engine_manifest.json` was missing.
@@ -460,7 +485,7 @@ Append evidence; never silently replace historical results.
   CUDA device access; the sandboxed run failed before kernels with NVIDIA memory
   manager initialization unavailable.
 - Verification: `./build-release/cli/nvcr encode -i
-  /home/oelghati/datasets/hd/BasketballDrive_1920x1080_50.yuv -o
+  /path/to/BasketballDrive_1920x1080_50.yuv -o
   /tmp/basketball.nvcr -s 1920x1080 -r 50 --frames 97 --gop-size 97 --qp 32
   --engine-dir build/engines/dcvcrt-1080p-orin` completed: 97 frames, 339046
   payload bytes, codec time 18.293 s, 5.303 fps. Steady P-frames were mostly
@@ -468,7 +493,7 @@ Append evidence; never silently replace historical results.
 
 ### 2026-07-08 — Orin OOM mitigation for 1080p GOP encode
 
-- User reproduction on Orin: 1080p GOP encode failed with
+- Observed Orin run: 1080p GOP encode failed with
   `cudaMallocAsync failed: out of memory` and NVMap allocation errors.
 - Added allocator resilience in `tensorrt_backend.cpp`: when stream-ordered
   `cudaMallocAsync` returns OOM, synchronize and retry, then fall back to
@@ -481,7 +506,7 @@ Append evidence; never silently replace historical results.
 - Verification: `cmake --build build-orin-release --target nvcr --parallel`
   passed.
 - Verification: `./build-orin-release/cli/nvcr encode -i
-  /home/oelghati/datasets/hd/BasketballDrive_1920x1080_50.yuv -o
+  /path/to/BasketballDrive_1920x1080_50.yuv -o
   /tmp/basketball.nvcr -s 1920x1080 -r 50 --frames 97 --gop-size 97 --qp 32
   --engine-dir build/engines/dcvcrt-1080p-orin` completed: 97 frames, 339046
   payload bytes, codec time 23.333 s, 4.157 fps.
@@ -574,24 +599,21 @@ Append evidence; never silently replace historical results.
   idle-adjusted 3.138 J/frame.
 - Decode post-warmup timing from frames 10-96 in that run: 87 frames averaged
   327.451 ms/frame, min 277.840 ms, max 346.580 ms. This is slower than the
-  user's 240 ms/frame report and reinforces that low-memory context churn and
-  host/output staging remain performance blockers.
+  earlier 240 ms/frame decode report and reinforces that low-memory context
+  churn and host/output staging remain performance blockers.
 - Next action: repeat encode energy after restoring contiguous NVMap headroom
   (usually a reboot or stopping the processes that fragmented GPU memory), and
   repeat decode in performance mode when it can initialize without OOM.
 
 ### 2026-07-22 — Generalized build automation beyond Orin (device/arch auto-detect, one-command install, auto-tuned artifact pipeline)
 
-- Trigger: user reprioritization outside the active M1/M3 milestones, per
-  AGENTS.md §6 ("If requested work conflicts with the roadmap, explain the
-  conflict and update the roadmap only after the user chooses the new
-  priority"): the prior Orin bring-up left CUDA/TensorRT configure flags
-  (`CMAKE_CUDA_COMPILER`, `CMAKE_CUDA_ARCHITECTURES=87`, `TensorRT_ROOT`) and
-  artifact-pipeline tuning flags (`--workspace-mib 512`,
-  `--builder-optimization-level 1`, `--device-id 0`) hardcoded per the single
-  verified Orin Nano. The user asked for this to generalize to "linux machine
-  with RTX or any other GPU" and to anticipate (without yet building) a future
-  release-please multi-architecture packaging pipeline.
+- Rationale: the prior Orin bring-up still relied on Orin-specific
+  CUDA/TensorRT configure flags (`CMAKE_CUDA_COMPILER`,
+  `CMAKE_CUDA_ARCHITECTURES=87`, `TensorRT_ROOT`) and artifact-pipeline tuning
+  flags (`--workspace-mib 512`, `--builder-optimization-level 1`,
+  `--device-id 0`). NVCR needed a default local-install path that auto-detects
+  one machine's CUDA/TensorRT/GPU settings plus an explicit portable
+  multi-architecture build mode for redistributable binaries.
 - Added `cmake/NVCRAutodetect.cmake`: auto-detects `CMAKE_CUDA_COMPILER` (glob
   `/usr/local/cuda*/bin/nvcc` when not on `PATH`) and, when
   `CMAKE_CUDA_ARCHITECTURES` is unset, either single-GPU `compute_cap` via
@@ -614,10 +636,10 @@ Append evidence; never silently replace historical results.
   `--cuda-arch` always takes precedence over `--arch-set`.
 - `scripts/prepare_dcvcrt_artifacts.sh` now auto-tunes `--device-id`,
   `--workspace-mib`, and `--builder-optimization-level` from
-  `detect_platform.sh` unless `--no-auto-tune` is passed; hardcoded
-  `/home/oelghati/nvcr` paths were removed from it and from
-  `scripts/export_dcvcrt_onnx.py`/`scripts/export_dcvcrt_p_onnx.py` in favor of
-  `$repo_root`/`NVCR_DCVCRT_ROOT`.
+  `detect_platform.sh` unless `--no-auto-tune` is passed; hardcoded host-local
+  paths were removed from it and from `scripts/export_dcvcrt_onnx.py` and
+  `scripts/export_dcvcrt_p_onnx.py` in favor of `$repo_root` and
+  `NVCR_DCVCRT_ROOT`.
 - Updated `README.md`, `docs/getting-started.md`, `scripts/README.md`, and
   `docs/dcvcrt-artifacts.md` to lead with `scripts/install.sh` and
   `scripts/prepare_dcvcrt_artifacts.sh`, to document `--arch-set portable`, and
@@ -656,8 +678,8 @@ Append evidence; never silently replace historical results.
   Nano; M4's checkpoint/engine redistribution-licensing and hash-validation
   bullets remain open, and no discrete RTX/datacenter GPU run has yet
   re-verified the `portable` arch-set path end-to-end (only configure+build
-  evidence exists, gathered on Jetson hardware). Release-please/CI packaging
-  automation was explicitly deferred at the user's request and is not started.
+  evidence exists, gathered on Jetson hardware). Release packaging automation
+  remained separate from this change set.
 
 ### 2026-07-22 — Binary install and fallback engine-build docs
 
@@ -731,9 +753,8 @@ Append evidence; never silently replace historical results.
   and the portable platform tag.
 - Validation: `bash -n scripts/ci/install_cuda_tensorrt.sh`, YAML parse of
   both workflow files via `python3 -c "import yaml; yaml.safe_load(...)"`.
-  Not yet validated: an actual GitHub Actions run (workflow files have not
-  been pushed/merged yet), and the hosted-runner CUDA/TensorRT apt install
-  steps (no network access to NVIDIA's package repositories in this sandbox).
+- Not yet validated: an actual GitHub Actions run, and the hosted-runner
+  CUDA/TensorRT apt install steps.
 - Follow-up: added a `changes` job (`dorny/paths-filter`) to `ci.yml` that
   gates `build-cpu` and `build-cuda-portable` on whether the push/PR touched
   any path that can affect the compiled output (CMake files, `src/`,
@@ -804,25 +825,22 @@ Decision: add an explicit `NVCR_CUDA_ARCH_SET` CMake option (`auto` default,
 always detecting the local build machine's single GPU or always building a
 fat binary.
 
-Rationale: the user clarified that NVCR must build correctly on any Jetson or
-discrete RTX/datacenter host (not just the Orin Nano used for bring-up), and
-that a future release process will need one executable per host CPU
-architecture that works out of the box across a range of GPU models on that
-architecture. Single-GPU auto-detection (via `nvidia-smi compute_cap`) is
-correct and fastest for local development or a single-machine install, but is
-the wrong default for a build meant to be redistributed to machines other than
-the one it was built on. Conflating the two would force every local developer
-build to pay the multi-architecture compile cost, or force every release build
-to silently target only the packaging machine's GPU.
+Rationale: NVCR must support both local single-machine builds and
+redistributable binaries for a wider GPU set. Single-GPU auto-detection (via
+`nvidia-smi compute_cap`) is correct and fastest for local development or a
+single-machine install, but it is the wrong default for a build meant to be
+redistributed to machines other than the one it was built on. Conflating the
+two would force every local developer build to pay the multi-architecture
+compile cost, or force every release build to silently target only the
+packaging machine's GPU.
 
 Consequence: `auto` remains the default so existing local/dev workflows and
-documentation are unaffected; `portable` is available and verified (configure
-+ build) for future packaging use. GPU-architecture portability
+documentation are unaffected; `portable` is available and verified through
+configure/build validation for future packaging use. GPU-architecture portability
 (`NVCR_CUDA_ARCH_SET=portable`) is explicitly documented as orthogonal to host
 CPU architecture portability — separate builds are still required per CPU
 arch — and TensorRT `.plan` engines are still never bundled as portable
 artifacts; they must always be generated per-target via
 `scripts/prepare_dcvcrt_artifacts.sh`, guarded by `engine_manifest.json`
-(2026-07-08 decision above). Building the actual release-please/CI
-multi-architecture packaging pipeline was explicitly deferred at the user's
-request ("don't do it now") and remains out of scope until requested.
+(2026-07-08 decision above). Release packaging automation remained out of scope
+for that change.

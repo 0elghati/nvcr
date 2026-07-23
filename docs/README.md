@@ -1,59 +1,33 @@
 # Documentation
 
-Start here if you are new to NVCR. The docs are arranged so users can first
-install and run quickly, then go deeper into architecture and internals.
+NVCR is a development snapshot progressing through v0.3 foundation gates toward
+a first scoped v1 release. Read the scope and evidence status before treating an
+implemented path as supported.
 
 ## Reading order
 
-1. [Project README](../README.md) for the overview and scope.
-2. [Binary Install Guide](install-binary.md) for fast user installation with
-	published release artifacts.
-3. [Getting Started](getting-started.md) for source build and local development setup.
-4. [Releasing](releasing.md) for release-please, tags, and binary/engine upload workflows.
-5. [Native command-line interface](cli.md) for installed CLI usage on Linux.
-6. [DCVC-RT artifact pipeline](dcvcrt-artifacts.md) for checkpoints, ONNX export,
-	and target-local TensorRT engine generation.
-7. [Architecture](architecture.md) for ownership, lifecycle, and module boundaries.
-8. [Public API Reference](reference.md) for the exported runtime types.
-9. [NVCR packet envelope](bitstream.md) for the wire format and sequence file layout.
-10. [DCVC-RT integration contract](dcvcrt-integration.md) for codec-specific behavior.
-11. [Performance](performance.md) for the current baseline and remaining work.
+1. [Project overview](../README.md)
+2. [Authoritative scope and support](scope-and-support.md)
+3. [Compatibility matrix](compatibility.md)
+4. [Getting started and builds](getting-started.md)
+5. [Model and engine preparation](dcvcrt-artifacts.md)
+6. [Architecture](architecture.md)
+7. [C++ API status](reference.md)
+8. [Bitstream and access units](bitstream.md)
+9. [CLI](cli.md)
+10. [DCVC-RT integration](dcvcrt-integration.md)
+11. [Performance protocol and historical results](performance.md)
+12. [Release gates](releasing.md)
+13. [Roadmap and evidence](../ROADMAP.md)
 
-## Quick links
+## Policy shortcuts
 
-| Topic | Purpose |
-|---|---|
-| [Binary Install Guide](install-binary.md) | Fast install from published binary and engine bundles |
-| [Getting Started](getting-started.md) | Build, install, and run NVCR from source |
-| [Releasing](releasing.md) | Configure release-please and publish binary assets |
-| [Architecture](architecture.md) | Public runtime ownership and lifecycle |
-| [API Reference](reference.md) | Public `nvcr` types and usage patterns |
-| [Bitstream](bitstream.md) | Packet envelope and sequence file format |
-| [CLI](cli.md) | `nvcr encode` and `nvcr decode` usage |
-| [DCVC-RT artifacts](dcvcrt-artifacts.md) | Checkpoints, ONNX export, and TensorRT engines |
-| [DCVC-RT integration](dcvcrt-integration.md) | TensorRT, rANS, and current codec status |
-| [Performance](performance.md) | Baselines, targets, and remaining optimization work |
-
-## Published-library notes
-
-NVCR is intentionally split between a small public runtime API and detailed
-codec-specific internals. The top-level README explains the package surface,
-install flow, and scope. The topic docs below are where implementation-level
-contracts live.
-
-## Doc tree
-
-```text
-docs/
-	README.md                 index and reading order
-	install-binary.md         install from published binary/engine bundles
-	getting-started.md        build, install, and first-run steps
-	releasing.md              release-please and release asset workflow
-	reference.md              public API summary
-	architecture.md           ownership and lifecycle
-	cli.md                    command-line usage
-	dcvcrt-artifacts.md       checkpoint-to-engine artifact pipeline
-	bitstream.md              wire format
-	dcvcrt-integration.md     codec-specific integration contract
-	performance.md            current benchmark baselines
-```
+- Checkpoints, ONNX/runtime assets, and TensorRT engines are built locally and
+  are not shipped in NVCR releases.
+- RTX 4070 and Jetson Orin Nano are the only v1 reference targets.
+- FP16 and YUV420P8 are the v1 product profiles; INT8 is experimental.
+- `NVAU` is the candidate codec access-unit contract. `NVCR`/`NVCS` remain
+  development application framing.
+- C ABI, FFmpeg, and standard container mapping are post-v1.
+- Historical binary-install instructions, where retained, describe old snapshots
+  and are not current product-support guidance.

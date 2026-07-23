@@ -1,74 +1,74 @@
-# Public API Reference
+# Public C++ API reference
 
-This page summarizes the exported types in the public `nvcr` headers. The API is
-intentionally small and value-oriented.
+The current API is a development C++ boundary, not a frozen ABI. v1 stabilization
+still requires explicit plane/stride and host/device view contracts.
 
-## Core types
+## Runtime and values
 
 ### `nvcr::Runtime`
 
-The main library entry point. Create it with `Runtime::create`, then call:
+Create with `Runtime::create(configuration, components)`, then use:
 
-- `encode(const Frame&)` to turn a frame into a packet.
-- `decode(const Packet&)` to reconstruct a frame from a packet.
-- `flush()` to drain outstanding codec work.
-- `reset()` to clear sequence state.
-- `state()` to inspect the runtime state.
-- `statistics()` to read accumulated counters.
+- `encode(const Frame&)` to produce a `Packet` containing one `NVAU`;
+- `decode(const Packet&)` to reconstruct a frame;
+- `reset()` to discard encoder/decoder state;
+- `flush()` to finish backend work and reset state;
+- `state()` and `statistics()` for lifecycle/counter inspection.
 
-`Runtime` requires a `RuntimeConfiguration` and a codec backend implementation
-wrapped in `nvcr::dcvcrt::Components`.
+Calls return `Result<T>` and are serialized per runtime session.
 
 ### `nvcr::Frame`
 
-Owns pixel data plus dimensions, format, and timestamp. Use:
-
-- `Frame::create(...)` to allocate a frame of the right size.
-- `Frame::copy_from(...)` to copy external bytes into owned storage.
-- `data()` to access the bytes.
-
-The supported formats are `yuv420p8`, `rgb24`, `rgba32`, and `gray8`.
+An owned pixel buffer with width, height, format, and timestamp. `Frame::create`
+checks storage arithmetic and format constraints; `copy_from` imports external
+bytes. The CLI-supported v1 boundary is YUV420P8. Other enum formats are utility or
+internal paths and are not independent v1 codec support claims.
 
 ### `nvcr::Packet`
 
-Owns a compressed payload, timestamp, frame type, and optional metadata. Packets
-serialize through `PacketIO`.
+An owned application packet with codec payload, timestamp, frame type, and bounded
+metadata. `PacketIO` implements the development `NVCR` envelope.
 
-### `nvcr::PacketIO`
+### `nvcr::AccessUnit` / `nvcr::AccessUnitIO`
 
-Serializes and deserializes the versioned NVCR packet envelope. Use this for
-wire storage or sequence-file streaming.
+The versioned codec unit carries model ID, dimensions, effective QP, frame type,
+reset flag, and payload. Serialization/deserialization are bounded and validate
+all fields. See [Bitstream](bitstream.md).
 
-## Configuration and backend
+## Configuration
 
-### `nvcr::RuntimeConfiguration`
+`RuntimeConfiguration` includes:
 
-Controls engine paths, device selection, GOP size, packet limits, memory pool
-size, and logging level.
+- `model_id` and `device_id`;
+- engine directory;
+- GOP size and base intra QP;
+- maximum packet bytes, host memory pool, and intended device-arena capacity;
+- per-session `automatic`, `low_memory`, or `performance` TensorRT mode;
+- legacy raw-access-unit policy;
+- opt-in encoder reconstruction download for conformance tests;
+- logging/profiling settings.
 
-### `nvcr::dcvcrt::Components`
+Configuration is validated before backend initialization. The encoder
+reconstruction option is a test hook and should remain false in normal execution.
 
-Holds the codec backend. In v0.1 this should point to the DCVC-RT backend
-implementation created by `make_tensorrt_backend()`.
+## DCVC-RT backend
 
-### `nvcr::dcvcrt::CodecBackend`
+`dcvcrt::Components` holds the explicit backend created by
+`make_tensorrt_backend()`. `CodecBackend` owns initialization, I/P encode/decode,
+reset, and flush. No CUDA/TensorRT type or exception crosses this interface.
 
-The codec-level interface. It is responsible for initialization, encode, decode,
-flush, and reset. Exceptions must not cross this boundary.
+This is a real codec boundary, not a promise of arbitrary backend plugins. Another
+codec would require its own evidence and a justified abstraction change.
 
-## Error handling
+## Errors
 
-Public APIs return `nvcr::Result<T>` values instead of throwing across module
-boundaries. On failure, the result carries a stable error code, subsystem, and
-message.
+Public operations return `nvcr::Result<T>`. `Error` supplies a stable category,
+subsystem, and human-readable message. Expected invalid inputs, state errors,
+malformed access units, unavailable dependencies, resource exhaustion, and backend
+failures do not use exceptions as cross-module control flow.
 
-## Suggested usage
+## ABI and integration status
 
-1. Create or load a `RuntimeConfiguration`.
-2. Create a codec backend and place it in `nvcr::dcvcrt::Components`.
-3. Call `nvcr::Runtime::create(...)`.
-4. Use `encode` and `decode` with owned `Frame` and `Packet` values.
-5. Call `flush()` before shutdown when you need deterministic completion.
-
-For the full ownership model, see [Architecture](architecture.md). For wire
-format details, see [Bitstream](bitstream.md).
+Headers may change before v1. A public C ABI and FFmpeg integration are post-v1.
+Applications targeting the development tree should pin the exact NVCR revision,
+model profile, and engine-bundle schema.
