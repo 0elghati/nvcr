@@ -90,7 +90,7 @@ test inputs, never release outputs.
 Pull-request CI runs on GitHub-hosted standard runners only. It covers:
 
 - shell, Python, JSON, and workflow-YAML validation;
-- CPU Debug/Release CTest on hosted x86_64 and arm64 Linux runners;
+- CPU Release CTest on hosted x86_64 and arm64 Linux runners;
 - a required hosted x86_64 CUDA/TensorRT portable build and generic package smoke
   path for release-surface changes.
 

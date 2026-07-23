@@ -279,8 +279,9 @@ Append evidence; never silently replace historical results.
   and final publication to explicit manual release steps recorded in roadmap
   evidence instead of unreachable self-hosted Actions jobs.
 - Converted the old main-push GPU workflow into an optional manual self-hosted
-  helper disabled by default, and pinned the hosted CUDA/TensorRT CI gate to
-  Ubuntu 24.04 to match the supported hosted install path.
+  helper disabled by default, pinned the hosted CUDA/TensorRT CI gate to
+  Ubuntu 24.04, and reduced hosted CPU CI to Release-only coverage on the
+  standard x86_64 and arm64 runners.
 - Validation: YAML parse of all workflow files, release-please JSON validation,
   and `git diff --check`.
 

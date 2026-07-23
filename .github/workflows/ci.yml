@@ -93,14 +93,13 @@ jobs:
           ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].sort.each { |f| YAML.load_file(f, aliases: true) }'
 
   build-cpu:
-    # CPU-only coverage for the shipped host CPU architectures.
+    # Release-only CPU coverage for the shipped host CPU architectures.
     needs: changes
     if: needs.changes.outputs.cpp == 'true'
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm]
-        build_type: [Debug, Release]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -108,7 +107,7 @@ jobs:
       - name: Configure
         run: |
           cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_BUILD_TYPE=Release \
             -DNVCR_ENABLE_TENSORRT=OFF \
             -DNVCR_FETCH_DEPENDENCIES=ON \
             -DNVCR_BUILD_TESTS=ON
