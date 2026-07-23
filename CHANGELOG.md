@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/0elghati/nvcr/compare/v0.2.3...v0.3.0) (2026-07-23)
+
+
+### Features
+
+* Project restructure ([#22](https://github.com/0elghati/nvcr/issues/22)) ([2417a79](https://github.com/0elghati/nvcr/commit/2417a79bf76ff718853d2919e0f295b828b74754))
+* **runtime:** add scoped artifact validation and access-unit workflow ([#18](https://github.com/0elghati/nvcr/issues/18)) ([e6b8666](https://github.com/0elghati/nvcr/commit/e6b8666e3b02ea629fc5274b7a2b828d2d2d261e))
+
 ## [0.2.3](https://github.com/0elghati/nvrc/compare/v0.2.2...v0.2.3) (2026-07-22)
 
 
