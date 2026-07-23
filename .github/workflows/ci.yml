@@ -1,16 +1,8 @@
 name: ci
 
-# Validates pull requests before merge. Only GitHub-hosted runners are used
-# here on purpose: self-hosted GPU runners (nvcr-release-discrete,
-# nvcr-release-jetson) must never be wired to the pull_request trigger,
-# because a fork could open a PR that runs arbitrary code on them. Real GPU
-# execution (CUDA ops tests, TensorRT engine round-trips) stays out of PR
-# validation and continues to run only on the self-hosted release pipeline in
-# release-assets.yml, and manually by maintainers as needed.
-# Runs on pull_request only. main only ever changes via a merged, already
-# -validated PR (or a release-please PR, which release-please itself opens
-# and merges), so a second push-triggered run on main would just re-check a
-# commit that already passed CI as part of its PR - pure duplication.
+# PR validation runs only on GitHub-hosted runners.
+# Self-hosted GPU runners stay off `pull_request`; trusted GPU execution remains
+# in `release-assets.yml` and `trusted-main-gpu`.
 on:
   pull_request:
 
@@ -24,11 +16,7 @@ permissions:
 
 jobs:
   changes:
-    # Detects whether this push/PR touched anything that can affect the
-    # compiled C++ output, so doc-only changes don't pay for a full
-    # configure/build/test cycle. Docs, README, ROADMAP, etc. fall through to
-    # "false" and the build-cpu/build-cuda-portable jobs below are skipped
-    # (not failed) for them.
+    # Skip compile jobs when a change cannot affect compiled output.
     runs-on: ubuntu-latest
     outputs:
       cpp: ${{ steps.filter.outputs.cpp }}
@@ -41,6 +29,8 @@ jobs:
             cpp:
               - 'CMakeLists.txt'
               - 'cmake/**'
+              - 'configs/**'
+              - 'resources/**'
               - 'src/**'
               - 'include/**'
               - 'cli/**'
@@ -71,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          for f in scripts/*.py; do
+          for f in scripts/*.py tests/*.py; do
             echo "== $f =="
             python3 -m py_compile "$f"
           done
@@ -82,11 +72,7 @@ jobs:
           python3 -m json.tool .release-please-manifest.json >/dev/null
 
   build-cpu:
-    # Validates the CPU-only build (NVCR_ENABLE_TENSORRT=OFF) across both
-    # host CPU architectures NVCR ships for: x86_64 and aarch64 (Jetson's CPU
-    # architecture, exercised here without CUDA/TensorRT since hosted aarch64
-    # runners have no GPU). Skipped (not failed) when nothing under the
-    # `cpp` filter above changed, e.g. a docs-only PR.
+    # CPU-only coverage for the shipped host CPU architectures.
     needs: changes
     if: needs.changes.outputs.cpp == 'true'
     strategy:
@@ -113,13 +99,8 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   build-cuda-portable:
-    # Compile-only validation of the CUDA/TensorRT backend across every GPU
-    # architecture in the portable release matrix (see NVCR_CUDA_ARCH_SET in
-    # cmake/NVCROptions.cmake). Hosted runners have no GPU, so this only
-    # proves the code configures and compiles for all target architectures;
-    # it cannot run CUDA-executing tests. Best-effort: NVIDIA's public apt
-    # package names/versions can change, so this job does not block merges.
-    # Skipped (not failed) when nothing under the `cpp` filter above changed.
+    # Compile-only CUDA/TensorRT coverage for the portable GPU-architecture
+    # matrix. Hosted runners have no GPU, so this job does not run CUDA tests.
     needs: changes
     if: needs.changes.outputs.cpp == 'true'
     runs-on: ubuntu-latest

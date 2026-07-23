@@ -1,0 +1,38 @@
+name: trusted-main-gpu
+
+# Trusted push-only GPU validation for `main`.
+# Keep self-hosted GPU runners off `pull_request`.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trusted-main-gpu
+  cancel-in-progress: true
+
+jobs:
+  rtx-merge-gate:
+    runs-on:
+      - self-hosted
+      - nvcr-release-discrete
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure release build on the reference GPU
+        run: |
+          cmake -S . -B build-main-gpu \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNVCR_ENABLE_TENSORRT=ON \
+            -DNVCR_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build-main-gpu --parallel
+
+      - name: CPU, parser fuzz/boundary, manifest/profile, rANS, and CUDA tests
+        run: |
+          ctest --test-dir build-main-gpu --output-on-failure \
+            -R 'nvcr_(artifact_profiles|smoke_tests|parser_fuzz_boundaries|rans_conformance|cuda_ops)'

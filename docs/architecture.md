@@ -1,122 +1,137 @@
 # Architecture
 
-Start with [Documentation](README.md) or return to the [project overview](../README.md).
+NVCR is a stateful DCVC-RT deployment runtime, not a model framework. The
+supported boundary is defined in [Scope and support](scope-and-support.md); this
+page describes the current implementation and clearly labels unfinished v1 work.
 
-## Design constraints
-
-NVCR is a stateful deployment library, not a model framework. Its architecture
-therefore favors explicit ownership, bounded allocations, narrow dependency
-boundaries, and errors that cross module boundaries as values.
-
-There is no generic codec base class or runtime plugin registry. Public codec
-integration types live in `nvcr::dcvcrt`, because DCVC-RT is the only v0.1 codec.
-This avoids prematurely freezing an abstraction around one implementation while
-still keeping dependencies out of the application API.
-
-## Module ownership
-
-| Module | Owns | Does not own |
-|---|---|---|
-| `runtime` | Public lifecycle, serialization of calls, `Frame`, `Packet` | TensorRT or entropy implementation details |
-| `dcvcrt` | I/P decisions, encoder/decoder state, backend orchestration, TensorRT I-frame plans, native rANS integration | Neural architecture, weights, entropy algorithms |
-| `bitstream` | NVCR packet envelope, validation, metadata | Entropy-coded payload semantics |
-| `cli` | Raw YUV I/O, sequence records, encode/decode commands | Codec state or TensorRT implementation |
-| `memory` | Reusable allocations through memory resources | CUDA policy outside a CUDA resource |
-| `configuration` | Parsing and validation | Backend-specific engine inspection |
-| `logging` | Per-subsystem logger creation | Global logger state |
-| `statistics` | Atomic counters and accumulated timings | Benchmark harnesses |
-| `common` | Error codes and expected-style results | Exceptions as API control flow |
-
-## Runtime lifecycle
+## System boundary
 
 ```text
-create
-  |
-  v
-initializing ---- adapter/backend failure ----> failed
-  |
-  v
-ready -- encode/decode/reset/flush --> ready
-  |
-  v
-destruction / moved-from ------------> stopped
+CLI / benchmark / C++ application
+               |
+        nvcr::Runtime session
+               |
+  access-unit validation + sequence state
+               |
+       dcvcrt::CodecBackend
+        /                  \
+TensorRT/CUDA stages     native CPU rANS
+        \                  /
+         device/host DPB state
 ```
 
-`nvcr::Runtime::create` validates configuration, creates subsystem loggers and
-statistics, then initializes the codec backend. Calls are serialized
-because a DCVC-RT sequence mutates references and latents. Encoder and decoder
-state are independent, allowing a runtime to perform a round trip without one
-direction corrupting the other. The current native path is I-frame only;
-predicted frames return `not_implemented`, and `gop_size=1` is required.
+There is no generic codec plugin registry. DCVC-RT is the only supported codec,
+so codec-specific orchestration stays in `nvcr::dcvcrt`. CUDA, TensorRT, and
+entropy implementation types do not cross the public runtime boundary.
 
-No singleton holds CUDA, logger, sequence, or model state.
+## Ownership
 
-## Sequence state
+| Area | Owns | Does not own |
+|---|---|---|
+| `runtime` | Session lifecycle, serialized calls, `Frame`, `Packet`, statistics | Neural graph ordering or TensorRT objects |
+| `dcvcrt` | I/P decisions, independent encoder/decoder state, TensorRT/CUDA/rANS orchestration | Training, checkpoints, model architecture |
+| `bitstream` | Bounded `NVAU` access units and development packet framing | Standard containers or FFmpeg metadata |
+| `configuration` | Per-session model, device, memory/execution, QP, GOP, and compatibility policy | Engine generation |
+| `memory` | Host resource and reusable best-fit pool | Completed CUDA arena (v1 work) |
+| `cli` | Raw YUV420P8 I/O and development sequence files | Codec state |
+| `tools` / `scripts` | Offline reference and artifact helper implementation | Deployed runtime dependencies |
+| `benchmarks` | Repeatable performance probes | Correctness authority |
 
-`dcvcrt::SequenceState` contains:
+## Session lifecycle and state
 
-- the reconstructed reference frame;
-- opaque backend latent state;
-- absolute frame index;
-- GOP position and configured GOP size;
-- a generation incremented on every reset.
+```text
+create -> validate configuration/bundle -> initialize backend -> ready
+                                                       |
+                                  encode / decode / reset / flush
+                                                       |
+                                                     ready
+```
 
-The first frame and each GOP boundary are intra frames. Predicted frames are
-rejected when a reference is unavailable or an intra boundary is expected.
-Backend work is committed only after the codec backend succeeds, so a failed operation does not partially advance sequence state.
-For the current runtime, configure `gop_size=1`.
+`Runtime::create` validates configuration, initializes the injected backend, and
+creates independent encoder and decoder `SequenceState` objects. Calls are
+serialized because DCVC-RT mutates references and latent state. A failed backend
+operation is not committed. `reset()` discards sequence state immediately;
+`flush()` finishes backend work and resets both directions.
 
-`flush()` asks the backend to finish outstanding work and then resets encoder,
-decoder, inference, and entropy state. `reset()` discards sequence state
-immediately.
+Each backend stores its selected TensorRT execution policy. `automatic` chooses a
+conservative low-memory mode on constrained devices; `low_memory` and
+`performance` are explicit per-session choices. The legacy environment override
+is only a fallback and is not the v1 configuration contract.
 
-## Backend boundary
+A GOP begins with an I-frame. P-frames require a valid reference; later GOPs and
+reset/reuse are covered by the registered engine roundtrip test. The backend DPB
+may contain a reconstructed device frame and a learned feature reference.
 
-`dcvcrt::CodecBackend` owns the complete DCVC-RT operation order behind an
-SDK-neutral C++ interface. A backend receives a source frame or compressed payload
-and returns the payload/frame plus committed sequence state. The current TensorRT
-implementation is an I-frame pipeline:
+## DCVC-RT execution
 
-1. RGB24 to YCbCr conversion.
-2. `i_analysis`.
-3. `i_hyper_analysis`.
-4. `i_hyper_synthesis`.
-5. Four spatial-prior passes with `i_spatial_prior_1`, `i_spatial_prior_2`, and
-   `i_spatial_prior_3`.
-6. `i_synthesis`.
-7. Native rANS packing into the `NVI1` payload wrapper.
-8. YCbCr to RGB24 reconstruction.
+The backend owns 14 deserialized plans, their execution contexts, a nonblocking
+CUDA stream, entropy tables, a 72-entry P-frame quantization cache, rANS state,
+and encoder/decoder DPBs.
 
-The backend owns deserialized engines, execution contexts, one nonblocking CUDA
-stream, entropy tables, and the native rANS wrapper. The current implementation
-allocates device buffers per engine call and stages tensors through pageable host
-memory between TensorRT calls for correctness and simplicity. No exception or TensorRT/CUDA type crosses the
-public boundary.
+The I path executes analysis, hyper-analysis, hyper-synthesis, three spatial-prior
+engines over four checkerboard passes, synthesis, and native rANS.
 
-## Memory
+The P path executes frame/feature reference adaptation, analysis,
+hyper-analysis, temporal prior, spatial prior, synthesis, adaptive QP shifts,
+native rANS, and frame/feature DPB update. P-frame effective QP is bounded to
+`0..71`; invalid derived indexes fail before cache access.
 
-`MemoryResource` expresses host, pinned-host, or device memory without exposing
-CUDA types. `MemoryPool` leases best-fit reusable blocks with RAII and a hard
-capacity. A lease keeps the pool state and resource alive, which makes destruction
-order safe.
+The P neural chain is substantially device-resident, while CPU entropy boundaries
+and some prior/index handling still require transfers. The I chain and remaining
+P state work have avoidable per-frame allocations. The reusable CUDA arena,
+complete device-resident I path, and removal of avoidable context churn remain
+active M1 work; current code is not described as performance-complete.
 
-The initial core provides the host resource. Pinned and device resources belong in
-the CUDA/TensorRT module and use the same pool. Frame currently owns host bytes;
-future device frame storage can be added as an optional resource-backed view
-without changing the meaning of the existing host accessor.
-The current YUV-to-RGB conversion used by the CLI lives in the application
-layer, not in the runtime.
+## Artifact preflight
 
-## FFmpeg compatibility
+Before TensorRT deserializes a plan, initialization requires an
+`nvcr.engine-bundle.v2` manifest and verifies:
 
-The long-term FFmpeg boundary should be a small C ABI layered over `nvcr::Runtime`.
-The current design prepares for that by using owned/movable buffers, integer
-timestamps, explicit reset/flush, no exceptions across subsystem boundaries, and
-no process-global state. FFmpeg integration itself is out of scope until v0.1
-codec and bitstream conformance are stable.
+- configured model profile identity and FP16 precision;
+- CUDA runtime, exact TensorRT version, GPU name, compute capability, and SM count;
+- the digest of `engine.sha256`;
+- the exact 14-plan/six-runtime-asset file set and every file digest;
+- I/P model-manifest identities.
+
+The offline `nvcr-artifacts validate` command additionally verifies source commit,
+checkpoint hashes, graph/asset hashes, portable relative paths, and manifest
+schemas. TensorRT plans are target-local and are never treated as portable.
+
+## Access units and development framing
+
+The codec boundary uses the versioned `NVAU` access unit. It contains model
+identity, even dimensions, frame type, effective QP, reset state, and a bounded
+codec payload. Parsers reject unknown flags, bad identities, invalid dimensions,
+QP overflow, truncation, trailing bytes, and oversized lengths before allocation.
+
+The TensorRT backend currently retains isolated `NVI1`/`NVP1` payload internals.
+The CLI wraps access units in the older `NVCR` packet and `NVCS` sequence records
+for timestamps and file streaming. Those outer formats are development formats,
+not a v1 container or an upstream compatibility claim. See [Bitstream](bitstream.md).
+
+## Public API status
+
+The current C++ API uses owned `Frame`/`Packet` values, `RuntimeConfiguration`,
+explicit reset/flush, integer timestamps, and structured `Result<T>` errors. It
+is usable by the CLI and tests but is not ABI-frozen.
+
+Before v1, the session API must stabilize explicit Y/U/V planes, strides,
+dimensions, device selection, and host/device view ownership. A C ABI, FFmpeg
+encoder/decoder wrapper, timestamp/container mapping, and hardware-frame
+integration are post-v1 work.
+
+## Incremental structure
+
+Large directory moves are deferred until correctness tests are reliable. As code
+is modified, application entry points move toward `apps/`, artifact/reference
+logic toward `tools/`, and performance/energy logic toward `benchmarks/`. The
+TensorRT backend should be split along manifest, engine/session, I-frame, P-frame,
+and state/asset boundaries without rewriting working behavior.
 
 ## See also
 
-- [NVCR packet envelope](bitstream.md)
-- [DCVC-RT integration contract](dcvcrt-integration.md)
+- [Scope and support](scope-and-support.md)
+- [Compatibility](compatibility.md)
+- [Bitstream](bitstream.md)
+- [Model and engine preparation](dcvcrt-artifacts.md)
 - [Performance](performance.md)
