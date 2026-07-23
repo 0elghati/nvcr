@@ -23,23 +23,16 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # release-please creates the GitHub Release through the GitHub API
-      # using this job's token. GitHub does not let events created that way
-      # (release:published, in this case) trigger further workflow runs, to
-      # prevent recursive automation - so release-assets.yml's `on: release`
-      # trigger never fires here. workflow_dispatch is explicitly exempted
-      # from that restriction, so we dispatch it directly instead of relying
-      # on a personal access token to make the native release event work.
+      # GitHub API-created draft releases do not trigger downstream workflows,
+      # so dispatch `release-assets.yml` directly when a release is created.
       - name: Trigger release asset builds
         if: ${{ steps.release.outputs.release_created == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Keep release-assets publication choices aligned with repository variables.
+          # Request Jetson assets only when the repository variable enables them.
           gh workflow run release-assets.yml \
             --repo "${{ github.repository }}" \
             --ref main \
             -f tag="${{ steps.release.outputs.tag_name }}" \
-            -f publish_discrete="${{ vars.NVCR_RELEASE_DISCRETE == 'true' && 'true' || 'false' }}" \
             -f publish_jetson="${{ vars.NVCR_RELEASE_JETSON == 'true' && 'true' || 'false' }}" \
-            -f publish_portable="${{ vars.NVCR_RELEASE_PORTABLE != 'false' && 'true' || 'false' }}"
