@@ -262,7 +262,9 @@ Append evidence; never silently replace historical results.
   `release-assets.yml` edits trigger hosted packaging coverage, and the hosted
   portable CUDA/TensorRT job now hard-gates the generic
   `linux-x86_64-nvidia` archive smoke package with checksum, manifest-presence,
-  and forbidden-asset checks.
+  and forbidden-asset checks. Archive contents are listed once before grep
+  checks so `pipefail` cannot turn a successful `grep -q` match into a tar
+  SIGPIPE failure.
 - Validation: `bash -n scripts/package_release.sh`,
   `./scripts/package_release.sh --help`, YAML parse of
   `.github/workflows/release-assets.yml` and `.github/workflows/ci.yml`,

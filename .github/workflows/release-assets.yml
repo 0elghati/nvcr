@@ -56,8 +56,10 @@ jobs:
           test -f "$archive"
           test -f "$checksum"
           (cd "$RUNNER_TEMP/nvcr-dist" && sha256sum -c "$(basename "$checksum")")
-          tar -tzf "$archive" | grep -qx "nvcr-$NVCR_TAG-linux-x86_64-nvidia/PACKAGE-MANIFEST.sha256"
-          if tar -tzf "$archive" | grep -Eq '(\.plan|\.engine|\.onnx|\.pth(\.tar)?)$|/(i|p)_(entropy|quant)\.bin$|/engine_manifest\.json$|/engine\.sha256$'; then
+          archive_list="$RUNNER_TEMP/nvcr-archive-list.txt"
+          tar -tzf "$archive" >"$archive_list"
+          grep -qx "nvcr-$NVCR_TAG-linux-x86_64-nvidia/PACKAGE-MANIFEST.sha256" "$archive_list"
+          if grep -Eq '(\.plan|\.engine|\.onnx|\.pth(\.tar)?)$|/(i|p)_(entropy|quant)\.bin$|/engine_manifest\.json$|/engine\.sha256$' "$archive_list"; then
             echo "release archive contains forbidden model or engine assets" >&2
             exit 1
           fi
