@@ -9,6 +9,10 @@ offline pinned-model preparation, release packaging, and focused measurement.
 - `nvcr_artifacts.py`: `prepare`, `build`, `inspect`, and `validate` for the
   pinned model and versioned profiles.
 - `package_release.sh`: package an installed tree; refuses model/engine assets.
+- `package_engine_bundle.sh`: package one already validated engine bundle as a
+  separate package-family GitHub Release asset.
+- `stage_engine_release_asset.sh`: package an engine bundle, optionally copy it
+  to a staging folder, and generate the `engine_assets.txt` workflow input row.
 - `profile_energy.py`: focused Jetson command/rail measurement helper.
 
 `nvcr_artifacts.py` calls the exporters, TensorRT builder, manifest writer,
@@ -64,6 +68,41 @@ The archive contains a file-hash manifest and required docs/licenses/profiles. I
 never contains checkpoints or derived model/engine assets. The public package
 family name is generic; support evidence remains tied to the recorded reference
 target profiles.
+
+Package optional reviewer-convenience engines separately after target-local
+validation:
+
+```bash
+./scripts/package_engine_bundle.sh \
+  --version 0.3.0 \
+  --engine-dir build/engines/dcvcrt \
+  --output-dir dist
+```
+
+The generated asset name is derived from the engine manifest and uses the public package family:
+
+```text
+nvcr-v0.3.0-<package-family>-dcvcrt-cvpr2025-<engine-profile>-engines.tar.gz
+```
+
+Upload these engine archives as separate GitHub Release assets only after their
+target evidence is recorded. They are not bundled into the generic binary
+packages.
+
+To combine packaging with staging-input generation:
+
+```bash
+./scripts/stage_engine_release_asset.sh \
+  --version 0.3.0 \
+  --engine-dir build/engines/dcvcrt-v2 \
+  --copy-to /path/to/OneDrive/NVCR \
+  --download-url https://example.invalid/direct-download.tar.gz
+```
+
+If the direct URL is not known yet, omit `--download-url`; the generated row uses
+a placeholder that can be replaced after the staged file is public. The generated
+text file is a manual `workflow_dispatch` input, not a file committed to the
+repository.
 
 ## Jetson energy
 

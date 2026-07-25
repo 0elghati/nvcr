@@ -288,6 +288,45 @@ Append evidence; never silently replace historical results.
 - Validation: YAML parse of all workflow files, release-please JSON validation,
   `bash -n scripts/ci/install_cuda_tensorrt.sh`, and `git diff --check`.
 
+### 2026-07-23 — Optional engine assets distributed from GitHub Releases
+
+- Added a separate reviewer-convenience engine asset path that keeps the generic
+  binary packages engine-free while allowing validated target-bound TensorRT
+  bundles to be attached as package-family assets to a draft GitHub Release.
+- Added `scripts/package_engine_bundle.sh` so current RTX/Jetson engine
+  directories are packaged under manifest-derived package-family names:
+  `nvcr-vX.Y.Z-<package-family>-dcvcrt-cvpr2025-<engine-profile>-engines.tar.gz`.
+- Added a manual `upload-engine-assets.yml` workflow that downloads staged
+  archives, verifies caller-supplied SHA-256 digests, validates safe archive
+  structure, runs the tagged `nvcr-artifacts validate` against each extracted
+  bundle, checks filename-to-manifest identity, uploads the archive plus checksum
+  to the GitHub Release, and only publishes the release when explicitly
+  confirmed.
+- Decision: staging services such as OneDrive may be used as temporary upload
+  inputs, but public/reviewer downloads should come from GitHub Release assets.
+  These engine assets remain target-bound evidence artifacts, not generic
+  TensorRT portability claims and not package contents.
+- Validation: `bash -n scripts/package_release.sh` and
+  `scripts/package_engine_bundle.sh`, Python compile of the engine upload helper,
+  workflow YAML parse, JSON validation, `git diff --check`, a fake public-package
+  manifest smoke test, and an end-to-end fake engine-bundle
+  package/download/validate smoke test.
+
+### 2026-07-25 — Engine staging input helper
+
+- Added `scripts/stage_engine_release_asset.sh` to package a validated engine
+  bundle, optionally copy it to a local staging folder such as a OneDrive-synced
+  directory, and generate the `engine_assets.txt` row consumed by
+  `upload-engine-assets.yml`.
+- Decision: the helper does not infer direct-download links from a public
+  OneDrive folder link because those links are provider-specific and often point
+  to preview/login HTML rather than the archive bytes. The workflow keeps SHA-256
+  and tar validation as the authority before uploading to GitHub Releases.
+- Clarified that `upload-engine-assets.yml` must be available on the selected
+  branch before it can be manually dispatched. A local `gh workflow run` command
+  only sends the input text to GitHub; the download, validation, and release
+  upload execute on the GitHub-hosted runner.
+
 
 ### 2026-07-02 — M0 baseline and entropy optimization
 
