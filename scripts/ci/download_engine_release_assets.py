@@ -118,7 +118,16 @@ def download(url: str, destination: Path) -> None:
         str(destination),
         url,
     ]
-    subprocess.run(command, check=True)
+    try:
+        subprocess.run(command, check=True)
+    except subprocess.CalledProcessError as error:
+        fail(
+            f"cannot download staging URL for {destination.name}; "
+            f"curl exited with {error.returncode}. The URL must be an "
+            "anonymous direct HTTPS download for the archive bytes. Browser "
+            "share pages, OneDrive preview links, login-gated links, and "
+            "permission-limited folder links are not valid workflow inputs."
+        )
 
 
 def safe_member_name(name: str) -> bool:

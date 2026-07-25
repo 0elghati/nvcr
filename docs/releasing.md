@@ -145,8 +145,23 @@ URL is already known, pass it directly:
 
 A public OneDrive folder link is not always enough to derive a per-file direct
 archive URL. The workflow intentionally validates the downloaded bytes by
-SHA-256, so an HTML preview page or login page fails before anything reaches the
-GitHub Release.
+SHA-256, so an HTML preview page, login page, or permission-limited link fails
+before anything reaches the GitHub Release. Test the final URL from a signed-out
+machine first:
+
+```bash
+curl -fL -o /tmp/nvcr-engine-test.tar.gz '<staging-download-url>'
+sha256sum /tmp/nvcr-engine-test.tar.gz
+```
+
+If that command returns `403`, the GitHub runner will also fail. Fix the file's
+sharing permissions or use a storage endpoint that exposes a direct anonymous
+HTTPS download. For a one-off release, it is also acceptable to bypass staging
+and upload the already packaged files directly:
+
+```bash
+gh release upload v0.3.0   dist/nvcr-v0.3.0-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz   dist/nvcr-v0.3.0-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz.sha256   --clobber
+```
 
 After the workflow in this PR is merged to the default branch, upload staged
 engine assets to a draft GitHub Release with one row per asset. Do not run this

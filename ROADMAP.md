@@ -326,6 +326,9 @@ Append evidence; never silently replace historical results.
   branch before it can be manually dispatched. A local `gh workflow run` command
   only sends the input text to GitHub; the download, validation, and release
   upload execute on the GitHub-hosted runner.
+- Improved staging-download diagnostics and documentation after a OneDrive share
+  URL returned HTTP 403 from `curl`; staged URLs must be anonymous direct archive
+  downloads, not browser/share/login pages.
 
 
 ### 2026-07-02 — M0 baseline and entropy optimization
