@@ -103,14 +103,14 @@ if [[ -n "$forbidden" ]]; then
     exit 1
 fi
 
+manifest_tmp="$staging_root/PACKAGE-MANIFEST.sha256.tmp"
 (
     cd "$package_root"
-    manifest_tmp="PACKAGE-MANIFEST.sha256.tmp"
-    find . -type f ! -name PACKAGE-MANIFEST.sha256 ! -name "$manifest_tmp" -print0 |
+    find . -type f ! -name PACKAGE-MANIFEST.sha256 -print0 |
         LC_ALL=C sort -z |
         xargs -0 sha256sum >"$manifest_tmp"
-    mv "$manifest_tmp" PACKAGE-MANIFEST.sha256
 )
+mv "$manifest_tmp" "$package_root/PACKAGE-MANIFEST.sha256"
 archive="$output_dir/$package_name.tar.gz"
 tar -C "$staging_root" -czf "$archive" "$package_name"
 (

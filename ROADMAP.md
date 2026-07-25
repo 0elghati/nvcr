@@ -291,11 +291,11 @@ Append evidence; never silently replace historical results.
 ### 2026-07-23 — Optional engine assets distributed from GitHub Releases
 
 - Added a separate reviewer-convenience engine asset path that keeps the generic
-  binary packages engine-free while allowing validated target-specific TensorRT
-  bundles to be attached to a draft GitHub Release.
+  binary packages engine-free while allowing validated target-bound TensorRT
+  bundles to be attached as package-family assets to a draft GitHub Release.
 - Added `scripts/package_engine_bundle.sh` so current RTX/Jetson engine
-  directories are packaged under manifest-derived names:
-  `nvcr-vX.Y.Z-dcvcrt-cvpr2025-<target-profile>-<engine-profile>-engines.tar.gz`.
+  directories are packaged under manifest-derived package-family names:
+  `nvcr-vX.Y.Z-<package-family>-dcvcrt-cvpr2025-<engine-profile>-engines.tar.gz`.
 - Added a manual `upload-engine-assets.yml` workflow that downloads staged
   archives, verifies caller-supplied SHA-256 digests, validates safe archive
   structure, runs the tagged `nvcr-artifacts validate` against each extracted
@@ -304,8 +304,8 @@ Append evidence; never silently replace historical results.
   confirmed.
 - Decision: staging services such as OneDrive may be used as temporary upload
   inputs, but public/reviewer downloads should come from GitHub Release assets.
-  These engine assets remain target-specific evidence artifacts, not generic
-  portability claims and not package-family contents.
+  These engine assets remain target-bound evidence artifacts, not generic
+  TensorRT portability claims and not package contents.
 - Validation: `bash -n scripts/package_release.sh` and
   `scripts/package_engine_bundle.sh`, Python compile of the engine upload helper,
   workflow YAML parse, JSON validation, `git diff --check`, a fake public-package

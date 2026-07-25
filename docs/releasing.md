@@ -59,7 +59,7 @@ Before publishing a draft release, complete and record the following:
    when required by the release track;
 3. build and validate the Jetson archive on the validated Jetson target;
 4. upload the Jetson archive and checksum to the draft release;
-5. optionally upload target-specific reviewer-convenience engine assets as
+5. optionally upload package-family reviewer-convenience engine assets as
    separate GitHub Release assets;
 6. record all required evidence in [ROADMAP.md](../ROADMAP.md);
 7. publish the draft release manually only after the release-track gates pass.
@@ -90,7 +90,7 @@ test inputs, never release outputs.
 ## Optional engine assets
 
 Public binary packages stay engine-free. If reviewers need prebuilt engines, ship
-them as separate target-specific GitHub Release assets so downloads still come
+them as separate package-family GitHub Release assets so downloads still come
 from the release page rather than a staging service.
 
 Create each archive on the machine where the engine bundle was built and
@@ -108,11 +108,11 @@ For the desktop RTX bundle that already exists in this workspace, use
 `build/engines/dcvcrt-v2`; the older `build/engines/dcvcrt` and
 `build/engines/dcvcrt-1080p` directories are not upload-ready v2 bundles.
 
-The archive filename is derived from `engine_manifest.json`:
+The archive filename is derived from `engine_manifest.json`, but uses the generic public package family instead of the exact target profile:
 
 ```text
-nvcr-v0.3.0-dcvcrt-cvpr2025-rtx4070-ubuntu2404-1080p-fp16-engines.tar.gz
-nvcr-v0.3.0-dcvcrt-cvpr2025-orin-nano-l4t3647-1080p-fp16-engines.tar.gz
+nvcr-v0.3.0-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
+nvcr-v0.3.0-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
 ```
 
 Stage the `.tar.gz` files wherever the upload workflow can fetch them. The
@@ -152,15 +152,15 @@ After the workflow in this PR is merged to the default branch, upload staged
 engine assets to a draft GitHub Release with one row per asset:
 
 ```text
-<asset-file-name> <sha256> <staging-download-url>
+<package-family-engine-asset-file-name> <sha256> <staging-download-url>
 ```
 
 For example:
 
 ```bash
 cat > /tmp/nvcr-engine-assets.txt <<'EOF'
-nvcr-v0.3.0-dcvcrt-cvpr2025-rtx4070-ubuntu2404-1080p-fp16-engines.tar.gz <rtx-archive-sha256> <rtx-staging-https-url>
-nvcr-v0.3.0-dcvcrt-cvpr2025-orin-nano-l4t3647-1080p-fp16-engines.tar.gz <orin-archive-sha256> <orin-staging-https-url>
+nvcr-v0.3.0-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz <rtx-archive-sha256> <rtx-staging-https-url>
+nvcr-v0.3.0-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz <orin-archive-sha256> <orin-staging-https-url>
 EOF
 
 gh workflow run upload-engine-assets.yml \
@@ -183,8 +183,7 @@ To publish from the same manual workflow after evidence is recorded, set
 `publish_release=true` and set `publish_confirmation` to the exact tag. Leaving
 `publish_release` unset keeps the release in draft status.
 
-GitHub Release assets are limited to files under 2 GiB. If a target/profile
-engine archive exceeds that limit, do not push it through Git LFS; split the
+GitHub Release assets are limited to files under 2 GiB. If a package-family engine archive exceeds that limit, do not push it through Git LFS; split the
 engine profile strategy or keep the asset outside the GitHub Release and document
 that exception in the release notes.
 

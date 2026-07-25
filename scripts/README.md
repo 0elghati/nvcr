@@ -10,7 +10,7 @@ offline pinned-model preparation, release packaging, and focused measurement.
   pinned model and versioned profiles.
 - `package_release.sh`: package an installed tree; refuses model/engine assets.
 - `package_engine_bundle.sh`: package one already validated engine bundle as a
-  separate target-specific GitHub Release asset.
+  separate package-family GitHub Release asset.
 - `stage_engine_release_asset.sh`: package an engine bundle, optionally copy it
   to a staging folder, and generate the `engine_assets.txt` workflow input row.
 - `profile_energy.py`: focused Jetson command/rail measurement helper.
@@ -79,10 +79,10 @@ validation:
   --output-dir dist
 ```
 
-The generated asset name is derived from the engine manifest:
+The generated asset name is derived from the engine manifest and uses the public package family:
 
 ```text
-nvcr-v0.3.0-dcvcrt-cvpr2025-<target-profile>-<engine-profile>-engines.tar.gz
+nvcr-v0.3.0-<package-family>-dcvcrt-cvpr2025-<engine-profile>-engines.tar.gz
 ```
 
 Upload these engine archives as separate GitHub Release assets only after their

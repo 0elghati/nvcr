@@ -10,9 +10,8 @@ usage() {
 Usage: $0 --version X.Y.Z --engine-dir DIR [options]
 
 Packages one validated NVCR TensorRT engine bundle as a separate reviewer
-convenience release asset. This is not the public binary package; it contains
-target-specific plans and runtime assets and must be downloaded separately from
-the GitHub Release.
+convenience release asset. The asset filename uses the public package family,
+while the target-specific GPU identity remains inside engine_manifest.json.
 
 Options:
   --version X.Y.Z      Release version without leading v
@@ -77,8 +76,20 @@ print("\t".join(values))
 PY
 )"
 IFS=$'\t' read -r model_profile_id target_profile_id engine_profile_id <<<"$manifest_fields"
+case "$target_profile_id" in
+rtx4070-ubuntu2404)
+    package_family="linux-x86_64-nvidia"
+    ;;
+orin-nano-l4t3647)
+    package_family="linux-aarch64-jetson-l4t36"
+    ;;
+*)
+    echo "unsupported engine target profile for public release asset: $target_profile_id" >&2
+    exit 1
+    ;;
+esac
 
-asset_name="nvcr-v$version-$model_profile_id-$target_profile_id-$engine_profile_id-engines"
+asset_name="nvcr-v$version-$package_family-$model_profile_id-$engine_profile_id-engines"
 staging_root="$(mktemp -d "${TMPDIR:-/tmp}/nvcr-engine-package.XXXXXX")"
 trap 'rm -rf -- "$staging_root"' EXIT
 bundle_root="$staging_root/$asset_name/dcvcrt"
@@ -107,14 +118,14 @@ done <"$engine_dir/engine.sha256"
 
 "$script_dir/nvcr_artifacts.py" validate "$bundle_root" --json >/dev/null
 
+manifest_tmp="$staging_root/ENGINE-ASSET-MANIFEST.sha256.tmp"
 (
     cd "$staging_root/$asset_name"
-    manifest_tmp="ENGINE-ASSET-MANIFEST.sha256.tmp"
-    find . -type f ! -name ENGINE-ASSET-MANIFEST.sha256 ! -name "$manifest_tmp" -print0 |
+    find . -type f ! -name ENGINE-ASSET-MANIFEST.sha256 -print0 |
         LC_ALL=C sort -z |
         xargs -0 sha256sum >"$manifest_tmp"
-    mv "$manifest_tmp" ENGINE-ASSET-MANIFEST.sha256
 )
+mv "$manifest_tmp" "$staging_root/$asset_name/ENGINE-ASSET-MANIFEST.sha256"
 
 archive="$output_dir/$asset_name.tar.gz"
 tar -C "$staging_root" \

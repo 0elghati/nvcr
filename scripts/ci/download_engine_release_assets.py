@@ -20,6 +20,11 @@ MAX_GITHUB_RELEASE_ASSET_BYTES = 2 * 1024 * 1024 * 1024
 SAFE_FILENAME = re.compile(r"^[0-9A-Za-z._+-]+$")
 SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 
+TARGET_PROFILE_PACKAGE_FAMILIES = {
+    "rtx4070-ubuntu2404": "linux-x86_64-nvidia",
+    "orin-nano-l4t3647": "linux-aarch64-jetson-l4t36",
+}
+
 
 @dataclass(frozen=True)
 class EngineAsset:
@@ -211,10 +216,14 @@ def validate_archive(
         fail(f"{archive.name} failed nvcr-artifacts validation")
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    target_profile_id = str(manifest["target_profile_id"])
+    try:
+        package_family = TARGET_PROFILE_PACKAGE_FAMILIES[target_profile_id]
+    except KeyError:
+        fail(f"{archive.name} uses unsupported target profile: {target_profile_id}")
     expected_name = (
-        f"nvcr-{tag}-{manifest['model_profile_id']}-"
-        f"{manifest['target_profile_id']}-{manifest['engine_profile_id']}-"
-        "engines.tar.gz"
+        f"nvcr-{tag}-{package_family}-{manifest['model_profile_id']}-"
+        f"{manifest['engine_profile_id']}-engines.tar.gz"
     )
     if archive.name != expected_name:
         fail(f"{archive.name} does not match engine manifest identity; expected {expected_name}")
@@ -255,7 +264,7 @@ def write_summary(path: Path, rows: list[dict[str, str]]) -> None:
     lines.extend(
         [
             "",
-            "These are separate target-specific engine assets. They are not part of "
+            "These are separate package-family engine assets with target-bound manifests. They are not part of "
             "the generic NVCR binary packages.",
         ]
     )

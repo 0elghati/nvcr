@@ -129,10 +129,10 @@ For a reviewer-convenience GitHub Release asset, package a validated bundle as:
   --output-dir dist
 ```
 
-The archive name is manifest-derived:
+The archive name is derived from the manifest and uses the public package family:
 
 ```text
-nvcr-v0.3.0-dcvcrt-cvpr2025-<target-profile>-<engine-profile>-engines.tar.gz
+nvcr-v0.3.0-<package-family>-dcvcrt-cvpr2025-<engine-profile>-engines.tar.gz
 ```
 
 The archive contains one `dcvcrt/` engine bundle plus

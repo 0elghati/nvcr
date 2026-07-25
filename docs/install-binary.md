@@ -29,14 +29,14 @@ engines locally with [Model and engine preparation](dcvcrt-artifacts.md), valida
 them, and pass their directory to `nvcr --engine-dir`. Never substitute an engine
 from another GPU, CUDA/TensorRT runtime, or model manifest.
 
-If a release also provides a target-specific reviewer-convenience engine asset,
+If a release also provides a package-family reviewer-convenience engine asset,
 download it from the same GitHub Release, verify it, and validate it before use:
 
 ```bash
 export NVCR_TAG=vX.Y.Z
-export NVCR_TARGET_PROFILE=rtx4070-ubuntu2404
+export NVCR_PACKAGE_FAMILY=linux-x86_64-nvidia
 export NVCR_ENGINE_PROFILE=1080p-fp16
-export NVCR_ENGINE_ASSET=nvcr-$NVCR_TAG-dcvcrt-cvpr2025-$NVCR_TARGET_PROFILE-$NVCR_ENGINE_PROFILE-engines.tar.gz
+export NVCR_ENGINE_ASSET=nvcr-$NVCR_TAG-$NVCR_PACKAGE_FAMILY-dcvcrt-cvpr2025-$NVCR_ENGINE_PROFILE-engines.tar.gz
 
 gh release download "$NVCR_TAG" \
   --pattern "$NVCR_ENGINE_ASSET" \
@@ -55,8 +55,8 @@ nvcr encode ... --engine-dir "engines/${NVCR_ENGINE_ASSET%.tar.gz}/dcvcrt"
 nvcr decode ... --engine-dir "engines/${NVCR_ENGINE_ASSET%.tar.gz}/dcvcrt"
 ```
 
-Engine assets are not generic binaries. Their filename records the model,
-target-profile, and engine-profile identity, and the runtime still checks the
+Engine assets are not generic TensorRT plans. Their filename records the package family,
+model, and engine-profile identity, and the runtime still checks the
 manifest and hashes before loading any TensorRT plan.
 
 The public archive family name is generic. It does not broaden the current
