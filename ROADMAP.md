@@ -315,13 +315,15 @@ Append evidence; never silently replace historical results.
 ### 2026-07-25 — Engine staging input helper
 
 - Added `scripts/stage_engine_release_asset.sh` to package a validated engine
-  bundle, optionally copy it to a local staging folder such as a OneDrive-synced
-  directory, and generate the `engine_assets.txt` row consumed by
-  `upload-engine-assets.yml`.
-- Decision: the helper does not infer direct-download links from a public
-  OneDrive folder link because those links are provider-specific and often point
-  to preview/login HTML rather than the archive bytes. The workflow keeps SHA-256
-  and tar validation as the authority before uploading to GitHub Releases.
+  bundle, optionally upload it to S3, and generate the `engine_assets.txt` row
+  consumed by `upload-engine-assets.yml`.
+- Added an AWS CDK app for a private S3 release-assets staging bucket in account
+  `<aws-account-id>`; staged engine uploads now use S3 plus presigned HTTPS URLs
+  rather than public OneDrive/share links.
+- Decision: the helper does not infer direct-download links from browser share
+  links because those links are provider-specific and often point to preview or
+  login HTML rather than archive bytes. The workflow keeps SHA-256 and tar
+  validation as the authority before uploading to GitHub Releases.
 - Clarified that `upload-engine-assets.yml` must be available on the selected
   branch before it can be manually dispatched. A local `gh workflow run` command
   only sends the input text to GitHub; the download, validation, and release

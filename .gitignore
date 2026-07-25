@@ -65,3 +65,7 @@ venv
 # Generated engine bundles and packaged/report artifacts
 *.zip
 *.sarif
+# AWS CDK local output
+/infra/aws-cdk/.venv/
+/infra/aws-cdk/cdk.out/
+/infra/aws-cdk/.cdk.staging/

@@ -1,0 +1,9 @@
+{
+  "app": "python3 app.py",
+  "context": {
+    "releaseRegion": "eu-west-1",
+    "assetRetentionDays": 14,
+    "noncurrentRetentionDays": 7,
+    "abortIncompleteMultipartUploadDays": 1
+  }
+}

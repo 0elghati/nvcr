@@ -115,38 +115,46 @@ nvcr-v0.3.0-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
 nvcr-v0.3.0-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
 ```
 
-Stage the `.tar.gz` files wherever the upload workflow can fetch them. The
-staging URLs are not the user-facing distribution channel; they are temporary
-inputs to the GitHub Release upload.
+Stage the `.tar.gz` files in the private S3 release-assets bucket and use a
+presigned URL as the temporary workflow input. The staging URL is not the
+user-facing distribution channel; it is only used by GitHub Actions before the
+asset is copied into GitHub Releases.
 
-A helper can package the bundle, copy it into a local OneDrive-synced staging
-folder, and generate the workflow input file:
+First deploy the staging bucket from [AWS CDK release assets](../infra/aws-cdk/README.md).
+For the first account setup, bootstrap account `<aws-account-id>` in the selected
+region, for example `eu-west-1`:
+
+```bash
+cd infra/aws-cdk
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+npm install -g aws-cdk
+cdk bootstrap aws://<aws-account-id>/eu-west-1
+cdk deploy NvcrReleaseAssetsStack
+```
+
+Then package, upload to S3, generate a presigned HTTPS URL, and write the
+workflow input file:
 
 ```bash
 ./scripts/stage_engine_release_asset.sh \
   --version 0.3.0 \
   --engine-dir build/engines/dcvcrt-v2 \
-  --copy-to /path/to/OneDrive/NVCR \
+  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/v0.3.0 \
+  --aws-region eu-west-1 \
+  --presign-expires 604800 \
   --asset-manifest dist/nvcr-engine-assets.txt
 ```
 
-After OneDrive finishes syncing, replace the placeholder URL in
-`dist/nvcr-engine-assets.txt` with the file's direct HTTPS download URL. If the
-URL is already known, pass it directly:
+The helper uploads both `.tar.gz` and `.tar.gz.sha256` to S3, but only the
+presigned archive URL is passed to the GitHub workflow because the workflow
+regenerates the release checksum after validation. Presigned URLs are temporary;
+if the workflow is rerun after expiry, regenerate `dist/nvcr-engine-assets.txt`.
 
-```bash
-./scripts/stage_engine_release_asset.sh \
-  --version 0.3.0 \
-  --engine-dir build/engines/dcvcrt-v2 \
-  --copy-to /path/to/OneDrive/NVCR \
-  --download-url https://... \
-  --asset-manifest dist/nvcr-engine-assets.txt
-```
-
-A public OneDrive folder link is not always enough to derive a per-file direct
-archive URL. The workflow intentionally validates the downloaded bytes by
-SHA-256, so an HTML preview page or login page fails before anything reaches the
-GitHub Release.
+If you do not use S3, pass `--download-url` with an HTTPS URL that works with
+`curl -fL` from a signed-out machine. Browser preview pages, login pages, and
+permission-limited links fail before anything reaches the GitHub Release.
 
 After the workflow in this PR is merged to the default branch, upload staged
 engine assets to a draft GitHub Release with one row per asset. Do not run this
@@ -230,8 +238,8 @@ gh release upload v0.3.0 dist/nvcr-v0.3.0-linux-aarch64-jetson-l4t36.tar.gz dist
 ```
 
 Users and reviewers should download both generic packages and optional engine
-assets from the GitHub Release. Do not ask reviewers to use OneDrive or another
-staging URL directly.
+assets from the GitHub Release. Do not ask reviewers to use S3 presigned staging
+URLs directly.
 
 Performance, rate/distortion, memory, and Orin energy evidence are recorded in
 [ROADMAP.md](../ROADMAP.md) using [Performance](performance.md). Passing hosted

@@ -11,8 +11,9 @@ offline pinned-model preparation, release packaging, and focused measurement.
 - `package_release.sh`: package an installed tree; refuses model/engine assets.
 - `package_engine_bundle.sh`: package one already validated engine bundle as a
   separate package-family GitHub Release asset.
-- `stage_engine_release_asset.sh`: package an engine bundle, optionally copy it
-  to a staging folder, and generate the `engine_assets.txt` workflow input row.
+- `stage_engine_release_asset.sh`: package an engine bundle, optionally upload
+  it to S3 or copy it to another staging folder, and generate the
+  `engine_assets.txt` workflow input row.
 - `profile_energy.py`: focused Jetson command/rail measurement helper.
 
 `nvcr_artifacts.py` calls the exporters, TensorRT builder, manifest writer,
@@ -89,20 +90,22 @@ Upload these engine archives as separate GitHub Release assets only after their
 target evidence is recorded. They are not bundled into the generic binary
 packages.
 
-To combine packaging with staging-input generation:
+To combine packaging, S3 upload, presigned URL generation, and workflow-input
+generation:
 
 ```bash
 ./scripts/stage_engine_release_asset.sh \
   --version 0.3.0 \
   --engine-dir build/engines/dcvcrt-v2 \
-  --copy-to /path/to/OneDrive/NVCR \
-  --download-url https://example.invalid/direct-download.tar.gz
+  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/v0.3.0 \
+  --aws-region eu-west-1 \
+  --asset-manifest dist/nvcr-engine-assets.txt
 ```
 
-If the direct URL is not known yet, omit `--download-url`; the generated row uses
-a placeholder that can be replaced after the staged file is public. The generated
-text file is a manual `workflow_dispatch` input, not a file committed to the
-repository.
+The generated text file is a manual `workflow_dispatch` input, not a file
+committed to the repository. If you do not use S3, pass `--download-url` with an
+HTTPS URL that works with `curl -fL` from a signed-out machine.
+
 
 ## Jetson energy
 
