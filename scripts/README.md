@@ -100,7 +100,9 @@ To combine packaging with staging-input generation:
 ```
 
 If the direct URL is not known yet, omit `--download-url`; the generated row uses
-a placeholder that can be replaced after the staged file is public.
+a placeholder that can be replaced after the staged file is public. The generated
+text file is a manual `workflow_dispatch` input, not a file committed to the
+repository.
 
 ## Jetson energy
 

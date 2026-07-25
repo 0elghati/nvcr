@@ -149,7 +149,9 @@ SHA-256, so an HTML preview page or login page fails before anything reaches the
 GitHub Release.
 
 After the workflow in this PR is merged to the default branch, upload staged
-engine assets to a draft GitHub Release with one row per asset:
+engine assets to a draft GitHub Release with one row per asset. Do not run this
+against `main` before the PR is merged; GitHub returns 404 when the requested
+workflow file is not present on the selected/default branch.
 
 ```text
 <package-family-engine-asset-file-name> <sha256> <staging-download-url>
@@ -168,6 +170,13 @@ gh workflow run upload-engine-assets.yml \
   -f tag=v0.3.0 \
   -F engine_assets=@/tmp/nvcr-engine-assets.txt
 ```
+
+The command above is only a trigger: it sends the text file contents to GitHub as
+the `engine_assets` input. The download, SHA-256 check, bundle validation, and
+GitHub Release upload all run on the GitHub-hosted Actions runner. If you prefer
+not to use the local GitHub CLI, open **Actions → upload-engine-assets → Run
+workflow** after the PR is merged, select `main`, paste the contents of
+`dist/nvcr-engine-assets.txt` into `engine_assets`, and run it from the browser.
 
 The workflow:
 

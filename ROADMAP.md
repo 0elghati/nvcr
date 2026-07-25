@@ -322,6 +322,10 @@ Append evidence; never silently replace historical results.
   OneDrive folder link because those links are provider-specific and often point
   to preview/login HTML rather than the archive bytes. The workflow keeps SHA-256
   and tar validation as the authority before uploading to GitHub Releases.
+- Clarified that `upload-engine-assets.yml` must be available on the selected
+  branch before it can be manually dispatched. A local `gh workflow run` command
+  only sends the input text to GitHub; the download, validation, and release
+  upload execute on the GitHub-hosted runner.
 
 
 ### 2026-07-02 — M0 baseline and entropy optimization
