@@ -7,6 +7,9 @@ output_dir="dist"
 copy_to=""
 download_url=""
 public_url_base=""
+s3_uri=""
+aws_region=""
+presign_expires="604800"
 asset_manifest=""
 append=0
 
@@ -23,6 +26,10 @@ Options:
   --engine-dir DIR       Validated engine bundle directory
   --output-dir DIR       Local archive output directory (default: dist)
   --copy-to DIR          Also copy .tar.gz and .sha256 to this staging directory
+  --s3-uri URI           Upload .tar.gz and .sha256 under this s3://bucket/prefix
+                         and generate a presigned HTTPS download URL
+  --aws-region REGION    AWS region for S3 upload/presign commands
+  --presign-expires SEC  Presigned URL lifetime in seconds (default: 604800)
   --download-url URL     Direct HTTPS download URL for the .tar.gz archive
   --public-url-base URL  Build URL as URL/asset-file-name; use only for hosts
                          where that form is a direct archive download
@@ -39,6 +46,9 @@ while (($#)); do
     --engine-dir) engine_dir="$2"; shift 2 ;;
     --output-dir) output_dir="$2"; shift 2 ;;
     --copy-to) copy_to="$2"; shift 2 ;;
+    --s3-uri) s3_uri="$2"; shift 2 ;;
+    --aws-region) aws_region="$2"; shift 2 ;;
+    --presign-expires) presign_expires="$2"; shift 2 ;;
     --download-url) download_url="$2"; shift 2 ;;
     --public-url-base) public_url_base="$2"; shift 2 ;;
     --asset-manifest) asset_manifest="$2"; shift 2 ;;
@@ -56,8 +66,20 @@ if [[ -z "$version" || -z "$engine_dir" ]]; then
     usage >&2
     exit 2
 fi
-if [[ -n "$download_url" && -n "$public_url_base" ]]; then
-    echo "use either --download-url or --public-url-base, not both" >&2
+url_source_count=0
+[[ -n "$download_url" ]] && ((url_source_count += 1))
+[[ -n "$public_url_base" ]] && ((url_source_count += 1))
+[[ -n "$s3_uri" ]] && ((url_source_count += 1))
+if ((url_source_count > 1)); then
+    echo "use only one of --download-url, --public-url-base, or --s3-uri" >&2
+    exit 2
+fi
+if [[ ! "$presign_expires" =~ ^[0-9]+$ || "$presign_expires" -lt 60 || "$presign_expires" -gt 604800 ]]; then
+    echo "--presign-expires must be an integer between 60 and 604800 seconds" >&2
+    exit 2
+fi
+if [[ -n "$s3_uri" && "$s3_uri" != s3://* ]]; then
+    echo "--s3-uri must start with s3://" >&2
     exit 2
 fi
 
@@ -104,6 +126,21 @@ if [[ -n "$copy_to" ]]; then
     copy_to="$(cd "$copy_to" && pwd)"
     cp -p "$archive" "$checksum" "$copy_to/"
     echo "Copied $archive_name and $archive_name.sha256 to $copy_to"
+fi
+
+if [[ -n "$s3_uri" ]]; then
+    if ! command -v aws >/dev/null; then
+        echo "aws CLI is required when --s3-uri is used" >&2
+        exit 1
+    fi
+    s3_prefix="${s3_uri%/}"
+    aws_args=()
+    if [[ -n "$aws_region" ]]; then
+        aws_args+=(--region "$aws_region")
+    fi
+    aws "${aws_args[@]}" s3 cp "$archive" "$s3_prefix/$archive_name"
+    aws "${aws_args[@]}" s3 cp "$checksum" "$s3_prefix/$archive_name.sha256"
+    download_url="$(aws "${aws_args[@]}" s3 presign "$s3_prefix/$archive_name" --expires-in "$presign_expires")"
 fi
 
 if [[ -n "$public_url_base" ]]; then
