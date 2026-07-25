@@ -97,12 +97,16 @@ Create each archive on the machine where the engine bundle was built and
 validated:
 
 ```bash
-./scripts/nvcr_artifacts.py validate build/engines/dcvcrt --json
+./scripts/nvcr_artifacts.py validate build/engines/dcvcrt-v2 --json
 ./scripts/package_engine_bundle.sh \
   --version 0.3.0 \
-  --engine-dir build/engines/dcvcrt \
+  --engine-dir build/engines/dcvcrt-v2 \
   --output-dir dist
 ```
+
+For the desktop RTX bundle that already exists in this workspace, use
+`build/engines/dcvcrt-v2`; the older `build/engines/dcvcrt` and
+`build/engines/dcvcrt-1080p` directories are not upload-ready v2 bundles.
 
 The archive filename is derived from `engine_manifest.json`:
 
@@ -114,6 +118,35 @@ nvcr-v0.3.0-dcvcrt-cvpr2025-orin-nano-l4t3647-1080p-fp16-engines.tar.gz
 Stage the `.tar.gz` files wherever the upload workflow can fetch them. The
 staging URLs are not the user-facing distribution channel; they are temporary
 inputs to the GitHub Release upload.
+
+A helper can package the bundle, copy it into a local OneDrive-synced staging
+folder, and generate the workflow input file:
+
+```bash
+./scripts/stage_engine_release_asset.sh \
+  --version 0.3.0 \
+  --engine-dir build/engines/dcvcrt-v2 \
+  --copy-to /path/to/OneDrive/NVCR \
+  --asset-manifest dist/nvcr-engine-assets.txt
+```
+
+After OneDrive finishes syncing, replace the placeholder URL in
+`dist/nvcr-engine-assets.txt` with the file's direct HTTPS download URL. If the
+URL is already known, pass it directly:
+
+```bash
+./scripts/stage_engine_release_asset.sh \
+  --version 0.3.0 \
+  --engine-dir build/engines/dcvcrt-v2 \
+  --copy-to /path/to/OneDrive/NVCR \
+  --download-url https://... \
+  --asset-manifest dist/nvcr-engine-assets.txt
+```
+
+A public OneDrive folder link is not always enough to derive a per-file direct
+archive URL. The workflow intentionally validates the downloaded bytes by
+SHA-256, so an HTML preview page or login page fails before anything reaches the
+GitHub Release.
 
 After the workflow in this PR is merged to the default branch, upload staged
 engine assets to a draft GitHub Release with one row per asset:

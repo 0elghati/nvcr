@@ -312,6 +312,17 @@ Append evidence; never silently replace historical results.
   manifest smoke test, and an end-to-end fake engine-bundle
   package/download/validate smoke test.
 
+### 2026-07-25 — Engine staging input helper
+
+- Added `scripts/stage_engine_release_asset.sh` to package a validated engine
+  bundle, optionally copy it to a local staging folder such as a OneDrive-synced
+  directory, and generate the `engine_assets.txt` row consumed by
+  `upload-engine-assets.yml`.
+- Decision: the helper does not infer direct-download links from a public
+  OneDrive folder link because those links are provider-specific and often point
+  to preview/login HTML rather than the archive bytes. The workflow keeps SHA-256
+  and tar validation as the authority before uploading to GitHub Releases.
+
 
 ### 2026-07-02 — M0 baseline and entropy optimization
 
