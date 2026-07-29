@@ -40,6 +40,7 @@ namespace nvcr::dcvcrt {
 namespace {
 
 namespace fs = std::filesystem;
+using SequenceStateView = codec::SequenceStateView;
 
 constexpr std::string_view subsystem = "dcvcrt.tensorrt";
 constexpr std::size_t video_qp_count = 72U;

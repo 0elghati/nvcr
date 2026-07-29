@@ -6,19 +6,24 @@ offline pinned-model preparation, release packaging, and focused measurement.
 ## Supported user entry points
 
 - `install.sh`: native configure/build/install convenience wrapper.
-- `nvcr_artifacts.py`: `prepare`, `build`, `inspect`, and `validate` for the
-  pinned model and versioned profiles.
+- `nvcr_artifacts.py`: `prepare`, `build`, `inspect`, and `validate` for
+  backend artifact bundles and versioned profiles. The current implementation
+  supports the DCVC-RT backend.
 - `package_release.sh`: package an installed tree; refuses model/engine assets.
 - `package_engine_bundle.sh`: package one already validated engine bundle as a
   separate package-family GitHub Release asset.
 - `stage_engine_release_asset.sh`: package an engine bundle, optionally upload
   it to S3 or copy it to another staging folder, and generate the
   `engine_assets.txt` workflow input row.
+- `release_engine_assets.sh`: stage one or more validated engine bundles to S3
+  and dispatch the GitHub Release upload workflow for a Release Please tag.
 - `profile_energy.py`: focused Jetson command/rail measurement helper.
 
-`nvcr_artifacts.py` calls the exporters, TensorRT builder, manifest writer,
-`prepare_dcvcrt_artifacts.sh`, and `detect_platform.sh`. Those helpers remain
-available for expert diagnosis but do not define separate supported workflows.
+`nvcr_artifacts.py` calls backend-local helpers under
+`scripts/backends/dcvcrt/` for DCVC-RT export, TensorRT building, and manifest
+writing, and uses the generic `detect_platform.sh` helper for local target
+detection. Backend helpers remain available for expert diagnosis but do not
+define separate supported workflows.
 
 ```bash
 ./scripts/nvcr_artifacts.py prepare \
@@ -94,10 +99,11 @@ To combine packaging, S3 upload, presigned URL generation, and workflow-input
 generation:
 
 ```bash
+release_tag="v$(cat version.txt)"
 ./scripts/stage_engine_release_asset.sh \
-  --version 0.3.0 \
-  --engine-dir build/engines/dcvcrt-v2 \
-  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/v0.3.0 \
+  --version "${release_tag#v}" \
+  --engine-dir build/engines/dcvcrt-720p \
+  --s3-uri "s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases/$release_tag" \
   --aws-region eu-west-1 \
   --asset-manifest dist/nvcr-engine-assets.txt
 ```
@@ -105,6 +111,21 @@ generation:
 The generated text file is a manual `workflow_dispatch` input, not a file
 committed to the repository. If you do not use S3, pass `--download-url` with an
 HTTPS URL that works with `curl -fL` from a signed-out machine.
+
+To avoid manual copy/paste after Release Please creates a draft release, stage
+and upload every validated local engine bundle in one command:
+
+```bash
+./scripts/release_engine_assets.sh \
+  --engine-dir build/engines/dcvcrt-720p \
+  --engine-dir build/engines/dcvcrt-1080p \
+  --s3-prefix s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases \
+  --aws-region eu-west-1
+```
+
+The helper validates the bundles, uploads the archives to S3 with temporary
+presigned URLs, writes `dist/nvcr-engine-assets.txt`, verifies the draft release
+exists, and dispatches `upload-engine-assets.yml` against the exact tag.
 
 
 ## Jetson energy

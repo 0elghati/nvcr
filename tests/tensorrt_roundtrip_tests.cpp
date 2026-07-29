@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
     configuration.verify_encoder_reconstruction = true;
     configuration.gop_size = 2;
 
-    nvcr::dcvcrt::Components components;
+    nvcr::codec::Components components;
     components.codec = std::move(backend.value());
     auto runtime = nvcr::Runtime::create(configuration, std::move(components));
     if (!runtime) {
@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
         std::cerr << verification_initialized.error().describe() << '\n';
         return 1;
     }
-    const nvcr::dcvcrt::SequenceStateView empty_state{};
+    const nvcr::codec::SequenceStateView empty_state{};
     auto verification_packet = verification_backend.value()->encode(
         frame.value(), nvcr::FrameType::intra, empty_state);
     if (!verification_packet) {
@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    const nvcr::dcvcrt::SequenceStateView predicted_state{
+    const nvcr::codec::SequenceStateView predicted_state{
         &verification_packet.value().reconstructed_frame,
         verification_packet.value().latent_state, 1, 1, 0};
     auto verification_predicted = verification_backend.value()->encode(
@@ -154,7 +154,7 @@ int main(int argc, char* argv[]) {
         std::cerr << high_qp_intra_decoded.error().describe() << '\n';
         return 1;
     }
-    const nvcr::dcvcrt::SequenceStateView high_qp_state{
+    const nvcr::codec::SequenceStateView high_qp_state{
         &high_qp_intra.value().reconstructed_frame,
         high_qp_intra.value().latent_state, 1, 1, 0};
     auto high_qp_predicted = high_qp_backend.value()->encode(

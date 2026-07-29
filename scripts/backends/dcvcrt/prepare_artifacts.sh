@@ -2,7 +2,8 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "$script_dir/.." && pwd)"
+repo_root="$(cd "$script_dir/../../.." && pwd)"
+generic_script_dir="$repo_root/scripts"
 
 dcvcrt_root="${NVCR_DCVCRT_ROOT:-$repo_root/assets}"
 dcvcrt_repo="https://github.com/0elghati/DCVC-RT.git"
@@ -201,7 +202,7 @@ fi
 
 if ((auto_tune)); then
     # shellcheck source=scripts/detect_platform.sh
-    source "$script_dir/detect_platform.sh"
+    source "$generic_script_dir/detect_platform.sh"
     nvcr_detect_platform_report
     [[ -z "$trtexec_bin" ]] && trtexec_bin="$NVCR_DETECT_TRTEXEC"
     [[ -z "$device_id" ]] && device_id="$NVCR_DETECT_DEVICE_ID"
@@ -273,7 +274,7 @@ if missing:
 PY
 
     echo "Exporting I-frame ONNX/runtime assets to $models_dir"
-    "$python_bin" "$script_dir/export_dcvcrt_onnx.py" \
+    "$python_bin" "$script_dir/export_i_onnx.py" \
         --dcvcrt-root "$dcvcrt_root" \
         --output-dir "$models_dir" \
         --height 144 \
@@ -281,7 +282,7 @@ PY
         --qp 0
 
     echo "Exporting P-frame ONNX/runtime assets to $models_dir"
-    "$python_bin" "$script_dir/export_dcvcrt_p_onnx.py" \
+    "$python_bin" "$script_dir/export_p_onnx.py" \
         --dcvcrt-root "$dcvcrt_root" \
         --output-dir "$models_dir" \
         --height 192 \
@@ -347,7 +348,7 @@ if ((skip_engine == 0)); then
         engine_args+=(--enable-int8)
     fi
     echo "Building target-local TensorRT engines in $engines_dir"
-    "$script_dir/build_dcvcrt_tensorrt.sh" "${engine_args[@]}"
+    "$script_dir/build_tensorrt.sh" "${engine_args[@]}"
 fi
 
 cat <<EOF

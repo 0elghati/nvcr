@@ -80,5 +80,6 @@ development migration.
 
 No claim of upstream DCVC-RT byte or reconstruction compatibility is made until
 native payload decoding and reconstructed frames pass golden tests against the
-pinned Python implementation. See [Compatibility](compatibility.md) and the
-M2 gates in [ROADMAP.md](../ROADMAP.md).
+pinned Python implementation. Additional codec backends would need their own
+access-unit compatibility position and evidence. See [Compatibility](compatibility.md)
+and the M2 gates in [ROADMAP.md](../ROADMAP.md).

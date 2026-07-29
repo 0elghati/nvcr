@@ -2,6 +2,9 @@
 
 #include "nvcr/bitstream/access_unit.hpp"
 #include "nvcr/bitstream/packet_io.hpp"
+#include "nvcr/codec/backend.hpp"
+#include "nvcr/codec/runtime.hpp"
+#include "nvcr/codec/sequence_state.hpp"
 #include "nvcr/common/error.hpp"
 #include "nvcr/configuration/configuration.hpp"
 #include "nvcr/dcvcrt/backend.hpp"

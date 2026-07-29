@@ -1,14 +1,14 @@
-#include "nvcr/dcvcrt/sequence_state.hpp"
+#include "nvcr/codec/sequence_state.hpp"
 
 #include <utility>
 
-namespace nvcr::dcvcrt {
+namespace nvcr::codec {
 
 SequenceState::SequenceState(std::uint32_t gop_size) : gop_size_(gop_size) {}
 
 Result<FrameType> SequenceState::next_frame_type() const {
     if (gop_size_ == 0) {
-        return Error(ErrorCode::invalid_state, "GOP size is zero", "dcvcrt.state");
+        return Error(ErrorCode::invalid_state, "GOP size is zero", "codec.state");
     }
     if (!has_reference_ || (frame_index_ % gop_size_) == 0) {
         return FrameType::intra;
@@ -21,7 +21,7 @@ Result<void> SequenceState::validate_packet(FrameType frame_type) const {
         return Error(
             ErrorCode::invalid_state,
             "predicted frame received without a reference frame",
-            "dcvcrt.state");
+            "codec.state");
     }
     if (frame_type == FrameType::intra) {
         return {};
@@ -47,13 +47,13 @@ Result<void> SequenceState::commit(
         return Error(
             ErrorCode::backend_error,
             "backend returned an empty reference frame",
-            "dcvcrt.state");
+            "codec.state");
     }
     if (frame_type == FrameType::predicted && !has_reference_) {
         return Error(
             ErrorCode::invalid_state,
             "cannot commit a predicted frame without a reference",
-            "dcvcrt.state");
+            "codec.state");
     }
     if (reconstructed_frame.size_bytes() != 0) {
         reference_frame_ = std::move(reconstructed_frame);
@@ -76,4 +76,4 @@ std::uint64_t SequenceState::frame_index() const noexcept { return frame_index_;
 std::uint64_t SequenceState::generation() const noexcept { return generation_; }
 bool SequenceState::has_reference() const noexcept { return has_reference_; }
 
-}  // namespace nvcr::dcvcrt
+}  // namespace nvcr::codec

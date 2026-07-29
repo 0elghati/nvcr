@@ -14,7 +14,8 @@ This page summarizes the authoritative policy in
 
 ## Model identity
 
-The only v1 model profile is `dcvcrt-cvpr2025`, defined by
+The only v1 codec backend is DCVC-RT, and the only v1 model profile is
+`dcvcrt-cvpr2025`, defined by
 [configs/models/dcvcrt-cvpr2025.json](../configs/models/dcvcrt-cvpr2025.json).
 It binds the pinned DCVC-RT source commit, exact image/video checkpoint names and
 SHA-256 digests, FP16 deployment precision, YUV420P8, and QP bounds.
@@ -86,6 +87,7 @@ be called supported until the evidence rules below pass on the relevant target.
 | Upstream Python payload/frame compatibility | Partial reference infrastructure | Unsupported until golden tests pass |
 | Reusable CUDA arena / fully device-resident state | In progress | Required performance/runtime gate |
 | INT8 | Experimental builder flag | Unsupported/default-disabled in v1 |
+| Additional codec backends | Architecture boundary introduced; none implemented | Post-v1 |
 | Public C ABI | Not implemented | Post-v1 |
 | FFmpeg / standard container integration | Not implemented | Post-v1 |
 | Prebuilt checkpoints, model assets, or engines | Deliberately not shipped | Users build derived bundles locally |

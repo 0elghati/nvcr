@@ -1,9 +1,10 @@
-# DCVC-RT integration contract
+# DCVC-RT backend integration contract
 
-NVCR has one codec backend: the pinned `dcvcrt-cvpr2025` I/P model profile. The
-backend owns all TensorRT, CUDA, native rANS, and temporal-state ordering; these
-cannot be separated into generic pre/post processors because entropy coding and
-spatial priors alternate.
+NVCR's first and currently only codec backend is the pinned `dcvcrt-cvpr2025`
+I/P model profile. This backend implements the generic `nvcr::codec::CodecBackend`
+boundary and owns all DCVC-RT TensorRT, CUDA, native rANS, and temporal-state
+ordering. These operations cannot be separated into generic pre/post processors
+because entropy coding and spatial priors alternate.
 
 ## Initialization
 
@@ -16,8 +17,9 @@ the stream/contexts, uploads all 72 P-frame quantization entries, and warms the
 engines.
 
 Artifact preparation is described in [Model and engine preparation](dcvcrt-artifacts.md).
-`scripts/nvcr_artifacts.py` is the supported front end; individual exporters and
-builders are internal helpers.
+`scripts/nvcr_artifacts.py` is the supported front end. Individual DCVC-RT
+exporters and builders live under `scripts/backends/dcvcrt/` as backend-local
+implementation helpers.
 
 ## Encode/decode
 

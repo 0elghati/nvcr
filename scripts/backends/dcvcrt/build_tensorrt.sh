@@ -2,6 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/../../.." && pwd)"
 model_dir="build/models/dcvcrt"
 engine_dir="build/engines/dcvcrt"
 trtexec_bin="${TRTEXEC:-}"
@@ -15,8 +16,8 @@ python_bin="${PYTHON:-python3}"
 enable_int8=0
 model_profile_id=dcvcrt-cvpr2025
 target_profile_id=local-auto
-model_profile_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/configs/models/dcvcrt-cvpr2025.json"
-engine_profile_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/configs/engine-profiles/1080p-fp16.json"
+model_profile_path="$repo_root/configs/models/dcvcrt-cvpr2025.json"
+engine_profile_path="$repo_root/configs/engine-profiles/1080p-fp16.json"
 target_profile_path=""
 engine_profile_explicit=0
 
@@ -132,6 +133,28 @@ qcif)
     p_z_max="$p_z_opt"
     p_spatial_max="$p_spatial_opt"
     ;;
+720p)
+    i_frame_opt=1x3x720x1280
+    i_y_opt=1x256x48x80
+    i_z_opt=1x128x12x20
+    i_spatial_opt=1x512x45x80
+    i_synthesis_opt=1x256x45x80
+    p_frame_opt=1x3x768x1280
+    p_feature_opt=1x256x96x160
+    p_y_opt=1x128x48x80
+    p_z_opt=1x128x12x20
+    p_spatial_opt=1x512x48x80
+    i_frame_max="$i_frame_opt"
+    i_y_max="$i_y_opt"
+    i_z_max="$i_z_opt"
+    i_spatial_max="$i_spatial_opt"
+    i_synthesis_max="$i_synthesis_opt"
+    p_frame_max="$p_frame_opt"
+    p_feature_max="$p_feature_opt"
+    p_y_max="$p_y_opt"
+    p_z_max="$p_z_opt"
+    p_spatial_max="$p_spatial_opt"
+    ;;
 1080p)
     i_frame_opt=1x3x1088x1920
     i_y_opt=1x256x68x120
@@ -155,7 +178,7 @@ qcif)
     p_spatial_max="$p_spatial_opt"
     ;;
 *)
-    echo "unsupported optimization point: $optimization_point (expected qcif or 1080p)" >&2
+    echo "unsupported optimization point: $optimization_point (expected qcif, 720p, or 1080p)" >&2
     exit 2
     ;;
 esac

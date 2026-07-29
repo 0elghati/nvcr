@@ -15,11 +15,11 @@ SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 SOURCE_ROOT = SCRIPT_DIRECTORY.parent
 if (SOURCE_ROOT / "configs").is_dir() and (SOURCE_ROOT / "scripts").is_dir():
     REPOSITORY_ROOT = SOURCE_ROOT
-    HELPER_DIRECTORY = SOURCE_ROOT / "scripts"
+    HELPER_DIRECTORY = SOURCE_ROOT / "scripts" / "backends" / "dcvcrt"
 else:
     install_root = SCRIPT_DIRECTORY.parent
     REPOSITORY_ROOT = install_root / "share" / "nvcr"
-    HELPER_DIRECTORY = REPOSITORY_ROOT / "scripts"
+    HELPER_DIRECTORY = REPOSITORY_ROOT / "scripts" / "backends" / "dcvcrt"
 DEFAULT_MODEL_PROFILE = REPOSITORY_ROOT / "configs/models/dcvcrt-cvpr2025.json"
 DEFAULT_ENGINE_PROFILE = REPOSITORY_ROOT / "configs/engine-profiles/1080p-fp16.json"
 PINNED_COMMIT = "48ab0ac5e5199d78fffb944bfbafafb2b6142f7b"
@@ -355,7 +355,7 @@ def forward_artifact_command(command: str, arguments: list[str]) -> int:
     if known.target_profile is not None:
         target = load_profile(known.target_profile, "nvcr.target-profile.v1")
         target_id = str(target["id"])
-    helper = "prepare_dcvcrt_artifacts.sh" if command == "prepare" else "build_dcvcrt_tensorrt.sh"
+    helper = "prepare_artifacts.sh" if command == "prepare" else "build_tensorrt.sh"
     child = [str(HELPER_DIRECTORY / helper)]
     # Keep the profile files themselves bound to the generated engine
     # manifest, not just their human-readable IDs.  This makes changing a

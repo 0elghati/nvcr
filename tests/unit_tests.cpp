@@ -130,7 +130,7 @@ TEST(MemoryPool, ReusesReleasedBlocks) {
 }
 
 TEST(SequenceState, RequiresReferenceForPredictedFrames) {
-    nvcr::dcvcrt::SequenceState state(32);
+    nvcr::codec::SequenceState state(32);
     EXPECT_FALSE(state.validate_packet(nvcr::FrameType::predicted));
     auto type = state.next_frame_type();
     ASSERT_TRUE(type);
@@ -138,7 +138,7 @@ TEST(SequenceState, RequiresReferenceForPredictedFrames) {
 }
 
 TEST(SequenceState, PredictedFramesAreValidatedWithoutGopBoundaryDependency) {
-    nvcr::dcvcrt::SequenceState state(32);
+    nvcr::codec::SequenceState state(32);
     auto reference = nvcr::Frame::create(2, 2, nvcr::PixelFormat::gray8);
     ASSERT_TRUE(reference);
     ASSERT_TRUE(state.commit(std::move(reference.value()), {}, nvcr::FrameType::intra));
@@ -155,7 +155,7 @@ TEST(SequenceState, PredictedFramesAreValidatedWithoutGopBoundaryDependency) {
 }
 
 TEST(SequenceState, PredictedCommitCanAdvanceWithoutHostReference) {
-    nvcr::dcvcrt::SequenceState state(32);
+    nvcr::codec::SequenceState state(32);
     auto reference = nvcr::Frame::create(2, 2, nvcr::PixelFormat::gray8);
     ASSERT_TRUE(reference);
     ASSERT_TRUE(state.commit(std::move(reference.value()), {}, nvcr::FrameType::intra));

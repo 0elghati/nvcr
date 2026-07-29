@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write NVCR TensorRT engine bundle metadata for runtime compatibility checks."""
+"""Write DCVC-RT TensorRT engine bundle metadata for runtime compatibility checks."""
 
 from __future__ import annotations
 
@@ -177,7 +177,7 @@ def main() -> None:
     parser.add_argument("--engines", required=True, type=Path)
     parser.add_argument("--trtexec", required=True, type=Path)
     parser.add_argument("--device-id", type=int, default=0)
-    parser.add_argument("--optimization-point", required=True, choices=("qcif", "1080p"))
+    parser.add_argument("--optimization-point", required=True, choices=("qcif", "720p", "1080p"))
     parser.add_argument("--workspace-mib", required=True, type=int)
     parser.add_argument("--builder-optimization-level", required=True, type=int)
     parser.add_argument("--model-profile-id", default="dcvcrt-cvpr2025")
@@ -267,6 +267,7 @@ def main() -> None:
 
     visible_profiles = {
         "qcif": {"minimum": [64, 64], "optimum": [176, 144], "maximum": [176, 144]},
+        "720p": {"minimum": [64, 64], "optimum": [1280, 720], "maximum": [1280, 720]},
         "1080p": {"minimum": [64, 64], "optimum": [1920, 1080], "maximum": [1920, 1080]},
     }
     major, minor, patch = infer_tensorrt_version()

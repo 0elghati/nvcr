@@ -1,8 +1,9 @@
 # Documentation
 
-NVCR is a development snapshot progressing through v0.3 foundation gates toward
-a first scoped v1 release. Read the scope and evidence status before treating an
-implemented path as supported.
+NVCR is a development snapshot of a neural video codec runtime architecture,
+progressing through v0.3 foundation gates toward a first scoped v1 release. The
+current release path supports DCVC-RT only. Read the scope and evidence status
+before treating an implemented path as supported.
 
 ## Reading order
 
@@ -25,6 +26,7 @@ implemented path as supported.
 - Checkpoints, ONNX/runtime assets, and TensorRT engines are built locally and
   are not shipped in NVCR releases.
 - RTX 4070 and Jetson Orin Nano are the only v1 reference targets.
+- DCVC-RT is the only implemented and supported v1 codec backend.
 - FP16 and YUV420P8 are the v1 product profiles; INT8 is experimental.
 - `NVAU` is the candidate codec access-unit contract. `NVCR`/`NVCS` remain
   development application framing.

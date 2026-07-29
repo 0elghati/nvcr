@@ -176,7 +176,7 @@ void memory_test() {
 }
 
 void state_test() {
-    nvcr::dcvcrt::SequenceState state(2);
+    nvcr::codec::SequenceState state(2);
     auto first_type = state.next_frame_type();
     expect(first_type && first_type.value() == nvcr::FrameType::intra, "sequence starts intra");
     expect(!state.validate_packet(nvcr::FrameType::predicted), "P frame needs a reference");
@@ -194,7 +194,7 @@ void state_test() {
     state.reset();
     expect(!state.has_reference() && state.frame_index() == 0, "reset clears sequence state");
 
-    nvcr::dcvcrt::SequenceState long_gop_state(32);
+    nvcr::codec::SequenceState long_gop_state(32);
     auto long_reference = nvcr::Frame::create(2, 2, nvcr::PixelFormat::gray8);
     expect(long_reference.has_value(), "long GOP reference frame created");
     if (!long_reference) return;

@@ -76,6 +76,8 @@ cp -a "$install_prefix/." "$package_root/"
 required_files=(
     bin/nvcr
     bin/nvcr-artifacts
+    share/nvcr/scripts/backends/dcvcrt/prepare_artifacts.sh
+    share/nvcr/scripts/backends/dcvcrt/build_tensorrt.sh
     share/nvcr/configs/models/dcvcrt-cvpr2025.json
     share/nvcr/configs/engine-profiles/1080p-fp16.json
     "share/nvcr/configs/targets/$target_profile"

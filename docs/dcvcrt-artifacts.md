@@ -41,9 +41,10 @@ Git commit and both checkpoint hashes; it does not trust filenames alone.
 - `inspect`: report identity and versions without execution;
 - `validate`: validate schema, portable paths, required files, and SHA-256 digests.
 
-`scripts/prepare_dcvcrt_artifacts.sh`, the two exporters, the TensorRT builder,
-and the manifest writer are retained as implementation helpers. Direct use is an
-expert/development path and does not define another supported workflow.
+The DCVC-RT preparation helper, the two exporters, the TensorRT builder, and the
+manifest writer are retained under `scripts/backends/dcvcrt/` as backend-local
+implementation helpers. Direct use is an expert/development path and does not
+define another supported workflow.
 
 ## Artifact identity model
 
@@ -88,6 +89,7 @@ The declared FP16 profiles are:
 | Profile | Visible dimensions | Workspace | Builder level | Purpose |
 |---|---|---:|---:|---|
 | `qcif-fp16` | 64×64 to 176×144 | 512 MiB | 1 | Small correctness/development bundle |
+| `720p-fp16` | 64×64 to 1280×720 | 1024 MiB | 2 | 720p target validation |
 | `1080p-fp16` | 64×64 to 1920×1080 | 1024 MiB | 2 | Reference target validation |
 
 Internal graph shapes may be padded (for example 1080 to 1088 lines); manifests

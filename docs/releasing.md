@@ -81,7 +81,8 @@ and Orin Nano target profiles and their roadmap evidence.
 
 Every archive has a top-level versioned directory and an internal
 `PACKAGE-MANIFEST.sha256`. `scripts/package_release.sh` checks for required docs,
-profiles, license/notice, CLI, and artifact tooling before packaging.
+profiles, license/notice, CLI, the generic artifact entry point, and backend-local
+DCVC-RT artifact helpers before packaging.
 
 The package script rejects checkpoints, `.pth`/`.pth.tar`, ONNX, entropy/quant
 model assets, TensorRT plans, and engine bundles. Generated bundles are release
@@ -93,26 +94,30 @@ Public binary packages stay engine-free. If reviewers need prebuilt engines, shi
 them as separate package-family GitHub Release assets so downloads still come
 from the release page rather than a staging service.
 
-Create each archive on the machine where the engine bundle was built and
-validated:
+The preferred path after Release Please creates a draft release is one command
+from the machine where the engine bundles were built and validated:
 
 ```bash
-./scripts/nvcr_artifacts.py validate build/engines/dcvcrt-v2 --json
-./scripts/package_engine_bundle.sh \
-  --version 0.3.0 \
-  --engine-dir build/engines/dcvcrt-v2 \
-  --output-dir dist
+./scripts/release_engine_assets.sh \
+  --engine-dir build/engines/dcvcrt-720p \
+  --engine-dir build/engines/dcvcrt-1080p \
+  --s3-prefix s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases \
+  --aws-region eu-west-1
 ```
 
-For the desktop RTX bundle that already exists in this workspace, use
-`build/engines/dcvcrt-v2`; the older `build/engines/dcvcrt` and
-`build/engines/dcvcrt-1080p` directories are not upload-ready v2 bundles.
+The helper validates each bundle, packages it, uploads the archive and checksum
+to private S3 staging, generates presigned URLs, writes
+`dist/nvcr-engine-assets.txt`, checks that the matching GitHub draft release
+exists, and dispatches `upload-engine-assets.yml` with the generated manifest
+contents. Release Please remains the only source of version bumps and tag
+creation; do not create replacement local tags for engine uploads.
 
 The archive filename is derived from `engine_manifest.json`, but uses the generic public package family instead of the exact target profile:
 
 ```text
-nvcr-v0.3.0-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
-nvcr-v0.3.0-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
+nvcr-vX.Y.Z-linux-x86_64-nvidia-dcvcrt-cvpr2025-720p-fp16-engines.tar.gz
+nvcr-vX.Y.Z-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
+nvcr-vX.Y.Z-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
 ```
 
 Stage the `.tar.gz` files in the private S3 release-assets bucket and use a
@@ -134,14 +139,16 @@ cdk bootstrap aws://<aws-account-id>/eu-west-1
 cdk deploy NvcrReleaseAssetsStack
 ```
 
-Then package, upload to S3, generate a presigned HTTPS URL, and write the
-workflow input file:
+If you only want to stage assets without dispatching GitHub Actions, pass
+`--skip-dispatch` to `release_engine_assets.sh`. The lower-level helper remains
+available for one-off staging:
 
 ```bash
+release_tag="v$(cat version.txt)"
 ./scripts/stage_engine_release_asset.sh \
-  --version 0.3.0 \
-  --engine-dir build/engines/dcvcrt-v2 \
-  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/v0.3.0 \
+  --version "${release_tag#v}" \
+  --engine-dir build/engines/dcvcrt-720p \
+  --s3-uri "s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases/$release_tag" \
   --aws-region eu-west-1 \
   --presign-expires 604800 \
   --asset-manifest dist/nvcr-engine-assets.txt
@@ -169,17 +176,19 @@ For example:
 
 ```bash
 cat > /tmp/nvcr-engine-assets.txt <<'EOF'
-nvcr-v0.3.0-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz <rtx-archive-sha256> <rtx-staging-https-url>
-nvcr-v0.3.0-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz <orin-archive-sha256> <orin-staging-https-url>
+nvcr-vX.Y.Z-linux-x86_64-nvidia-dcvcrt-cvpr2025-720p-fp16-engines.tar.gz <rtx-720p-archive-sha256> <rtx-720p-staging-https-url>
+nvcr-vX.Y.Z-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz <rtx-1080p-archive-sha256> <rtx-1080p-staging-https-url>
+nvcr-vX.Y.Z-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz <orin-archive-sha256> <orin-staging-https-url>
 EOF
 
+release_tag="v$(cat version.txt)"
 gh workflow run upload-engine-assets.yml \
   --ref main \
-  -f tag=v0.3.0 \
+  -f "tag=$release_tag" \
   -F engine_assets=@/tmp/nvcr-engine-assets.txt
 ```
 
-The command above is only a trigger: it sends the text file contents to GitHub as
+`release_engine_assets.sh` performs this dispatch automatically. The command above is only a trigger: it sends the text file contents to GitHub as
 the `engine_assets` input. The download, SHA-256 check, bundle validation, and
 GitHub Release upload all run on the GitHub-hosted Actions runner. If you prefer
 not to use the local GitHub CLI, open **Actions → upload-engine-assets → Run

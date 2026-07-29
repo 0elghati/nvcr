@@ -72,13 +72,13 @@ jobs:
             echo "== $f =="
             bash -n "$f"
           done
-          shellcheck scripts/*.sh scripts/ci/*.sh
+          find scripts -name '*.sh' -print0 | xargs -0 shellcheck
 
       - name: Python syntax check
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          for f in scripts/*.py tests/*.py; do
+          shopt -s globstar nullglob
+          for f in scripts/**/*.py tests/*.py; do
             echo "== $f =="
             python3 -m py_compile "$f"
           done

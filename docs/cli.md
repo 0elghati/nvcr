@@ -15,9 +15,10 @@ on the final target runtime and selected CUDA device. The directory must contain
 bundles built for a different GPU model, compute capability, multiprocessor
 count, or CUDA/TensorRT version or model identity.
 
-The native backend supports configured I/P GOPs through fourteen TensorRT plans.
-It remains correctness-first and performance work is still active, so use Release
-builds for timing.
+The CLI currently selects the DCVC-RT TensorRT backend. That backend supports
+configured I/P GOPs through fourteen TensorRT plans. It remains
+correctness-first and performance work is still active, so use Release builds
+for timing.
 
 ## Encode
 
