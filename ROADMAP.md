@@ -63,7 +63,10 @@ M1/M3; target support remains pending until that evidence is recorded.
 Deployment next action: reproduce the v2 `nvcr-artifacts` workflow and full
 registered suite on Orin Nano, then record its clean target, correctness,
 performance, memory, rate/distortion, and energy matrix. Engine-cache reuse must
-be keyed by model, target, TensorRT/CUDA, precision, and shape profile.
+be keyed by model, target, TensorRT/CUDA, precision, and shape profile. The
+release installer now uses a backend-neutral default engine slot at
+`$XDG_DATA_HOME/nvcr/engines/default`; exact-tag installer smoke remains pending
+until the next published package/engine assets exist.
 
 ## M0 — Baseline and entropy
 
@@ -167,11 +170,15 @@ State: **Active**
 - [x] Validate model/engine hashes and compatibility before plan deserialization.
 - [ ] Key reusable TensorRT caches by GPU, TensorRT/CUDA, precision, model, and profile.
 - [x] Provide one profile-aware `prepare`/`build`/`inspect`/`validate` command.
+- [x] Add a one-command release installer that downloads the latest package plus
+  backend-selected engine bundle into a backend-neutral default engine slot.
 - [x] Adopt a local-build/no-redistribution policy pending an explicit rights review.
 
 Exit criteria:
 
 - [ ] An exact-tag clean install can build compatible engines reproducibly.
+- [ ] The release installer succeeds from a published tag and validates the
+  selected backend engine bundle at the default engine path.
 - [x] Corrupt/incompatible bundles fail during initialization.
 - [x] Access-unit model identity resolves to the configured decoder bundle.
 

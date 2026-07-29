@@ -40,11 +40,11 @@ cmake --build build-release --parallel
 
 CMake detects the attached GPU architecture, CUDA compiler, and TensorRT install
 on a normal native build. This produces a development build for the selected
-profile; it is not support evidence by itself. The convenience installer
-performs the same detection and installs to a local platform-specific prefix by default:
+profile; it is not support evidence by itself. The source-build helper performs
+the same detection and installs to a local platform-specific prefix by default:
 
 ```bash
-./scripts/install.sh --run-tests
+./scripts/install_from_source.sh --run-tests
 ```
 
 Auto-detection is convenience, not support evidence. v1 is validated only for

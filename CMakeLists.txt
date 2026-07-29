@@ -134,6 +134,8 @@ install(
 install(
     PROGRAMS
         scripts/detect_platform.sh
+        scripts/install.sh
+        scripts/install_from_source.sh
     DESTINATION "${CMAKE_INSTALL_DATADIR}/nvcr/scripts")
 install(
     PROGRAMS
