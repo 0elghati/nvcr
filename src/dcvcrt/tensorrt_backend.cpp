@@ -196,9 +196,14 @@ Result<bool> determine_low_memory_mode(const RuntimeConfiguration& configuration
             std::string(subsystem));
     }
 
-    // Keep constrained Jetson-class devices on the safer path by default.
-    constexpr std::size_t threshold_bytes = 12ULL * 1024ULL * 1024ULL * 1024ULL;
-    return static_cast<std::size_t>(properties.totalGlobalMem) <= threshold_bytes;
+    // Discrete GPUs should keep persistent TensorRT contexts by default. A
+    // capacity-only cutoff incorrectly classified 12 GiB RTX 4070 cards as
+    // low-memory, adding context churn and stream waits to every device stage.
+    // Integrated/Jetson-class devices remain conservative unless explicitly
+    // overridden through configuration or NVCR_TENSORRT_LOW_MEMORY_MODE.
+    if (properties.integrated != 0) return true;
+    constexpr std::size_t constrained_discrete_bytes = 8ULL * 1024ULL * 1024ULL * 1024ULL;
+    return static_cast<std::size_t>(properties.totalGlobalMem) <= constrained_discrete_bytes;
 }
 
 

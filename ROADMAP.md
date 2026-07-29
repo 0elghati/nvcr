@@ -69,6 +69,8 @@ and uses backend/profile aliases plus a backend-neutral default engine slot unde
 `$XDG_DATA_HOME/nvcr/engines`; exact-tag installer smoke remains pending until
 the next published package/engine assets exist. The CLI now warns when
 multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
+Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and leaves
+integrated/Jetson-class devices on the conservative low-memory path.
 
 ## M0 — Baseline and entropy
 
@@ -100,6 +102,8 @@ Device execution:
 
 - [x] Add owned `DeviceTensor` storage.
 - [ ] Add a bounded per-session CUDA arena.
+- [x] Default automatic TensorRT execution mode to persistent contexts on
+  discrete GPUs while keeping integrated devices conservative.
 - [ ] Replace `run_host_engine` with reusable device-address binding.
 - [ ] Bind TensorRT outputs directly to downstream inputs where possible.
 - [ ] Remove steady-state `cudaMalloc`, `cudaFree`, and unconditional syncs.

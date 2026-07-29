@@ -104,7 +104,9 @@ private staging repositories can pass `--repo OWNER/REPO` to `scripts/install.sh
 
 Other NVIDIA Linux configurations are experimental until they have equivalent
 recorded evidence. A multi-architecture CUDA binary does not make TensorRT plans
-portable; every engine bundle is tied to its recorded target.
+portable; every engine bundle is tied to its recorded target. Discrete GPUs use
+persistent TensorRT execution contexts by default; set
+`NVCR_TENSORRT_LOW_MEMORY_MODE=1` only when memory pressure requires it.
 
 ### 2. Prepare model artifacts and engines
 
