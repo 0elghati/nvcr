@@ -1,4 +1,4 @@
-#include "nvcr/dcvcrt/runtime.hpp"
+#include "nvcr/codec/runtime.hpp"
 
 #include "nvcr/bitstream/access_unit.hpp"
 
@@ -6,7 +6,7 @@
 #include <optional>
 #include <utility>
 
-namespace nvcr::dcvcrt {
+namespace nvcr::codec {
 
 Runtime::Runtime(
     RuntimeConfiguration configuration,
@@ -27,13 +27,13 @@ Result<void> Runtime::initialize() {
     if (!components_.codec) {
         return Error(
             ErrorCode::dependency_unavailable,
-            "a DCVC-RT codec backend is required",
-            "dcvcrt");
+            "a codec backend is required",
+            "codec");
     }
     auto initialized = components_.codec->initialize(configuration_);
     if (!initialized) return initialized.error();
     initialized_ = true;
-    logger_->log(LogLevel::info, "DCVC-RT runtime initialized");
+    logger_->log(LogLevel::info, "codec runtime initialized");
     return {};
 }
 
@@ -165,4 +165,4 @@ void Runtime::reset() noexcept {
     logger_->log(LogLevel::debug, "sequence state reset");
 }
 
-}  // namespace nvcr::dcvcrt
+}  // namespace nvcr::codec

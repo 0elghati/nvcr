@@ -360,7 +360,7 @@ nvcr::Result<nvcr::Runtime> create_runtime(const Options& options) {
     configuration.intra_qp = options.qp;
     configuration.gop_size = options.gop_size;
     configuration.enable_profiling = options.profile;
-    nvcr::dcvcrt::Components components;
+    nvcr::codec::Components components;
     components.codec = std::move(backend.value());
     return nvcr::Runtime::create(configuration, std::move(components));
 }

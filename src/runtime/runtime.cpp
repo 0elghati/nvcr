@@ -1,6 +1,6 @@
 #include "nvcr/runtime/runtime.hpp"
 
-#include "nvcr/dcvcrt/runtime.hpp"
+#include "nvcr/codec/runtime.hpp"
 #include "nvcr/logging/logger.hpp"
 #include "nvcr/memory/memory_pool.hpp"
 
@@ -13,7 +13,7 @@ namespace nvcr {
 struct Runtime::Impl final {
     Impl(
         RuntimeConfiguration runtime_configuration,
-        dcvcrt::Components components,
+        codec::Components components,
         std::shared_ptr<LoggerFactory> logger_factory)
         : configuration(std::move(runtime_configuration)),
           logger(logger_factory->create("runtime")),
@@ -25,7 +25,7 @@ struct Runtime::Impl final {
     std::shared_ptr<Logger> logger;
     std::shared_ptr<Statistics> stats;
     MemoryPool host_pool;
-    dcvcrt::Runtime codec;
+    codec::Runtime codec;
     mutable std::mutex mutex;
     RuntimeState state{RuntimeState::initializing};
 };
@@ -36,7 +36,7 @@ Runtime::Runtime(Runtime&&) noexcept = default;
 Runtime& Runtime::operator=(Runtime&&) noexcept = default;
 
 Result<Runtime> Runtime::create(
-    RuntimeConfiguration configuration, dcvcrt::Components components) {
+    RuntimeConfiguration configuration, codec::Components components) {
     auto valid = ConfigurationLoader::validate(configuration);
     if (!valid) {
         return valid.error();
@@ -44,7 +44,7 @@ Result<Runtime> Runtime::create(
     if (!components.codec) {
         return Error(
             ErrorCode::dependency_unavailable,
-            "a DCVC-RT codec backend must be provided",
+            "a codec backend must be provided",
             "runtime");
     }
 

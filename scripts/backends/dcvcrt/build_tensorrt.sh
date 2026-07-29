@@ -2,6 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/../../.." && pwd)"
 model_dir="build/models/dcvcrt"
 engine_dir="build/engines/dcvcrt"
 trtexec_bin="${TRTEXEC:-}"
@@ -15,8 +16,8 @@ python_bin="${PYTHON:-python3}"
 enable_int8=0
 model_profile_id=dcvcrt-cvpr2025
 target_profile_id=local-auto
-model_profile_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/configs/models/dcvcrt-cvpr2025.json"
-engine_profile_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/configs/engine-profiles/1080p-fp16.json"
+model_profile_path="$repo_root/configs/models/dcvcrt-cvpr2025.json"
+engine_profile_path="$repo_root/configs/engine-profiles/1080p-fp16.json"
 target_profile_path=""
 engine_profile_explicit=0
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write NVCR TensorRT engine bundle metadata for runtime compatibility checks."""
+"""Write DCVC-RT TensorRT engine bundle metadata for runtime compatibility checks."""
 
 from __future__ import annotations
 

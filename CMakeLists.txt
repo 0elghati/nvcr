@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(
     NVCR
     VERSION 0.3.0 # x-release-please-version
-    DESCRIPTION "C++ and TensorRT runtime for the pinned DCVC-RT model profile"
+    DESCRIPTION "Deployment-oriented runtime architecture for neural video codecs"
     LANGUAGES CXX)
 
 include(GNUInstallDirs)
@@ -39,12 +39,12 @@ target_sources(
     PRIVATE
         src/bitstream/access_unit.cpp
         src/bitstream/packet_io.cpp
+        src/codec/runtime.cpp
+        src/codec/sequence_state.cpp
         src/common/error.cpp
         src/common/sha256.cpp
         src/configuration/configuration.cpp
         src/dcvcrt/rans_codec.cpp
-        src/dcvcrt/runtime.cpp
-        src/dcvcrt/sequence_state.cpp
         src/logging/logger.cpp
         src/memory/memory_pool.cpp
         src/runtime/frame.cpp
@@ -133,13 +133,16 @@ install(
     RENAME nvcr-artifacts)
 install(
     PROGRAMS
-        scripts/prepare_dcvcrt_artifacts.sh
-        scripts/build_dcvcrt_tensorrt.sh
         scripts/detect_platform.sh
-        scripts/export_dcvcrt_onnx.py
-        scripts/export_dcvcrt_p_onnx.py
-        scripts/write_tensorrt_engine_manifest.py
     DESTINATION "${CMAKE_INSTALL_DATADIR}/nvcr/scripts")
+install(
+    PROGRAMS
+        scripts/backends/dcvcrt/prepare_artifacts.sh
+        scripts/backends/dcvcrt/build_tensorrt.sh
+        scripts/backends/dcvcrt/export_i_onnx.py
+        scripts/backends/dcvcrt/export_p_onnx.py
+        scripts/backends/dcvcrt/write_tensorrt_engine_manifest.py
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/nvcr/scripts/backends/dcvcrt")
 install(DIRECTORY configs/ DESTINATION "${CMAKE_INSTALL_DATADIR}/nvcr/configs")
 install(
     FILES resources/nvcr.conf.example

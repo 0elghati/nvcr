@@ -6,8 +6,9 @@ offline pinned-model preparation, release packaging, and focused measurement.
 ## Supported user entry points
 
 - `install.sh`: native configure/build/install convenience wrapper.
-- `nvcr_artifacts.py`: `prepare`, `build`, `inspect`, and `validate` for the
-  pinned model and versioned profiles.
+- `nvcr_artifacts.py`: `prepare`, `build`, `inspect`, and `validate` for
+  backend artifact bundles and versioned profiles. The current implementation
+  supports the DCVC-RT backend.
 - `package_release.sh`: package an installed tree; refuses model/engine assets.
 - `package_engine_bundle.sh`: package one already validated engine bundle as a
   separate package-family GitHub Release asset.
@@ -16,9 +17,11 @@ offline pinned-model preparation, release packaging, and focused measurement.
   `engine_assets.txt` workflow input row.
 - `profile_energy.py`: focused Jetson command/rail measurement helper.
 
-`nvcr_artifacts.py` calls the exporters, TensorRT builder, manifest writer,
-`prepare_dcvcrt_artifacts.sh`, and `detect_platform.sh`. Those helpers remain
-available for expert diagnosis but do not define separate supported workflows.
+`nvcr_artifacts.py` calls backend-local helpers under
+`scripts/backends/dcvcrt/` for DCVC-RT export, TensorRT building, and manifest
+writing, and uses the generic `detect_platform.sh` helper for local target
+detection. Backend helpers remain available for expert diagnosis but do not
+define separate supported workflows.
 
 ```bash
 ./scripts/nvcr_artifacts.py prepare \
