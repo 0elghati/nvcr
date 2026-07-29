@@ -1,4 +1,5 @@
 #include <nvcr/dcvcrt/sequence_state.hpp>
+#include <nvcr/experimental/fast_backend.hpp>
 #include <nvcr/nvcr.hpp>
 
 #include <algorithm>
@@ -217,6 +218,44 @@ void state_test() {
         "predicted frames remain valid after 32 committed frames");
 }
 
+void experimental_fast_backend_test() {
+    auto backend = nvcr::experimental::make_fast_backend();
+    expect(backend.has_value(), "experimental fast backend is created");
+    if (!backend) return;
+
+    nvcr::RuntimeConfiguration configuration;
+    expect(backend.value()->initialize(configuration).has_value(),
+           "experimental fast backend initializes");
+
+    auto frame = nvcr::Frame::create(16, 8, nvcr::PixelFormat::yuv420p8);
+    expect(frame.has_value(), "experimental fast source frame is created");
+    if (!frame) return;
+    std::uint8_t value = 0;
+    for (auto& byte : frame.value().data()) {
+        byte = static_cast<std::byte>(value++);
+    }
+
+    nvcr::codec::SequenceState state(32);
+    auto encoded = backend.value()->encode(
+        frame.value(), nvcr::FrameType::intra, state.view());
+    expect(encoded.has_value(), "experimental fast frame encodes");
+    if (!encoded) return;
+    auto decoded = backend.value()->decode(
+        encoded.value().payload, nvcr::FrameType::intra, nvcr::Timestamp{}, state.view());
+    expect(decoded.has_value(), "experimental fast frame decodes");
+    if (!decoded) return;
+    expect(decoded.value().frame.pixel_format() == nvcr::PixelFormat::yuv420p8,
+           "experimental fast backend returns YUV420P8");
+    expect(decoded.value().frame.width() == frame.value().width() &&
+           decoded.value().frame.height() == frame.value().height(),
+           "experimental fast dimensions round-trip");
+    expect(std::equal(
+               decoded.value().frame.data().begin(),
+               decoded.value().frame.data().end(),
+               frame.value().data().begin()),
+           "experimental fast pixels round-trip");
+}
+
 }  // namespace
 
 int main() {
@@ -225,6 +264,7 @@ int main() {
     access_unit_test();
     memory_test();
     state_test();
+    experimental_fast_backend_test();
     if (failures == 0) {
         std::cout << "All NVCR smoke tests passed\n";
     }

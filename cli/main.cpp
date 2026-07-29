@@ -1,4 +1,5 @@
 #include <nvcr/dcvcrt/tensorrt_backend.hpp>
+#include <nvcr/experimental/fast_backend.hpp>
 #include <nvcr/nvcr.hpp>
 
 #include <algorithm>
@@ -67,7 +68,7 @@ void usage(std::ostream& out) {
         << "  -s, --size WIDTHxHEIGHT   Raw input dimensions (encode only)\n"
         << "      --width N             Raw input width (encode only)\n"
         << "      --height N            Raw input height (encode only)\n"
-        << "      --backend NAME        Installed backend selector (default: NVCR_BACKEND or default)\n"
+        << "      --backend NAME        Backend selector: default/dcvcrt or experimental mlvc-fast\n"
         << "      --engine-profile NAME Installed engine profile, for example 720p-fp16\n"
         << "                            (default: NVCR_ENGINE_PROFILE or active default)\n"
         << "      --engine-dir DIR      Custom TensorRT engine and entropy asset directory\n"
@@ -122,6 +123,7 @@ fs::path default_engine_root() {
 
 std::string normalize_backend(std::string backend) {
     if (backend == "dcvc_rt" || backend == "dcvc-rt") return "dcvcrt";
+    if (backend == "mlvc_fast" || backend == "mlvc-fast" || backend == "fast") return "mlvc-fast";
     return backend;
 }
 
@@ -406,9 +408,13 @@ RecordRead read_record(std::istream& input, std::vector<std::byte>& bytes) {
 }
 
 nvcr::Result<nvcr::Runtime> create_runtime(const Options& options) {
-    auto backend = nvcr::dcvcrt::make_tensorrt_backend();
+    auto backend_name = normalize_backend(options.backend);
+    auto backend = backend_name == "mlvc-fast"
+        ? nvcr::experimental::make_fast_backend()
+        : nvcr::dcvcrt::make_tensorrt_backend();
     if (!backend) return backend.error();
     nvcr::RuntimeConfiguration configuration;
+    if (backend_name == "mlvc-fast") configuration.model_id = "mlvc-fast-v0";
     configuration.intra_engine_path = options.engine_dir;
     configuration.device_id = options.device_id;
     configuration.intra_qp = options.qp;
@@ -569,10 +575,6 @@ int decode(const Options& options) {
             return 1;
         }
         codec_time += elapsed;
-        if (frame.value().pixel_format() != nvcr::PixelFormat::rgb24) {
-            std::cerr << "nvcr: decoder returned an unsupported pixel format\n";
-            return 1;
-        }
         if (frame_index == 0) {
             sequence_width = frame.value().width();
             sequence_height = frame.value().height();
@@ -585,10 +587,18 @@ int decode(const Options& options) {
             std::cerr << "nvcr: raw YUV output does not support resolution changes\n";
             return 1;
         }
-        const auto yuv = rgb24_to_yuv420p8(
-            frame.value().data(), frame.value().width(), frame.value().height());
-        output.write(reinterpret_cast<const char*>(yuv.data()),
-                     static_cast<std::streamsize>(yuv.size()));
+        if (frame.value().pixel_format() == nvcr::PixelFormat::yuv420p8) {
+            output.write(reinterpret_cast<const char*>(frame.value().data().data()),
+                         static_cast<std::streamsize>(frame.value().data().size()));
+        } else if (frame.value().pixel_format() == nvcr::PixelFormat::rgb24) {
+            const auto yuv = rgb24_to_yuv420p8(
+                frame.value().data(), frame.value().width(), frame.value().height());
+            output.write(reinterpret_cast<const char*>(yuv.data()),
+                         static_cast<std::streamsize>(yuv.size()));
+        } else {
+            std::cerr << "nvcr: decoder returned an unsupported pixel format\n";
+            return 1;
+        }
         if (!output) {
             std::cerr << "nvcr: failed writing decoded frame " << frame_index << '\n';
             return 1;

@@ -112,6 +112,44 @@ The next performance milestone is to finish the GPU-resident I-frame graph:
 5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
 
 
+### 2026-07-29 experimental `mlvc-fast` backend scaffold
+
+An experimental backend selector, `--backend mlvc-fast`, now exists as a
+non-DCVC-RT playground for MLVC-inspired speed work. The first implementation is
+a deliberately raw YUV420P8 payload mode with access-unit model identity
+`mlvc-fast-v0`. It is not a compression result and it is not compatible with
+DCVC-RT streams; it exists to prove backend selection, isolate bitstreams, and
+measure the upper bound of NVCR framing/CLI overhead before inserting a fused or
+MLVC-style model path.
+
+Commands:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/nvcr_fast_720p_gop97.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size 97 --qp 32 \
+  --backend mlvc-fast
+
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/misc/BQTerrace_1920x1080_60.yuv \
+  -o /tmp/nvcr_fast_1080p_gop97.nvcr \
+  -s 1920x1080 -r 60 --frames 97 --gop-size 97 --qp 32 \
+  --backend mlvc-fast
+```
+
+| Backend | Resolution | GOP | Payload bytes | Encode codec time | Encode throughput | Decode throughput |
+|---|---|---:|---:|---:|---:|---:|
+| `mlvc-fast-v0` raw scaffold | 720p | 97 | 134,099,396 | 0.050 s | 1,937.078 fps | 8,991.695 fps |
+| `mlvc-fast-v0` raw scaffold | 1080p | 97 | 301,715,396 | 0.124 s | 781.039 fps | 3,391.902 fps |
+
+The decoded 97-frame outputs matched the corresponding 97-frame source prefixes
+byte-for-byte by SHA-256. The result shows the NVCR access-unit/CLI envelope is
+not the dominant FPS limiter. The future fast-backend work must replace the raw
+payload with an actual accelerated compression graph: likely a fixed-shape,
+low-call-count model partition inspired by MLVC-S, with its own RD/fidelity gates
+and release identity.
+
 ### 2026-07-29 RTX 4070 paired 720p/1080p smoke baseline
 
 Paired performance smoke is now required before accepting CUDA/TensorRT

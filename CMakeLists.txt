@@ -45,6 +45,7 @@ target_sources(
         src/common/sha256.cpp
         src/configuration/configuration.cpp
         src/dcvcrt/rans_codec.cpp
+        src/experimental/fast_backend.cpp
         src/logging/logger.cpp
         src/memory/memory_pool.cpp
         src/runtime/frame.cpp

@@ -22,7 +22,9 @@ CVPR 2025 I/P model pair, that:
 
 Additional codec backends, a public C ABI, FFmpeg integration, and container
 mapping are post-v1 work. They remain in the roadmap but are not v1 exit
-criteria.
+criteria. An experimental `mlvc-fast-v0` raw backend scaffold exists only as a
+non-DCVC-RT speed research harness and must not be presented as DCVC-RT
+compression evidence.
 
 ## Release status
 
@@ -152,6 +154,7 @@ Verification evidence, 2026-07-29:
 - [x] 720p GOP-8 profile sample before the bridge fix: `./build-release/cli/nvcr encode -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv -o /tmp/fourpeople_720p_opt.nvcr -s 1280x720 -r 30 --frames 97 --gop-size 8 --qp 32 --engine-profile 720p-fp16 --profile` produced 97 frames in 2.405 s (40.331 fps); warmed P frames were ~10.3-10.9 ms.
 - [ ] Warmed QCIF/1080p matrix and repeated JSON benchmark output are not recorded yet.
 - [x] Paired 720p/1080p diagnostic smoke added with `scripts/benchmark_resolution_pair.sh`; current single-run baseline: 720p GOP 1 = 30.518 fps, 720p GOP 97 = 94.170 fps, 1080p GOP 1 = 13.254 fps, 1080p GOP 97 = 44.103 fps.
+- [x] Experimental `mlvc-fast-v0` raw backend scaffold: 97-frame raw roundtrip matched source prefixes byte-for-byte; encode ceiling was 1,937.078 fps at 720p and 781.039 fps at 1080p, with raw payload sizes of 134,099,396 and 301,715,396 bytes respectively.
 - [x] 1080p all-I diagnostic profile after scratch arena: 10 allocations / 54,477,632 bytes per I frame; hot enqueue stages are `i_synthesis` about 22-23 ms, `i_analysis` about 12 ms, and three spatial priors about 9 ms combined.
 
 Exit criteria:
