@@ -94,8 +94,11 @@ reconstruction directly. The bridge remains a test/debug guard until I-frame
 decode is device-resident or the GPU and host reconstruction paths are proven
 byte-identical.
 
-Device allocations are still per-frame rather than arena-backed, and the final
-performance gate still needs warmed QCIF/720p/1080p JSON benchmark evidence.
+Encode-side temporary device tensors are now served from a bounded per-session
+CUDA scratch arena. Owned TensorRT outputs, DPB/reference tensors, entropy
+download buffers, and decode-side staging still allocate outside the arena where
+their lifetimes cross stage or frame boundaries. The final performance gate still
+needs warmed QCIF/720p/1080p JSON benchmark evidence.
 
 The next performance milestone is to finish the GPU-resident I-frame graph:
 
@@ -103,11 +106,58 @@ The next performance milestone is to finish the GPU-resident I-frame graph:
    device-address bindings.
 2. Replace the encode-time decode-conformance bridge with a shared
    device-resident reconstruction path.
-3. Introduce reusable device tensor storage sized once per resolution.
-4. Bind TensorRT outputs directly to the next stage's inputs where lifetimes
+3. Bind TensorRT outputs directly to the next stage's inputs where lifetimes
    permit.
+4. Move remaining decode-side staging to reusable device storage.
 5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
 
+
+### 2026-07-29 RTX 4070 encode scratch arena
+
+Change under test: route encode-side manual temporary CUDA allocations through a
+bounded per-session scratch arena and skip writing residual tensors that are not
+consumed by the normal encode path. TensorRT outputs, DPB/reference tensors, and
+CPU entropy download boundaries remain owned allocations because their lifetimes
+can outlive a single scratch frame.
+
+Profile command:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_arena_nores_profile_final.nvcr \
+  -s 1280x720 -r 30 --frames 3 --gop-size 1 --qp 32 \
+  --engine-profile 720p-fp16 --profile
+```
+
+Profile result: each sampled I frame reported 10 allocations and 24,408,512
+allocated bytes. Before the arena pass, the same path reported about 51
+allocations and 92,314,112 allocated bytes per I frame. The remaining hot stages
+are TensorRT engine execution, especially `i_synthesis` around 10.1 ms and
+`i_analysis` around 5.3 ms, so allocator cleanup is now mostly a prerequisite for
+direct binding and CUDA graph work rather than the dominant latency lever.
+
+Release sweep command template:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_arena_nores_final_gop<GOP>.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size <GOP> --qp 32 \
+  --engine-profile 720p-fp16
+```
+
+| Build state | GOP | Frames | Payload bytes | Codec time | Throughput |
+|---|---:|---:|---:|---:|---:|
+| scratch arena + no residual write | 1 | 97 | 1,104,333 | 3.215 s | 30.168 fps |
+| scratch arena + no residual write | 8 | 97 | 312,696 | 1.316 s | 73.689 fps |
+| scratch arena + no residual write | 97 | 97 | 86,297 | 1.029 s | 94.239 fps |
+
+Interpretation: all-I throughput is roughly neutral versus the previous quiet
+30.616 fps run, while normal GOP points remain slightly ahead of the `f88c2b2e24be`
+reference sweep. The main measurable improvement is the much smaller allocation
+footprint, which reduces allocator jitter and prepares the backend for direct
+TensorRT output binding.
 
 ### 2026-07-29 CLI logging overhead cleanup
 

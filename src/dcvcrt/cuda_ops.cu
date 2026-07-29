@@ -208,7 +208,7 @@ __global__ void process_with_mask_kernel(
     float symbol = roundf(value_residual);
     if (force_zero_threshold > 0.0F && scale <= force_zero_threshold) symbol = 0.0F;
     symbol = fminf(127.0F, fmaxf(-128.0F, symbol));
-    store_half(residual, index, value_residual);
+    if (residual != nullptr) store_half(residual, index, value_residual);
     store_half(symbols, index, symbol);
     store_half(reconstructed, index, symbol + mean);
     store_half(masked_scales, index, scale);
@@ -491,8 +491,8 @@ cudaError_t process_with_mask(
     float force_zero_threshold,
     cudaStream_t stream) noexcept {
     if (values == nullptr || scales == nullptr || means == nullptr || mask == nullptr ||
-        residual == nullptr || symbols == nullptr || reconstructed == nullptr ||
-        masked_scales == nullptr || count == 0) return cudaErrorInvalidValue;
+        symbols == nullptr || reconstructed == nullptr || masked_scales == nullptr ||
+        count == 0) return cudaErrorInvalidValue;
     process_with_mask_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
         static_cast<const __half*>(values), static_cast<const __half*>(scales),
         static_cast<const __half*>(means), static_cast<const __half*>(mask),

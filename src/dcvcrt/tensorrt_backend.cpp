@@ -821,6 +821,8 @@ private:
 
 thread_local cudaStream_t allocation_stream = nullptr;
 thread_local BackendProfiler* active_profiler = nullptr;
+class DeviceScratchArena;
+thread_local DeviceScratchArena* active_scratch_arena = nullptr;
 
 class CpuProfileScope final {
 public:
@@ -845,12 +847,14 @@ private:
 
 class CudaAllocationScope final {
 public:
-    CudaAllocationScope(cudaStream_t stream, BackendProfiler* profiler)
+    CudaAllocationScope(cudaStream_t stream, BackendProfiler* profiler, DeviceScratchArena* arena)
         : previous_stream_(std::exchange(allocation_stream, stream)),
-          previous_profiler_(std::exchange(active_profiler, profiler)) {}
+          previous_profiler_(std::exchange(active_profiler, profiler)),
+          previous_arena_(std::exchange(active_scratch_arena, arena)) {}
     ~CudaAllocationScope() {
         allocation_stream = previous_stream_;
         active_profiler = previous_profiler_;
+        active_scratch_arena = previous_arena_;
     }
     CudaAllocationScope(const CudaAllocationScope&) = delete;
     CudaAllocationScope& operator=(const CudaAllocationScope&) = delete;
@@ -858,6 +862,7 @@ public:
 private:
     cudaStream_t previous_stream_{};
     BackendProfiler* previous_profiler_{};
+    DeviceScratchArena* previous_arena_{};
 };
 
 void release_cuda(void* pointer, cudaStream_t stream) noexcept {
@@ -871,19 +876,21 @@ void release_cuda(void* pointer, cudaStream_t stream) noexcept {
 
 struct CudaAllocation final {
     CudaAllocation() = default;
-    CudaAllocation(void* pointer, std::size_t byte_count, cudaStream_t owner_stream)
-        : data(pointer), bytes(byte_count), stream(owner_stream) {}
-    ~CudaAllocation() { release_cuda(data, stream); }
+    CudaAllocation(void* pointer, std::size_t byte_count, cudaStream_t owner_stream, bool owned_allocation = true)
+        : data(pointer), bytes(byte_count), stream(owner_stream), owned(owned_allocation) {}
+    ~CudaAllocation() { if (owned) release_cuda(data, stream); }
     CudaAllocation(CudaAllocation&& other) noexcept
         : data(std::exchange(other.data, nullptr)),
           bytes(std::exchange(other.bytes, 0)),
-          stream(std::exchange(other.stream, nullptr)) {}
+          stream(std::exchange(other.stream, nullptr)),
+          owned(std::exchange(other.owned, true)) {}
     CudaAllocation& operator=(CudaAllocation&& other) noexcept {
         if (this != &other) {
-            release_cuda(data, stream);
+            if (owned) release_cuda(data, stream);
             data = std::exchange(other.data, nullptr);
             bytes = std::exchange(other.bytes, 0);
             stream = std::exchange(other.stream, nullptr);
+            owned = std::exchange(other.owned, true);
         }
         return *this;
     }
@@ -893,6 +900,63 @@ struct CudaAllocation final {
     void* data{};
     std::size_t bytes{};
     cudaStream_t stream{};
+    bool owned{true};
+};
+
+class DeviceScratchArena final {
+public:
+    ~DeviceScratchArena() {
+        if (data_ != nullptr) static_cast<void>(cudaFree(data_));
+    }
+    DeviceScratchArena() = default;
+    DeviceScratchArena(DeviceScratchArena&& other) noexcept
+        : data_(std::exchange(other.data_, nullptr)),
+          capacity_(std::exchange(other.capacity_, 0)),
+          offset_(std::exchange(other.offset_, 0)) {}
+    DeviceScratchArena& operator=(DeviceScratchArena&& other) noexcept {
+        if (this != &other) {
+            if (data_ != nullptr) static_cast<void>(cudaFree(data_));
+            data_ = std::exchange(other.data_, nullptr);
+            capacity_ = std::exchange(other.capacity_, 0);
+            offset_ = std::exchange(other.offset_, 0);
+        }
+        return *this;
+    }
+    DeviceScratchArena(const DeviceScratchArena&) = delete;
+    DeviceScratchArena& operator=(const DeviceScratchArena&) = delete;
+
+    Result<void> initialize(std::size_t byte_count) {
+        if (byte_count == 0) return {};
+        void* pointer = nullptr;
+        const auto status = cudaMalloc(&pointer, byte_count);
+        if (status != cudaSuccess) return cuda_error("cudaMalloc device scratch arena", status);
+        data_ = static_cast<std::byte*>(pointer);
+        capacity_ = byte_count;
+        offset_ = 0;
+        return {};
+    }
+
+    void reset() noexcept { offset_ = 0; }
+
+    Result<CudaAllocation> allocate(std::size_t bytes) noexcept {
+        constexpr std::size_t alignment = 256;
+        const auto aligned = (offset_ + alignment - 1) & ~(alignment - 1);
+        if (data_ == nullptr || bytes > capacity_ || aligned > capacity_ - bytes) {
+            return Error(
+                ErrorCode::resource_exhausted,
+                "device scratch arena capacity exceeded",
+                std::string(subsystem));
+        }
+        offset_ = aligned + bytes;
+        return CudaAllocation(data_ + aligned, bytes, nullptr, false);
+    }
+
+    [[nodiscard]] bool initialized() const noexcept { return data_ != nullptr; }
+
+private:
+    std::byte* data_{};
+    std::size_t capacity_{};
+    std::size_t offset_{};
 };
 
 struct CudaEvent final {
@@ -976,6 +1040,14 @@ Result<CudaAllocation> allocate_cuda(std::size_t bytes) {
     }
     if (active_profiler != nullptr) active_profiler->record_allocation(bytes);
     return CudaAllocation(pointer, bytes, stream);
+}
+
+Result<CudaAllocation> allocate_cuda_scratch(std::size_t bytes) {
+    if (active_scratch_arena != nullptr && active_scratch_arena->initialized()) {
+        auto allocation = active_scratch_arena->allocate(bytes);
+        if (allocation) return allocation;
+    }
+    return allocate_cuda(bytes);
 }
 
 Result<void> copy_async(
@@ -1196,6 +1268,15 @@ Result<DeviceTensor> allocate_device_tensor(
     auto bytes = tensor_bytes(shape);
     if (!bytes) return bytes.error();
     auto storage = allocate_cuda(bytes.value());
+    if (!storage) return storage.error();
+    return DeviceTensor{std::move(name), shape, std::move(storage.value())};
+}
+
+Result<DeviceTensor> allocate_device_tensor_scratch(
+    std::string name, nvinfer1::Dims shape) {
+    auto bytes = tensor_bytes(shape);
+    if (!bytes) return bytes.error();
+    auto storage = allocate_cuda_scratch(bytes.value());
     if (!storage) return storage.error();
     return DeviceTensor{std::move(name), shape, std::move(storage.value())};
 }
@@ -2287,9 +2368,9 @@ Result<CodecEncodeResult> encode_intra(
 
     const auto padded_height = round_up(static_cast<std::int32_t>(frame.height()), 16);
     const auto padded_width = round_up(static_cast<std::int32_t>(frame.width()), 16);
-    auto input_frame = allocate_device_tensor("frame", make_dims(3, padded_height, padded_width));
+    auto input_frame = allocate_device_tensor_scratch("frame", make_dims(3, padded_height, padded_width));
     if (!input_frame) return input_frame.error();
-    auto input_bytes_device = allocate_cuda(frame.data().size());
+    auto input_bytes_device = allocate_cuda_scratch(frame.data().size());
     if (!input_bytes_device) return input_bytes_device.error();
     auto copied = copy_async(
         input_bytes_device.value().data, frame.data().data(), frame.data().size(),
@@ -2323,7 +2404,7 @@ Result<CodecEncodeResult> encode_intra(
     const auto y_height = static_cast<std::int32_t>(y_device.shape.d[2]);
     const auto y_width = static_cast<std::int32_t>(y_device.shape.d[3]);
 
-    auto y_padded = allocate_device_tensor(
+    auto y_padded = allocate_device_tensor_scratch(
         "y_padded", make_dims(256, round_up(y_height, 4), round_up(y_width, 4)));
     if (!y_padded) return y_padded.error();
     const cuda_ops::Shape4D y_shape{1, 256, y_height, y_width};
@@ -2342,7 +2423,7 @@ Result<CodecEncodeResult> encode_intra(
     auto z_device = std::move(z_result.value());
     z_device.name = "z_hat";
     const auto z_count = element_count(z_device.shape);
-    auto z_symbol_device = allocate_cuda(z_count * sizeof(std::int8_t));
+    auto z_symbol_device = allocate_cuda_scratch(z_count * sizeof(std::int8_t));
     if (!z_symbol_device) return z_symbol_device.error();
     status = cuda_ops::round_to_int8(
         z_device.storage.data, static_cast<std::int8_t*>(z_symbol_device.value().data),
@@ -2359,8 +2440,8 @@ Result<CodecEncodeResult> encode_intra(
     if (!common_padded_result) return common_padded_result.error();
     auto params_padded = std::move(params_padded_result.value());
     auto common_padded = std::move(common_padded_result.value());
-    auto params = allocate_device_tensor("params", make_dims(514, y_height, y_width));
-    auto common = allocate_device_tensor("common", make_dims(256, y_height, y_width));
+    auto params = allocate_device_tensor_scratch("params", make_dims(514, y_height, y_width));
+    auto common = allocate_device_tensor_scratch("common", make_dims(256, y_height, y_width));
     if (!params) return params.error();
     if (!common) return common.error();
     status = cuda_ops::crop_spatial(
@@ -2394,13 +2475,11 @@ Result<CodecEncodeResult> encode_intra(
     std::optional<DeviceTensor> spatial_params;
     for (std::int32_t stage_index = 0; stage_index < 4; ++stage_index) {
         const auto stage_slot = static_cast<std::size_t>(stage_index);
-        auto mask = allocate_device_tensor("mask", y_device.shape);
-        auto residual = allocate_device_tensor("residual", y_device.shape);
-        auto symbols_full = allocate_device_tensor("symbols_full", y_device.shape);
-        auto reconstructed = allocate_device_tensor("reconstructed", y_device.shape);
-        auto scales_full = allocate_device_tensor("scales_full", y_device.shape);
+        auto mask = allocate_device_tensor_scratch("mask", y_device.shape);
+        auto symbols_full = allocate_device_tensor_scratch("symbols_full", y_device.shape);
+        auto reconstructed = allocate_device_tensor_scratch("reconstructed", y_device.shape);
+        auto scales_full = allocate_device_tensor_scratch("scales_full", y_device.shape);
         if (!mask) return mask.error();
-        if (!residual) return residual.error();
         if (!symbols_full) return symbols_full.error();
         if (!reconstructed) return reconstructed.error();
         if (!scales_full) return scales_full.error();
@@ -2408,13 +2487,13 @@ Result<CodecEncodeResult> encode_intra(
         if (status != cudaSuccess) return cuda_error("cuda_ops::make_four_way_mask", status);
         status = cuda_ops::process_with_mask(
             y_device.storage.data, current_scales, current_means, mask.value().storage.data,
-            residual.value().storage.data, symbols_full.value().storage.data,
-            reconstructed.value().storage.data, scales_full.value().storage.data,
+            nullptr, symbols_full.value().storage.data, reconstructed.value().storage.data,
+            scales_full.value().storage.data,
             prior_count, 0.0F, stream);
         if (status != cudaSuccess) return cuda_error("cuda_ops::process_with_mask", status);
 
-        auto symbols = allocate_device_tensor("symbols", reduced_shape);
-        auto scales = allocate_device_tensor("scales", reduced_shape);
+        auto symbols = allocate_device_tensor_scratch("symbols", reduced_shape);
+        auto scales = allocate_device_tensor_scratch("scales", reduced_shape);
         if (!symbols) return symbols.error();
         if (!scales) return scales.error();
         status = cuda_ops::reduce_channel_quarters(
@@ -2437,7 +2516,7 @@ Result<CodecEncodeResult> encode_intra(
         }
 
         if (stage_index < 3) {
-            auto spatial_context = allocate_device_tensor("context", make_dims(512, y_height, y_width));
+            auto spatial_context = allocate_device_tensor_scratch("context", make_dims(512, y_height, y_width));
             if (!spatial_context) return spatial_context.error();
             const auto y_bytes = prior_count * sizeof(__half);
             copied = copy_async(
@@ -2470,7 +2549,7 @@ Result<CodecEncodeResult> encode_intra(
 
     std::array<CudaAllocation, 4> index_devices;
     for (std::size_t stage_index = 0; stage_index < 4; ++stage_index) {
-        auto allocation = allocate_cuda(reduced_count * sizeof(std::int16_t));
+        auto allocation = allocate_cuda_scratch(reduced_count * sizeof(std::int16_t));
         if (!allocation) return allocation.error();
         index_devices[stage_index] = std::move(allocation.value());
         status = cuda_ops::build_encode_indexes(
@@ -2717,10 +2796,10 @@ Result<CodecEncodeResult> encode_predicted(
 
     const auto padded_height = round_up(static_cast<std::int32_t>(frame.height()), 16);
     const auto padded_width = round_up(static_cast<std::int32_t>(frame.width()), 16);
-    auto input_frame = allocate_device_tensor(
+    auto input_frame = allocate_device_tensor_scratch(
         "frame", make_dims(3, padded_height, padded_width));
     if (!input_frame) return input_frame.error();
-    auto input_bytes_device = allocate_cuda(frame.data().size());
+    auto input_bytes_device = allocate_cuda_scratch(frame.data().size());
     if (!input_bytes_device) return input_bytes_device.error();
     auto input_bytes_copied = copy_async(
         input_bytes_device.value().data, frame.data().data(), frame.data().size(),
@@ -2766,7 +2845,7 @@ Result<CodecEncodeResult> encode_predicted(
     const auto y_height = static_cast<std::int32_t>(y_device.shape.d[2]);
     const auto y_width = static_cast<std::int32_t>(y_device.shape.d[3]);
 
-    auto y_padded = allocate_device_tensor(
+    auto y_padded = allocate_device_tensor_scratch(
         "y_padded", make_dims(128, round_up(y_height, 4), round_up(y_width, 4)));
     if (!y_padded) return y_padded.error();
     const cuda_ops::Shape4D y_shape{1, 128, y_height, y_width};
@@ -2784,7 +2863,7 @@ Result<CodecEncodeResult> encode_predicted(
     auto z_device = std::move(z_result.value());
     z_device.name = "z_hat";
     const auto z_count = element_count(z_device.shape);
-    auto z_symbol_device = allocate_cuda(z_count * sizeof(std::int8_t));
+    auto z_symbol_device = allocate_cuda_scratch(z_count * sizeof(std::int8_t));
     if (!z_symbol_device) return z_symbol_device.error();
     const auto rounded = cuda_ops::round_to_int8(
         z_device.storage.data, static_cast<std::int8_t*>(z_symbol_device.value().data),
@@ -2811,13 +2890,11 @@ Result<CodecEncodeResult> encode_predicted(
         return cuda_error("cuda_ops::clamp_reciprocal_with_quant", quantized);
     }
 
-    auto mask0 = allocate_device_tensor("mask0", y_device.shape);
-    auto residual0 = allocate_device_tensor("residual0", y_device.shape);
-    auto symbols_full0 = allocate_device_tensor("symbols_full0", y_device.shape);
-    auto y_hat_device = allocate_device_tensor("y_hat", y_device.shape);
-    auto scales_full0 = allocate_device_tensor("scales_full0", y_device.shape);
+    auto mask0 = allocate_device_tensor_scratch("mask0", y_device.shape);
+    auto symbols_full0 = allocate_device_tensor_scratch("symbols_full0", y_device.shape);
+    auto y_hat_device = allocate_device_tensor_scratch("y_hat", y_device.shape);
+    auto scales_full0 = allocate_device_tensor_scratch("scales_full0", y_device.shape);
     if (!mask0) return mask0.error();
-    if (!residual0) return residual0.error();
     if (!symbols_full0) return symbols_full0.error();
     if (!y_hat_device) return y_hat_device.error();
     if (!scales_full0) return scales_full0.error();
@@ -2825,14 +2902,14 @@ Result<CodecEncodeResult> encode_predicted(
     if (status != cudaSuccess) return cuda_error("cuda_ops::make_two_way_mask", status);
     status = cuda_ops::process_with_mask(
         y_device.storage.data, scales_values, means_values, mask0.value().storage.data,
-        residual0.value().storage.data, symbols_full0.value().storage.data,
-        y_hat_device.value().storage.data, scales_full0.value().storage.data, prior_count,
+        nullptr, symbols_full0.value().storage.data, y_hat_device.value().storage.data,
+        scales_full0.value().storage.data, prior_count,
         0.0F, stream);
     if (status != cudaSuccess) return cuda_error("cuda_ops::process_with_mask", status);
 
     const auto reduced_shape = make_dims(64, y_height, y_width);
-    auto symbols0 = allocate_device_tensor("symbols0", reduced_shape);
-    auto scales0 = allocate_device_tensor("scales0", reduced_shape);
+    auto symbols0 = allocate_device_tensor_scratch("symbols0", reduced_shape);
+    auto scales0 = allocate_device_tensor_scratch("scales0", reduced_shape);
     if (!symbols0) return symbols0.error();
     if (!scales0) return scales0.error();
     status = cuda_ops::reduce_channel_halves(
@@ -2842,7 +2919,7 @@ Result<CodecEncodeResult> encode_predicted(
         scales_full0.value().storage.data, scales0.value().storage.data, prior_shape, stream);
     if (status != cudaSuccess) return cuda_error("cuda_ops::reduce_channel_halves", status);
 
-    auto spatial_context = allocate_device_tensor(
+    auto spatial_context = allocate_device_tensor_scratch(
         "context", make_dims(512, y_height, y_width));
     if (!spatial_context) return spatial_context.error();
     const auto y_bytes = prior_count * sizeof(__half);
@@ -2865,13 +2942,11 @@ Result<CodecEncodeResult> encode_predicted(
     auto spatial_params = std::move(spatial_result.value());
     auto* spatial_values = static_cast<__half*>(spatial_params.storage.data);
 
-    auto mask1 = allocate_device_tensor("mask1", y_device.shape);
-    auto residual1 = allocate_device_tensor("residual1", y_device.shape);
-    auto symbols_full1 = allocate_device_tensor("symbols_full1", y_device.shape);
-    auto reconstructed1 = allocate_device_tensor("reconstructed1", y_device.shape);
-    auto scales_full1 = allocate_device_tensor("scales_full1", y_device.shape);
+    auto mask1 = allocate_device_tensor_scratch("mask1", y_device.shape);
+    auto symbols_full1 = allocate_device_tensor_scratch("symbols_full1", y_device.shape);
+    auto reconstructed1 = allocate_device_tensor_scratch("reconstructed1", y_device.shape);
+    auto scales_full1 = allocate_device_tensor_scratch("scales_full1", y_device.shape);
     if (!mask1) return mask1.error();
-    if (!residual1) return residual1.error();
     if (!symbols_full1) return symbols_full1.error();
     if (!reconstructed1) return reconstructed1.error();
     if (!scales_full1) return scales_full1.error();
@@ -2879,12 +2954,12 @@ Result<CodecEncodeResult> encode_predicted(
     if (status != cudaSuccess) return cuda_error("cuda_ops::make_two_way_mask", status);
     status = cuda_ops::process_with_mask(
         y_device.storage.data, spatial_values, spatial_values + prior_count,
-        mask1.value().storage.data, residual1.value().storage.data,
-        symbols_full1.value().storage.data, reconstructed1.value().storage.data,
+        mask1.value().storage.data, nullptr, symbols_full1.value().storage.data,
+        reconstructed1.value().storage.data,
         scales_full1.value().storage.data, prior_count, 0.0F, stream);
     if (status != cudaSuccess) return cuda_error("cuda_ops::process_with_mask", status);
-    auto symbols1 = allocate_device_tensor("symbols1", reduced_shape);
-    auto scales1 = allocate_device_tensor("scales1", reduced_shape);
+    auto symbols1 = allocate_device_tensor_scratch("symbols1", reduced_shape);
+    auto scales1 = allocate_device_tensor_scratch("scales1", reduced_shape);
     if (!symbols1) return symbols1.error();
     if (!scales1) return scales1.error();
     status = cuda_ops::reduce_channel_halves(
@@ -2899,8 +2974,8 @@ Result<CodecEncodeResult> encode_predicted(
     if (status != cudaSuccess) return cuda_error("cuda_ops::add_and_multiply", status);
 
     const auto reduced_count = prior_count / 2;
-    auto indexes0_device = allocate_cuda(reduced_count * sizeof(std::int16_t));
-    auto indexes1_device = allocate_cuda(reduced_count * sizeof(std::int16_t));
+    auto indexes0_device = allocate_cuda_scratch(reduced_count * sizeof(std::int16_t));
+    auto indexes1_device = allocate_cuda_scratch(reduced_count * sizeof(std::int16_t));
     if (!indexes0_device) return indexes0_device.error();
     if (!indexes1_device) return indexes1_device.error();
     status = cuda_ops::build_encode_indexes(
@@ -3291,6 +3366,12 @@ public:
             if (stream_status != cudaSuccess) {
                 return cuda_error("cudaStreamCreateWithFlags", stream_status);
             }
+            DeviceScratchArena scratch_arena;
+            auto scratch_ready = scratch_arena.initialize(configuration.device_arena_bytes);
+            if (!scratch_ready) {
+                static_cast<void>(cudaStreamDestroy(stream));
+                return scratch_ready.error();
+            }
             VideoQuantDeviceCache video_quant_cache;
             auto quant_cache_loaded = populate_video_quant_cache(assets.value(), video_quant_cache, stream);
             if (!quant_cache_loaded) {
@@ -3311,6 +3392,7 @@ public:
             rans_ = std::move(rans);
             assets_ = std::move(assets.value());
             video_quant_cache_ = std::move(video_quant_cache);
+            scratch_arena_ = std::move(scratch_arena);
             stream_ = stream;
             intra_qp_ = configuration.intra_qp;
             profiling_enabled_ = configuration.enable_profiling;
@@ -3344,7 +3426,8 @@ public:
         try {
             BackendProfiler profiler(profiling_enabled_);
             profiler.begin("encode", frame_type, state.frame_index);
-            CudaAllocationScope allocation_scope(stream_, &profiler);
+            scratch_arena_.reset();
+            CudaAllocationScope allocation_scope(stream_, &profiler, &scratch_arena_);
             if (frame_type == FrameType::intra) {
                 auto result = encode_intra(
                     frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_,
@@ -3382,7 +3465,8 @@ public:
         try {
             BackendProfiler profiler(profiling_enabled_);
             profiler.begin("decode", frame_type, state.frame_index);
-            CudaAllocationScope allocation_scope(stream_, &profiler);
+            scratch_arena_.reset();
+            CudaAllocationScope allocation_scope(stream_, &profiler, &scratch_arena_);
             if (frame_type == FrameType::intra) {
                 auto result = decode_intra(
                     payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_, stream_);
@@ -3429,6 +3513,7 @@ private:
     RansCodec rans_;
     RuntimeAssets assets_;
     VideoQuantDeviceCache video_quant_cache_;
+    DeviceScratchArena scratch_arena_;
     PinnedHostBuffer<std::int8_t> z_symbols_buffer_;
     PinnedHostBuffer<std::int8_t> image_z_symbols_buffer_;
     PinnedHostBuffer<std::int16_t> image_indexes0_buffer_;

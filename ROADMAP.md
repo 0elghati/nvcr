@@ -53,13 +53,14 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: run warmed 720p/1080p profile captures for the device-bound
-I-frame encode path, then make I-frame decode/reconstruction device-resident and
-byte-identical so verification no longer needs the debug DPB bridge. After that, repeat the
-exact-tag clean RTX checkpoint→artifact→engine→native I/P workflow, the Orin
-target matrix, and pinned Python↔native I/P golden/performance gates. Reusable
-per-session CUDA arena work and remaining host-staging removal stay open under
-M1/M3; target support remains pending until that evidence is recorded.
+Current next action: bind TensorRT outputs directly to downstream inputs where
+lifetimes permit, then make I-frame decode/reconstruction device-resident and
+byte-identical so verification no longer needs the debug DPB bridge. After that,
+run warmed QCIF/720p/1080p JSON profile captures, repeat the exact-tag clean RTX
+checkpoint→artifact→engine→native I/P workflow, the Orin target matrix, and
+pinned Python↔native I/P golden/performance gates. Remaining host-staging removal
+stays open under M1/M3; target support remains pending until that evidence is
+recorded.
 
 Deployment next action: reproduce the v2 `nvcr-artifacts` workflow and full
 registered suite on Orin Nano, then record its clean target, correctness,
@@ -74,8 +75,10 @@ Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and leave
 integrated/Jetson-class devices on the conservative low-memory path. I-frame
 encode now keeps analysis, hyper-analysis/synthesis, image-prior transforms,
 four-way spatial prior processing, quarter reductions, entropy index
-construction, and normal CLI synthesis on GPU. The decode-conformant DPB rebuild
-is now limited to verification mode.
+construction, and normal CLI synthesis on GPU. Encode-side scratch tensors are
+served from a bounded per-session CUDA arena, and unused residual writes are
+skipped in normal entropy preparation. The decode-conformant DPB rebuild is now
+limited to verification mode.
 
 ## M0 — Baseline and entropy
 
@@ -106,7 +109,7 @@ Measurement:
 Device execution:
 
 - [x] Add owned `DeviceTensor` storage.
-- [ ] Add a bounded per-session CUDA arena.
+- [x] Add a bounded per-session CUDA arena.
 - [x] Default automatic TensorRT execution mode to persistent contexts on
   discrete GPUs while keeping integrated devices conservative.
 - [ ] Replace `run_host_engine` with reusable device-address binding.
@@ -115,6 +118,9 @@ Device execution:
   stages and verification-only DPB rebuilding still use host staging.
 - [ ] Bind TensorRT outputs directly to downstream inputs where possible.
 - [ ] Remove steady-state `cudaMalloc`, `cudaFree`, and unconditional syncs.
+  Encode-side manual scratch allocations now use the per-session arena; remaining
+  profiled allocations are owned TensorRT outputs, DPB/reference lifetimes,
+  entropy downloads, and decode-side staging.
 - [ ] Use pinned staging only at unavoidable CPU/GPU boundaries.
 
 CUDA prior operations:
@@ -135,6 +141,10 @@ Verification evidence, 2026-07-29:
 
 - [x] Release build after encode-side I-frame GPU residency: `cmake --build build-release -j 8`.
 - [x] Release tests after encode-side I-frame GPU residency: `ctest --test-dir build-release --output-on-failure` passed 8/8.
+- [x] Release build after encode scratch arena: `cmake --build build-release -j 8` passed.
+- [x] Release tests after encode scratch arena: `ctest --test-dir build-release --output-on-failure` passed 8/8.
+- [x] Encode scratch arena profile: 720p all-I, 3 frames, QP 32, profile `720p-fp16`, `--profile` showed I-frame allocations reduced to 10 allocations / 24,408,512 bytes, with remaining hot TensorRT enqueue stages around `i_analysis` 5.3 ms and `i_synthesis` 10.1 ms.
+- [x] Encode scratch arena 720p sweep on FourPeople, 97 frames, QP 32, profile `720p-fp16`: GOP 1 = 30.168 fps, GOP 8 = 73.689 fps, GOP 97 = 94.239 fps.
 - [x] CLI logging overhead cleanup: default encode/decode now omit per-frame progress and info startup logs unless `--verbose` is passed; quiet 720p all-I check produced 30.616 fps.
 - [x] 720p entropy threshold update: enabling two rANS coders at exactly 1280x720 and removing unused normal I-frame latent serialization improved all-I FourPeople from commit `f88c2b2e24be` 29.154 fps to 30.452 fps in a single 97-frame run. A no-host-reconstruction experiment was rejected after regressing all-I to 24.683 fps.
 - [x] Commit `f88c2b2e24be` 720p GOP sweep on FourPeople, 97 frames, QP 32, profile `720p-fp16`: GOP 1 = 29.154 fps, GOP 2 = 44.174 fps, GOP 4 = 60.082 fps, GOP 8 = 72.978 fps, GOP 16 = 81.792 fps, GOP 32 = 87.487 fps, GOP 97 = 93.916 fps.
