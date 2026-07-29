@@ -54,8 +54,8 @@ Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
 Current next action: run warmed 720p/1080p profile captures for the device-bound
-I-frame encode path, then remove the encode-time DPB bridge by making I-frame
-decode/reconstruction device-resident and byte-identical. After that, repeat the
+I-frame encode path, then make I-frame decode/reconstruction device-resident and
+byte-identical so verification no longer needs the debug DPB bridge. After that, repeat the
 exact-tag clean RTX checkpoint→artifact→engine→native I/P workflow, the Orin
 target matrix, and pinned Python↔native I/P golden/performance gates. Reusable
 per-session CUDA arena work and remaining host-staging removal stay open under
@@ -73,9 +73,9 @@ multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
 Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and leaves
 integrated/Jetson-class devices on the conservative low-memory path. I-frame
 encode now keeps analysis, hyper-analysis/synthesis, image-prior transforms,
-four-way spatial prior processing, quarter reductions, and entropy index
-construction on GPU, then rebuilds the encoder DPB through the decode-conformant
-path as a temporary byte-stability bridge.
+four-way spatial prior processing, quarter reductions, entropy index
+construction, and normal CLI synthesis on GPU. The decode-conformant DPB rebuild
+is now limited to verification mode.
 
 ## M0 — Baseline and entropy
 
@@ -111,8 +111,8 @@ Device execution:
   discrete GPUs while keeping integrated devices conservative.
 - [ ] Replace `run_host_engine` with reusable device-address binding.
   Encode-side I-frame analysis, hyper-analysis/synthesis, and spatial prior
-  stages now use device-address binding; decode-side I-frame stages and the
-  temporary encode-time DPB bridge still use host staging.
+  stages now use device-address binding in normal encode; decode-side I-frame
+  stages and verification-only DPB rebuilding still use host staging.
 - [ ] Bind TensorRT outputs directly to downstream inputs where possible.
 - [ ] Remove steady-state `cudaMalloc`, `cudaFree`, and unconditional syncs.
 - [ ] Use pinned staging only at unavoidable CPU/GPU boundaries.
@@ -123,7 +123,7 @@ CUDA prior operations:
   quarter reduction, scale indexing, and combined-symbol generation on the GPU.
 - [x] Copy only encode-side entropy symbols/indexes required by CPU rANS.
 - [ ] Move decode-side I-frame restore/synthesis to the same device-resident path
-  and remove the encode-time DPB conformance bridge.
+  and remove the verification-only DPB conformance bridge.
 
 v1 frame boundary:
 
@@ -135,7 +135,8 @@ Verification evidence, 2026-07-29:
 
 - [x] Release build after encode-side I-frame GPU residency: `cmake --build build-release -j 8`.
 - [x] Release tests after encode-side I-frame GPU residency: `ctest --test-dir build-release --output-on-failure` passed 8/8.
-- [x] 720p GOP-8 profile sample after this change: `./build-release/cli/nvcr encode -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv -o /tmp/fourpeople_720p_opt.nvcr -s 1280x720 -r 30 --frames 97 --gop-size 8 --qp 32 --engine-profile 720p-fp16 --profile` produced 97 frames in 2.405 s (40.331 fps); warmed P frames were ~10.3-10.9 ms and bridge-limited I frames were ~115 ms.
+- [x] 720p all-I profile after making the DPB bridge verification-only: `./build-release/cli/nvcr encode -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv -o /tmp/fourpeople_720p_alli_fast.nvcr -s 1280x720 -r 30 --frames 97 --gop-size 1 --qp 32 --engine-profile 720p-fp16 --profile` produced 97 frames in 3.353 s (28.927 fps); warmed I frames were ~34.2-34.8 ms.
+- [x] 720p GOP-8 profile sample before the bridge fix: `./build-release/cli/nvcr encode -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv -o /tmp/fourpeople_720p_opt.nvcr -s 1280x720 -r 30 --frames 97 --gop-size 8 --qp 32 --engine-profile 720p-fp16 --profile` produced 97 frames in 2.405 s (40.331 fps); warmed P frames were ~10.3-10.9 ms.
 - [ ] Warmed QCIF/1080p matrix and repeated JSON benchmark output are not recorded yet.
 
 Exit criteria:
@@ -143,8 +144,9 @@ Exit criteria:
 - [ ] I-frame reconstruction is conformant at QCIF, 720p, and 1080p.
 - [ ] No device allocation occurs in steady-state frame processing.
 - [ ] Intermediate TensorRT tensors do not round-trip through host memory.
-  Encode-side I-frame intermediates no longer round-trip before CPU rANS; the
-  decode-conformant DPB bridge remains intentionally host-staged.
+  Encode-side I-frame intermediates no longer round-trip before CPU rANS in
+  normal CLI encode; verification-only DPB rebuilding remains intentionally
+  host-staged.
 - [ ] Warmed 720p and 1080p latency meets or beats Python under
   `docs/performance.md`.
 

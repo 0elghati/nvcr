@@ -2271,6 +2271,7 @@ Result<CodecEncodeResult> encode_intra(
     PinnedHostBuffer<std::int16_t>& image_indexes1_buffer,
     PinnedHostBuffer<std::int16_t>& image_indexes2_buffer,
     PinnedHostBuffer<std::int16_t>& image_indexes3_buffer,
+    bool verify_reconstruction,
     cudaStream_t stream) {
     if (frame.pixel_format() != PixelFormat::rgb24 &&
         frame.pixel_format() != PixelFormat::yuv420p8) {
@@ -2528,12 +2529,43 @@ Result<CodecEncodeResult> encode_intra(
     if (!stream_bytes) return stream_bytes.error();
     auto payload = make_intra_payload(
         frame.width(), frame.height(), qp, two_coders, stream_bytes.value());
-    auto conformant_reconstruction = decode_intra(
-        payload, frame.timestamp(), state, device_dpb, engines, rans, assets, stream);
-    if (!conformant_reconstruction) return conformant_reconstruction.error();
+
+    auto q_dec = upload_tensor(make_quant_tensor(assets, false, qp, "q_dec"), "q_dec", stream);
+    if (!q_dec) return q_dec.error();
+    std::array<DeviceTensor*, 2> synthesis_inputs{&*y_hat_device, &q_dec.value()};
+    auto synthesis_outputs = run_device_engine(engines[6], engine_specs[6], synthesis_inputs, stream);
+    if (!synthesis_outputs) return synthesis_outputs.error();
+    auto frame_device_result = take_device_tensor(synthesis_outputs.value(), "frame_hat");
+    if (!frame_device_result) return frame_device_result.error();
+    auto frame_device = std::move(frame_device_result.value());
+
+    std::array<const DeviceTensor*, 1> tensors{&frame_device};
+    auto downloaded = download_tensors(tensors, stream);
+    if (!downloaded) return downloaded.error();
+    auto reconstructed_result = take_tensor(downloaded.value(), "frame_hat");
+    if (!reconstructed_result) return reconstructed_result.error();
+    auto reconstructed = ycbcr_to_rgb(
+        reconstructed_result.value(), frame.width(), frame.height(), frame.timestamp());
+    if (!reconstructed) return reconstructed.error();
+
+    frame_device.name = "reference_frame";
+    device_dpb.clear();
+    device_dpb.frame = std::move(frame_device);
+    device_dpb.next_frame_index = state.frame_index + 1;
+    device_dpb.generation = state.generation;
+    auto latent_state = serialize_dpb(reconstructed_result.value());
+
+    if (verify_reconstruction) {
+        auto conformant_reconstruction = decode_intra(
+            payload, frame.timestamp(), state, device_dpb, engines, rans, assets, stream);
+        if (!conformant_reconstruction) return conformant_reconstruction.error();
+        return CodecEncodeResult{
+            std::move(payload), std::move(conformant_reconstruction.value().frame),
+            std::move(conformant_reconstruction.value().latent_state), qp};
+    }
+
     return CodecEncodeResult{
-        std::move(payload), std::move(conformant_reconstruction.value().frame),
-        std::move(conformant_reconstruction.value().latent_state), qp};
+        std::move(payload), std::move(reconstructed.value()), std::move(latent_state), qp};
 }
 
 Result<CodecDecodeResult> decode_intra(
@@ -3315,7 +3347,8 @@ public:
                 auto result = encode_intra(
                     frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_,
                     image_z_symbols_buffer_, image_indexes0_buffer_, image_indexes1_buffer_,
-                    image_indexes2_buffer_, image_indexes3_buffer_, stream_);
+                    image_indexes2_buffer_, image_indexes3_buffer_,
+                    verify_encoder_reconstruction_, stream_);
                 profiler.finish();
                 return result;
             }

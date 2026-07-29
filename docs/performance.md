@@ -87,12 +87,12 @@ front half of the path:
 - I-frame z symbols and four compact y-index streams are copied through reusable
   pinned host buffers for CPU rANS.
 
-For conformance, I-frame encode currently rebuilds the encoder DPB by decoding
-the just-produced I-frame payload through the existing decode-conformant path.
-This prevents byte-level encoder/decoder DPB drift before P frames. It is a
-temporary bridge, not the final M1 design: the remaining step is to make I-frame
-decode device-resident too, or prove the GPU and host reconstruction paths are
-byte-identical, then remove the extra decode-side rebuild.
+For conformance testing, I-frame encode can rebuild the encoder DPB by decoding
+the just-produced I-frame payload when `verify_encoder_reconstruction` is enabled.
+Normal CLI encoding does not pay this bridge; it uses the GPU-produced I-frame
+reconstruction directly. The bridge remains a test/debug guard until I-frame
+decode is device-resident or the GPU and host reconstruction paths are proven
+byte-identical.
 
 Device allocations are still per-frame rather than arena-backed, and the final
 performance gate still needs warmed QCIF/720p/1080p JSON benchmark evidence.
@@ -108,6 +108,35 @@ The next performance milestone is to finish the GPU-resident I-frame graph:
    permit.
 5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
 
+
+### 2026-07-29 RTX 4070 720p all-I profile
+
+Command:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_720p_alli_fast.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size 1 --qp 32 \
+  --engine-profile 720p-fp16 --profile
+```
+
+Result after making the decode-conformance bridge verification-only:
+
+| Metric | Value |
+|---|---:|
+| Frames | 97 |
+| GOP size | 1 |
+| Payload bytes | 1,103,993 |
+| Codec time | 3.353 s |
+| Throughput | 28.927 fps |
+| Representative warmed I-frame latency | ~34.2-34.8 ms |
+
+Interpretation: this fixes the accidental all-I benchmark penalty from running
+a full decode-conformance rebuild for every encoded I frame. The remaining hot
+stages are `i_analysis` (~5.0 ms), three image spatial-prior engines (~3.1 ms
+combined), `i_synthesis` (~9.4 ms), per-frame allocations, entropy, and final
+reconstruction download.
 
 ### 2026-07-29 RTX 4070 720p GOP-8 profile
 
@@ -133,11 +162,10 @@ Result after the encode-side I-frame GPU-residency patch:
 | Representative P-frame latency | ~10.3-10.9 ms |
 | Representative warmed I-frame latency | ~115 ms |
 
-Interpretation: the P-frame hot path is now close to 10 ms/frame at 720p, but
-GOP-8 throughput is still capped by periodic I frames. The remaining I-frame
-latency is dominated by the temporary decode-conformant DPB bridge, visible in
-profile output as host-staged `i_hyper_synthesis`, three `i_spatial_prior_*`, and
-`i_synthesis` stages after the encode-side device work has produced the payload.
+Interpretation: the P-frame hot path is now close to 10 ms/frame at 720p. This
+GOP-8 sample was captured before the all-I bridge fix above, so its I-frame rows
+still include verification-style bridge cost and should not be used as the
+current I-frame latency point.
 
 ## Jetson energy profiling
 
