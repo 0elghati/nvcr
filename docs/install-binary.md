@@ -15,7 +15,7 @@ A future validated archive and matching default engine bundle can be installed
 with the convenience installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nvcr/nvcr/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
 ```
 
 By default it installs NVCR under `$HOME/.local/nvcr`, validates the downloaded
