@@ -71,6 +71,10 @@ def main() -> int:
         "nvcr.engine-profile.v1",
     )
     artifacts.load_profile(
+        REPOSITORY_ROOT / "configs/engine-profiles/720p-fp16.json",
+        "nvcr.engine-profile.v1",
+    )
+    artifacts.load_profile(
         REPOSITORY_ROOT / "configs/engine-profiles/1080p-fp16.json",
         "nvcr.engine-profile.v1",
     )

@@ -245,6 +245,16 @@ Exit criteria:
 
 ## Evidence log
 
+### 2026-07-29 — RTX 4070 720p TensorRT bundle
+
+- Added the `720p-fp16` engine profile and I/P TensorRT shape routing, built all
+  14 plans on RTX 4070 (SM 8.9) with CUDA 12.6 and TensorRT 10.7.0, passed all
+  per-plan smoke inferences, and validated the resulting
+  `nvcr.engine-bundle.v2` checksums and metadata. Removed the two legacy-format
+  local engine directories after validation.
+
+
+
 Append evidence; never silently replace historical results.
 
 ### 2026-07-29 — Codec runtime architecture boundary alignment

@@ -152,7 +152,10 @@ install(
     DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr")
 install(
     DIRECTORY docs/
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr/docs")
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr/docs"
+    PATTERN "*.orig" EXCLUDE
+    PATTERN "*.rej" EXCLUDE
+    PATTERN "*.bak" EXCLUDE)
 install(
     FILES
         third_party/dcvc_rans/LICENSE.MIT

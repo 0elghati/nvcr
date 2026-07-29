@@ -89,6 +89,7 @@ The declared FP16 profiles are:
 | Profile | Visible dimensions | Workspace | Builder level | Purpose |
 |---|---|---:|---:|---|
 | `qcif-fp16` | 64×64 to 176×144 | 512 MiB | 1 | Small correctness/development bundle |
+| `720p-fp16` | 64×64 to 1280×720 | 1024 MiB | 2 | 720p target validation |
 | `1080p-fp16` | 64×64 to 1920×1080 | 1024 MiB | 2 | Reference target validation |
 
 Internal graph shapes may be padded (for example 1080 to 1088 lines); manifests
