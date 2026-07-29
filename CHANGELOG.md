@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/0elghati/nvcr/compare/v0.3.0...v0.4.0) (2026-07-29)
+
+
+### Features
+
+* restructure dcvcrt backend & added support for 720p build ([#26](https://github.com/0elghati/nvcr/issues/26)) ([1361742](https://github.com/0elghati/nvcr/commit/1361742dc9789de0f0cb871493261f4bd7ba44fc))
+
 ## [0.3.0](https://github.com/0elghati/nvcr/compare/v0.2.3...v0.3.0) (2026-07-23)
 
 
