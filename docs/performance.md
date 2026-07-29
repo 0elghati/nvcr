@@ -112,6 +112,48 @@ The next performance milestone is to finish the GPU-resident I-frame graph:
 5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
 
 
+### 2026-07-29 RTX 4070 paired 720p/1080p smoke baseline
+
+Paired performance smoke is now required before accepting CUDA/TensorRT
+optimization direction changes. The helper is diagnostic rather than the final
+publication harness, but it prevents accepting a 720p-only win that regresses the
+1080p path.
+
+Command:
+
+```bash
+./scripts/benchmark_resolution_pair.sh \
+  --gops "1 97" \
+  --jsonl /tmp/nvcr-paired-baseline-e7de44f.jsonl
+```
+
+Inputs: `FourPeople_1280x720_60.yuv` for 720p and
+`BQTerrace_1920x1080_60.yuv` for 1080p, 97 frames, QP 32.
+
+| Resolution | GOP | Engine profile | Payload bytes | Codec time | Throughput |
+|---|---:|---|---:|---:|---:|
+| 720p | 1 | `720p-fp16` | 1,104,333 | 3.178 s | 30.518 fps |
+| 1080p | 1 | `1080p-fp16` | 4,421,239 | 7.318 s | 13.254 fps |
+| 720p | 97 | `720p-fp16` | 86,297 | 1.030 s | 94.170 fps |
+| 1080p | 97 | `1080p-fp16` | 396,285 | 2.199 s | 44.103 fps |
+
+Short 1080p all-I diagnostic profile, collected separately with `--profile`,
+reported 10 allocations / 54,477,632 bytes per I frame. Representative hot
+TensorRT enqueue stages were `i_synthesis` about 22-23 ms, `i_analysis` about
+12 ms, three spatial priors about 9 ms combined, and `i_hyper_synthesis` about
+2.7 ms. This makes direct TensorRT binding, exact-shape/tactic inspection, and
+I-path graph/partition work higher value than more allocator cleanup alone.
+
+MLVC-inspired interpretation: MLVC's published speed advantage comes largely
+from model and entropy-graph choices that reduce accelerator calls and
+neural/coder interleaving. For NVCR's faithful DCVC-RT runtime, the safe lessons
+to adopt first are paired JSON evidence, fixed-resolution package/profiling
+discipline, persistent runtime objects, explicit part metadata, exact-shape
+engine experiments, and measured partition ablations. MLVC-style transmitted
+scale design, activation redesign, unified I/P graphs, and smaller MLVC-S-style
+models are separate codec research unless introduced as a new opt-in backend or
+profile with its own fidelity/RD gates.
+
 ### 2026-07-29 RTX 4070 encode scratch arena
 
 Change under test: route encode-side manual temporary CUDA allocations through a

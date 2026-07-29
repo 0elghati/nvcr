@@ -130,6 +130,21 @@ The helper validates the bundles, uploads the archives to S3 with temporary
 presigned URLs, writes `dist/nvcr-engine-assets.txt`, verifies the draft release
 exists, and dispatches `upload-engine-assets.yml` against the exact tag.
 
+## Paired performance smoke
+
+Use `benchmark_resolution_pair.sh` before and after optimization changes. It is a
+developer smoke helper, not the final publication harness, but it keeps 720p and
+1080p tied together and can append JSONL rows for commit-by-commit comparison.
+
+```bash
+./scripts/benchmark_resolution_pair.sh \
+  --gops "1 97" \
+  --jsonl /tmp/nvcr-paired-benchmark.jsonl
+```
+
+Override the default local inputs with `--720p-input`, `--1080p-input`, or the
+matching `NVCR_BENCH_720P_INPUT` and `NVCR_BENCH_1080P_INPUT` environment
+variables.
 
 ## Jetson energy
 
