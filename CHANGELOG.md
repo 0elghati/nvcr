@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/0elghati/nvcr/compare/v0.4.0...v0.4.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* public install repo ([#29](https://github.com/0elghati/nvcr/issues/29)) ([83bb4f5](https://github.com/0elghati/nvcr/commit/83bb4f5f055e16718d7f4d59fd3d2fa104aedd7b))
+
 ## [0.4.0](https://github.com/0elghati/nvcr/compare/v0.3.0...v0.4.0) (2026-07-29)
 
 
