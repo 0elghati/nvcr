@@ -90,10 +90,11 @@ For published releases, the convenience installer fetches the latest matching
 Linux package and the default backend engine bundle for the platform:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/0elghati/NVCR/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
 ```
 
-Development checkouts can still use the source-build helper:
+Development checkouts can still use the source-build helper, while forks and
+private staging repositories can pass `--repo OWNER/REPO` to `scripts/install.sh`:
 
 ```bash
 ./scripts/install_from_source.sh --run-tests
