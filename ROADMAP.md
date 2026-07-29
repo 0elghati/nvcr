@@ -1022,7 +1022,7 @@ in the roadmap.
 
 ### 2026-07-29 — Orchestrate engine assets from Release Please tags
 
-Decision: add `scripts/release_engine_assets.sh` as the default operator path for optional TensorRT engine release assets. The helper validates local target-built bundles, stages archives under a caller-provided S3 prefix, generates presigned URLs and `dist/nvcr-engine-assets.txt`, checks the matching GitHub draft release, and dispatches `upload-engine-assets.yml` for the exact Release Please tag.
+Decision: add `scripts/release_engine_assets.sh` as the default operator path for optional TensorRT engine release assets. The helper derives the release tag from the checked-out `version.txt` by default, validates local target-built bundles, stages archives under a caller-provided S3 prefix, generates presigned URLs and `dist/nvcr-engine-assets.txt`, checks the matching GitHub draft release, and dispatches `upload-engine-assets.yml` for that Release Please tag.
 
 Rationale: Release Please should remain the only version and tag authority, S3 should remain temporary staging, and GitHub Releases should remain the public distribution channel. Automating the handoff removes manual manifest copy/paste and reduces the chance of attaching engines to a stale or mismatched release tag.
 

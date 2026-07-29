@@ -99,10 +99,11 @@ To combine packaging, S3 upload, presigned URL generation, and workflow-input
 generation:
 
 ```bash
+release_tag="v$(cat version.txt)"
 ./scripts/stage_engine_release_asset.sh \
-  --version 0.3.0 \
-  --engine-dir build/engines/dcvcrt-v2 \
-  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/v0.3.0 \
+  --version "${release_tag#v}" \
+  --engine-dir build/engines/dcvcrt-720p \
+  --s3-uri "s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases/$release_tag" \
   --aws-region eu-west-1 \
   --asset-manifest dist/nvcr-engine-assets.txt
 ```
@@ -116,10 +117,9 @@ and upload every validated local engine bundle in one command:
 
 ```bash
 ./scripts/release_engine_assets.sh \
-  --tag v0.4.0 \
   --engine-dir build/engines/dcvcrt-720p \
   --engine-dir build/engines/dcvcrt-1080p \
-  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/v0.4.0 \
+  --s3-prefix s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases \
   --aws-region eu-west-1
 ```
 

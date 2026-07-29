@@ -99,10 +99,9 @@ from the machine where the engine bundles were built and validated:
 
 ```bash
 ./scripts/release_engine_assets.sh \
-  --tag v0.4.0 \
   --engine-dir build/engines/dcvcrt-720p \
   --engine-dir build/engines/dcvcrt-1080p \
-  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/v0.4.0 \
+  --s3-prefix s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases \
   --aws-region eu-west-1
 ```
 
@@ -116,9 +115,9 @@ creation; do not create replacement local tags for engine uploads.
 The archive filename is derived from `engine_manifest.json`, but uses the generic public package family instead of the exact target profile:
 
 ```text
-nvcr-v0.4.0-linux-x86_64-nvidia-dcvcrt-cvpr2025-720p-fp16-engines.tar.gz
-nvcr-v0.4.0-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
-nvcr-v0.4.0-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
+nvcr-vX.Y.Z-linux-x86_64-nvidia-dcvcrt-cvpr2025-720p-fp16-engines.tar.gz
+nvcr-vX.Y.Z-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
+nvcr-vX.Y.Z-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
 ```
 
 Stage the `.tar.gz` files in the private S3 release-assets bucket and use a
@@ -145,10 +144,11 @@ If you only want to stage assets without dispatching GitHub Actions, pass
 available for one-off staging:
 
 ```bash
+release_tag="v$(cat version.txt)"
 ./scripts/stage_engine_release_asset.sh \
-  --version 0.4.0 \
+  --version "${release_tag#v}" \
   --engine-dir build/engines/dcvcrt-720p \
-  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/v0.4.0 \
+  --s3-uri "s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases/$release_tag" \
   --aws-region eu-west-1 \
   --presign-expires 604800 \
   --asset-manifest dist/nvcr-engine-assets.txt
@@ -176,14 +176,15 @@ For example:
 
 ```bash
 cat > /tmp/nvcr-engine-assets.txt <<'EOF'
-nvcr-v0.4.0-linux-x86_64-nvidia-dcvcrt-cvpr2025-720p-fp16-engines.tar.gz <rtx-720p-archive-sha256> <rtx-720p-staging-https-url>
-nvcr-v0.4.0-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz <rtx-1080p-archive-sha256> <rtx-1080p-staging-https-url>
-nvcr-v0.4.0-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz <orin-archive-sha256> <orin-staging-https-url>
+nvcr-vX.Y.Z-linux-x86_64-nvidia-dcvcrt-cvpr2025-720p-fp16-engines.tar.gz <rtx-720p-archive-sha256> <rtx-720p-staging-https-url>
+nvcr-vX.Y.Z-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz <rtx-1080p-archive-sha256> <rtx-1080p-staging-https-url>
+nvcr-vX.Y.Z-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz <orin-archive-sha256> <orin-staging-https-url>
 EOF
 
+release_tag="v$(cat version.txt)"
 gh workflow run upload-engine-assets.yml \
   --ref main \
-  -f tag=v0.4.0 \
+  -f "tag=$release_tag" \
   -F engine_assets=@/tmp/nvcr-engine-assets.txt
 ```
 

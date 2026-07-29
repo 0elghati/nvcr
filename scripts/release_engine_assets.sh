@@ -2,11 +2,13 @@
 set -euo pipefail
 
 tag=""
+latest_draft=0
 repo=""
 workflow_ref="main"
 output_dir="dist"
 asset_manifest=""
 s3_uri=""
+s3_prefix=""
 aws_region=""
 presign_expires="604800"
 publish_release=0
@@ -17,15 +19,18 @@ engine_dirs=()
 
 usage() {
     cat <<EOF_USAGE
-Usage: $0 --tag vX.Y.Z --s3-uri s3://bucket/prefix --engine-dir DIR [options]
+Usage: $0 --engine-dir DIR (--s3-prefix s3://bucket/prefix | --s3-uri s3://bucket/prefix/{tag}) [options]
 
 Stage validated TensorRT engine bundles to S3 and dispatch the GitHub workflow
-that copies them into the matching Release Please draft release.
+that copies them into the matching Release Please draft release. By default, the
+release tag is derived from version.txt in the current checkout.
 
 Options:
-  --tag vX.Y.Z          Exact Release Please tag and draft release
   --engine-dir DIR      Validated engine bundle directory; repeat for many
-  --s3-uri URI          S3 staging prefix, usually s3://bucket/releases/vX.Y.Z
+  --s3-prefix URI       Base S3 prefix; resolved tag is appended automatically
+  --s3-uri URI          Exact S3 staging prefix; may contain {tag}
+  --tag vX.Y.Z          Override the version.txt-derived Release Please tag
+  --latest-draft        Resolve the newest draft GitHub Release tag instead
   --aws-region REGION   AWS region for S3 upload/presign commands
   --repo OWNER/REPO     GitHub repository for workflow dispatch
   --workflow-ref REF    Ref containing upload-engine-assets.yml (default: main)
@@ -34,7 +39,7 @@ Options:
   --presign-expires SEC Presigned URL lifetime, 60..604800 (default: 604800)
   --publish-release     Ask upload workflow to publish after upload
   --publish-confirmation TAG
-                         Required with --publish-release; must equal --tag
+                         Required with --publish-release; must equal resolved tag
   --skip-dispatch       Stage assets only; do not call GitHub Actions
   --dry-run             Validate inputs and print the workflow command only
   -h, --help            Show this help
@@ -44,8 +49,10 @@ EOF_USAGE
 while (($#)); do
     case "$1" in
     --tag) tag="$2"; shift 2 ;;
+    --latest-draft) latest_draft=1; shift ;;
     --engine-dir) engine_dirs+=("$2"); shift 2 ;;
     --s3-uri) s3_uri="$2"; shift 2 ;;
+    --s3-prefix) s3_prefix="$2"; shift 2 ;;
     --aws-region) aws_region="$2"; shift 2 ;;
     --repo) repo="$2"; shift 2 ;;
     --workflow-ref) workflow_ref="$2"; shift 2 ;;
@@ -65,34 +72,37 @@ while (($#)); do
     esac
 done
 
-if [[ -z "$tag" || -z "$s3_uri" || "${#engine_dirs[@]}" -eq 0 ]]; then
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+version_file="$repo_root/version.txt"
+
+if [[ "${#engine_dirs[@]}" -eq 0 ]]; then
     usage >&2
     exit 2
 fi
-if [[ ! "$tag" =~ ^v[0-9]+[.][0-9]+[.][0-9]+([.+-][0-9A-Za-z.+-]+)?$ ]]; then
-    echo "--tag must be a Release Please style tag such as v0.4.0: $tag" >&2
+if ((latest_draft)) && [[ -n "$tag" ]]; then
+    echo "use either --latest-draft or --tag, not both" >&2
     exit 2
 fi
-if [[ "$s3_uri" != s3://* ]]; then
+if [[ -n "$s3_uri" && -n "$s3_prefix" ]]; then
+    echo "use either --s3-uri or --s3-prefix, not both" >&2
+    exit 2
+fi
+if [[ -z "$s3_uri" && -z "$s3_prefix" ]]; then
+    usage >&2
+    exit 2
+fi
+if [[ -n "$s3_uri" && "$s3_uri" != s3://* ]]; then
     echo "--s3-uri must start with s3://: $s3_uri" >&2
+    exit 2
+fi
+if [[ -n "$s3_prefix" && "$s3_prefix" != s3://* ]]; then
+    echo "--s3-prefix must start with s3://: $s3_prefix" >&2
     exit 2
 fi
 if [[ ! "$presign_expires" =~ ^[0-9]+$ || "$presign_expires" -lt 60 || "$presign_expires" -gt 604800 ]]; then
     echo "--presign-expires must be an integer between 60 and 604800 seconds" >&2
     exit 2
-fi
-if ((publish_release)) && [[ "$publish_confirmation" != "$tag" ]]; then
-    echo "--publish-confirmation must exactly match --tag when publishing" >&2
-    exit 2
-fi
-
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "$script_dir/.." && pwd)"
-version="${tag#v}"
-mkdir -p "$output_dir"
-output_dir="$(cd "$output_dir" && pwd)"
-if [[ -z "$asset_manifest" ]]; then
-    asset_manifest="$output_dir/nvcr-engine-assets.txt"
 fi
 
 if [[ -z "$repo" ]]; then
@@ -101,18 +111,55 @@ if [[ -z "$repo" ]]; then
         repo="$(printf '%s\n' "$origin_url" | sed -E 's#^git@github.com:##; s#^https://github.com/##; s#[.]git$##')"
     fi
 fi
-if ((skip_dispatch == 0)) && [[ -z "$repo" ]]; then
+if ((latest_draft || skip_dispatch == 0)) && [[ -z "$repo" ]]; then
     echo "could not infer GitHub repo; pass --repo OWNER/REPO" >&2
     exit 2
 fi
-
+if ((latest_draft || (skip_dispatch == 0 && dry_run == 0))) && ! command -v gh >/dev/null; then
+    echo "gh CLI is required to resolve or dispatch GitHub releases" >&2
+    exit 1
+fi
 if ((dry_run == 0)) && ! command -v aws >/dev/null; then
     echo "aws CLI is required to stage engine assets" >&2
     exit 1
 fi
-if ((skip_dispatch == 0 && dry_run == 0)) && ! command -v gh >/dev/null; then
-    echo "gh CLI is required unless --skip-dispatch is used" >&2
-    exit 1
+
+if ((latest_draft)); then
+    tag="$(gh release list --repo "$repo" --limit 100 --json tagName,isDraft,createdAt --jq 'map(select(.isDraft)) | sort_by(.createdAt) | last | .tagName // ""')"
+    if [[ -z "$tag" ]]; then
+        echo "no draft GitHub Release found for $repo" >&2
+        exit 1
+    fi
+else
+    if [[ -z "$tag" ]]; then
+        if [[ ! -f "$version_file" ]]; then
+            echo "missing version file: $version_file" >&2
+            exit 1
+        fi
+        version_from_file="$(tr -d '[:space:]' <"$version_file")"
+        tag="v$version_from_file"
+    fi
+fi
+
+if [[ ! "$tag" =~ ^v[0-9]+[.][0-9]+[.][0-9]+([.+-][0-9A-Za-z.+-]+)?$ ]]; then
+    echo "release tag must be Release Please style, for example vX.Y.Z: $tag" >&2
+    exit 2
+fi
+if [[ -n "$s3_prefix" ]]; then
+    s3_uri="${s3_prefix%/}/$tag"
+else
+    s3_uri="${s3_uri//\{tag\}/$tag}"
+fi
+if ((publish_release)) && [[ "$publish_confirmation" != "$tag" ]]; then
+    echo "--publish-confirmation must exactly match resolved tag when publishing: $tag" >&2
+    exit 2
+fi
+
+version="${tag#v}"
+mkdir -p "$output_dir"
+output_dir="$(cd "$output_dir" && pwd)"
+if [[ -z "$asset_manifest" ]]; then
+    asset_manifest="$output_dir/nvcr-engine-assets.txt"
 fi
 
 for engine_dir in "${engine_dirs[@]}"; do
@@ -145,7 +192,7 @@ if ((dry_run == 0)); then
 fi
 
 if ((skip_dispatch)); then
-    echo "Staged engine assets in $asset_manifest"
+    echo "Staged engine assets for $tag in $asset_manifest"
     exit 0
 fi
 
@@ -164,6 +211,8 @@ if ((publish_release)); then
 fi
 
 if ((dry_run)); then
+    echo "Resolved release tag: $tag"
+    echo "Resolved S3 staging prefix: ${s3_uri%/}"
     printf 'gh'
     printf ' %q' "${workflow_args[@]}"
     printf '\n'
