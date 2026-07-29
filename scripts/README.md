@@ -15,6 +15,8 @@ offline pinned-model preparation, release packaging, and focused measurement.
 - `stage_engine_release_asset.sh`: package an engine bundle, optionally upload
   it to S3 or copy it to another staging folder, and generate the
   `engine_assets.txt` workflow input row.
+- `release_engine_assets.sh`: stage one or more validated engine bundles to S3
+  and dispatch the GitHub Release upload workflow for a Release Please tag.
 - `profile_energy.py`: focused Jetson command/rail measurement helper.
 
 `nvcr_artifacts.py` calls backend-local helpers under
@@ -108,6 +110,22 @@ generation:
 The generated text file is a manual `workflow_dispatch` input, not a file
 committed to the repository. If you do not use S3, pass `--download-url` with an
 HTTPS URL that works with `curl -fL` from a signed-out machine.
+
+To avoid manual copy/paste after Release Please creates a draft release, stage
+and upload every validated local engine bundle in one command:
+
+```bash
+./scripts/release_engine_assets.sh \
+  --tag v0.4.0 \
+  --engine-dir build/engines/dcvcrt-720p \
+  --engine-dir build/engines/dcvcrt-1080p \
+  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/v0.4.0 \
+  --aws-region eu-west-1
+```
+
+The helper validates the bundles, uploads the archives to S3 with temporary
+presigned URLs, writes `dist/nvcr-engine-assets.txt`, verifies the draft release
+exists, and dispatches `upload-engine-assets.yml` against the exact tag.
 
 
 ## Jetson energy

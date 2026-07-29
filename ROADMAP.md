@@ -1019,3 +1019,11 @@ Consequence: hosted automation may upload the generic x86_64 package to a draft
 release, but it does not publish the release. The Jetson archive, exact target
 matrices, and final publication remain manual release responsibilities recorded
 in the roadmap.
+
+### 2026-07-29 — Orchestrate engine assets from Release Please tags
+
+Decision: add `scripts/release_engine_assets.sh` as the default operator path for optional TensorRT engine release assets. The helper validates local target-built bundles, stages archives under a caller-provided S3 prefix, generates presigned URLs and `dist/nvcr-engine-assets.txt`, checks the matching GitHub draft release, and dispatches `upload-engine-assets.yml` for the exact Release Please tag.
+
+Rationale: Release Please should remain the only version and tag authority, S3 should remain temporary staging, and GitHub Releases should remain the public distribution channel. Automating the handoff removes manual manifest copy/paste and reduces the chance of attaching engines to a stale or mismatched release tag.
+
+Consequence: engine assets are still built on validated target machines and are still separate from generic binary packages, but the release operator now has a repeatable one-command path from target-local bundles to draft-release assets. Publishing remains gated on the recorded roadmap evidence for the release track.
