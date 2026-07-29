@@ -67,7 +67,8 @@ be keyed by model, target, TensorRT/CUDA, precision, and shape profile. The
 release installer now downloads every selected-backend engine profile by default
 and uses backend/profile aliases plus a backend-neutral default engine slot under
 `$XDG_DATA_HOME/nvcr/engines`; exact-tag installer smoke remains pending until
-the next published package/engine assets exist.
+the next published package/engine assets exist. The CLI now warns when
+multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
 
 ## M0 — Baseline and entropy
 

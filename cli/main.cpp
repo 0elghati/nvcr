@@ -118,6 +118,11 @@ fs::path default_engine_root() {
     return fs::path("engines");
 }
 
+std::string normalize_backend(std::string backend) {
+    if (backend == "dcvc_rt" || backend == "dcvc-rt") return "dcvcrt";
+    return backend;
+}
+
 fs::path resolve_engine_dir(const Options& options) {
     if (!options.engine_dir.empty()) return options.engine_dir;
     if (const char* engine_dir = std::getenv("NVCR_ENGINE_DIR")) {
@@ -248,6 +253,7 @@ bool parse_options(int argc, char* argv[], Options& options) {
     if (const char* profile = std::getenv("NVCR_ENGINE_PROFILE")) {
         if (*profile != '\0' && options.engine_profile.empty()) options.engine_profile = profile;
     }
+    options.backend = normalize_backend(std::move(options.backend));
     options.engine_dir = resolve_engine_dir(options);
     if (options.input.empty() || options.output.empty()) {
         std::cerr << "nvcr: --input and --output are required\n";
@@ -420,6 +426,10 @@ int encode(const Options& options) {
     if (!input) {
         std::cerr << "nvcr: cannot open input: " << options.input << '\n';
         return 1;
+    }
+    if (options.gop_size == 1 && options.frames > 1) {
+        std::cerr << "nvcr: warning: --gop-size 1 encodes every frame as an I-frame; "
+                  << "do not compare this development path with warmed I/P GOP throughput\n";
     }
     auto runtime = create_runtime(options);
     if (!runtime) {

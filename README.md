@@ -179,7 +179,8 @@ without passing an engine path:
 NVCR_ENGINE_PROFILE=1080p-fp16 ./build-release/cli/nvcr decode ...
 ```
 
-Use `--backend NAME` when multiple backends are installed. `--engine-dir` remains
+Use `--backend NAME` when multiple backends are installed; `dcvcrt`, `dcvc_rt`,
+and `dcvc-rt` currently select the same backend. `--engine-dir` remains
 available only for custom bundles and local development tests. Input and output
 frames are planar YUV420P8. `NVCR`/`NVCS` are development
 framing formats and have no stable pre-v1 compatibility promise. Container
