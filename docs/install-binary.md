@@ -11,26 +11,37 @@ documentation, roadmap/changelog, licenses/notices, and a
 `PACKAGE-MANIFEST.sha256`. It does **not** contain checkpoints, ONNX/model assets,
 or TensorRT engines.
 
-A future validated archive and matching default engine bundle can be installed
-with the convenience installer:
+A future validated archive and matching backend engine bundles can be installed
+with the convenience installer. Without `--engine-profile`, it downloads every
+available profile for the selected backend and asks which one should become the
+active CLI default:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
 ```
 
-By default it installs NVCR under `$HOME/.local/nvcr`, validates the downloaded
-checksums, extracts the matching backend engine bundle under
-`$XDG_DATA_HOME/nvcr/engines/releases/`, points
-`$XDG_DATA_HOME/nvcr/engines/<backend>` at that bundle, and points
-`$XDG_DATA_HOME/nvcr/engines/default` at the active backend. The CLI uses that path
-automatically, so normal encode/decode commands do not need `--engine-dir`.
+By default it installs NVCR under `$HOME/.local/nvcr`, validates downloaded
+checksums, extracts engine bundles under `$XDG_DATA_HOME/nvcr/engines/releases/`,
+and creates profile aliases under
+`$XDG_DATA_HOME/nvcr/engines/profiles/<backend>/<profile>`. The active selection
+is also available through `$XDG_DATA_HOME/nvcr/engines/default`, so normal
+encode/decode commands do not need `--engine-dir`.
 
-Pin a release, test a fork or private staging repository, or install only the
-binary package when needed:
+Select a profile at runtime without passing a path:
+
+```bash
+nvcr encode ... --engine-profile 720p-fp16
+nvcr decode ... --backend dcvcrt --engine-profile 1080p-fp16
+NVCR_ENGINE_PROFILE=720p-fp16 nvcr encode ...
+```
+
+Pin a release, test a fork or private staging repository, download one profile,
+or install only the binary package when needed:
 
 ```bash
 NVCR_TAG=vX.Y.Z ./scripts/install.sh --run-tests
 ./scripts/install.sh --repo OWNER/REPO --tag vX.Y.Z
+./scripts/install.sh --engine-profile 720p-fp16
 ./scripts/install.sh --no-engines
 ```
 
@@ -49,9 +60,9 @@ nvcr-artifacts --help
 
 The package must match the recorded target runtime. Build or download the pinned
 model and engines with [Model and engine preparation](dcvcrt-artifacts.md),
-validate them, and install them at the default engine path or pass their
-directory to `nvcr --engine-dir`. Never substitute an engine from another GPU,
-CUDA/TensorRT runtime, or model manifest.
+validate them, and install them under the profile alias layout above. Pass
+`nvcr --engine-dir` only for custom bundles or local development tests. Never
+substitute an engine from another GPU, CUDA/TensorRT runtime, or model manifest.
 
 Engine assets are not generic TensorRT plans. Their filename records the package family,
 model, and engine-profile identity, and the runtime still checks the

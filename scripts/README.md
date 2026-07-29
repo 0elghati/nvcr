@@ -58,8 +58,9 @@ v1 reference targets; detection of another GPU is not a support claim.
 ```
 
 Published binary releases use `./scripts/install.sh`, which downloads the release
-package and active backend engine bundle. The optional `--arch-set portable`
-produces a CUDA fat binary for experimentation.
+package and, unless `--engine-profile` is set, every engine profile for the
+selected backend. The optional `--arch-set portable` produces a CUDA fat binary
+for experimentation.
 It does not make the runtime universal or make TensorRT plans portable.
 
 ## Packaging
