@@ -15,7 +15,7 @@ A future validated archive and matching default engine bundle can be installed
 with the convenience installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/0elghati/NVCR/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nvcr/nvcr/main/scripts/install.sh | bash
 ```
 
 By default it installs NVCR under `$HOME/.local/nvcr`, validates the downloaded
@@ -25,10 +25,12 @@ checksums, extracts the matching backend engine bundle under
 `$XDG_DATA_HOME/nvcr/engines/default` at the active backend. The CLI uses that path
 automatically, so normal encode/decode commands do not need `--engine-dir`.
 
-Pin a release or install only the binary package when needed:
+Pin a release, test a fork or private staging repository, or install only the
+binary package when needed:
 
 ```bash
 NVCR_TAG=vX.Y.Z ./scripts/install.sh --run-tests
+./scripts/install.sh --repo OWNER/REPO --tag vX.Y.Z
 ./scripts/install.sh --no-engines
 ```
 

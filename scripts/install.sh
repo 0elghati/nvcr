@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo="${NVCR_REPO:-0elghati/NVCR}"
+repo="${NVCR_REPO:-nvcr/nvcr}"
 tag="${NVCR_TAG:-latest}"
 backend="${NVCR_BACKEND:-default}"
 requested_backend="$backend"
