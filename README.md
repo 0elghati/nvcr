@@ -86,11 +86,17 @@ cmake -S . -B build-release \
 cmake --build build-release --parallel
 ```
 
-On the two reference targets, the convenience installer detects the attached GPU,
-CUDA compiler, architecture, and TensorRT installation:
+For published releases, the convenience installer fetches the latest matching
+Linux package and the default backend engine bundle for the platform:
 
 ```bash
-./scripts/install.sh --run-tests
+curl -fsSL https://raw.githubusercontent.com/0elghati/NVCR/main/scripts/install.sh | bash
+```
+
+Development checkouts can still use the source-build helper:
+
+```bash
+./scripts/install_from_source.sh --run-tests
 ```
 
 Other NVIDIA Linux configurations are experimental until they have equivalent
@@ -156,15 +162,16 @@ coverage; it runs only the tests available to that configuration.
 ```bash
 ./build-release/cli/nvcr encode \
   -i input.yuv -o output.nvcr \
-  -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32 \
-  --engine-dir build/engines/dcvcrt
+  -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32
 
 ./build-release/cli/nvcr decode \
-  -i output.nvcr -o reconstructed.yuv \
-  --engine-dir build/engines/dcvcrt
+  -i output.nvcr -o reconstructed.yuv
 ```
 
-Input and output frames are planar YUV420P8. `NVCR`/`NVCS` are development
+By default the CLI loads engines from `NVCR_ENGINE_DIR`, then
+`$XDG_DATA_HOME/nvcr/engines/default`, then
+`$HOME/.local/share/nvcr/engines/default`; pass `--engine-dir` for a local build
+bundle. Input and output frames are planar YUV420P8. `NVCR`/`NVCS` are development
 framing formats and have no stable pre-v1 compatibility promise. Container
 timestamps and FFmpeg metadata are intentionally outside the codec access unit.
 

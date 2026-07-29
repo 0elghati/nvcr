@@ -240,7 +240,7 @@ gh workflow run release-assets.yml --ref main -f tag=v0.3.0
 Build and upload the Jetson package manually on the validated Jetson target:
 
 ```bash
-./scripts/install.sh --build-type Release --build-dir build-release-jetson --prefix "$PWD/install-release-jetson"
+./scripts/install_from_source.sh --build-type Release --build-dir build-release-jetson --prefix "$PWD/install-release-jetson"
 ./scripts/package_release.sh --version 0.3.0 --platform linux-aarch64-jetson-l4t36 --install-prefix "$PWD/install-release-jetson" --output-dir dist
 (cd dist && sha256sum -c nvcr-v0.3.0-linux-aarch64-jetson-l4t36.tar.gz.sha256)
 gh release upload v0.3.0 dist/nvcr-v0.3.0-linux-aarch64-jetson-l4t36.tar.gz dist/nvcr-v0.3.0-linux-aarch64-jetson-l4t36.tar.gz.sha256 --clobber

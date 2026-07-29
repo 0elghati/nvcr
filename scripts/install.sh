@@ -1,155 +1,204 @@
 #!/usr/bin/env bash
-# One-command configure/build/install for NVCR.
-#
-# Auto-detects the platform (Jetson vs. discrete GPU host), CUDA compiler,
-# CUDA architecture, and TensorRT location via scripts/detect_platform.sh, and
-# bootstraps a modern CMake (>= 3.24) via pip if the system one is too old.
-# All auto-detected choices can be overridden with explicit flags.
 set -euo pipefail
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "$script_dir/.." && pwd)"
-cd "$repo_root"
-
-build_dir=""
-prefix=""
-build_type="Release"
-enable_tensorrt=1
+repo="${NVCR_REPO:-0elghati/NVCR}"
+tag="${NVCR_TAG:-latest}"
+backend="${NVCR_BACKEND:-default}"
+requested_backend="$backend"
+engine_profile="${NVCR_ENGINE_PROFILE:-1080p-fp16}"
+prefix="${NVCR_PREFIX:-$HOME/.local/nvcr}"
+data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+engine_root="${NVCR_ENGINE_ROOT:-$data_home/nvcr/engines}"
+bin_dir="$prefix/bin"
+download_dir=""
 run_tests=0
-jobs=""
-arch_set="auto"
-cuda_arch=""
-cuda_compiler=""
-tensorrt_root=""
-extra_cmake_args=()
+install_engines=1
 
 usage() {
-    cat <<EOF
-Usage: $0 [options]
+    cat <<EOF_USAGE
+Usage: install.sh [options]
+
+Installs the latest NVCR binary package and, by default, the matching backend
+engine bundle. The CLI then finds engines without --engine-dir at:
+  \$NVCR_ENGINE_DIR, or $data_home/nvcr/engines/default
 
 Options:
-  --build-dir DIR     CMake build directory (default: build-<platform>)
-  --prefix DIR        Install prefix (default: <repo>/install-<platform>)
-  --build-type TYPE   CMake build type (default: Release)
-  --no-tensorrt       Disable the TensorRT/CUDA backend (CPU-only build)
-  --arch-set MODE     auto (default): detect this machine's single GPU for
-                      the fastest local build. portable: build a
-                      redistributable fat binary covering common Jetson and
-                      discrete RTX/datacenter GPU architectures in one build
-                      (slower, larger; intended for release packaging).
-  --cuda-arch ARCH    Override CMAKE_CUDA_ARCHITECTURES explicitly; takes
-                      precedence over --arch-set
-  --cuda-compiler BIN Override auto-detected nvcc path
-  --tensorrt-root DIR Override auto-detected TensorRT_ROOT
-  --run-tests         Run ctest after building
-  --jobs N            Parallel build jobs (default: nproc)
-  --cmake-arg ARG     Extra literal argument forwarded to cmake configure
-                      (repeatable)
-  -h, --help          Show this help
-EOF
+  --repo OWNER/REPO       GitHub repository (default: $repo)
+  --tag TAG               Release tag, or "latest" (default: latest)
+  --backend NAME          Engine backend to install (default: default)
+  --engine-profile NAME   Engine profile asset to install (default: 1080p-fp16)
+  --prefix DIR            NVCR install prefix (default: $prefix)
+  --engine-root DIR       Engine install root (default: $engine_root)
+  --no-engines            Install only the NVCR binary package
+  --run-tests             Run nvcr --help and nvcr-artifacts --help after install
+  -h, --help              Show this help
+
+Environment overrides: NVCR_REPO, NVCR_TAG, NVCR_BACKEND, NVCR_ENGINE_PROFILE,
+NVCR_PREFIX, NVCR_ENGINE_ROOT, XDG_DATA_HOME.
+EOF_USAGE
 }
 
 while (($#)); do
     case "$1" in
-    --build-dir) build_dir="$2"; shift 2 ;;
+    --repo) repo="$2"; shift 2 ;;
+    --tag) tag="$2"; shift 2 ;;
+    --backend) backend="$2"; shift 2 ;;
+    --engine-profile) engine_profile="$2"; shift 2 ;;
     --prefix) prefix="$2"; shift 2 ;;
-    --build-type) build_type="$2"; shift 2 ;;
-    --no-tensorrt) enable_tensorrt=0; shift ;;
-    --arch-set) arch_set="$2"; shift 2 ;;
-    --cuda-arch) cuda_arch="$2"; shift 2 ;;
-    --cuda-compiler) cuda_compiler="$2"; shift 2 ;;
-    --tensorrt-root) tensorrt_root="$2"; shift 2 ;;
+    --engine-root) engine_root="$2"; shift 2 ;;
+    --no-engines) install_engines=0; shift ;;
     --run-tests) run_tests=1; shift ;;
-    --jobs) jobs="$2"; shift 2 ;;
-    --cmake-arg) extra_cmake_args+=("$2"); shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *)
-        echo "unknown argument: $1" >&2
+        echo "nvcr-install: unknown argument: $1" >&2
         usage >&2
         exit 2
         ;;
     esac
 done
 
-if [[ "$arch_set" != "auto" && "$arch_set" != "portable" ]]; then
-    echo "invalid --arch-set: $arch_set (expected auto or portable)" >&2
+require_command() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "nvcr-install: required command not found: $1" >&2
+        exit 1
+    fi
+}
+
+require_command curl
+require_command tar
+require_command sha256sum
+require_command python3
+
+case "$(uname -s):$(uname -m)" in
+Linux:x86_64) package_family="linux-x86_64-nvidia" ;;
+Linux:aarch64) package_family="linux-aarch64-jetson-l4t36" ;;
+*)
+    echo "nvcr-install: unsupported platform: $(uname -s) $(uname -m)" >&2
+    exit 2
+    ;;
+esac
+
+case "$backend" in
+default)
+    resolved_backend="dcvcrt"
+    backend_asset_id="dcvcrt-cvpr2025"
+    backend_archive_dir="dcvcrt"
+    ;;
+dcvcrt)
+    resolved_backend="dcvcrt"
+    backend_asset_id="dcvcrt-cvpr2025"
+    backend_archive_dir="dcvcrt"
+    ;;
+*)
+    echo "nvcr-install: unsupported backend: $backend" >&2
+    exit 2
+    ;;
+esac
+if [[ "$repo" != */* || "$repo" == *..* || "$repo" == /* ]]; then
+    echo "nvcr-install: invalid repo: $repo" >&2
     exit 2
 fi
 
-# shellcheck source=scripts/detect_platform.sh
-source "$script_dir/detect_platform.sh"
-nvcr_detect_platform_report
+download_dir="$(mktemp -d "${TMPDIR:-/tmp}/nvcr-install.XXXXXX")"
+trap 'rm -rf -- "$download_dir"' EXIT
 
-[[ -z "$build_dir" ]] && build_dir="build-${NVCR_DETECT_PLATFORM}"
-[[ -z "$prefix" ]] && prefix="$repo_root/install-${NVCR_DETECT_PLATFORM}"
-[[ -z "$jobs" ]] && jobs="$(command -v nproc >/dev/null 2>&1 && nproc || echo 4)"
-# Only auto-fill --cuda-arch from single-machine detection in "auto" mode;
-# "portable" mode must reach the arch_set branch below untouched so it uses
-# the curated multi-arch list instead of this build machine's single GPU.
-if [[ -z "$cuda_arch" && "$arch_set" == "auto" ]]; then
-    cuda_arch="$NVCR_DETECT_ARCH"
-fi
-[[ -z "$cuda_compiler" ]] && cuda_compiler="$NVCR_DETECT_NVCC"
-[[ -z "$tensorrt_root" ]] && tensorrt_root="$NVCR_DETECT_TENSORRT_ROOT"
-
-# Bootstrap a modern-enough CMake (>= 3.24) if the system one is too old, or
-# missing, using a pip-installed wheel (works for both x86_64 and aarch64).
-cmake_bin="$(command -v cmake || true)"
-need_bootstrap=0
-if [[ -z "$cmake_bin" ]]; then
-    need_bootstrap=1
+api_url="https://api.github.com/repos/$repo/releases"
+if [[ "$tag" == "latest" ]]; then
+    release_json="$download_dir/latest.json"
+    curl -fsSL "$api_url/latest" -o "$release_json"
+    tag="$(python3 - "$release_json" <<'PY'
+import json
+import sys
+print(json.loads(open(sys.argv[1], encoding="utf-8").read())["tag_name"])
+PY
+)"
 else
-    cmake_version="$("$cmake_bin" --version | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)"
-    cmake_major="${cmake_version%%.*}"
-    cmake_minor="$(echo "$cmake_version" | cut -d. -f2)"
-    if [[ -z "$cmake_major" ]] || (( cmake_major < 3 )) || { (( cmake_major == 3 )) && (( cmake_minor < 24 )); }; then
-        need_bootstrap=1
-    fi
+    release_json="$download_dir/release.json"
+    curl -fsSL "$api_url/tags/$tag" -o "$release_json"
 fi
-if ((need_bootstrap)); then
-    echo "System CMake is missing or older than 3.24 (required); installing a local copy with pip." >&2
-    python3 -m pip install --user --upgrade "cmake>=3.24" >&2
-    user_base="$(python3 -m site --user-base)"
-    export PATH="$user_base/bin:$PATH"
-    cmake_bin="$(command -v cmake)"
-fi
-echo "Using cmake: $cmake_bin ($("$cmake_bin" --version | head -1))"
 
-cmake_args=(-S "$repo_root" -B "$build_dir" -DCMAKE_BUILD_TYPE="$build_type")
-if ((enable_tensorrt)); then
-    cmake_args+=(-DNVCR_ENABLE_TENSORRT=ON)
-    [[ -n "$cuda_compiler" ]] && cmake_args+=(-DCMAKE_CUDA_COMPILER="$cuda_compiler")
-    if [[ -n "$cuda_arch" ]]; then
-        cmake_args+=(-DCMAKE_CUDA_ARCHITECTURES="$cuda_arch")
-    elif [[ "$arch_set" == "portable" ]]; then
-        # Let cmake/NVCRAutodetect.cmake pick its curated multi-arch list;
-        # do not force a single build-machine architecture here.
-        cmake_args+=(-DNVCR_CUDA_ARCH_SET=portable)
-    else
-        cmake_args+=(-DCMAKE_CUDA_ARCHITECTURES="${NVCR_DETECT_ARCH:-native}")
-    fi
-    [[ -n "$tensorrt_root" ]] && cmake_args+=(-DTensorRT_ROOT="$tensorrt_root")
-else
-    cmake_args+=(-DNVCR_ENABLE_TENSORRT=OFF)
-fi
-cmake_args+=("${extra_cmake_args[@]}")
+version="${tag#v}"
+package_asset="nvcr-$tag-$package_family.tar.gz"
+engine_asset="nvcr-$tag-$package_family-$backend_asset_id-$engine_profile-engines.tar.gz"
 
-echo "Configuring: $cmake_bin ${cmake_args[*]}"
-"$cmake_bin" "${cmake_args[@]}"
-"$cmake_bin" --build "$build_dir" --parallel "$jobs"
-"$cmake_bin" --install "$build_dir" --prefix "$prefix"
+asset_url() {
+    python3 - "$release_json" "$1" <<'PY'
+import json
+import sys
+release = json.loads(open(sys.argv[1], encoding="utf-8").read())
+name = sys.argv[2]
+for asset in release.get("assets", []):
+    if asset.get("name") == name:
+        print(asset["browser_download_url"])
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+download_asset() {
+    local name="$1"
+    local url
+    if ! url="$(asset_url "$name")"; then
+        echo "nvcr-install: release $tag does not contain asset: $name" >&2
+        exit 1
+    fi
+    curl -fL "$url" -o "$download_dir/$name"
+}
+
+verify_checksum() {
+    local name="$1"
+    download_asset "$name.sha256"
+    (
+        cd "$download_dir"
+        sha256sum -c "$name.sha256"
+    )
+}
+
+echo "Installing NVCR $tag for $package_family"
+download_asset "$package_asset"
+verify_checksum "$package_asset"
+mkdir -p "$prefix"
+tar -xzf "$download_dir/$package_asset" -C "$prefix" --strip-components=1
+
+if ((install_engines)); then
+    echo "Installing $requested_backend backend engines ($engine_profile)"
+    download_asset "$engine_asset"
+    verify_checksum "$engine_asset"
+    engine_install="$engine_root/releases/${engine_asset%.tar.gz}"
+    rm -rf -- "$engine_install"
+    mkdir -p "$engine_install"
+    tar -xzf "$download_dir/$engine_asset" -C "$engine_install" --strip-components=1
+    mkdir -p "$engine_root"
+    ln -sfn "$engine_install/$backend_archive_dir" "$engine_root/$resolved_backend"
+    ln -sfn "$engine_install/$backend_archive_dir" "$engine_root/default"
+    "$bin_dir/nvcr-artifacts" validate "$engine_root/default" --json >/dev/null
+fi
 
 if ((run_tests)); then
-    ctest_bin="$(command -v ctest || true)"
-    if [[ -z "$ctest_bin" ]]; then
-        ctest_bin="$(dirname "$cmake_bin")/ctest"
-    fi
-    "$ctest_bin" --test-dir "$build_dir" --output-on-failure
+    "$bin_dir/nvcr" --help >/dev/null
+    "$bin_dir/nvcr-artifacts" --help >/dev/null
 fi
 
-cat <<EOF
+cat <<EOF_DONE
+NVCR $version installed.
 
-NVCR installed to: $prefix
-Add it to PATH for this shell:
-  export PATH="$prefix/bin:\$PATH"
-EOF
+Binary prefix:
+  $prefix
+
+Add this to PATH if needed:
+  export PATH="$bin_dir:\$PATH"
+EOF_DONE
+
+if ((install_engines)); then
+    cat <<EOF_ENGINES
+
+Default engine directory:
+  $engine_root/default
+
+Backend engine directory:
+  $engine_root/$resolved_backend
+
+The nvcr CLI will use that directory automatically unless --engine-dir or
+NVCR_ENGINE_DIR overrides it.
+EOF_ENGINES
+fi

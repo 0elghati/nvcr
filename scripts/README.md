@@ -54,10 +54,12 @@ v1 reference targets; detection of another GPU is not a support claim.
 
 ```bash
 ./scripts/detect_platform.sh
-./scripts/install.sh --run-tests
+./scripts/install_from_source.sh --run-tests
 ```
 
-The optional `--arch-set portable` produces a CUDA fat binary for experimentation.
+Published binary releases use `./scripts/install.sh`, which downloads the release
+package and active backend engine bundle. The optional `--arch-set portable`
+produces a CUDA fat binary for experimentation.
 It does not make the runtime universal or make TensorRT plans portable.
 
 ## Packaging

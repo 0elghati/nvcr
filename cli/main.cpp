@@ -47,11 +47,11 @@ struct Options final {
 };
 
 void usage(std::ostream& out) {
-    out << "NVCR native DCVC-RT encoder and decoder\n\n"
+    out << "NVCR native encoder and decoder\n\n"
         << "Usage:\n"
         << "  nvcr encode -i INPUT.yuv -o OUTPUT.nvcr -s WIDTHxHEIGHT\n"
-        << "              --engine-dir DIR [--frames N] [--qp N] [--gop-size N] [-r FPS]\n"
-        << "  nvcr decode -i INPUT.nvcr -o OUTPUT.yuv --engine-dir DIR\n"
+        << "              [--engine-dir DIR] [--frames N] [--qp N] [--gop-size N] [-r FPS]\n"
+        << "  nvcr decode -i INPUT.nvcr -o OUTPUT.yuv [--engine-dir DIR]\n"
         << "              [--frames N] [--device-id N]\n\n"
         << "Input and output video use planar 8-bit YUV 4:2:0. A frame count of zero\n"
         << "means process until end of input. Normal encoding uses the configured I/P\n"
@@ -63,6 +63,7 @@ void usage(std::ostream& out) {
         << "      --width N             Raw input width (encode only)\n"
         << "      --height N            Raw input height (encode only)\n"
         << "      --engine-dir DIR      TensorRT engine and entropy asset directory\n"
+        << "                            (default: NVCR_ENGINE_DIR or XDG data engines/default)\n"
         << "      --frames N            Frames to process; 0 means all (default: 0)\n"
         << "      --qp N                I-frame QP (default: 32)\n"
         << "      --gop-size N          GOP size; 1 explicitly requests all-intra (default: 32)\n"
@@ -98,6 +99,19 @@ bool parse_fps(std::string_view text, std::int64_t& period_us) {
     if (period > static_cast<double>(std::numeric_limits<std::int64_t>::max())) return false;
     period_us = static_cast<std::int64_t>(std::llround(period));
     return period_us > 0;
+}
+
+fs::path default_engine_dir() {
+    if (const char* engine_dir = std::getenv("NVCR_ENGINE_DIR")) {
+        if (*engine_dir != '\0') return fs::path(engine_dir);
+    }
+    if (const char* xdg_data_home = std::getenv("XDG_DATA_HOME")) {
+        if (*xdg_data_home != '\0') return fs::path(xdg_data_home) / "nvcr" / "engines" / "default";
+    }
+    if (const char* home = std::getenv("HOME")) {
+        if (*home != '\0') return fs::path(home) / ".local" / "share" / "nvcr" / "engines" / "default";
+    }
+    return fs::path("engines") / "default";
 }
 
 bool parse_options(int argc, char* argv[], Options& options) {
@@ -205,8 +219,11 @@ bool parse_options(int argc, char* argv[], Options& options) {
             return false;
         }
     }
-    if (options.input.empty() || options.output.empty() || options.engine_dir.empty()) {
-        std::cerr << "nvcr: --input, --output, and --engine-dir are required\n";
+    if (options.engine_dir.empty()) {
+        options.engine_dir = default_engine_dir();
+    }
+    if (options.input.empty() || options.output.empty()) {
+        std::cerr << "nvcr: --input and --output are required\n";
         return false;
     }
     if (options.input == options.output) {
