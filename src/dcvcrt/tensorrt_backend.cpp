@@ -3316,9 +3316,11 @@ public:
             profiling_enabled_ = configuration.enable_profiling;
             verify_encoder_reconstruction_ = configuration.verify_encoder_reconstruction;
             low_memory_mode_ = low_memory_mode.value();
-            std::clog << "[nvcr.dcvcrt] [info] TensorRT mode: "
-                      << (low_memory_mode_ ? "low-memory" : "performance")
-                      << '\n';
+            if (configuration.log_level <= LogLevel::info) {
+                std::clog << "[nvcr.dcvcrt] [info] TensorRT mode: "
+                          << (low_memory_mode_ ? "low-memory" : "performance")
+                          << '\n';
+            }
             initialized_ = true;
             return {};
         } catch (const std::exception& exception) {

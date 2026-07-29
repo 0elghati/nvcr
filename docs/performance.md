@@ -109,6 +109,25 @@ The next performance milestone is to finish the GPU-resident I-frame graph:
 5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
 
 
+### 2026-07-29 CLI logging overhead cleanup
+
+Default CLI encode/decode output now prints only the final summary. Per-frame
+progress and runtime info logs require `--verbose`; detailed TensorRT/CUDA stage
+counters still require `--profile`. This keeps benchmark stdout small and avoids
+terminal/log-processing overhead in normal runs.
+
+Quiet 720p all-I check after the change:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_720p_quiet_gop1_final.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size 1 --qp 32 \
+  --engine-profile 720p-fp16
+```
+
+Result: 97 frames, 1,104,333 payload bytes, 3.168 s codec time, 30.616 fps.
+
 ### 2026-07-29 RTX 4070 720p entropy threshold update
 
 Change under test: enable the two-rANS-coder path at exactly 1280x720 instead

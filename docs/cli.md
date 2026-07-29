@@ -20,6 +20,10 @@ configured I/P GOPs through fourteen TensorRT plans. It remains
 correctness-first and performance work is still active, so use Release builds
 for timing.
 
+By default, encode/decode print only a final summary. Pass `--verbose` (`-v`) to
+print per-frame CLI progress lines. Pass `--profile` for detailed TensorRT/CUDA
+stage counters; profile output is diagnostic and may add synchronization overhead.
+
 ## Encode
 
 Encode one frame:

@@ -45,6 +45,7 @@ struct Options final {
     std::int64_t frame_period_us{16'667};
     std::int32_t device_id{};
     bool profile{};
+    bool verbose{};
     bool help{};
 };
 
@@ -78,6 +79,7 @@ void usage(std::ostream& out) {
         << "      --frame-period-us N   Exact timestamp interval (alternative to --fps)\n"
         << "      --device-id N         CUDA device (default: 0)\n"
         << "      --profile             Print TensorRT/CUDA per-frame profiling counters\n"
+        << "  -v, --verbose             Print per-frame CLI progress and info logs\n"
         << "  -h, --help                Show this help\n";
 }
 
@@ -242,6 +244,8 @@ bool parse_options(int argc, char* argv[], Options& options) {
             }
         } else if (argument == "--profile") {
             options.profile = true;
+        } else if (argument == "--verbose" || argument == "-v") {
+            options.verbose = true;
         } else {
             std::cerr << "nvcr: unknown option: " << argument << '\n';
             return false;
@@ -410,6 +414,7 @@ nvcr::Result<nvcr::Runtime> create_runtime(const Options& options) {
     configuration.intra_qp = options.qp;
     configuration.gop_size = options.gop_size;
     configuration.enable_profiling = options.profile;
+    configuration.log_level = options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
     nvcr::codec::Components components;
     components.codec = std::move(backend.value());
     return nvcr::Runtime::create(configuration, std::move(components));
@@ -488,11 +493,13 @@ int encode(const Options& options) {
             return 1;
         }
         payload_bytes += packet.value().size();
-        const double milliseconds =
-            std::chrono::duration<double, std::milli>(elapsed).count();
-        std::cout << "frame " << frame_index << ": encoded " << packet.value().size()
-                  << " payload bytes in " << std::fixed << std::setprecision(2)
-                  << milliseconds << " ms\n";
+        if (options.verbose) {
+            const double milliseconds =
+                std::chrono::duration<double, std::milli>(elapsed).count();
+            std::cout << "frame " << frame_index << ": encoded " << packet.value().size()
+                      << " payload bytes in " << std::fixed << std::setprecision(2)
+                      << milliseconds << " ms\n";
+        }
         ++frame_index;
     }
     auto flushed = runtime.value().flush();
@@ -586,10 +593,12 @@ int decode(const Options& options) {
             std::cerr << "nvcr: failed writing decoded frame " << frame_index << '\n';
             return 1;
         }
-        const double milliseconds =
-            std::chrono::duration<double, std::milli>(elapsed).count();
-        std::cout << "frame " << frame_index << ": decoded in " << std::fixed
-                  << std::setprecision(2) << milliseconds << " ms\n";
+        if (options.verbose) {
+            const double milliseconds =
+                std::chrono::duration<double, std::milli>(elapsed).count();
+            std::cout << "frame " << frame_index << ": decoded in " << std::fixed
+                      << std::setprecision(2) << milliseconds << " ms\n";
+        }
         ++frame_index;
     }
     auto flushed = runtime.value().flush();
