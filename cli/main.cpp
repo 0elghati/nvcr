@@ -35,6 +35,8 @@ struct Options final {
     fs::path input;
     fs::path output;
     fs::path engine_dir;
+    std::string backend{"default"};
+    std::string engine_profile;
     std::uint32_t width{};
     std::uint32_t height{};
     std::size_t frames{};
@@ -50,9 +52,11 @@ void usage(std::ostream& out) {
     out << "NVCR native encoder and decoder\n\n"
         << "Usage:\n"
         << "  nvcr encode -i INPUT.yuv -o OUTPUT.nvcr -s WIDTHxHEIGHT\n"
-        << "              [--engine-dir DIR] [--frames N] [--qp N] [--gop-size N] [-r FPS]\n"
-        << "  nvcr decode -i INPUT.nvcr -o OUTPUT.yuv [--engine-dir DIR]\n"
-        << "              [--frames N] [--device-id N]\n\n"
+        << "              [--backend NAME] [--engine-profile NAME] [--frames N] [--qp N]\n"
+        << "              [--gop-size N] [-r FPS] [--engine-dir DIR]\n"
+        << "  nvcr decode -i INPUT.nvcr -o OUTPUT.yuv\n"
+        << "              [--backend NAME] [--engine-profile NAME] [--frames N]\n"
+        << "              [--device-id N] [--engine-dir DIR]\n\n"
         << "Input and output video use planar 8-bit YUV 4:2:0. A frame count of zero\n"
         << "means process until end of input. Normal encoding uses the configured I/P\n"
         << "GOP; --gop-size 1 explicitly requests all-intra development mode.\n\n"
@@ -62,8 +66,11 @@ void usage(std::ostream& out) {
         << "  -s, --size WIDTHxHEIGHT   Raw input dimensions (encode only)\n"
         << "      --width N             Raw input width (encode only)\n"
         << "      --height N            Raw input height (encode only)\n"
-        << "      --engine-dir DIR      TensorRT engine and entropy asset directory\n"
-        << "                            (default: NVCR_ENGINE_DIR or XDG data engines/default)\n"
+        << "      --backend NAME        Installed backend selector (default: NVCR_BACKEND or default)\n"
+        << "      --engine-profile NAME Installed engine profile, for example 720p-fp16\n"
+        << "                            (default: NVCR_ENGINE_PROFILE or active default)\n"
+        << "      --engine-dir DIR      Custom TensorRT engine and entropy asset directory\n"
+        << "                            (overrides backend/profile selection)\n"
         << "      --frames N            Frames to process; 0 means all (default: 0)\n"
         << "      --qp N                I-frame QP (default: 32)\n"
         << "      --gop-size N          GOP size; 1 explicitly requests all-intra (default: 32)\n"
@@ -101,17 +108,27 @@ bool parse_fps(std::string_view text, std::int64_t& period_us) {
     return period_us > 0;
 }
 
-fs::path default_engine_dir() {
+fs::path default_engine_root() {
+    if (const char* xdg_data_home = std::getenv("XDG_DATA_HOME")) {
+        if (*xdg_data_home != '\0') return fs::path(xdg_data_home) / "nvcr" / "engines";
+    }
+    if (const char* home = std::getenv("HOME")) {
+        if (*home != '\0') return fs::path(home) / ".local" / "share" / "nvcr" / "engines";
+    }
+    return fs::path("engines");
+}
+
+fs::path resolve_engine_dir(const Options& options) {
+    if (!options.engine_dir.empty()) return options.engine_dir;
     if (const char* engine_dir = std::getenv("NVCR_ENGINE_DIR")) {
         if (*engine_dir != '\0') return fs::path(engine_dir);
     }
-    if (const char* xdg_data_home = std::getenv("XDG_DATA_HOME")) {
-        if (*xdg_data_home != '\0') return fs::path(xdg_data_home) / "nvcr" / "engines" / "default";
+
+    auto root = default_engine_root();
+    if (!options.engine_profile.empty()) {
+        return root / "profiles" / options.backend / options.engine_profile;
     }
-    if (const char* home = std::getenv("HOME")) {
-        if (*home != '\0') return fs::path(home) / ".local" / "share" / "nvcr" / "engines" / "default";
-    }
-    return fs::path("engines") / "default";
+    return root / options.backend;
 }
 
 bool parse_options(int argc, char* argv[], Options& options) {
@@ -153,6 +170,12 @@ bool parse_options(int argc, char* argv[], Options& options) {
         } else if (argument == "--output" || argument == "-o") {
             options.output = value_after(argument);
             if (options.output.empty()) return false;
+        } else if (argument == "--backend") {
+            options.backend = std::string(value_after(argument));
+            if (options.backend.empty()) return false;
+        } else if (argument == "--engine-profile") {
+            options.engine_profile = std::string(value_after(argument));
+            if (options.engine_profile.empty()) return false;
         } else if (argument == "--engine-dir") {
             options.engine_dir = value_after(argument);
             if (options.engine_dir.empty()) return false;
@@ -219,9 +242,13 @@ bool parse_options(int argc, char* argv[], Options& options) {
             return false;
         }
     }
-    if (options.engine_dir.empty()) {
-        options.engine_dir = default_engine_dir();
+    if (const char* backend = std::getenv("NVCR_BACKEND")) {
+        if (*backend != '\0' && options.backend == "default") options.backend = backend;
     }
+    if (const char* profile = std::getenv("NVCR_ENGINE_PROFILE")) {
+        if (*profile != '\0' && options.engine_profile.empty()) options.engine_profile = profile;
+    }
+    options.engine_dir = resolve_engine_dir(options);
     if (options.input.empty() || options.output.empty()) {
         std::cerr << "nvcr: --input and --output are required\n";
         return false;

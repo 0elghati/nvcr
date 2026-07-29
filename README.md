@@ -87,7 +87,9 @@ cmake --build build-release --parallel
 ```
 
 For published releases, the convenience installer fetches the latest matching
-Linux package and the default backend engine bundle for the platform:
+Linux package and every available engine profile for the selected backend. If
+more than one profile is available, it asks which backend/profile should become
+the active CLI default:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
@@ -169,10 +171,17 @@ coverage; it runs only the tests available to that configuration.
   -i output.nvcr -o reconstructed.yuv
 ```
 
-By default the CLI loads engines from `NVCR_ENGINE_DIR`, then
-`$XDG_DATA_HOME/nvcr/engines/default`, then
-`$HOME/.local/share/nvcr/engines/default`; pass `--engine-dir` for a local build
-bundle. Input and output frames are planar YUV420P8. `NVCR`/`NVCS` are development
+By default the CLI uses the active installed engine profile. Switch profiles
+without passing an engine path:
+
+```bash
+./build-release/cli/nvcr encode ... --engine-profile 720p-fp16
+NVCR_ENGINE_PROFILE=1080p-fp16 ./build-release/cli/nvcr decode ...
+```
+
+Use `--backend NAME` when multiple backends are installed. `--engine-dir` remains
+available only for custom bundles and local development tests. Input and output
+frames are planar YUV420P8. `NVCR`/`NVCS` are development
 framing formats and have no stable pre-v1 compatibility promise. Container
 timestamps and FFmpeg metadata are intentionally outside the codec access unit.
 
