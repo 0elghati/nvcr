@@ -109,6 +109,38 @@ The next performance milestone is to finish the GPU-resident I-frame graph:
 5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
 
 
+### 2026-07-29 RTX 4070 720p GOP sweep by commit
+
+Commit: `f88c2b2e24be` (`f88c2b2e24be5f8d28d3cc147bb5c4d1ddb8d44f`)
+
+Command template:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_720p_gop<GOP>_f88c2b2e24be.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size <GOP> --qp 32 \
+  --engine-profile 720p-fp16
+```
+
+Single-run codec-time summaries:
+
+| Commit | GOP | Frames | Payload bytes | Codec time | Throughput |
+|---|---:|---:|---:|---:|---:|
+| `f88c2b2e24be` | 1 | 97 | 1,103,993 | 3.327 s | 29.154 fps |
+| `f88c2b2e24be` | 2 | 97 | 910,474 | 2.196 s | 44.174 fps |
+| `f88c2b2e24be` | 4 | 97 | 500,953 | 1.614 s | 60.082 fps |
+| `f88c2b2e24be` | 8 | 97 | 312,353 | 1.329 s | 72.978 fps |
+| `f88c2b2e24be` | 16 | 97 | 191,276 | 1.186 s | 81.792 fps |
+| `f88c2b2e24be` | 32 | 97 | 125,481 | 1.109 s | 87.487 fps |
+| `f88c2b2e24be` | 97 | 97 | 85,951 | 1.033 s | 93.916 fps |
+
+Interpretation: longer GOPs amortize the current I-frame cost and lean on the
+faster P-frame path. The GOP-97 run is the best throughput point in this sweep
+because it contains one I frame followed by 96 P frames; GOP-1 is the all-I stress
+case and remains the main I-frame optimization target. These are reference
+single-run numbers, not final repeated release evidence under the full protocol.
+
 ### 2026-07-29 RTX 4070 720p all-I profile
 
 Command:

@@ -135,6 +135,7 @@ Verification evidence, 2026-07-29:
 
 - [x] Release build after encode-side I-frame GPU residency: `cmake --build build-release -j 8`.
 - [x] Release tests after encode-side I-frame GPU residency: `ctest --test-dir build-release --output-on-failure` passed 8/8.
+- [x] Commit `f88c2b2e24be` 720p GOP sweep on FourPeople, 97 frames, QP 32, profile `720p-fp16`: GOP 1 = 29.154 fps, GOP 2 = 44.174 fps, GOP 4 = 60.082 fps, GOP 8 = 72.978 fps, GOP 16 = 81.792 fps, GOP 32 = 87.487 fps, GOP 97 = 93.916 fps.
 - [x] 720p all-I profile after making the DPB bridge verification-only: `./build-release/cli/nvcr encode -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv -o /tmp/fourpeople_720p_alli_fast.nvcr -s 1280x720 -r 30 --frames 97 --gop-size 1 --qp 32 --engine-profile 720p-fp16 --profile` produced 97 frames in 3.353 s (28.927 fps); warmed I frames were ~34.2-34.8 ms.
 - [x] 720p GOP-8 profile sample before the bridge fix: `./build-release/cli/nvcr encode -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv -o /tmp/fourpeople_720p_opt.nvcr -s 1280x720 -r 30 --frames 97 --gop-size 8 --qp 32 --engine-profile 720p-fp16 --profile` produced 97 frames in 2.405 s (40.331 fps); warmed P frames were ~10.3-10.9 ms.
 - [ ] Warmed QCIF/1080p matrix and repeated JSON benchmark output are not recorded yet.
