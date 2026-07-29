@@ -18,8 +18,9 @@ before treating an implemented path as supported.
 9. [CLI](cli.md)
 10. [DCVC-RT integration](dcvcrt-integration.md)
 11. [Performance protocol and historical results](performance.md)
-12. [Release gates](releasing.md)
-13. [Roadmap and evidence](../ROADMAP.md)
+12. [Experimental mlvc-fast codec](mlvc-fast.md)
+13. [Release gates](releasing.md)
+14. [Roadmap and evidence](../ROADMAP.md)
 
 ## Policy shortcuts
 

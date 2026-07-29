@@ -219,41 +219,132 @@ void state_test() {
 }
 
 void experimental_fast_backend_test() {
-    auto backend = nvcr::experimental::make_fast_backend();
-    expect(backend.has_value(), "experimental fast backend is created");
-    if (!backend) return;
+    auto encoder = nvcr::experimental::make_fast_backend();
+    auto decoder = nvcr::experimental::make_fast_backend();
+    expect(encoder.has_value() && decoder.has_value(),
+           "experimental fast backends are created");
+    if (!encoder || !decoder) return;
 
     nvcr::RuntimeConfiguration configuration;
-    expect(backend.value()->initialize(configuration).has_value(),
-           "experimental fast backend initializes");
+    configuration.intra_qp = 32;
+    expect(encoder.value()->initialize(configuration).has_value() &&
+               decoder.value()->initialize(configuration).has_value(),
+           "experimental fast backends initialize");
 
-    auto frame = nvcr::Frame::create(16, 8, nvcr::PixelFormat::yuv420p8);
+    auto frame = nvcr::Frame::create(64, 32, nvcr::PixelFormat::yuv420p8);
     expect(frame.has_value(), "experimental fast source frame is created");
     if (!frame) return;
-    std::uint8_t value = 0;
-    for (auto& byte : frame.value().data()) {
-        byte = static_cast<std::byte>(value++);
+    for (std::size_t index = 0; index < frame.value().data().size(); ++index) {
+        const auto x = index % 64U;
+        const auto y = index / 64U;
+        frame.value().data()[index] =
+            static_cast<std::byte>((x * 3U + y * 2U) & 0xffU);
     }
 
-    nvcr::codec::SequenceState state(32);
-    auto encoded = backend.value()->encode(
-        frame.value(), nvcr::FrameType::intra, state.view());
-    expect(encoded.has_value(), "experimental fast frame encodes");
+    nvcr::codec::SequenceState encoder_state(32);
+    nvcr::codec::SequenceState decoder_state(32);
+    auto encoded = encoder.value()->encode(
+        frame.value(), nvcr::FrameType::intra, encoder_state.view());
+    expect(encoded.has_value(), "experimental fast intra frame encodes");
     if (!encoded) return;
-    auto decoded = backend.value()->decode(
-        encoded.value().payload, nvcr::FrameType::intra, nvcr::Timestamp{}, state.view());
-    expect(decoded.has_value(), "experimental fast frame decodes");
+    expect(encoded.value().payload.size() < frame.value().size_bytes(),
+           "experimental fast intra payload is smaller than raw YUV");
+    auto decoded = decoder.value()->decode(
+        encoded.value().payload, nvcr::FrameType::intra,
+        nvcr::Timestamp{}, decoder_state.view());
+    expect(decoded.has_value(), "experimental fast intra frame decodes");
     if (!decoded) return;
     expect(decoded.value().frame.pixel_format() == nvcr::PixelFormat::yuv420p8,
            "experimental fast backend returns YUV420P8");
-    expect(decoded.value().frame.width() == frame.value().width() &&
-           decoded.value().frame.height() == frame.value().height(),
-           "experimental fast dimensions round-trip");
     expect(std::equal(
                decoded.value().frame.data().begin(),
                decoded.value().frame.data().end(),
-               frame.value().data().begin()),
-           "experimental fast pixels round-trip");
+               encoded.value().reconstructed_frame.data().begin()),
+           "experimental fast encoder and decoder intra reconstruction agrees");
+
+    std::uint8_t maximum_error = 0;
+    for (std::size_t index = 0; index < frame.value().data().size(); ++index) {
+        const auto source = std::to_integer<int>(frame.value().data()[index]);
+        const auto reconstruction =
+            std::to_integer<int>(decoded.value().frame.data()[index]);
+        maximum_error = static_cast<std::uint8_t>(
+            std::max<int>(maximum_error, std::abs(source - reconstruction)));
+    }
+    expect(maximum_error <= 4U,
+           "experimental fast QP 32 reconstruction error is bounded");
+
+    auto encoder_reference = nvcr::Frame::copy_from(
+        64, 32, nvcr::PixelFormat::yuv420p8,
+        encoded.value().reconstructed_frame.data());
+    auto decoder_reference = nvcr::Frame::copy_from(
+        64, 32, nvcr::PixelFormat::yuv420p8, decoded.value().frame.data());
+    expect(encoder_reference.has_value() && decoder_reference.has_value(),
+           "experimental fast references are copied");
+    if (!encoder_reference || !decoder_reference) return;
+    expect(encoder_state.commit(
+               std::move(encoder_reference.value()), {}, nvcr::FrameType::intra)
+               .has_value() &&
+               decoder_state.commit(
+                   std::move(decoder_reference.value()), {}, nvcr::FrameType::intra)
+                   .has_value(),
+           "experimental fast intra references commit");
+
+    auto predicted = nvcr::Frame::create(64, 32, nvcr::PixelFormat::yuv420p8);
+    expect(predicted.has_value(), "experimental fast predicted source is created");
+    if (!predicted) return;
+    for (std::size_t index = 0; index < predicted.value().data().size(); ++index) {
+        const auto shifted = (index + 3U) % frame.value().data().size();
+        predicted.value().data()[index] = frame.value().data()[shifted];
+    }
+    auto encoded_predicted = encoder.value()->encode(
+        predicted.value(), nvcr::FrameType::predicted, encoder_state.view());
+    expect(encoded_predicted.has_value(), "experimental fast predicted frame encodes");
+    if (!encoded_predicted) return;
+    expect(encoded_predicted.value().payload.size() < predicted.value().size_bytes(),
+           "experimental fast predicted payload is smaller than raw YUV");
+    auto decoded_predicted = decoder.value()->decode(
+        encoded_predicted.value().payload, nvcr::FrameType::predicted,
+        nvcr::Timestamp{}, decoder_state.view());
+    expect(decoded_predicted.has_value(), "experimental fast predicted frame decodes");
+    if (!decoded_predicted) return;
+    expect(std::equal(
+               decoded_predicted.value().frame.data().begin(),
+               decoded_predicted.value().frame.data().end(),
+               encoded_predicted.value().reconstructed_frame.data().begin()),
+           "experimental fast encoder and decoder predicted reconstruction agrees");
+
+    auto truncated = encoded_predicted.value().payload;
+    truncated.pop_back();
+    expect(!decoder.value()->decode(
+               truncated, nvcr::FrameType::predicted,
+               nvcr::Timestamp{}, decoder_state.view()),
+           "experimental fast truncated payload is rejected");
+
+    auto low_qp_encoder = nvcr::experimental::make_fast_backend();
+    auto low_qp_decoder = nvcr::experimental::make_fast_backend();
+    configuration.intra_qp = 0;
+    expect(low_qp_encoder && low_qp_decoder &&
+               low_qp_encoder.value()->initialize(configuration).has_value() &&
+               low_qp_decoder.value()->initialize(configuration).has_value(),
+           "experimental fast low-QP backends initialize");
+    if (!low_qp_encoder || !low_qp_decoder) return;
+    auto extreme = nvcr::Frame::create(2, 2, nvcr::PixelFormat::yuv420p8);
+    expect(extreme.has_value(), "experimental fast extreme frame is created");
+    if (!extreme) return;
+    std::fill(extreme.value().data().begin(), extreme.value().data().end(),
+              std::byte{0});
+    extreme.value().data()[1] = std::byte{255};
+    nvcr::codec::SequenceState low_qp_state(1);
+    auto extreme_encoded = low_qp_encoder.value()->encode(
+        extreme.value(), nvcr::FrameType::intra, low_qp_state.view());
+    expect(extreme_encoded.has_value(),
+           "experimental fast 9-bit extreme residual encodes");
+    if (!extreme_encoded) return;
+    auto extreme_decoded = low_qp_decoder.value()->decode(
+        extreme_encoded.value().payload, nvcr::FrameType::intra,
+        nvcr::Timestamp{}, low_qp_state.view());
+    expect(extreme_decoded.has_value(),
+           "experimental fast 9-bit extreme residual decodes");
 }
 
 }  // namespace

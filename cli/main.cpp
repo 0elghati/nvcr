@@ -414,7 +414,7 @@ nvcr::Result<nvcr::Runtime> create_runtime(const Options& options) {
         : nvcr::dcvcrt::make_tensorrt_backend();
     if (!backend) return backend.error();
     nvcr::RuntimeConfiguration configuration;
-    if (backend_name == "mlvc-fast") configuration.model_id = "mlvc-fast-v0";
+    if (backend_name == "mlvc-fast") configuration.model_id = "mlvc-fast-v1";
     configuration.intra_engine_path = options.engine_dir;
     configuration.device_id = options.device_id;
     configuration.intra_qp = options.qp;

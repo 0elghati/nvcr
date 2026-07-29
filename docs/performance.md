@@ -112,7 +112,39 @@ The next performance milestone is to finish the GPU-resident I-frame graph:
 5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
 
 
-### 2026-07-29 DCVC-RT versus `mlvc-fast` comparison smoke
+### 2026-07-29 compressed `mlvc-fast-v1` implementation
+
+The raw transport scaffold has been replaced by an actual experimental I/P
+codec. It uses closed-loop spatial intra prediction, 32x32 block motion search,
+motion-compensated residuals, QP-derived scalar quantization, and adaptive
+256-sample bit packing. The decoder reconstructs the same references as the
+encoder. See [the backend design and usage document](mlvc-fast.md) for the
+payload syntax, algorithm, commands, and limitations.
+
+Release-build command:
+
+```bash
+./scripts/benchmark_resolution_pair.sh \
+  --backends "mlvc-fast" \
+  --gops "1 97" --frames 97 \
+  --jsonl /tmp/nvcr-mlvc-fast-compressed.jsonl
+```
+
+| Resolution | GOP | Encode FPS | Payload bytes | Raw reduction |
+|---|---:|---:|---:|---:|
+| 720p | 1 | 73.833 | 42,320,776 | 3.17x |
+| 720p | 97 | 201.101 | 38,264,072 | 3.50x |
+| 1080p | 1 | 29.674 | 127,451,430 | 2.37x |
+| 1080p | 97 | 97.808 | 126,328,902 | 2.39x |
+
+The GOP-97 streams decoded at 337.361 fps for 720p and 189.587 fps for 1080p.
+FFmpeg comparison against the 97-frame source prefixes measured 41.065 dB and
+40.957 dB average PSNR respectively. Release tests passed 6/6, including
+separate encoder/decoder I/P reconstruction, compression, error-bound, and
+truncation gates. These are single-run development measurements, not warmed
+publication results or a rate-distortion-equivalent comparison with DCVC-RT.
+
+### 2026-07-29 raw `mlvc-fast-v0` comparison smoke (superseded)
 
 The paired helper can now run multiple backends and a separate summarizer renders
 JSONL rows as Markdown. This comparison uses the same 720p/1080p inputs, 97
@@ -154,7 +186,7 @@ also proves raw payload mode is not a codec. The next meaningful `mlvc-fast`
 step must replace raw payloads with a fixed-shape compressed representation and
 track bitrate/RD beside FPS from the first experiment.
 
-### 2026-07-29 experimental `mlvc-fast` backend scaffold
+### 2026-07-29 experimental raw `mlvc-fast-v0` backend scaffold (superseded)
 
 An experimental backend selector, `--backend mlvc-fast`, now exists as a
 non-DCVC-RT playground for MLVC-inspired speed work. The first implementation is
