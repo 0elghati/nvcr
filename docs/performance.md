@@ -112,6 +112,48 @@ The next performance milestone is to finish the GPU-resident I-frame graph:
 5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
 
 
+### 2026-07-29 DCVC-RT versus `mlvc-fast` comparison smoke
+
+The paired helper can now run multiple backends and a separate summarizer renders
+JSONL rows as Markdown. This comparison uses the same 720p/1080p inputs, 97
+frames, QP 32, GOP 1 and GOP 97. It compares the current DCVC-RT TensorRT path
+against the experimental raw `mlvc-fast-v0` scaffold.
+
+Command:
+
+```bash
+./scripts/benchmark_resolution_pair.sh \
+  --backends "dcvcrt mlvc-fast" \
+  --gops "1 97" \
+  --jsonl /tmp/nvcr-dcvcrt-vs-mlvc-fast-2c0aa93.jsonl
+./scripts/summarize_benchmark_jsonl.py \
+  /tmp/nvcr-dcvcrt-vs-mlvc-fast-2c0aa93.jsonl
+```
+
+| Resolution | GOP | Backend | FPS | Payload bytes | Codec time |
+|---|---:|---|---:|---:|---:|
+| 1080p | 1 | `dcvcrt` | 13.262 | 4,421,239 | 7.314 s |
+| 1080p | 1 | `mlvc-fast` | 795.802 | 301,715,396 | 0.122 s |
+| 1080p | 97 | `dcvcrt` | 44.048 | 396,285 | 2.202 s |
+| 1080p | 97 | `mlvc-fast` | 815.074 | 301,715,396 | 0.119 s |
+| 720p | 1 | `dcvcrt` | 30.517 | 1,104,333 | 3.179 s |
+| 720p | 1 | `mlvc-fast` | 1,945.069 | 134,099,396 | 0.050 s |
+| 720p | 97 | `dcvcrt` | 94.472 | 86,297 | 1.027 s |
+| 720p | 97 | `mlvc-fast` | 1,962.196 | 134,099,396 | 0.049 s |
+
+| Resolution | GOP | FPS ratio | Payload ratio |
+|---|---:|---:|---:|
+| 1080p | 1 | 60.01x | 68.24x |
+| 1080p | 97 | 18.50x | 761.36x |
+| 720p | 1 | 63.74x | 121.43x |
+| 720p | 97 | 20.77x | 1,553.93x |
+
+Interpretation: the experimental backend proves that the NVCR runtime envelope
+can move frames much faster than the current DCVC-RT compression path, but it
+also proves raw payload mode is not a codec. The next meaningful `mlvc-fast`
+step must replace raw payloads with a fixed-shape compressed representation and
+track bitrate/RD beside FPS from the first experiment.
+
 ### 2026-07-29 experimental `mlvc-fast` backend scaffold
 
 An experimental backend selector, `--backend mlvc-fast`, now exists as a

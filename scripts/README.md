@@ -138,8 +138,10 @@ developer smoke helper, not the final publication harness, but it keeps 720p and
 
 ```bash
 ./scripts/benchmark_resolution_pair.sh \
+  --backends "dcvcrt mlvc-fast" \
   --gops "1 97" \
   --jsonl /tmp/nvcr-paired-benchmark.jsonl
+./scripts/summarize_benchmark_jsonl.py /tmp/nvcr-paired-benchmark.jsonl
 ```
 
 Override the default local inputs with `--720p-input`, `--1080p-input`, or the

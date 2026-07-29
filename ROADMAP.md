@@ -155,6 +155,7 @@ Verification evidence, 2026-07-29:
 - [ ] Warmed QCIF/1080p matrix and repeated JSON benchmark output are not recorded yet.
 - [x] Paired 720p/1080p diagnostic smoke added with `scripts/benchmark_resolution_pair.sh`; current single-run baseline: 720p GOP 1 = 30.518 fps, 720p GOP 97 = 94.170 fps, 1080p GOP 1 = 13.254 fps, 1080p GOP 97 = 44.103 fps.
 - [x] Experimental `mlvc-fast-v0` raw backend scaffold: 97-frame raw roundtrip matched source prefixes byte-for-byte; encode ceiling was 1,937.078 fps at 720p and 781.039 fps at 1080p, with raw payload sizes of 134,099,396 and 301,715,396 bytes respectively.
+- [x] DCVC-RT versus `mlvc-fast` comparison smoke: helper now supports backend matrices and Markdown summaries; current `mlvc-fast` raw scaffold is 18.50x-63.74x faster than DCVC-RT across the paired cells but emits 68.24x-1,553.93x larger payloads, so the next experimental milestone is compressed payload design.
 - [x] 1080p all-I diagnostic profile after scratch arena: 10 allocations / 54,477,632 bytes per I frame; hot enqueue stages are `i_synthesis` about 22-23 ms, `i_analysis` about 12 ms, and three spatial priors about 9 ms combined.
 
 Exit criteria:
