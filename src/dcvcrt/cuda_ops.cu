@@ -66,6 +66,40 @@ __global__ void replicate_pad_kernel(
     output[index] = input[source];
 }
 
+__global__ void crop_spatial_kernel(
+    const __half* input,
+    __half* output,
+    Shape4D input_shape,
+    std::int32_t output_height,
+    std::int32_t output_width,
+    std::size_t count) {
+    const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (index >= count) return;
+    const auto x = static_cast<std::int32_t>(index % output_width);
+    const auto row = index / static_cast<std::size_t>(output_width);
+    const auto y = static_cast<std::int32_t>(row % output_height);
+    const auto channel_batch = row / static_cast<std::size_t>(output_height);
+    const auto source =
+        (channel_batch * static_cast<std::size_t>(input_shape.height) + y) *
+            static_cast<std::size_t>(input_shape.width) + x;
+    output[index] = input[source];
+}
+
+__global__ void image_prior_quant_kernel(__half* params, __half* values, std::size_t spatial_count) {
+    const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (index >= spatial_count) return;
+    const float q_enc_sigmoid = 1.0F / (1.0F + expf(-load_half(params, index)));
+    const float q_dec_sigmoid = 1.0F / (1.0F + expf(-load_half(params, spatial_count + index)));
+    const float q_enc = q_enc_sigmoid * 1.5F + 0.5F;
+    const float q_dec = q_dec_sigmoid * 1.5F + 0.5F;
+    store_half(params, index, q_enc);
+    store_half(params, spatial_count + index, q_dec);
+    for (std::size_t channel = 0; channel < 256; ++channel) {
+        const auto offset = channel * spatial_count + index;
+        store_half(values, offset, load_half(values, offset) * q_enc);
+    }
+}
+
 __global__ void rgb24_to_ycbcr_padded_kernel(
     const std::uint8_t* input,
     std::int32_t source_width,
@@ -272,6 +306,24 @@ __global__ void restore_two_way_kernel(
     }
 }
 
+__global__ void add_in_place_kernel(
+    __half* first, const __half* second, std::size_t count) {
+    const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (index >= count) return;
+    first[index] = __float2half_rn(load_half(first, index) + load_half(second, index));
+}
+
+__global__ void multiply_broadcast_kernel(
+    __half* values, const __half* factors, std::size_t spatial_count,
+    std::int32_t channels, std::size_t count) {
+    const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (index >= count) return;
+    const auto spatial = index % spatial_count;
+    const auto channel = static_cast<std::int32_t>(index / spatial_count);
+    if (channel >= channels) return;
+    values[index] = __float2half_rn(load_half(values, index) * load_half(factors, spatial));
+}
+
 __global__ void add_and_multiply_kernel(
     __half* first, const __half* second, const __half* quant_step, std::size_t count) {
     const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
@@ -362,6 +414,28 @@ cudaError_t make_four_way_mask(
     const auto count = volume(shape);
     make_four_way_mask_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
         static_cast<__half*>(mask), shape, stage, count);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t crop_spatial(
+    const void* input, void* output, Shape4D input_shape, std::int32_t output_height,
+    std::int32_t output_width, cudaStream_t stream) noexcept {
+    if (input == nullptr || output == nullptr || invalid_shape(input_shape) ||
+        output_height <= 0 || output_width <= 0 || output_height > input_shape.height ||
+        output_width > input_shape.width) return cudaErrorInvalidValue;
+    const auto count = static_cast<std::size_t>(input_shape.batch) * input_shape.channels *
+        output_height * output_width;
+    crop_spatial_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
+        static_cast<const __half*>(input), static_cast<__half*>(output), input_shape,
+        output_height, output_width, count);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t apply_image_prior_and_quantize(
+    void* params, void* values, std::size_t spatial_count, cudaStream_t stream) noexcept {
+    if (params == nullptr || values == nullptr || spatial_count == 0) return cudaErrorInvalidValue;
+    image_prior_quant_kernel<<<blocks(spatial_count), threads_per_block, 0, stream>>>(
+        static_cast<__half*>(params), static_cast<__half*>(values), spatial_count);
     return cudaPeekAtLastError();
 }
 
@@ -515,6 +589,27 @@ cudaError_t restore_two_way(
     restore_two_way_kernel<<<blocks(half_size), threads_per_block, 0, stream>>>(
         static_cast<const __half*>(symbols), static_cast<const __half*>(means),
         static_cast<const __half*>(mask), static_cast<__half*>(output), half_size);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t add_in_place(
+    void* first, const void* second, std::size_t count, cudaStream_t stream) noexcept {
+    if (first == nullptr || second == nullptr || count == 0) return cudaErrorInvalidValue;
+    add_in_place_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
+        static_cast<__half*>(first), static_cast<const __half*>(second), count);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t multiply_broadcast_in_place(
+    void* values, const void* factors, std::size_t spatial_count,
+    std::int32_t channels, cudaStream_t stream) noexcept {
+    if (values == nullptr || factors == nullptr || spatial_count == 0 || channels <= 0) {
+        return cudaErrorInvalidValue;
+    }
+    const auto count = spatial_count * static_cast<std::size_t>(channels);
+    multiply_broadcast_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
+        static_cast<__half*>(values), static_cast<const __half*>(factors),
+        spatial_count, channels, count);
     return cudaPeekAtLastError();
 }
 

@@ -62,21 +62,82 @@ The rANS optimization in this tree reduced its synthetic 1080p-sized round trip
 from 91.6 to 46.6 ms with one coder and from 48.0 to 25.2 ms with two coders. The
 encoded sizes and upstream golden streams remain unchanged.
 
-## Dominant remaining work
+## Current optimization state
 
-The P-frame reference, analysis, hyper-analysis, prior, and synthesis stages now
-chain through `DeviceTensor` buffers on one CUDA stream. The remaining P spatial
-prior, mask/reduction/restore/index work, entropy boundary, and serialized feature
-DPB are host-staged. Device allocations are still per-frame rather than arena-backed.
-The I-frame path also remains host-staged.
+The TensorRT backend now defaults to persistent execution contexts on discrete
+GPUs, avoiding per-frame context recreation in the normal RTX performance path.
+Integrated and Jetson-class devices keep the conservative low-memory mode unless
+`NVCR_TENSORRT_LOW_MEMORY_MODE=0` explicitly overrides it.
 
-The next performance milestone is a GPU-resident I-frame graph:
+P-frame encode already chains reference, analysis, hyper-analysis, prior, spatial
+prior, synthesis, and feature-DPB updates through `DeviceTensor` buffers on one
+CUDA stream. Only compact rANS entropy symbols/indexes and optional verification
+frames cross back to the host.
 
-1. Introduce reusable device tensor storage sized once per resolution.
-2. Bind TensorRT outputs directly to the next stage's inputs.
-3. Use the existing CUDA operators for prior, mask, quantization, and index work.
-4. Transfer only entropy symbols/indexes and the final reconstructed frame.
+I-frame encode now uses the same device-resident strategy for the expensive
+front half of the path:
+
+- input YUV420P8/RGB24 conversion and padding happen in CUDA;
+- `i_analysis`, `i_hyper_analysis`, and `i_hyper_synthesis` run through
+  device-address TensorRT bindings;
+- padded hyperprior outputs are cropped on GPU;
+- image-prior sigmoid transforms, q-encode multiplication, four-way masks,
+  symbol reconstruction, quarter reductions, q-decode multiplication, and
+  entropy index construction run in CUDA;
+- I-frame z symbols and four compact y-index streams are copied through reusable
+  pinned host buffers for CPU rANS.
+
+For conformance, I-frame encode currently rebuilds the encoder DPB by decoding
+the just-produced I-frame payload through the existing decode-conformant path.
+This prevents byte-level encoder/decoder DPB drift before P frames. It is a
+temporary bridge, not the final M1 design: the remaining step is to make I-frame
+decode device-resident too, or prove the GPU and host reconstruction paths are
+byte-identical, then remove the extra decode-side rebuild.
+
+Device allocations are still per-frame rather than arena-backed, and the final
+performance gate still needs warmed QCIF/720p/1080p JSON benchmark evidence.
+
+The next performance milestone is to finish the GPU-resident I-frame graph:
+
+1. Move I-frame decode hyperprior, spatial prior, restore, and synthesis to
+   device-address bindings.
+2. Replace the encode-time decode-conformance bridge with a shared
+   device-resident reconstruction path.
+3. Introduce reusable device tensor storage sized once per resolution.
+4. Bind TensorRT outputs directly to the next stage's inputs where lifetimes
+   permit.
 5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
+
+
+### 2026-07-29 RTX 4070 720p GOP-8 profile
+
+Command:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_720p_opt.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size 8 --qp 32 \
+  --engine-profile 720p-fp16 --profile
+```
+
+Result after the encode-side I-frame GPU-residency patch:
+
+| Metric | Value |
+|---|---:|
+| Frames | 97 |
+| GOP size | 8 |
+| Payload bytes | 466,023 |
+| Codec time | 2.405 s |
+| Throughput | 40.331 fps |
+| Representative P-frame latency | ~10.3-10.9 ms |
+| Representative warmed I-frame latency | ~115 ms |
+
+Interpretation: the P-frame hot path is now close to 10 ms/frame at 720p, but
+GOP-8 throughput is still capped by periodic I frames. The remaining I-frame
+latency is dominated by the temporary decode-conformant DPB bridge, visible in
+profile output as host-staged `i_hyper_synthesis`, three `i_spatial_prior_*`, and
+`i_synthesis` stages after the encode-side device work has produced the payload.
 
 ## Jetson energy profiling
 

@@ -2248,6 +2248,16 @@ Result<PredictedPayload> parse_predicted_payload(std::span<const std::byte> payl
                             payload.subspan(offset)};
 }
 
+Result<CodecDecodeResult> decode_intra(
+    std::span<const std::byte> payload,
+    Timestamp timestamp,
+    const SequenceStateView& state,
+    DeviceDpb& device_dpb,
+    std::vector<EngineInstance>& engines,
+    RansCodec& rans,
+    const RuntimeAssets& assets,
+    cudaStream_t stream);
+
 Result<CodecEncodeResult> encode_intra(
     const Frame& frame,
     std::uint32_t qp,
@@ -2256,6 +2266,11 @@ Result<CodecEncodeResult> encode_intra(
     std::vector<EngineInstance>& engines,
     RansCodec& rans,
     const RuntimeAssets& assets,
+    PinnedHostBuffer<std::int8_t>& image_z_symbols_buffer,
+    PinnedHostBuffer<std::int16_t>& image_indexes0_buffer,
+    PinnedHostBuffer<std::int16_t>& image_indexes1_buffer,
+    PinnedHostBuffer<std::int16_t>& image_indexes2_buffer,
+    PinnedHostBuffer<std::int16_t>& image_indexes3_buffer,
     cudaStream_t stream) {
     if (frame.pixel_format() != PixelFormat::rgb24 &&
         frame.pixel_format() != PixelFormat::yuv420p8) {
@@ -2269,108 +2284,243 @@ Result<CodecEncodeResult> encode_intra(
                      std::string(subsystem));
     }
 
-    auto input_frame = frame.pixel_format() == PixelFormat::yuv420p8 ?
-        yuv420p8_to_ycbcr(frame) : rgb_to_ycbcr(frame);
-    std::vector<HostTensor> analysis_inputs;
-    analysis_inputs.push_back(std::move(input_frame));
-    analysis_inputs.push_back(make_quant_tensor(assets, true, qp, "q_enc"));
-    auto analysis_outputs = run_host_engine(
-        engines[0], engine_specs[0], analysis_inputs, stream);
-    if (!analysis_outputs) return analysis_outputs.error();
-    auto y_result = take_tensor(analysis_outputs.value(), "y");
-    if (!y_result) return y_result.error();
-    HostTensor y = std::move(y_result.value());
-    const auto y_height = static_cast<std::int32_t>(y.shape.d[2]);
-    const auto y_width = static_cast<std::int32_t>(y.shape.d[3]);
+    const auto padded_height = round_up(static_cast<std::int32_t>(frame.height()), 16);
+    const auto padded_width = round_up(static_cast<std::int32_t>(frame.width()), 16);
+    auto input_frame = allocate_device_tensor("frame", make_dims(3, padded_height, padded_width));
+    if (!input_frame) return input_frame.error();
+    auto input_bytes_device = allocate_cuda(frame.data().size());
+    if (!input_bytes_device) return input_bytes_device.error();
+    auto copied = copy_async(
+        input_bytes_device.value().data, frame.data().data(), frame.data().size(),
+        cudaMemcpyHostToDevice, stream, "cudaMemcpyAsync I-frame input bytes");
+    if (!copied) return copied.error();
+    {
+        CpuProfileScope stage("i_input_color_convert_gpu");
+        cudaError_t converted = cudaSuccess;
+        if (frame.pixel_format() == PixelFormat::yuv420p8) {
+            converted = cuda_ops::yuv420p8_to_ycbcr_padded(
+                input_bytes_device.value().data, static_cast<std::int32_t>(frame.width()),
+                static_cast<std::int32_t>(frame.height()), input_frame.value().storage.data,
+                padded_height, padded_width, stream);
+        } else {
+            converted = cuda_ops::rgb24_to_ycbcr_padded(
+                input_bytes_device.value().data, static_cast<std::int32_t>(frame.width()),
+                static_cast<std::int32_t>(frame.height()), input_frame.value().storage.data,
+                padded_height, padded_width, stream);
+        }
+        if (converted != cudaSuccess) return cuda_error("cuda_ops I-frame input color convert", converted);
+    }
 
-    std::vector<HostTensor> hyper_analysis_inputs;
-    hyper_analysis_inputs.push_back(replicate_pad_host(
-        y, "y_padded", round_up(y_height, 4), round_up(y_width, 4)));
-    auto hyper_analysis_outputs = run_host_engine(
+    auto q_enc = upload_tensor(make_quant_tensor(assets, true, qp, "q_enc"), "q_enc", stream);
+    if (!q_enc) return q_enc.error();
+    std::array<DeviceTensor*, 2> analysis_inputs{&input_frame.value(), &q_enc.value()};
+    auto analysis_outputs = run_device_engine(engines[0], engine_specs[0], analysis_inputs, stream);
+    if (!analysis_outputs) return analysis_outputs.error();
+    auto y_result = take_device_tensor(analysis_outputs.value(), "y");
+    if (!y_result) return y_result.error();
+    auto y_device = std::move(y_result.value());
+    const auto y_height = static_cast<std::int32_t>(y_device.shape.d[2]);
+    const auto y_width = static_cast<std::int32_t>(y_device.shape.d[3]);
+
+    auto y_padded = allocate_device_tensor(
+        "y_padded", make_dims(256, round_up(y_height, 4), round_up(y_width, 4)));
+    if (!y_padded) return y_padded.error();
+    const cuda_ops::Shape4D y_shape{1, 256, y_height, y_width};
+    auto status = cuda_ops::replicate_pad(
+        y_device.storage.data, y_padded.value().storage.data, y_shape,
+        static_cast<std::int32_t>(y_padded.value().shape.d[2]),
+        static_cast<std::int32_t>(y_padded.value().shape.d[3]), stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::replicate_pad", status);
+
+    std::array<DeviceTensor*, 1> hyper_analysis_inputs{&y_padded.value()};
+    auto hyper_analysis_outputs = run_device_engine(
         engines[1], engine_specs[1], hyper_analysis_inputs, stream);
     if (!hyper_analysis_outputs) return hyper_analysis_outputs.error();
-    auto z_result = take_tensor(hyper_analysis_outputs.value(), "z");
+    auto z_result = take_device_tensor(hyper_analysis_outputs.value(), "z");
     if (!z_result) return z_result.error();
-    HostTensor z = std::move(z_result.value());
-    std::vector<std::int8_t> z_symbols(z.values.size());
-    for (std::size_t index = 0; index < z.values.size(); ++index) {
-        const float value = std::clamp(
-            std::round(to_float(z.values[index])), -128.0F, 127.0F);
-        z.values[index] = to_half(value);
-        z_symbols[index] = static_cast<std::int8_t>(value);
-    }
-    z.name = "z_hat";
+    auto z_device = std::move(z_result.value());
+    z_device.name = "z_hat";
+    const auto z_count = element_count(z_device.shape);
+    auto z_symbol_device = allocate_cuda(z_count * sizeof(std::int8_t));
+    if (!z_symbol_device) return z_symbol_device.error();
+    status = cuda_ops::round_to_int8(
+        z_device.storage.data, static_cast<std::int8_t*>(z_symbol_device.value().data),
+        z_count, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::round_to_int8", status);
 
-    std::vector<HostTensor> hyper_synthesis_inputs;
-    hyper_synthesis_inputs.push_back(z);
-    auto hyper_synthesis_outputs = run_host_engine(
+    std::array<DeviceTensor*, 1> hyper_synthesis_inputs{&z_device};
+    auto hyper_synthesis_outputs = run_device_engine(
         engines[2], engine_specs[2], hyper_synthesis_inputs, stream);
     if (!hyper_synthesis_outputs) return hyper_synthesis_outputs.error();
-    auto params_result = take_tensor(hyper_synthesis_outputs.value(), "params_padded");
-    auto common_result = take_tensor(hyper_synthesis_outputs.value(), "common_padded");
-    if (!params_result) return params_result.error();
-    if (!common_result) return common_result.error();
-    auto params = crop_spatial(params_result.value(), "params", y_height, y_width);
-    auto common = crop_spatial(common_result.value(), "common", y_height, y_width);
-    auto prior = separate_image_prior(params);
-    multiply_broadcast_in_place(y, prior.q_enc);
+    auto params_padded_result = take_device_tensor(hyper_synthesis_outputs.value(), "params_padded");
+    auto common_padded_result = take_device_tensor(hyper_synthesis_outputs.value(), "common_padded");
+    if (!params_padded_result) return params_padded_result.error();
+    if (!common_padded_result) return common_padded_result.error();
+    auto params_padded = std::move(params_padded_result.value());
+    auto common_padded = std::move(common_padded_result.value());
+    auto params = allocate_device_tensor("params", make_dims(514, y_height, y_width));
+    auto common = allocate_device_tensor("common", make_dims(256, y_height, y_width));
+    if (!params) return params.error();
+    if (!common) return common.error();
+    status = cuda_ops::crop_spatial(
+        params_padded.storage.data, params.value().storage.data,
+        cuda_ops::Shape4D{1, 514, static_cast<std::int32_t>(params_padded.shape.d[2]),
+                          static_cast<std::int32_t>(params_padded.shape.d[3])},
+        y_height, y_width, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::crop_spatial params", status);
+    status = cuda_ops::crop_spatial(
+        common_padded.storage.data, common.value().storage.data,
+        cuda_ops::Shape4D{1, 256, static_cast<std::int32_t>(common_padded.shape.d[2]),
+                          static_cast<std::int32_t>(common_padded.shape.d[3])},
+        y_height, y_width, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::crop_spatial common", status);
 
-    std::array<HostTensor, 4> encoded_symbols;
-    std::array<HostTensor, 4> encoded_scales;
-    HostTensor y_hat;
-    HostTensor current_scales = std::move(prior.scales);
-    HostTensor current_means = std::move(prior.means);
-    for (std::int32_t stage = 0; stage < 4; ++stage) {
-        auto mask = make_mask(y, stage);
-        auto processed = process_mask(y, current_scales, current_means, mask);
-        encoded_symbols[static_cast<std::size_t>(stage)] =
-            reduce_quarters(processed.symbols, "symbols");
-        encoded_scales[static_cast<std::size_t>(stage)] =
-            reduce_quarters(processed.scales, "scales");
-        if (stage == 0) {
-            y_hat = std::move(processed.reconstructed);
+    const auto spatial_count = static_cast<std::size_t>(y_height) * y_width;
+    const auto prior_count = static_cast<std::size_t>(256) * spatial_count;
+    status = cuda_ops::apply_image_prior_and_quantize(
+        params.value().storage.data, y_device.storage.data, spatial_count, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::apply_image_prior_and_quantize", status);
+    auto* params_values = static_cast<__half*>(params.value().storage.data);
+    auto* q_dec_values = params_values + spatial_count;
+    auto* current_scales = params_values + 2 * spatial_count;
+    auto* current_means = params_values + (2 + 256) * spatial_count;
+
+    const auto reduced_shape = make_dims(64, y_height, y_width);
+    const auto reduced_count = prior_count / 4;
+    std::array<std::optional<DeviceTensor>, 4> encoded_symbols;
+    std::array<std::optional<DeviceTensor>, 4> encoded_scales;
+    std::optional<DeviceTensor> y_hat_device;
+    std::optional<DeviceTensor> spatial_params;
+    for (std::int32_t stage_index = 0; stage_index < 4; ++stage_index) {
+        const auto stage_slot = static_cast<std::size_t>(stage_index);
+        auto mask = allocate_device_tensor("mask", y_device.shape);
+        auto residual = allocate_device_tensor("residual", y_device.shape);
+        auto symbols_full = allocate_device_tensor("symbols_full", y_device.shape);
+        auto reconstructed = allocate_device_tensor("reconstructed", y_device.shape);
+        auto scales_full = allocate_device_tensor("scales_full", y_device.shape);
+        if (!mask) return mask.error();
+        if (!residual) return residual.error();
+        if (!symbols_full) return symbols_full.error();
+        if (!reconstructed) return reconstructed.error();
+        if (!scales_full) return scales_full.error();
+        status = cuda_ops::make_four_way_mask(mask.value().storage.data, y_shape, stage_index, stream);
+        if (status != cudaSuccess) return cuda_error("cuda_ops::make_four_way_mask", status);
+        status = cuda_ops::process_with_mask(
+            y_device.storage.data, current_scales, current_means, mask.value().storage.data,
+            residual.value().storage.data, symbols_full.value().storage.data,
+            reconstructed.value().storage.data, scales_full.value().storage.data,
+            prior_count, 0.0F, stream);
+        if (status != cudaSuccess) return cuda_error("cuda_ops::process_with_mask", status);
+
+        auto symbols = allocate_device_tensor("symbols", reduced_shape);
+        auto scales = allocate_device_tensor("scales", reduced_shape);
+        if (!symbols) return symbols.error();
+        if (!scales) return scales.error();
+        status = cuda_ops::reduce_channel_quarters(
+            symbols_full.value().storage.data, symbols.value().storage.data, y_shape, stream);
+        if (status != cudaSuccess) return cuda_error("cuda_ops::reduce_channel_quarters symbols", status);
+        status = cuda_ops::reduce_channel_quarters(
+            scales_full.value().storage.data, scales.value().storage.data, y_shape, stream);
+        if (status != cudaSuccess) return cuda_error("cuda_ops::reduce_channel_quarters scales", status);
+        encoded_symbols[stage_slot] = std::move(symbols.value());
+        encoded_scales[stage_slot] = std::move(scales.value());
+
+        if (!y_hat_device.has_value()) {
+            reconstructed.value().name = "y_hat";
+            y_hat_device = std::move(reconstructed.value());
         } else {
-            add_in_place(y_hat, processed.reconstructed);
+            status = cuda_ops::add_in_place(
+                y_hat_device->storage.data, reconstructed.value().storage.data,
+                prior_count, stream);
+            if (status != cudaSuccess) return cuda_error("cuda_ops::add_in_place", status);
         }
-        if (stage < 3) {
-            std::vector<HostTensor> spatial_inputs;
-            spatial_inputs.push_back(concat_channels(y_hat, common, "context"));
-            const auto engine_index = static_cast<std::size_t>(3 + stage);
-            auto spatial_outputs = run_host_engine(
-                engines[engine_index], engine_specs[engine_index], spatial_inputs, stream);
+
+        if (stage_index < 3) {
+            auto spatial_context = allocate_device_tensor("context", make_dims(512, y_height, y_width));
+            if (!spatial_context) return spatial_context.error();
+            const auto y_bytes = prior_count * sizeof(__half);
+            copied = copy_async(
+                spatial_context.value().storage.data, y_hat_device->storage.data, y_bytes,
+                cudaMemcpyDeviceToDevice, stream, "cudaMemcpyAsync I spatial y");
+            if (!copied) return copied.error();
+            copied = copy_async(
+                static_cast<std::byte*>(spatial_context.value().storage.data) + y_bytes,
+                common.value().storage.data, y_bytes, cudaMemcpyDeviceToDevice, stream,
+                "cudaMemcpyAsync I spatial common");
+            if (!copied) return copied.error();
+            std::array<DeviceTensor*, 1> spatial_inputs{&spatial_context.value()};
+            auto spatial_outputs = run_device_engine(
+                engines[static_cast<std::size_t>(3 + stage_index)],
+                engine_specs[static_cast<std::size_t>(3 + stage_index)], spatial_inputs, stream);
             if (!spatial_outputs) return spatial_outputs.error();
-            auto spatial_result = take_tensor(spatial_outputs.value(), "scales_means");
+            auto spatial_result = take_device_tensor(spatial_outputs.value(), "scales_means");
             if (!spatial_result) return spatial_result.error();
-            current_scales = slice_channels(spatial_result.value(), "scales", 0, 256);
-            current_means = slice_channels(spatial_result.value(), "means", 256, 256);
+            spatial_params = std::move(spatial_result.value());
+            auto* spatial_values = static_cast<__half*>(spatial_params->storage.data);
+            current_scales = spatial_values;
+            current_means = spatial_values + prior_count;
         }
     }
-    multiply_broadcast_in_place(y_hat, prior.q_dec);
-    y_hat.name = "y_hat";
 
-    std::vector<HostTensor> synthesis_inputs;
-    synthesis_inputs.push_back(y_hat);
-    synthesis_inputs.push_back(make_quant_tensor(assets, false, qp, "q_dec"));
-    auto synthesis_outputs = run_host_engine(
-        engines[6], engine_specs[6], synthesis_inputs, stream);
-    if (!synthesis_outputs) return synthesis_outputs.error();
-    auto reconstructed_result = take_tensor(synthesis_outputs.value(), "frame_hat");
-    if (!reconstructed_result) return reconstructed_result.error();
-    auto reconstructed = ycbcr_to_rgb(
-        reconstructed_result.value(), frame.width(), frame.height(), frame.timestamp());
-    if (!reconstructed) return reconstructed.error();
+    status = cuda_ops::multiply_broadcast_in_place(
+        y_hat_device->storage.data, q_dec_values, spatial_count, 256, stream);
+    if (status != cudaSuccess) return cuda_error("cuda_ops::multiply_broadcast_in_place", status);
+    y_hat_device->name = "y_hat";
+
+    std::array<CudaAllocation, 4> index_devices;
+    for (std::size_t stage_index = 0; stage_index < 4; ++stage_index) {
+        auto allocation = allocate_cuda(reduced_count * sizeof(std::int16_t));
+        if (!allocation) return allocation.error();
+        index_devices[stage_index] = std::move(allocation.value());
+        status = cuda_ops::build_encode_indexes(
+            encoded_symbols[stage_index]->storage.data, encoded_scales[stage_index]->storage.data,
+            static_cast<std::int16_t*>(index_devices[stage_index].data), reduced_count,
+            0.0F, stream);
+        if (status != cudaSuccess) return cuda_error("cuda_ops::build_encode_indexes", status);
+    }
+
+    auto z_buffer_ready = image_z_symbols_buffer.ensure(z_count, "image_z_symbols");
+    if (!z_buffer_ready) return z_buffer_ready.error();
+    std::array<PinnedHostBuffer<std::int16_t>*, 4> index_buffers{
+        &image_indexes0_buffer, &image_indexes1_buffer,
+        &image_indexes2_buffer, &image_indexes3_buffer};
+    for (auto* buffer : index_buffers) {
+        auto ready = buffer->ensure(reduced_count, "image_indexes");
+        if (!ready) return ready.error();
+    }
+
+    std::span<std::int8_t> z_symbols(image_z_symbols_buffer.data, z_count);
+    copied = copy_async(
+        z_symbols.data(), z_symbol_device.value().data, z_count * sizeof(std::int8_t),
+        cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync I z symbols");
+    if (!copied) return copied.error();
+    for (std::size_t stage_index = 0; stage_index < 4; ++stage_index) {
+        copied = copy_async(
+            index_buffers[stage_index]->data, index_devices[stage_index].data,
+            reduced_count * sizeof(std::int16_t), cudaMemcpyDeviceToHost, stream,
+            "cudaMemcpyAsync I indexes");
+        if (!copied) return copied.error();
+    }
+    CudaEvent entropy_ready;
+    status = cudaEventCreateWithFlags(&entropy_ready.data, cudaEventDisableTiming);
+    if (status != cudaSuccess) return cuda_error("cudaEventCreateWithFlags", status);
+    status = cudaEventRecord(entropy_ready.data, stream);
+    if (status != cudaSuccess) return cuda_error("cudaEventRecord I entropy", status);
+
+    status = cudaEventSynchronize(entropy_ready.data);
+    if (status != cudaSuccess) return cuda_error("cudaEventSynchronize I entropy", status);
 
     const bool two_coders =
         static_cast<std::uint64_t>(frame.width()) * frame.height() > 1280ULL * 720ULL;
     rans.reset_encoder();
     auto mode = rans.set_use_two_coders(two_coders);
     if (!mode) return mode.error();
-    const auto per_channel = static_cast<std::size_t>(z.shape.d[2] * z.shape.d[3]);
+    const auto per_channel = static_cast<std::size_t>(z_device.shape.d[2] * z_device.shape.d[3]);
     auto encoded_z = rans.encode_z(
         z_symbols, assets.image_z_group, static_cast<std::size_t>(qp) * 128, per_channel);
     if (!encoded_z) return encoded_z.error();
-    for (std::size_t stage = 0; stage < 4; ++stage) {
-        auto indexes = build_encode_indexes(encoded_symbols[stage], encoded_scales[stage]);
+    for (std::size_t stage_index = 0; stage_index < 4; ++stage_index) {
+        std::span<std::int16_t> indexes(index_buffers[stage_index]->data, reduced_count);
         auto encoded_y = rans.encode_y(indexes, assets.gaussian_y_group);
         if (!encoded_y) return encoded_y.error();
     }
@@ -2378,16 +2528,12 @@ Result<CodecEncodeResult> encode_intra(
     if (!stream_bytes) return stream_bytes.error();
     auto payload = make_intra_payload(
         frame.width(), frame.height(), qp, two_coders, stream_bytes.value());
-    auto reference_device = upload_tensor(
-        reconstructed_result.value(), "reference_frame", stream);
-    if (!reference_device) return reference_device.error();
-    device_dpb.clear();
-    device_dpb.frame = std::move(reference_device.value());
-    device_dpb.next_frame_index = state.frame_index + 1;
-    device_dpb.generation = state.generation;
-    auto latent_state = serialize_dpb(reconstructed_result.value());
+    auto conformant_reconstruction = decode_intra(
+        payload, frame.timestamp(), state, device_dpb, engines, rans, assets, stream);
+    if (!conformant_reconstruction) return conformant_reconstruction.error();
     return CodecEncodeResult{
-        std::move(payload), std::move(reconstructed.value()), std::move(latent_state), qp};
+        std::move(payload), std::move(conformant_reconstruction.value().frame),
+        std::move(conformant_reconstruction.value().latent_state), qp};
 }
 
 Result<CodecDecodeResult> decode_intra(
@@ -3167,7 +3313,9 @@ public:
             CudaAllocationScope allocation_scope(stream_, &profiler);
             if (frame_type == FrameType::intra) {
                 auto result = encode_intra(
-                    frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_, stream_);
+                    frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_,
+                    image_z_symbols_buffer_, image_indexes0_buffer_, image_indexes1_buffer_,
+                    image_indexes2_buffer_, image_indexes3_buffer_, stream_);
                 profiler.finish();
                 return result;
             }
@@ -3247,6 +3395,11 @@ private:
     RuntimeAssets assets_;
     VideoQuantDeviceCache video_quant_cache_;
     PinnedHostBuffer<std::int8_t> z_symbols_buffer_;
+    PinnedHostBuffer<std::int8_t> image_z_symbols_buffer_;
+    PinnedHostBuffer<std::int16_t> image_indexes0_buffer_;
+    PinnedHostBuffer<std::int16_t> image_indexes1_buffer_;
+    PinnedHostBuffer<std::int16_t> image_indexes2_buffer_;
+    PinnedHostBuffer<std::int16_t> image_indexes3_buffer_;
     PinnedHostBuffer<std::int16_t> indexes0_buffer_;
     PinnedHostBuffer<std::int16_t> indexes1_buffer_;
     cudaStream_t stream_{};

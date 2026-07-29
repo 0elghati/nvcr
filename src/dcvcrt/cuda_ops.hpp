@@ -28,6 +28,14 @@ cudaError_t replicate_pad(
     std::int32_t padded_width,
     cudaStream_t stream) noexcept;
 
+cudaError_t crop_spatial(
+    const void* input,
+    void* output,
+    Shape4D input_shape,
+    std::int32_t output_height,
+    std::int32_t output_width,
+    cudaStream_t stream) noexcept;
+
 cudaError_t rgb24_to_ycbcr_padded(
     const void* input,
     std::int32_t source_width,
@@ -50,6 +58,12 @@ cudaError_t make_four_way_mask(
     void* mask,
     Shape4D shape,
     std::int32_t stage,
+    cudaStream_t stream) noexcept;
+
+cudaError_t apply_image_prior_and_quantize(
+    void* params,
+    void* values,
+    std::size_t spatial_count,
     cudaStream_t stream) noexcept;
 
 cudaError_t process_with_mask(
@@ -116,6 +130,19 @@ cudaError_t restore_two_way(
     const void* mask,
     void* output,
     Shape4D output_shape,
+    cudaStream_t stream) noexcept;
+
+cudaError_t add_in_place(
+    void* first,
+    const void* second,
+    std::size_t count,
+    cudaStream_t stream) noexcept;
+
+cudaError_t multiply_broadcast_in_place(
+    void* values,
+    const void* factors,
+    std::size_t spatial_count,
+    std::int32_t channels,
     cudaStream_t stream) noexcept;
 
 cudaError_t add_and_multiply(
