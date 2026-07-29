@@ -109,6 +109,33 @@ The next performance milestone is to finish the GPU-resident I-frame graph:
 5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
 
 
+### 2026-07-29 RTX 4070 720p entropy threshold update
+
+Change under test: enable the two-rANS-coder path at exactly 1280x720 instead
+of only above 1280x720, and avoid serializing the unused normal encode-side
+I-frame latent-state copy.
+
+Command:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_720p_kept_opts_gop1.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size 1 --qp 32 \
+  --engine-profile 720p-fp16
+```
+
+| Build state | GOP | Payload bytes | Codec time | Throughput |
+|---|---:|---:|---:|---:|
+| `f88c2b2e24be` reference | 1 | 1,103,993 | 3.327 s | 29.154 fps |
+| two-coder 720p + no latent copy | 1 | 1,104,333 | 3.185 s | 30.452 fps |
+
+A larger experiment that skipped normal I-frame host reconstruction entirely was
+rejected: it improved GOP-97 slightly but regressed all-I to 24.683 fps, likely
+because removing the final synchronization changed frame-to-frame allocation and
+stream retirement behavior. Keep that path out until the arena/direct-bind work
+provides stable lifetimes and explicit synchronization boundaries.
+
 ### 2026-07-29 RTX 4070 720p GOP sweep by commit
 
 Commit: `f88c2b2e24be` (`f88c2b2e24be5f8d28d3cc147bb5c4d1ddb8d44f`)

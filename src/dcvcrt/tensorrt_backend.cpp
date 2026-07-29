@@ -2512,7 +2512,7 @@ Result<CodecEncodeResult> encode_intra(
     if (status != cudaSuccess) return cuda_error("cudaEventSynchronize I entropy", status);
 
     const bool two_coders =
-        static_cast<std::uint64_t>(frame.width()) * frame.height() > 1280ULL * 720ULL;
+        static_cast<std::uint64_t>(frame.width()) * frame.height() >= 1280ULL * 720ULL;
     rans.reset_encoder();
     auto mode = rans.set_use_two_coders(two_coders);
     if (!mode) return mode.error();
@@ -2553,7 +2553,7 @@ Result<CodecEncodeResult> encode_intra(
     device_dpb.frame = std::move(frame_device);
     device_dpb.next_frame_index = state.frame_index + 1;
     device_dpb.generation = state.generation;
-    auto latent_state = serialize_dpb(reconstructed_result.value());
+    std::vector<std::byte> latent_state;
 
     if (verify_reconstruction) {
         auto conformant_reconstruction = decode_intra(
@@ -2964,7 +2964,7 @@ Result<CodecEncodeResult> encode_predicted(
 
     const auto entropy_start = std::chrono::steady_clock::now();
     const bool two_coders =
-        static_cast<std::uint64_t>(frame.width()) * frame.height() > 1280ULL * 720ULL;
+        static_cast<std::uint64_t>(frame.width()) * frame.height() >= 1280ULL * 720ULL;
     rans.reset_encoder();
     auto mode = rans.set_use_two_coders(two_coders);
     if (!mode) return mode.error();
