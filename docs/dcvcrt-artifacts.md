@@ -41,9 +41,10 @@ Git commit and both checkpoint hashes; it does not trust filenames alone.
 - `inspect`: report identity and versions without execution;
 - `validate`: validate schema, portable paths, required files, and SHA-256 digests.
 
-`scripts/prepare_dcvcrt_artifacts.sh`, the two exporters, the TensorRT builder,
-and the manifest writer are retained as implementation helpers. Direct use is an
-expert/development path and does not define another supported workflow.
+The DCVC-RT preparation helper, the two exporters, the TensorRT builder, and the
+manifest writer are retained under `scripts/backends/dcvcrt/` as backend-local
+implementation helpers. Direct use is an expert/development path and does not
+define another supported workflow.
 
 ## Artifact identity model
 

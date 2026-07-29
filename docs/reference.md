@@ -51,14 +51,16 @@ all fields. See [Bitstream](bitstream.md).
 Configuration is validated before backend initialization. The encoder
 reconstruction option is a test hook and should remain false in normal execution.
 
-## DCVC-RT backend
+## Codec backend boundary
 
-`dcvcrt::Components` holds the explicit backend created by
-`make_tensorrt_backend()`. `CodecBackend` owns initialization, I/P encode/decode,
-reset, and flush. No CUDA/TensorRT type or exception crosses this interface.
+`codec::Components` holds the explicit backend injected into `Runtime::create`.
+`codec::CodecBackend` owns initialization, frame encode/decode, reset, and flush.
+No CUDA/TensorRT type or exception crosses this interface.
 
-This is a real codec boundary, not a promise of arbitrary backend plugins. Another
-codec would require its own evidence and a justified abstraction change.
+The current release provides one implementation, created by
+`dcvcrt::make_tensorrt_backend()`. Additional neural codec backends would require
+their own model profiles, payload contracts, conformance tests, and target
+evidence before they could be described as supported.
 
 ## Errors
 

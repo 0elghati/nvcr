@@ -1,7 +1,9 @@
 # NVCR — Neural Video Codec Runtime
 
-NVCR is a Linux C++20/CUDA/TensorRT runtime and reproducible deployment
-toolchain for one pinned DCVC-RT I/P model pair.
+NVCR is a deployment-oriented runtime architecture for neural video codecs.
+Its first and currently only supported backend is the pinned DCVC-RT I/P model
+pair, executed through a Linux C++20/CUDA/TensorRT runtime and reproducible
+artifact toolchain.
 
 > Repository status: development snapshot `0.3.0` <!-- x-release-please-version -->.
 > `v0.3` is the active scope-and-foundation target; `v1.0` is the first scoped
@@ -13,7 +15,8 @@ in [ROADMAP.md](ROADMAP.md).
 
 ## Declared v1 scope
 
-NVCR v1 is intentionally narrow:
+NVCR v1 is intentionally narrow. It validates the runtime architecture through
+one production-quality codec backend rather than claiming broad codec coverage:
 
 - pinned `dcvcrt-cvpr2025` image/video checkpoints and source identity;
 - Linux on an RTX 4070 reference desktop and Jetson Orin Nano reference edge target;
@@ -22,10 +25,11 @@ NVCR v1 is intentionally narrow:
 - native C++ I/P encode/decode, CPU rANS, explicit sequence state, and bounded access units.
 
 NVCR v1 is not a training framework, arbitrary PyTorch/ONNX converter, universal
-GPU runtime, stable upstream bitstream implementation, C ABI, FFmpeg codec, or
-container integration. INT8 is experimental and is not a supported/default v1
-profile. Checkpoints, ONNX graphs, runtime model assets, and TensorRT plans are
-not distributed from this repository; users generate derived bundles locally.
+GPU runtime, multi-codec release, stable upstream bitstream implementation, C
+ABI, FFmpeg codec, or container integration. INT8 is experimental and is not a
+supported/default v1 profile. Checkpoints, ONNX graphs, runtime model assets,
+and TensorRT plans are not distributed from this repository; users generate
+derived bundles locally.
 
 ## Current implementation
 
@@ -118,8 +122,9 @@ The operations are:
 - `inspect`: report bundle identity without executing it;
 - `validate`: hash and validate every required model or engine artifact.
 
-The older shell/export scripts are implementation helpers. They remain callable
-for development, but are not separate supported user workflows.
+The backend-local shell/export scripts under `scripts/backends/dcvcrt/` are
+implementation helpers. They remain callable for development, but are not
+separate supported user workflows.
 
 ```bash
 ./scripts/nvcr_artifacts.py validate build/models/dcvcrt --json
@@ -166,9 +171,10 @@ timestamps and FFmpeg metadata are intentionally outside the codec access unit.
 ## Public C++ boundary
 
 Applications create an `nvcr::Runtime` with an explicit per-session
-`RuntimeConfiguration` and a DCVC-RT backend. Errors cross the boundary as
-`nvcr::Result<T>`; CUDA/TensorRT types and exceptions do not. Encoder and decoder
-state are independent and `reset()`/`flush()` are explicit.
+`RuntimeConfiguration` and an injected `nvcr::codec::CodecBackend`. The DCVC-RT
+TensorRT backend is the only backend implemented in this release. Errors cross
+the boundary as `nvcr::Result<T>`; CUDA/TensorRT types and exceptions do not.
+Encoder and decoder state are independent and `reset()`/`flush()` are explicit.
 
 The v1 API still needs its final plane/stride/device-view stabilization. Do not
 treat the current headers as a frozen ABI. A public C ABI and FFmpeg wrapper are

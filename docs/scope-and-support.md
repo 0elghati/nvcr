@@ -6,11 +6,12 @@ the conflict is a documentation bug.
 
 ## Product definition
 
-NVCR is an open-source Linux C++20/CUDA/TensorRT deployment runtime and
-reproducible artifact toolchain for the pinned DCVC-RT CVPR 2025
-image/video model pair.
+NVCR is an open-source deployment-oriented runtime architecture for neural video
+codecs. The current release validates that architecture through one implemented
+codec backend: the pinned DCVC-RT CVPR 2025 image/video model pair on
+Linux C++20/CUDA/TensorRT.
 
-The deployed path is:
+For the currently supported DCVC-RT backend, the deployed path is:
 
 ```text
 pinned checkpoints
@@ -21,8 +22,9 @@ pinned checkpoints
   -> reconstruction, correctness, performance, and energy evidence
 ```
 
-Python and PyTorch are offline export and reference-conformance dependencies.
-They are not runtime dependencies of `libnvcr` or the `nvcr` executable.
+Python and PyTorch are offline export and reference-conformance dependencies for
+the DCVC-RT backend. They are not runtime dependencies of `libnvcr` or the
+`nvcr` executable.
 
 ## Release tracks
 
@@ -86,7 +88,7 @@ evidence matrix are added.
 ## Explicit non-goals for v1
 
 - Training, fine-tuning, dataset management, or checkpoint production.
-- Arbitrary ONNX/model conversion or a generic learned-codec plugin system.
+- Arbitrary ONNX/model conversion or a dynamically loaded codec plugin system.
 - Other DCVC releases, learned codecs, precisions, or checkpoint pairs.
 - INT8 as a default or supported release profile.
 - Windows, macOS, CPU inference, or non-NVIDIA accelerators.
@@ -95,8 +97,8 @@ evidence matrix are added.
 - Universal GPU or TensorRT-plan portability.
 - Redistribution of checkpoints, exported model assets, or TensorRT engines.
 
-The C ABI, FFmpeg wrapper, and container milestones remain useful future work,
-but they cannot be used as v1 acceptance evidence.
+Additional codec backends, the C ABI, FFmpeg wrapper, and container milestones
+remain useful future work, but they cannot be used as v1 acceptance evidence.
 
 ## Artifact and redistribution policy
 

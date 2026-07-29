@@ -1,8 +1,10 @@
 # Getting started and builds
 
-NVCR is currently a source-built development project. Published `0.2.x`
-artifacts are historical snapshots, not v1-compatible product packages. The
-supported release procedure is gated in [Releasing](releasing.md).
+NVCR is currently a source-built development project. The runtime architecture is
+intended for neural video codec backends, but the current release path supports
+DCVC-RT only. Published `0.2.x` artifacts are historical snapshots, not
+v1-compatible product packages. The supported release procedure is gated in
+[Releasing](releasing.md).
 
 ## Choose a build
 
@@ -76,7 +78,8 @@ and place them under:
 The Python interpreter used offline must provide `torch`, `onnx`, and
 `onnxscript`. Python is not a runtime dependency of `libnvcr` or the CLI.
 
-Use the profile-aware artifact command:
+Use the profile-aware artifact command. This generic front end dispatches to the
+current DCVC-RT backend preparation helpers:
 
 ```bash
 ./scripts/nvcr_artifacts.py prepare \

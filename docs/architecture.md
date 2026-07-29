@@ -1,8 +1,10 @@
 # Architecture
 
-NVCR is a stateful DCVC-RT deployment runtime, not a model framework. The
-supported boundary is defined in [Scope and support](scope-and-support.md); this
-page describes the current implementation and clearly labels unfinished v1 work.
+NVCR is a stateful runtime architecture for neural video codecs, not a model
+training framework. The supported boundary is defined in
+[Scope and support](scope-and-support.md); this page describes the current
+implementation and clearly labels unfinished v1 work. DCVC-RT is the first and
+currently only implemented codec backend.
 
 ## System boundary
 
@@ -11,25 +13,29 @@ CLI / benchmark / C++ application
                |
         nvcr::Runtime session
                |
-  access-unit validation + sequence state
+  access-unit validation + codec sequence state
                |
-       dcvcrt::CodecBackend
+        nvcr::codec::CodecBackend
         /                  \
-TensorRT/CUDA stages     native CPU rANS
+backend execution       entropy coding
         \                  /
          device/host DPB state
 ```
 
-There is no generic codec plugin registry. DCVC-RT is the only supported codec,
-so codec-specific orchestration stays in `nvcr::dcvcrt`. CUDA, TensorRT, and
-entropy implementation types do not cross the public runtime boundary.
+There is no dynamic codec plugin registry in v1. The runtime core owns session
+lifecycle, packet/access-unit validation, configuration, errors, statistics, and
+serialized calls. Codec-specific orchestration stays behind
+`nvcr::codec::CodecBackend`; the only concrete backend today is
+`nvcr::dcvcrt`'s TensorRT implementation. CUDA, TensorRT, and entropy
+implementation types do not cross the public runtime boundary.
 
 ## Ownership
 
 | Area | Owns | Does not own |
 |---|---|---|
 | `runtime` | Session lifecycle, serialized calls, `Frame`, `Packet`, statistics | Neural graph ordering or TensorRT objects |
-| `dcvcrt` | I/P decisions, independent encoder/decoder state, TensorRT/CUDA/rANS orchestration | Training, checkpoints, model architecture |
+| `codec` | Backend interface, generic sequence state, access-unit wrapping | Concrete model architecture or vendor SDK objects |
+| `dcvcrt` | DCVC-RT I/P decisions, TensorRT/CUDA/rANS orchestration, model-specific payloads | Training, checkpoints, other codec families |
 | `bitstream` | Bounded `NVAU` access units and development packet framing | Standard containers or FFmpeg metadata |
 | `configuration` | Per-session model, device, memory/execution, QP, GOP, and compatibility policy | Engine generation |
 | `memory` | Host resource and reusable best-fit pool | Completed CUDA arena (v1 work) |
@@ -47,26 +53,26 @@ create -> validate configuration/bundle -> initialize backend -> ready
                                                      ready
 ```
 
-`Runtime::create` validates configuration, initializes the injected backend, and
-creates independent encoder and decoder `SequenceState` objects. Calls are
-serialized because DCVC-RT mutates references and latent state. A failed backend
-operation is not committed. `reset()` discards sequence state immediately;
-`flush()` finishes backend work and resets both directions.
+`Runtime::create` validates configuration, initializes the injected codec backend,
+and creates independent encoder and decoder `codec::SequenceState` objects. Calls
+are serialized because neural video codecs generally mutate references and latent
+state. A failed backend operation is not committed. `reset()` discards sequence
+state immediately; `flush()` finishes backend work and resets both directions.
 
-Each backend stores its selected TensorRT execution policy. `automatic` chooses a
-conservative low-memory mode on constrained devices; `low_memory` and
-`performance` are explicit per-session choices. The legacy environment override
-is only a fallback and is not the v1 configuration contract.
+The current DCVC-RT backend stores its selected TensorRT execution policy.
+`automatic` chooses a conservative low-memory mode on constrained devices;
+`low_memory` and `performance` are explicit per-session choices. The legacy
+environment override is only a fallback and is not the v1 configuration contract.
 
 A GOP begins with an I-frame. P-frames require a valid reference; later GOPs and
 reset/reuse are covered by the registered engine roundtrip test. The backend DPB
 may contain a reconstructed device frame and a learned feature reference.
 
-## DCVC-RT execution
+## Current DCVC-RT backend
 
-The backend owns 14 deserialized plans, their execution contexts, a nonblocking
-CUDA stream, entropy tables, a 72-entry P-frame quantization cache, rANS state,
-and encoder/decoder DPBs.
+The implemented backend owns 14 deserialized DCVC-RT plans, their execution
+contexts, a nonblocking CUDA stream, entropy tables, a 72-entry P-frame
+quantization cache, rANS state, and encoder/decoder DPBs.
 
 The I path executes analysis, hyper-analysis, hyper-synthesis, three spatial-prior
 engines over four checkerboard passes, synthesis, and native rANS.
@@ -116,17 +122,18 @@ explicit reset/flush, integer timestamps, and structured `Result<T>` errors. It
 is usable by the CLI and tests but is not ABI-frozen.
 
 Before v1, the session API must stabilize explicit Y/U/V planes, strides,
-dimensions, device selection, and host/device view ownership. A C ABI, FFmpeg
-encoder/decoder wrapper, timestamp/container mapping, and hardware-frame
-integration are post-v1 work.
+dimensions, device selection, and host/device view ownership. A C ABI, additional
+codec backends, FFmpeg encoder/decoder wrapper, timestamp/container mapping, and
+hardware-frame integration are post-v1 work.
 
 ## Incremental structure
 
 Large directory moves are deferred until correctness tests are reliable. As code
-is modified, application entry points move toward `apps/`, artifact/reference
-logic toward `tools/`, and performance/energy logic toward `benchmarks/`. The
-TensorRT backend should be split along manifest, engine/session, I-frame, P-frame,
-and state/asset boundaries without rewriting working behavior.
+is modified, generic codec contracts move under `include/nvcr/codec`, application
+entry points move toward `apps/`, artifact/reference logic toward `tools`, and
+performance/energy logic toward `benchmarks`. The DCVC-RT TensorRT backend should
+be split along manifest, engine/session, I-frame, P-frame, and state/asset
+boundaries without rewriting working behavior.
 
 ## See also
 

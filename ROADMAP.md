@@ -1,14 +1,16 @@
 # NVCR deployment roadmap
 
-This is the source of truth for the scoped DCVC-RT deployment runtime described
-in `docs/scope-and-support.md`.
+This is the source of truth for the scoped neural video codec runtime
+architecture described in `docs/scope-and-support.md`. DCVC-RT is the first and
+currently only supported codec backend.
 
-Last reviewed: 2026-07-23
+Last reviewed: 2026-07-29
 
 ## Objective
 
-Deliver NVCR v1 as a Linux C++20/CUDA/TensorRT runtime and reproducible local
-artifact toolchain for the pinned DCVC-RT CVPR 2025 I/P model pair that:
+Deliver NVCR v1 as a Linux C++20/CUDA/TensorRT runtime architecture and
+reproducible local artifact toolchain, validated through the pinned DCVC-RT
+CVPR 2025 I/P model pair, that:
 
 - matches pinned Python DCVC-RT behavior on the validated profiles;
 - meets or beats its warmed encode/decode latency on the same hardware;
@@ -18,8 +20,9 @@ artifact toolchain for the pinned DCVC-RT CVPR 2025 I/P model pair that:
 - records correctness, performance, memory, bitrate/distortion, and Orin energy
   evidence for RTX 4070 and Jetson Orin Nano.
 
-A public C ABI, FFmpeg integration, and container mapping are post-v1 work.
-They remain in the roadmap but are not v1 exit criteria.
+Additional codec backends, a public C ABI, FFmpeg integration, and container
+mapping are post-v1 work. They remain in the roadmap but are not v1 exit
+criteria.
 
 ## Release status
 
@@ -40,7 +43,7 @@ They remain in the roadmap but are not v1 exit criteria.
 | M3 — Predicted frames | Active | Two complete conformant GOPs |
 | M4 — Deployment artifacts | Active | Reproducible validated model/engine loading |
 | M5 — Stable C ABI | Post-v1 | C-only encode/decode/drain/reset tests |
-| M6 — FFmpeg codec wrapper | Post-v1 | `libdcvcrt` transcode tests |
+| M6 — FFmpeg codec wrapper | Post-v1 | `libnvcr` transcode tests |
 | M7 — Container integration | Post-v1 | Seekable mux/demux round trip |
 | M8 — Zero-copy and hardening | Post-v1 | CUDA-frame path and expanded release matrix |
 
@@ -50,11 +53,12 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: repeat the exact-tag clean RTX checkpoint→artifact→engine→
-native I/P workflow, then run the Orin target matrix and pinned Python↔native I/P
-golden/performance gates. Reusable per-session CUDA arena work and remaining
-host-staging removal stay open under M1/M3; target support remains pending until
-that evidence is recorded.
+Current next action: run the local CPU configure/build/test suite and configured
+RTX TensorRT suite after the codec-boundary refactor, then repeat the exact-tag
+clean RTX checkpoint→artifact→engine→native I/P workflow, the Orin target
+matrix, and pinned Python↔native I/P golden/performance gates. Reusable
+per-session CUDA arena work and remaining host-staging removal stay open under
+M1/M3; target support remains pending until that evidence is recorded.
 
 Deployment next action: reproduce the v2 `nvcr-artifacts` workflow and full
 registered suite on Orin Nano, then record its clean target, correctness,
@@ -126,6 +130,7 @@ State: **Active**
 - [x] Define a versioned access unit with model identity, dimensions, and features.
 - [x] Define syntax for frame type, effective QP, reset state, and payload lengths.
 - [x] Define bounds/version behavior and add parser/writer plus deterministic fuzz tests.
+- [x] Separate the generic codec backend/session boundary from the DCVC-RT TensorRT implementation.
 - [ ] Add Python→native and native→Python I/P golden vectors.
 
 Exit criteria:
@@ -201,7 +206,7 @@ Maintain a patch series or fork pinned to a tested FFmpeg revision.
 
 Exit criteria:
 
-- [ ] FFmpeg lists `libdcvcrt` as encoder and decoder.
+- [ ] FFmpeg lists `libnvcr` as encoder and decoder.
 - [ ] Raw YUV → DCVC-RT → raw YUV works through FFmpeg.
 - [ ] Transcode, drain, seek/reset, and corrupt-packet tests pass.
 - [ ] The wrapper uses only the public C ABI.
@@ -241,6 +246,35 @@ Exit criteria:
 ## Evidence log
 
 Append evidence; never silently replace historical results.
+
+### 2026-07-29 — Codec runtime architecture boundary alignment
+
+- Refactored the public session boundary so `nvcr::Runtime::create` receives
+  generic `nvcr::codec::Components` and owns a generic `nvcr::codec::Runtime`
+  session. Generic `CodecBackend`, `SequenceState`, and session orchestration now
+  live under `include/nvcr/codec` and `src/codec`; `nvcr::dcvcrt` retains
+  compatibility aliases and the only concrete TensorRT backend factory.
+- Moved DCVC-RT-specific artifact preparation helpers under
+  `scripts/backends/dcvcrt/`, while keeping `scripts/nvcr_artifacts.py` as the
+  generic installed `nvcr-artifacts` front end. The backend-local directory now
+  contains the DCVC-RT prepare helper, TensorRT builder, I/P exporters, and
+  engine-manifest writer.
+- Updated README, scope/support, architecture, API reference, compatibility,
+  getting-started, CLI, bitstream, and DCVC-RT integration docs to frame NVCR as
+  a neural video codec runtime architecture whose current v1 support is limited
+  to the DCVC-RT backend.
+- Updated CMake install rules, package validation, scripts documentation, and CI
+  linting so backend-local helpers are shipped and checked recursively.
+- Validation: repository text scan found no remaining old public DCVC-RT session
+  namespace usage; `bash -n` passed for
+  `scripts/backends/dcvcrt/prepare_artifacts.sh` and
+  `scripts/backends/dcvcrt/build_tensorrt.sh`; Python compile passed for
+  `scripts/nvcr_artifacts.py`, the moved DCVC-RT Python helpers, and
+  `tests/artifact_tool_tests.py`; `python tests/artifact_tool_tests.py` passed;
+  `git diff --check` passed.
+- Not validated in this Windows workspace: CMake configure/build/CTest. The
+  sandboxed PowerShell runner intermittently failed to spawn, and the escalated
+  shell reported `cmake` was not installed.
 
 ### 2026-07-23 — Local RTX 4070 v0.3 foundation validation
 
@@ -846,6 +880,23 @@ Append evidence; never silently replace historical results.
 ## Decision log
 
 Append decisions with date, rationale, and consequences.
+
+### 2026-07-29 — Make NVCR a codec-runtime architecture with one supported backend
+
+Decision: the public C++ session boundary is now expressed in generic
+`nvcr::codec` terms, while DCVC-RT remains the only implemented and supported
+backend for v0.3/v1.
+
+Rationale: NVCR's project identity is a deployment-oriented runtime architecture
+for neural video codecs, but the current evidence and release gates are tied to
+one DCVC-RT model profile. A generic backend/session boundary lets the
+architecture be described honestly without claiming additional codec support.
+
+Consequence: documentation may describe the runtime architecture as codec-backend
+oriented, and backend-specific preparation code should live under a backend
+directory. Release claims must continue to say that only DCVC-RT is supported
+until another backend has model profiles, payload contracts, conformance tests,
+artifact validation, and target evidence.
 
 ### 2026-07-02 — Keep the FFmpeg wrapper thin
 

@@ -81,7 +81,8 @@ and Orin Nano target profiles and their roadmap evidence.
 
 Every archive has a top-level versioned directory and an internal
 `PACKAGE-MANIFEST.sha256`. `scripts/package_release.sh` checks for required docs,
-profiles, license/notice, CLI, and artifact tooling before packaging.
+profiles, license/notice, CLI, the generic artifact entry point, and backend-local
+DCVC-RT artifact helpers before packaging.
 
 The package script rejects checkpoints, `.pth`/`.pth.tar`, ONNX, entropy/quant
 model assets, TensorRT plans, and engine bundles. Generated bundles are release
