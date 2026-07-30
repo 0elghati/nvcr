@@ -1514,31 +1514,54 @@ std::size_t tensor_offset(
         tensor.shape.d[3] + x;
 }
 
-Result<Frame> ycbcr_to_rgb(
+Result<Frame> ycbcr_to_yuv420p8(
     const HostTensor& tensor, std::uint32_t width, std::uint32_t height, Timestamp timestamp) {
-    constexpr float kr = 0.2126F;
-    constexpr float kg = 0.7152F;
-    constexpr float kb = 0.0722F;
-    std::vector<std::byte> bytes(static_cast<std::size_t>(width) * height * 3);
+    if ((width & 1U) != 0U || (height & 1U) != 0U) {
+        return Error(
+            ErrorCode::invalid_argument,
+            "YUV420 reconstruction requires even dimensions",
+            std::string(subsystem));
+    }
+
+    const auto y_size = static_cast<std::size_t>(width) * height;
+    const auto uv_width = width / 2U;
+    const auto uv_size = static_cast<std::size_t>(uv_width) * (height / 2U);
+    std::vector<std::byte> bytes(y_size + 2U * uv_size);
+    auto* y_plane = bytes.data();
+    auto* u_plane = bytes.data() + y_size;
+    auto* v_plane = bytes.data() + y_size + uv_size;
+
+    const auto quantize_y = [](float value) {
+        return static_cast<std::byte>(static_cast<unsigned char>(
+            std::lround(std::clamp(value, 0.0F, 1.0F) * 255.0F)));
+    };
+    const auto quantize_uv = [](float value) {
+        return static_cast<std::byte>(static_cast<unsigned char>(
+            std::clamp(value * 255.0F, 0.0F, 255.0F)));
+    };
+
     for (std::uint32_t y = 0; y < height; ++y) {
         for (std::uint32_t x = 0; x < width; ++x) {
-            const float luma = to_float(tensor.values[tensor_offset(tensor, 0, y, x)]);
-            const float cb = to_float(tensor.values[tensor_offset(tensor, 1, y, x)]);
-            const float cr = to_float(tensor.values[tensor_offset(tensor, 2, y, x)]);
-            const float r = luma + (2.0F - 2.0F * kr) * (cr - 0.5F);
-            const float b = luma + (2.0F - 2.0F * kb) * (cb - 0.5F);
-            const float g = (luma - kr * r - kb * b) / kg;
-            const auto destination = (static_cast<std::size_t>(y) * width + x) * 3;
-            const auto quantize = [](float value) {
-                return static_cast<unsigned char>(
-                    std::lround(std::clamp(value, 0.0F, 1.0F) * 255.0F));
-            };
-            bytes[destination] = static_cast<std::byte>(quantize(r));
-            bytes[destination + 1] = static_cast<std::byte>(quantize(g));
-            bytes[destination + 2] = static_cast<std::byte>(quantize(b));
+            y_plane[static_cast<std::size_t>(y) * width + x] =
+                quantize_y(to_float(tensor.values[tensor_offset(tensor, 0, y, x)]));
         }
     }
-    return Frame::copy_from(width, height, PixelFormat::rgb24, bytes, timestamp);
+    for (std::uint32_t y = 0; y < height; y += 2U) {
+        for (std::uint32_t x = 0; x < width; x += 2U) {
+            float u_sum = 0.0F;
+            float v_sum = 0.0F;
+            for (std::uint32_t dy = 0; dy < 2U; ++dy) {
+                for (std::uint32_t dx = 0; dx < 2U; ++dx) {
+                    u_sum += to_float(tensor.values[tensor_offset(tensor, 1, y + dy, x + dx)]);
+                    v_sum += to_float(tensor.values[tensor_offset(tensor, 2, y + dy, x + dx)]);
+                }
+            }
+            const auto chroma = static_cast<std::size_t>(y / 2U) * uv_width + x / 2U;
+            u_plane[chroma] = quantize_uv(u_sum * 0.25F);
+            v_plane[chroma] = quantize_uv(v_sum * 0.25F);
+        }
+    }
+    return Frame::copy_from(width, height, PixelFormat::yuv420p8, bytes, timestamp);
 }
 
 class AssetReader final {
@@ -2313,7 +2336,7 @@ Result<CodecEncodeResult> encode_intra(
     if (!downloaded) return downloaded.error();
     auto reconstructed_result = take_tensor(downloaded.value(), "frame_hat");
     if (!reconstructed_result) return reconstructed_result.error();
-    auto reconstructed = ycbcr_to_rgb(
+    auto reconstructed = ycbcr_to_yuv420p8(
         reconstructed_result.value(), frame.width(), frame.height(), frame.timestamp());
     if (!reconstructed) return reconstructed.error();
 
@@ -2532,7 +2555,7 @@ Result<CodecDecodeResult> decode_intra(
     if (!reconstruction) return reconstruction.error();
     auto frame_result = take_tensor(reconstruction.value(), "frame_hat");
     if (!frame_result) return frame_result.error();
-    auto frame = ycbcr_to_rgb(frame_result.value(), info.width, info.height, timestamp);
+    auto frame = ycbcr_to_yuv420p8(frame_result.value(), info.width, info.height, timestamp);
     if (!frame) return frame.error();
     frame_device.name = "reference_frame";
     device_dpb.clear();
@@ -2864,7 +2887,7 @@ Result<CodecEncodeResult> encode_predicted(
         std::array<const DeviceTensor*, 1> tensors{&frame_device};
         auto downloaded = download_tensors(tensors, stream);
         if (!downloaded) return downloaded.error();
-        auto reconstructed = ycbcr_to_rgb(
+        auto reconstructed = ycbcr_to_yuv420p8(
             downloaded.value().front(), frame.width(), frame.height(), frame.timestamp());
         if (!reconstructed) return reconstructed.error();
         reconstructed_frame = std::move(reconstructed.value());
@@ -3085,7 +3108,7 @@ Result<CodecDecodeResult> decode_predicted(
     if (!reconstruction) return reconstruction.error();
     auto frame_result = take_tensor(reconstruction.value(), "frame_hat");
     if (!frame_result) return frame_result.error();
-    auto frame = ycbcr_to_rgb(frame_result.value(), info.width, info.height, timestamp);
+    auto frame = ycbcr_to_yuv420p8(frame_result.value(), info.width, info.height, timestamp);
     if (!frame) return frame.error();
     device_dpb.frame = std::move(frame_device);
     device_dpb.feature = std::move(feature_device);

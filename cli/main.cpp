@@ -280,35 +280,6 @@ bool parse_options(int argc, char* argv[], Options& options) {
     return true;
 }
 
-std::vector<std::byte> yuv420p8_to_rgb24(
-    std::span<const std::byte> yuv, std::uint32_t width, std::uint32_t height) {
-    const auto y_size = static_cast<std::size_t>(width) * height;
-    const auto uv_width = width / 2U;
-    const auto uv_size = static_cast<std::size_t>(uv_width) * (height / 2U);
-    const auto* y_plane = yuv.data();
-    const auto* u_plane = yuv.data() + y_size;
-    const auto* v_plane = yuv.data() + y_size + uv_size;
-    std::vector<std::byte> rgb(y_size * 3U);
-    const auto clamp = [](int value) {
-        return static_cast<std::byte>(std::clamp(value, 0, 255));
-    };
-    for (std::uint32_t y = 0; y < height; ++y) {
-        for (std::uint32_t x = 0; x < width; ++x) {
-            const auto y_index = static_cast<std::size_t>(y) * width + x;
-            const auto uv_index = static_cast<std::size_t>(y / 2U) * uv_width + x / 2U;
-            const int luma = std::to_integer<unsigned char>(y_plane[y_index]);
-            const int u = std::to_integer<unsigned char>(u_plane[uv_index]) - 128;
-            const int v = std::to_integer<unsigned char>(v_plane[uv_index]) - 128;
-            const int c = std::max(luma - 16, 0);
-            const auto destination = y_index * 3U;
-            rgb[destination] = clamp((298 * c + 409 * v + 128) >> 8);
-            rgb[destination + 1] = clamp((298 * c - 100 * u - 208 * v + 128) >> 8);
-            rgb[destination + 2] = clamp((298 * c + 516 * u + 128) >> 8);
-        }
-    }
-    return rgb;
-}
-
 std::vector<std::byte> rgb24_to_yuv420p8(
     std::span<const std::byte> rgb, std::uint32_t width, std::uint32_t height) {
     const auto y_size = static_cast<std::size_t>(width) * height;
@@ -569,7 +540,8 @@ int decode(const Options& options) {
             return 1;
         }
         codec_time += elapsed;
-        if (frame.value().pixel_format() != nvcr::PixelFormat::rgb24) {
+        if (frame.value().pixel_format() != nvcr::PixelFormat::yuv420p8 &&
+            frame.value().pixel_format() != nvcr::PixelFormat::rgb24) {
             std::cerr << "nvcr: decoder returned an unsupported pixel format\n";
             return 1;
         }
@@ -585,8 +557,13 @@ int decode(const Options& options) {
             std::cerr << "nvcr: raw YUV output does not support resolution changes\n";
             return 1;
         }
-        const auto yuv = rgb24_to_yuv420p8(
-            frame.value().data(), frame.value().width(), frame.value().height());
+        std::vector<std::byte> converted_yuv;
+        std::span<const std::byte> yuv = frame.value().data();
+        if (frame.value().pixel_format() == nvcr::PixelFormat::rgb24) {
+            converted_yuv = rgb24_to_yuv420p8(
+                frame.value().data(), frame.value().width(), frame.value().height());
+            yuv = converted_yuv;
+        }
         output.write(reinterpret_cast<const char*>(yuv.data()),
                      static_cast<std::streamsize>(yuv.size()));
         if (!output) {
