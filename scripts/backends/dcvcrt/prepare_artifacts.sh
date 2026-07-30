@@ -60,7 +60,8 @@ Options:
   --engines DIR            TensorRT engine output (default: $engines_dir)
   --trtexec PATH           TensorRT trtexec path
   --python PATH            Python used for ONNX export (default: $python_bin)
-  --optimization-point X   TensorRT profile point: 1080p or qcif (default: $optimization_point)
+  --optimization-point X   TensorRT profile point: qcif, cif, 720p, or 1080p
+                           (default: $optimization_point)
   --workspace-mib N        TensorRT workspace memory pool in MiB (default: auto-tuned)
   --builder-optimization-level N
                            TensorRT builder optimization level 0-5 (default: auto-tuned)
@@ -185,8 +186,8 @@ while (($#)); do
     esac
 done
 
-if ((engine_profile_explicit == 0 && optimization_point == "qcif")); then
-    engine_profile_path="$repo_root/configs/engine-profiles/qcif-fp16.json"
+if ((engine_profile_explicit == 0)); then
+    engine_profile_path="$repo_root/configs/engine-profiles/${optimization_point}-fp16.json"
 fi
 
 for profile_path in "$model_profile_path" "$engine_profile_path"; do
@@ -195,7 +196,11 @@ for profile_path in "$model_profile_path" "$engine_profile_path"; do
         exit 1
     fi
 done
-if [[ -n "$target_profile_path" && ! -f "$target_profile_path" ]]; then
+if [[ -z "$target_profile_path" ]]; then
+    echo "--target-profile-path is required for reproducible engine bundles" >&2
+    exit 1
+fi
+if [[ ! -f "$target_profile_path" ]]; then
     echo "missing target profile: $target_profile_path" >&2
     exit 1
 fi

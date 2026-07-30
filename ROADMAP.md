@@ -1102,3 +1102,27 @@ Decision: add `scripts/release_engine_assets.sh` as the default operator path fo
 Rationale: Release Please should remain the only version and tag authority, S3 should remain temporary staging, and GitHub Releases should remain the public distribution channel. Automating the handoff removes manual manifest copy/paste and reduces the chance of attaching engines to a stale or mismatched release tag.
 
 Consequence: engine assets are still built on validated target machines and are still separate from generic binary packages, but the release operator now has a repeatable one-command path from target-local bundles to draft-release assets. Publishing remains gated on the recorded roadmap evidence for the release track.
+
+## M4 checkpoint: four-resolution TensorRT profiles (2026-07-30)
+
+Status: the QCIF, CIF, 720p, and 1080p FP16 profile matrix is implemented and
+validated on `rtx4070-ubuntu2404`. This checkpoint does not mark M4 complete;
+decode performance remains the active issue.
+
+Completed evidence:
+
+- QCIF and CIF engines were exported from a clean detached copy of pinned DCVC-RT, built with TensorRT 10.7.0, smoke-tested, and bound to versioned model, engine, and target profiles.
+- Eight release gates pass: one engine contract and one native I/P encode-decode roundtrip at each profile's visible optimum.
+- QCIF and CIF archives plus SHA-256 sidecars were uploaded as additive v0.4.1 GitHub release assets.
+- The warmed four-resolution GOP-1/GOP-97 encode, decode, and PSNR-YUV baseline is recorded in `docs/performance.md` and `docs/evidence/dcvcrt-resolution-matrix-2026-07-30.jsonl`.
+
+Architectural decisions:
+
+- Resolution-sensitive TensorRT tests must enumerate all four release profiles through their engine manifests.
+- Small-resolution profiles retain visible optimization points but include codec-required padded maxima and latent shapes.
+- TensorRT bundles without a versioned target profile are rejected before engine generation.
+- Performance changes must preserve failed/superseded measurements and rerun both encode and decode with quality metrics.
+
+Current next action: branch from this profile checkpoint for decode optimization,
+profile the GOP-97 decode path, fix the dominant resolution-scaled bottleneck,
+and rerun the identical four-resolution matrix against the baseline above.

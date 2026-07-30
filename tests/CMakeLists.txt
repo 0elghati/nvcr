@@ -54,12 +54,37 @@ if(NVCR_ENABLE_TENSORRT)
     add_executable(nvcr_tensorrt_roundtrip_tests tensorrt_roundtrip_tests.cpp)
     target_link_libraries(nvcr_tensorrt_roundtrip_tests PRIVATE NVCR::nvcr)
     nvcr_set_project_warnings(nvcr_tensorrt_roundtrip_tests)
+    function(nvcr_register_tensorrt_profile_tests engine_dir)
+        set(manifest_path "${engine_dir}/engine_manifest.json")
+        if(NOT EXISTS "${manifest_path}")
+            message(FATAL_ERROR "TensorRT engine test directory has no manifest: ${engine_dir}")
+        endif()
+        file(READ "${manifest_path}" engine_manifest)
+        string(JSON engine_profile_id GET "${engine_manifest}" engine_profile_id)
+        string(JSON optimum_width GET "${engine_manifest}" visible_dimensions optimum 0)
+        string(JSON optimum_height GET "${engine_manifest}" visible_dimensions optimum 1)
+        string(MAKE_C_IDENTIFIER "${engine_profile_id}" profile_test_id)
+        string(REGEX REPLACE "^_+" "" profile_test_id "${profile_test_id}")
+        set(profile_test_suffix "_${profile_test_id}")
+        add_test(NAME nvcr_tensorrt_engine_contracts${profile_test_suffix}
+            COMMAND nvcr_tensorrt_engine_tests "${engine_dir}")
+        add_test(NAME nvcr_tensorrt_ip_frame_roundtrip${profile_test_suffix}
+            COMMAND nvcr_tensorrt_roundtrip_tests "${engine_dir}"
+                "${optimum_width}" "${optimum_height}")
+        set_tests_properties(
+            nvcr_tensorrt_engine_contracts${profile_test_suffix}
+            nvcr_tensorrt_ip_frame_roundtrip${profile_test_suffix}
+            PROPERTIES LABELS "gpu;profile-${engine_profile_id}")
+    endfunction()
+
     if(NVCR_TENSORRT_ENGINE_DIR)
-        add_test(NAME nvcr_tensorrt_engine_contracts
-            COMMAND nvcr_tensorrt_engine_tests "${NVCR_TENSORRT_ENGINE_DIR}")
-        add_test(NAME nvcr_tensorrt_ip_frame_roundtrip
-            COMMAND nvcr_tensorrt_roundtrip_tests "${NVCR_TENSORRT_ENGINE_DIR}")
+        nvcr_register_tensorrt_profile_tests("${NVCR_TENSORRT_ENGINE_DIR}")
     endif()
+    foreach(engine_dir IN LISTS NVCR_TENSORRT_ENGINE_DIRS)
+        if(NOT engine_dir STREQUAL NVCR_TENSORRT_ENGINE_DIR)
+            nvcr_register_tensorrt_profile_tests("${engine_dir}")
+        endif()
+    endforeach()
     if(Python3_Interpreter_FOUND
        AND TARGET nvcr_cli
        AND NVCR_DCVCRT_ROOT

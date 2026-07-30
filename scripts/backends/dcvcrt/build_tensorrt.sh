@@ -95,8 +95,8 @@ while (($#)); do
     esac
 done
 
-if ((engine_profile_explicit == 0 && optimization_point == "qcif")); then
-    engine_profile_path="$(cd "$script_dir/.." && pwd)/configs/engine-profiles/qcif-fp16.json"
+if ((engine_profile_explicit == 0)); then
+    engine_profile_path="$repo_root/configs/engine-profiles/${optimization_point}-fp16.json"
 fi
 
 for profile_path in "$model_profile_path" "$engine_profile_path"; do
@@ -122,6 +122,28 @@ qcif)
     p_y_opt=1x128x12x12
     p_z_opt=1x128x3x3
     p_spatial_opt=1x512x12x12
+    i_frame_max=1x3x192x192
+    i_y_max="$i_y_opt"
+    i_z_max="$i_z_opt"
+    i_spatial_max=1x512x12x12
+    i_synthesis_max=1x256x12x12
+    p_frame_max="$p_frame_opt"
+    p_feature_max="$p_feature_opt"
+    p_y_max="$p_y_opt"
+    p_z_max="$p_z_opt"
+    p_spatial_max="$p_spatial_opt"
+    ;;
+cif)
+    i_frame_opt=1x3x288x352
+    i_y_opt=1x256x20x24
+    i_z_opt=1x128x5x6
+    i_spatial_opt=1x512x18x22
+    i_synthesis_opt=1x256x18x22
+    p_frame_opt=1x3x320x384
+    p_feature_opt=1x256x40x48
+    p_y_opt=1x128x20x24
+    p_z_opt=1x128x5x6
+    p_spatial_opt=1x512x20x24
     i_frame_max="$i_frame_opt"
     i_y_max="$i_y_opt"
     i_z_max="$i_z_opt"
@@ -178,7 +200,7 @@ qcif)
     p_spatial_max="$p_spatial_opt"
     ;;
 *)
-    echo "unsupported optimization point: $optimization_point (expected qcif, 720p, or 1080p)" >&2
+    echo "unsupported optimization point: $optimization_point (expected qcif, cif, 720p, or 1080p)" >&2
     exit 2
     ;;
 esac
@@ -282,21 +304,21 @@ if ((run_smoke && stamp_only == 0)); then
             --useSpinWait
     }
 
-    smoke_engine i_analysis frame:1x3x144x176
-    smoke_engine i_hyper_analysis y_padded:1x256x12x12
-    smoke_engine i_hyper_synthesis z_hat:1x128x3x3
+    smoke_engine i_analysis "frame:$i_frame_opt"
+    smoke_engine i_hyper_analysis "y_padded:$i_y_opt"
+    smoke_engine i_hyper_synthesis "z_hat:$i_z_opt"
     for stage in 1 2 3; do
-        smoke_engine "i_spatial_prior_$stage" context:1x512x9x11
+        smoke_engine "i_spatial_prior_$stage" "context:$i_spatial_opt"
     done
-    smoke_engine i_synthesis y_hat:1x256x9x11
+    smoke_engine i_synthesis "y_hat:$i_synthesis_opt"
 
-    smoke_engine p_reference_frame reference_frame:1x3x192x192
-    smoke_engine p_reference_feature reference_feature:1x256x24x24
-    smoke_engine p_analysis frame:1x3x192x192,context:1x256x24x24
-    smoke_engine p_hyper_analysis y_padded:1x128x12x12
-    smoke_engine p_prior z_hat:1x128x3x3,temporal_context:1x256x24x24
-    smoke_engine p_spatial_prior context:1x512x12x12
-    smoke_engine p_synthesis y_hat:1x128x12x12,context:1x256x24x24
+    smoke_engine p_reference_frame "reference_frame:$p_frame_opt"
+    smoke_engine p_reference_feature "reference_feature:$p_feature_opt"
+    smoke_engine p_analysis "frame:$p_frame_opt,context:$p_feature_opt"
+    smoke_engine p_hyper_analysis "y_padded:$p_y_opt"
+    smoke_engine p_prior "z_hat:$p_z_opt,temporal_context:$p_feature_opt"
+    smoke_engine p_spatial_prior "context:$p_spatial_opt"
+    smoke_engine p_synthesis "y_hat:$p_y_opt,context:$p_feature_opt"
 fi
 
 for plan in i_analysis.plan i_hyper_analysis.plan i_hyper_synthesis.plan \

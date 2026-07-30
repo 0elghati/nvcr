@@ -202,3 +202,22 @@ versioned profiles. Record all commands, hashes, tool versions, hardware, engine
 build settings, test results, and reference/performance evidence in
 [ROADMAP.md](../ROADMAP.md). Preserve failed or superseded results as labeled
 history.
+
+## Validated FP16 resolution profiles
+
+The discrete-GPU release matrix contains four independently packaged TensorRT
+profiles. Visible dimensions are the CLI/video dimensions; TensorRT profiles
+also include the runtime padding required by the codec.
+
+| Profile | Visible optimum | Release gate |
+|---|---:|---|
+| `qcif-fp16` | 176x144 | Contract plus native I/P roundtrip |
+| `cif-fp16` | 352x288 | Contract plus native I/P roundtrip |
+| `720p-fp16` | 1280x720 | Contract plus native I/P roundtrip |
+| `1080p-fp16` | 1920x1080 | Contract plus native I/P roundtrip |
+
+Configure `NVCR_TENSORRT_ENGINE_DIR` for one primary bundle and provide any
+additional bundles through semicolon-separated `NVCR_TENSORRT_ENGINE_DIRS`.
+CTest registers a profile-labeled contract and roundtrip gate for every
+manifest. Engine plans remain specific to the target GPU, CUDA, and TensorRT
+runtime recorded in `engine_manifest.json`.

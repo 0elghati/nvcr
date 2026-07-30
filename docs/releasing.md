@@ -253,3 +253,17 @@ URLs directly.
 Performance, rate/distortion, memory, and Orin energy evidence are recorded in
 [ROADMAP.md](../ROADMAP.md) using [Performance](performance.md). Passing hosted
 packaging alone never completes a release milestone.
+
+## v0.4.1 small-resolution engine assets
+
+The validated RTX 4070 QCIF and CIF bundles were added to the existing v0.4.1
+release on 2026-07-30 without replacing the 720p or 1080p assets:
+
+- `nvcr-v0.4.1-linux-x86_64-nvidia-dcvcrt-cvpr2025-qcif-fp16-engines.tar.gz`
+- `nvcr-v0.4.1-linux-x86_64-nvidia-dcvcrt-cvpr2025-qcif-fp16-engines.tar.gz.sha256`
+- `nvcr-v0.4.1-linux-x86_64-nvidia-dcvcrt-cvpr2025-cif-fp16-engines.tar.gz`
+- `nvcr-v0.4.1-linux-x86_64-nvidia-dcvcrt-cvpr2025-cif-fp16-engines.tar.gz.sha256`
+
+Before uploading a new profile, run its TensorRT contract and native I/P
+roundtrip at the manifest's visible optimum. A successful `trtexec` plan build
+alone is not sufficient release evidence.

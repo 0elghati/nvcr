@@ -227,7 +227,7 @@ def main() -> int:
         output_names: list[str],
         dynamic_shapes: tuple[Any, ...] | None,
         dynamic_axes: dict[str, dict[int, str]] | None = None,
-        dynamo: bool = True,
+        dynamo: bool = False,
     ) -> None:
         output = args.output_dir / f"{name}.onnx"
         module = module.eval()
@@ -246,6 +246,12 @@ def main() -> int:
                 export_kwargs["dynamic_shapes"] = dynamic_shapes
             if dynamic_axes is not None and "dynamic_axes" in export_signature.parameters:
                 export_kwargs["dynamic_axes"] = dynamic_axes
+            if not dynamo:
+                export_kwargs.pop("dynamic_shapes", None)
+                compat_dynamic_axes = derive_dynamic_axes(
+                    input_names, dynamic_shapes, dynamic_axes)
+                if compat_dynamic_axes is not None and "dynamic_axes" in export_signature.parameters:
+                    export_kwargs["dynamic_axes"] = compat_dynamic_axes
             try:
                 torch.onnx.export(
                     module,
@@ -329,6 +335,8 @@ def main() -> int:
             ["context"],
             ["scales_means"],
             ({2: latent_h, 3: latent_w},),
+            None,
+            False,
         )
     export(
         "i_synthesis",

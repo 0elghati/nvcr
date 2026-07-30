@@ -2,6 +2,7 @@
 #include <nvcr/nvcr.hpp>
 
 #include <algorithm>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -11,8 +12,15 @@
 
 namespace {
 
-constexpr std::uint32_t width = 176;
-constexpr std::uint32_t height = 144;
+std::uint32_t width = 176;
+std::uint32_t height = 144;
+
+bool parse_dimension(const char* value, std::uint32_t& output) {
+    const auto* end = value + std::char_traits<char>::length(value);
+    const auto parsed = std::from_chars(value, end, output);
+    return parsed.ec == std::errc{} && parsed.ptr == end && output >= 64U &&
+        (output & 1U) == 0U;
+}
 
 void fill_test_pattern(nvcr::Frame& frame) {
     auto pixels = frame.data();
@@ -37,8 +45,12 @@ std::uint32_t read_u32(std::span<const std::byte> bytes, std::size_t offset) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        std::cerr << "usage: nvcr_tensorrt_roundtrip_tests ENGINE_DIRECTORY\n";
+    if (argc != 2 && argc != 4) {
+        std::cerr << "usage: nvcr_tensorrt_roundtrip_tests ENGINE_DIRECTORY [WIDTH HEIGHT]\n";
+        return 2;
+    }
+    if (argc == 4 && (!parse_dimension(argv[2], width) || !parse_dimension(argv[3], height))) {
+        std::cerr << "WIDTH and HEIGHT must be even integers of at least 64\n";
         return 2;
     }
 

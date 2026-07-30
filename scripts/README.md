@@ -160,3 +160,28 @@ sample interval, and preserve the raw JSON/logs with roadmap evidence.
 
 See [Artifact preparation](../docs/dcvcrt-artifacts.md),
 [Performance](../docs/performance.md), and [Releasing](../docs/releasing.md).
+
+## Four-resolution benchmark matrix
+
+Use `benchmark_resolution_matrix.sh` for comparable encode/decode and quality
+measurements across QCIF, CIF, 720p, and 1080p. The default protocol runs GOP 1
+and GOP 97, performs separate encode/decode warm-ups, and records three measured
+repetitions per point.
+
+```bash
+scripts/benchmark_resolution_matrix.sh \
+  --nvcr build-release/cli/nvcr \
+  --qcif-input /home/oelghati/DCVC/datasets/qcif/akiyo_qcif.yuv \
+  --cif-input /home/oelghati/DCVC/datasets/cif/paris_cif.yuv \
+  --720p-input /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  --1080p-input /home/oelghati/DCVC/datasets/misc/BQTerrace_1920x1080_60.yuv \
+  --qcif-engine-dir build/engines/dcvcrt-qcif \
+  --cif-engine-dir build/engines/dcvcrt-cif \
+  --720p-engine-dir /path/to/720p/dcvcrt \
+  --1080p-engine-dir /path/to/1080p/dcvcrt \
+  --jsonl docs/evidence/dcvcrt-resolution-matrix-YYYY-MM-DD.jsonl
+```
+
+PSNR calculation is deliberately outside codec timing. Keep the emitted JSONL
+with the corresponding performance documentation so per-run variance is not
+lost behind aggregate FPS values.
