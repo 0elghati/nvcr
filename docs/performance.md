@@ -575,6 +575,55 @@ remained 364,985,344 bytes. `cudaMemcpyAsync` host API time fell from the
 baseline ~711 ms to 367.728 ms. Total GPU kernel time was 811.426 ms, and the
 new visible-output kernels accounted for about 1.018 ms across the 96 P frames.
 
+## Packed P-frame decode staging (2026-07-30)
+
+After device-side visible output conversion, P-frame decode still staged entropy
+indexes through pageable vectors and uploaded decoded z/y symbols as FP16 host
+tensors. This candidate adds reusable pinned P-decode staging buffers and uses
+the existing packed int8 upload plus GPU int8-to-FP16 conversion path for z,
+y0, and y1 symbols. The public output and DPB behavior are unchanged.
+
+Validation used the same release-build matrix protocol as the baseline.
+Machine-readable evidence is in
+`docs/evidence/dcvcrt-resolution-matrix-packed-pdecode-staging-2026-07-30.jsonl`.
+
+| Resolution | GOP | Payload bytes | Encode FPS | Decode FPS | Change vs device output | PSNR-YUV (dB) |
+|---|---:|---:|---:|---:|---:|---:|
+| QCIF (176x144) | 1 | 64,153 | 482.283 | 579.018 | +0.19% | 35.784883 |
+| CIF (352x288) | 1 | 1,311,398 | 224.943 | 247.929 | +0.05% | 28.044318 |
+| 720p (1280x720) | 1 | 1,104,333 | 35.068 | 42.155 | -0.04% | 38.648032 |
+| 1080p (1920x1080) | 1 | 4,421,239 | 15.105 | 17.756 | +0.22% | 34.701453 |
+| QCIF (176x144) | 97 | 11,124 | 804.534 | 967.570 | +2.46% | 38.355843 |
+| CIF (352x288) | 97 | 155,448 | 535.974 | 557.877 | +7.46% | 25.965082 |
+| 720p (1280x720) | 97 | 86,297 | 95.456 | 101.209 | +11.94% | 40.711093 |
+| 1080p (1920x1080) | 97 | 396,285 | 44.445 | 47.277 | +12.99% | 35.242946 |
+
+All payload byte counts and PSNR-YUV values match the prior device-output
+matrix. Compared with the original four-resolution baseline, GOP-97 decode is
+now 25.9% faster at QCIF, 47.8% faster at CIF, 77.2% faster at 720p, and
+81.4% faster at 1080p.
+
+A profiled 720p GOP-97 decode is summarized in
+`docs/evidence/dcvcrt-packed-pdecode-staging-720p-gop97-profile-2026-07-30.txt`.
+P-frame owned allocations fell from 5 to 2 per frame, allocation bytes from
+13,885,440 to 12,902,400 per frame, and H2D bytes from 983,040 to 491,520 per
+frame. D2H and D2D bytes are unchanged. The top remaining waits are the
+reference/synthesis TensorRT stages and the two required synchronization points
+for entropy indexes and public output.
+
+A short Nsight Systems trace is retained as
+`docs/evidence/dcvcrt-packed-pdecode-staging-720p-gop97-decode-2026-07-30.nsys-rep`;
+text summaries are in
+`docs/evidence/dcvcrt-packed-pdecode-staging-720p-gop97-decode-2026-07-30-nsys-stats.txt`,
+with memcpy totals in
+`docs/evidence/dcvcrt-packed-pdecode-staging-720p-gop97-decode-2026-07-30-memcpy.csv`
+and key allocation API counts in
+`docs/evidence/dcvcrt-packed-pdecode-staging-720p-gop97-decode-2026-07-30-api.csv`.
+Under tracing, decode measured 100.283 fps. H2D traffic dropped from the prior
+260,481,152 bytes to 213,295,232 bytes, D2H stayed 183,398,400 bytes, D2D stayed
+364,985,344 bytes, `cudaMallocAsync` calls dropped from 481 to 193, and total
+GPU kernel time was 802.861 ms.
+
 ### Superseded build and validation attempts
 
 The following failures are retained as diagnostic history and are not release

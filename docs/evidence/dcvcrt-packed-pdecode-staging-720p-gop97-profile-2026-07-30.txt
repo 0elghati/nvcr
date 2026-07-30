@@ -1,0 +1,71 @@
+== before packed P-decode staging ==
+Decoded 97 frame(s), codec time 1.081 s (89.721 fps)
+Wrote YUV420p8 1280x720 to "/dev/null"
+P-frame averages:
+  allocs: 5.000
+  alloc_bytes: 13885440.000
+  h2d_copies: 3.000
+  h2d_bytes: 983040.000
+  d2h_copies: 3.000
+  d2h_bytes: 1843200.000
+  d2d_copies: 2.000
+  d2d_bytes: 3686400.000
+  syncs: 3.000
+Top stage totals:
+  p_synthesis.plan enqueue               count= 96 cpu_ms=   0.000 cuda_ms= 387.775 total_ms= 387.775 avg_ms=  4.039
+  p_output_yuv420p8                      count= 96 cpu_ms= 384.489 cuda_ms=   0.000 total_ms= 384.489 avg_ms=  4.005
+  p_indexes0_download_sync               count= 96 cpu_ms= 322.906 cuda_ms=   0.000 total_ms= 322.906 avg_ms=  3.364
+  p_reference_feature.plan enqueue       count= 93 cpu_ms=   0.000 cuda_ms= 292.512 total_ms= 292.512 avg_ms=  3.145
+  p_prior.plan enqueue                   count= 96 cpu_ms=   0.000 cuda_ms=  74.450 total_ms=  74.450 avg_ms=  0.776
+  p_entropy_y0_decode                    count= 96 cpu_ms=  51.450 cuda_ms=   0.000 total_ms=  51.450 avg_ms=  0.536
+  p_entropy_y1_decode                    count= 96 cpu_ms=  43.796 cuda_ms=   0.000 total_ms=  43.796 avg_ms=  0.456
+  p_indexes1_download_sync               count= 96 cpu_ms=  31.878 cuda_ms=   0.000 total_ms=  31.878 avg_ms=  0.332
+  p_spatial_prior.plan enqueue           count= 96 cpu_ms=   0.000 cuda_ms=  30.722 total_ms=  30.722 avg_ms=  0.320
+  p_reference_feature.plan setup         count= 93 cpu_ms=  24.376 cuda_ms=   0.000 total_ms=  24.376 avg_ms=  0.262
+  p_synthesis.plan setup                 count= 96 cpu_ms=  23.962 cuda_ms=   0.000 total_ms=  23.962 avg_ms=  0.250
+  p_prior.plan setup                     count= 96 cpu_ms=  19.062 cuda_ms=   0.000 total_ms=  19.062 avg_ms=  0.199
+  p_reference_frame.plan enqueue         count=  3 cpu_ms=   0.000 cuda_ms=  10.997 total_ms=  10.997 avg_ms=  3.666
+  i_synthesis.plan enqueue               count=  1 cpu_ms=   0.000 cuda_ms=  10.084 total_ms=  10.084 avg_ms= 10.084
+  p_entropy_z_decode                     count= 96 cpu_ms=   9.576 cuda_ms=   0.000 total_ms=   9.576 avg_ms=  0.100
+  p_spatial_prior.plan setup             count= 96 cpu_ms=   6.769 cuda_ms=   0.000 total_ms=   6.769 avg_ms=  0.071
+  i_synthesis.plan setup                 count=  1 cpu_ms=   6.669 cuda_ms=   0.000 total_ms=   6.669 avg_ms=  6.669
+  p_symbols0_upload                      count= 96 cpu_ms=   2.975 cuda_ms=   0.000 total_ms=   2.975 avg_ms=  0.031
+  p_symbols1_upload                      count= 96 cpu_ms=   2.882 cuda_ms=   0.000 total_ms=   2.882 avg_ms=  0.030
+  i_hyper_synthesis.plan enqueue         count=  1 cpu_ms=   0.000 cuda_ms=   1.244 total_ms=   1.244 avg_ms=  1.244
+
+== after packed P-decode staging ==
+Decoded 97 frame(s), codec time 0.979 s (99.037 fps)
+Quality 97 frame(s): PSNR-Y 39.032465 dB, PSNR-U 45.035490 dB, PSNR-V 46.458467 dB, PSNR-YUV 40.711093 dB
+Wrote YUV420p8 1280x720 to "/dev/null"
+P-frame averages:
+  allocs: 2.000
+  alloc_bytes: 12902400.000
+  h2d_copies: 3.000
+  h2d_bytes: 491520.000
+  d2h_copies: 3.000
+  d2h_bytes: 1843200.000
+  d2d_copies: 2.000
+  d2d_bytes: 3686400.000
+  syncs: 3.000
+Top stage totals:
+  p_synthesis.plan enqueue               count= 96 cpu_ms=   0.000 cuda_ms= 385.648 total_ms= 385.648 avg_ms=  4.017
+  p_output_yuv420p8                      count= 96 cpu_ms= 379.526 cuda_ms=   0.000 total_ms= 379.526 avg_ms=  3.953
+  p_indexes0_download_sync               count= 96 cpu_ms= 327.589 cuda_ms=   0.000 total_ms= 327.589 avg_ms=  3.412
+  p_reference_feature.plan enqueue       count= 93 cpu_ms=   0.000 cuda_ms= 292.607 total_ms= 292.607 avg_ms=  3.146
+  p_prior.plan enqueue                   count= 96 cpu_ms=   0.000 cuda_ms=  73.362 total_ms=  73.362 avg_ms=  0.764
+  p_entropy_y0_decode                    count= 96 cpu_ms=  53.236 cuda_ms=   0.000 total_ms=  53.236 avg_ms=  0.555
+  p_entropy_y1_decode                    count= 96 cpu_ms=  46.054 cuda_ms=   0.000 total_ms=  46.054 avg_ms=  0.480
+  p_spatial_prior.plan enqueue           count= 96 cpu_ms=   0.000 cuda_ms=  30.522 total_ms=  30.522 avg_ms=  0.318
+  p_indexes1_download_sync               count= 96 cpu_ms=  28.536 cuda_ms=   0.000 total_ms=  28.536 avg_ms=  0.297
+  p_synthesis.plan setup                 count= 96 cpu_ms=  25.536 cuda_ms=   0.000 total_ms=  25.536 avg_ms=  0.266
+  p_reference_feature.plan setup         count= 93 cpu_ms=  23.221 cuda_ms=   0.000 total_ms=  23.221 avg_ms=  0.250
+  p_prior.plan setup                     count= 96 cpu_ms=  18.269 cuda_ms=   0.000 total_ms=  18.269 avg_ms=  0.190
+  p_reference_frame.plan enqueue         count=  3 cpu_ms=   0.000 cuda_ms=  11.187 total_ms=  11.187 avg_ms=  3.729
+  p_entropy_z_decode                     count= 96 cpu_ms=  10.092 cuda_ms=   0.000 total_ms=  10.092 avg_ms=  0.105
+  i_synthesis.plan enqueue               count=  1 cpu_ms=   0.000 cuda_ms=  10.034 total_ms=  10.034 avg_ms= 10.034
+  p_spatial_prior.plan setup             count= 96 cpu_ms=   6.951 cuda_ms=   0.000 total_ms=   6.951 avg_ms=  0.072
+  i_synthesis.plan setup                 count=  1 cpu_ms=   6.835 cuda_ms=   0.000 total_ms=   6.835 avg_ms=  6.835
+  i_hyper_synthesis.plan enqueue         count=  1 cpu_ms=   0.000 cuda_ms=   1.255 total_ms=   1.255 avg_ms=  1.255
+  p_reference_frame.plan setup           count=  3 cpu_ms=   1.235 cuda_ms=   0.000 total_ms=   1.235 avg_ms=  0.412
+  i_spatial_prior_1.plan enqueue         count=  1 cpu_ms=   0.000 cuda_ms=   1.169 total_ms=   1.169 avg_ms=  1.169
+

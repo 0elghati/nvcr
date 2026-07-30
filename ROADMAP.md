@@ -53,12 +53,13 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: with P-frame visible-output conversion accepted on RTX
-4070, profile the remaining GOP-97 decode boundaries separately: CPU rANS
-decode, pageable P-frame index downloads, TensorRT execution, and the remaining
-`cudaMallocAsync`/`cudaFree` churn. Do not start a GPU entropy-coder rewrite
-until those smaller boundaries are measured. Cross-runtime I/P golden vectors,
-drain/flush semantics, and target support remain pending.
+Current next action: after packed P-decode staging, profile and reduce the
+remaining GOP-97 decode waits around TensorRT reference/synthesis execution,
+public-output synchronization, and residual allocation/free churn. CPU rANS
+decode is measured below the dominant GPU waits, and a GPU entropy-coder rewrite
+is still deferred until the smaller TensorRT/output/allocation boundaries are
+exhausted. Cross-runtime I/P golden vectors, drain/flush semantics, and target
+support remain pending.
 
 Deployment next action: reproduce the v2 `nvcr-artifacts` workflow and full
 registered suite on Orin Nano, then record its clean target, correctness,
@@ -116,9 +117,10 @@ Device execution:
   active TensorRT stages and remove the obsolete host-engine implementation.
 - [ ] Bind TensorRT outputs directly to downstream inputs where possible.
 - [ ] Remove steady-state `cudaMalloc`, `cudaFree`, and unconditional syncs.
-  Encode-side manual scratch allocations now use the per-session arena; remaining
-  profiled allocations are owned TensorRT outputs, DPB/reference lifetimes,
-  entropy downloads, and decode-side staging.
+  Encode-side manual scratch allocations and P-decode entropy staging now use
+  the per-session arena or reusable pinned buffers; remaining profiled
+  allocations are owned TensorRT outputs, DPB/reference lifetimes, and
+  decode-side output lifetimes.
 - [ ] Use pinned staging only at unavoidable CPU/GPU boundaries.
 
 CUDA prior operations:
@@ -168,6 +170,8 @@ Verification evidence, 2026-07-29 to 2026-07-30:
 - [x] P-frame visible decoded-output conversion, 2026-07-30: Release build passed; standalone CUDA operator coverage passed; all eight TensorRT profile contract/roundtrip gates passed for QCIF, CIF, 720p, and 1080p. The full registered suite was 14/15 because `nvcr_dcvcrt_i_frame_golden` is currently generated with the QCIF engine directory for a 720p input; this is a pre-existing test configuration issue, not a candidate output regression.
 - [x] Four-resolution matrix after device-side P-frame YUV420P8 output, 2026-07-30: evidence `docs/evidence/dcvcrt-resolution-matrix-device-yuv420-2026-07-30.jsonl`. GOP-97 decode improved from 808.001 to 944.322 fps at QCIF (+16.9%), 377.522 to 519.126 fps at CIF (+37.5%), 57.112 to 90.416 fps at 720p (+58.3%), and 26.060 to 41.843 fps at 1080p (+60.6%). Payload bytes and PSNR-YUV are identical to the baseline for every GOP/resolution point; encode remains within normal variance.
 - [x] 720p GOP-97 Nsight trace after device-side output conversion: `docs/evidence/dcvcrt-device-yuv420-720p-gop97-decode-2026-07-30.nsys-rep`, stats text, and memcpy CSV. Under tracing, decode measured 89.157 fps; D2H traffic fell from the baseline ~581.5 MB to 183,398,400 bytes, `cudaMemcpyAsync` API time fell from ~711 ms to 367.728 ms, total GPU kernel time was 811.426 ms, and the new luma/chroma output kernels contributed about 1.018 ms across the 96 P frames.
+- [x] Packed P-frame decode staging, 2026-07-30: Release build passed; standalone CUDA operator coverage passed; all eight TensorRT profile contract/roundtrip gates passed. Evidence: `docs/evidence/dcvcrt-resolution-matrix-packed-pdecode-staging-2026-07-30.jsonl` and `docs/evidence/dcvcrt-packed-pdecode-staging-720p-gop97-profile-2026-07-30.txt`. Compared with the accepted device-output matrix, GOP-97 decode improved from 90.416 to 101.209 fps at 720p (+11.9%) and 41.843 to 47.277 fps at 1080p (+13.0%) with identical payload bytes and PSNR-YUV. Per P frame, owned allocations dropped from 5 to 2 and H2D bytes from 983,040 to 491,520.
+- [x] Packed P-frame decode Nsight trace: `docs/evidence/dcvcrt-packed-pdecode-staging-720p-gop97-decode-2026-07-30.nsys-rep`, stats text, memcpy CSV, and API CSV. Under tracing, decode measured 100.283 fps; H2D traffic fell from the prior 260,481,152 bytes to 213,295,232 bytes, D2H remained 183,398,400 bytes, D2D remained 364,985,344 bytes, `cudaMallocAsync` calls dropped from 481 to 193, and total GPU kernel time was 802.861 ms.
 
 Exit criteria:
 

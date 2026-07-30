@@ -1039,6 +1039,24 @@ struct ImageDecodeStaging final {
     std::array<CudaEvent, 4> indexes_ready;
 };
 
+struct VideoDecodeStaging final {
+    Result<void> ensure(std::size_t z_count, std::size_t reduced_count) {
+        auto ready = z_symbols.ensure(z_count, "video_decode_z_symbols");
+        if (!ready) return ready.error();
+        for (std::size_t stage = 0; stage < indexes.size(); ++stage) {
+            ready = indexes[stage].ensure(reduced_count, "video_decode_indexes");
+            if (!ready) return ready.error();
+            ready = symbols[stage].ensure(reduced_count, "video_decode_symbols");
+            if (!ready) return ready.error();
+        }
+        return {};
+    }
+
+    PinnedHostBuffer<std::int8_t> z_symbols;
+    std::array<PinnedHostBuffer<std::uint8_t>, 2> indexes;
+    std::array<PinnedHostBuffer<std::int8_t>, 2> symbols;
+};
+
 Result<CudaAllocation> allocate_cuda(std::size_t bytes) {
     void* pointer = nullptr;
     const auto stream = allocation_stream;
@@ -2952,6 +2970,7 @@ Result<CodecDecodeResult> decode_predicted(
     DeviceDpb& device_dpb,
     std::vector<EngineInstance>& engines, RansCodec& rans,
     const RuntimeAssets& assets, VideoQuantDeviceCache& quant_cache,
+    VideoDecodeStaging& video_decode_staging,
     PinnedHostBuffer<std::byte>& output_frame_buffer,
     cudaStream_t stream) {
     auto parsed = parse_predicted_payload(payload);
@@ -2993,20 +3012,29 @@ Result<CodecDecodeResult> decode_predicted(
     const auto y_width = padded_width / 16;
     const auto z_height = round_up(y_height, 4) / 4;
     const auto z_width = round_up(y_width, 4) / 4;
-    rans.reset_encoder();
-    auto mode = rans.set_use_two_coders(info.two_coders);
-    if (!mode) return mode.error();
-    auto stream_set = rans.set_stream(info.rans);
-    if (!stream_set) return stream_set.error();
     const auto per_channel = static_cast<std::size_t>(z_height * z_width);
-    auto z_values = rans.decode_z(128 * per_channel, assets.video_z_group,
-        static_cast<std::size_t>(info.qp) * 128, per_channel);
+    auto z_values = [&]() -> Result<std::vector<std::int8_t>> {
+        CpuProfileScope stage("p_entropy_z_decode");
+        rans.reset_encoder();
+        auto mode = rans.set_use_two_coders(info.two_coders);
+        if (!mode) return mode.error();
+        auto stream_set = rans.set_stream(info.rans);
+        if (!stream_set) return stream_set.error();
+        return rans.decode_z(128 * per_channel, assets.video_z_group,
+            static_cast<std::size_t>(info.qp) * 128, per_channel);
+    }();
     if (!z_values) return z_values.error();
-    HostTensor z_host{"z_hat", make_dims(128, z_height, z_width),
-                      std::vector<__half>(z_values.value().size())};
-    std::transform(z_values.value().begin(), z_values.value().end(), z_host.values.begin(),
-                   [](std::int8_t value) { return to_half(static_cast<float>(value)); });
-    auto z_device = upload_tensor(z_host, "z_hat", stream);
+    const auto staging_reduced_count = static_cast<std::size_t>(64) * y_height * y_width;
+    auto staging_ready = video_decode_staging.ensure(
+        z_values.value().size(), staging_reduced_count);
+    if (!staging_ready) return staging_ready.error();
+    std::copy(
+        z_values.value().begin(), z_values.value().end(),
+        video_decode_staging.z_symbols.data);
+    auto z_device = upload_int8_tensor_scratch(
+        std::span<const std::int8_t>(
+            video_decode_staging.z_symbols.data, z_values.value().size()),
+        make_dims(128, z_height, z_width), "z_hat", stream);
     if (!z_device) return z_device.error();
     std::array<DeviceTensor*, 2> prior_inputs{&z_device.value(), &temporal_context};
     auto prior_outputs = run_device_engine(
@@ -3042,21 +3070,33 @@ Result<CodecDecodeResult> decode_predicted(
         scales0.value().storage.data, static_cast<std::uint8_t*>(indexes0_device.value().data),
         reduced_count, 0.0F, stream);
     if (status != cudaSuccess) return cuda_error("cuda_ops::build_decode_indexes", status);
-    std::vector<std::uint8_t> indexes0(reduced_count);
-    auto copied = copy_async(
-        indexes0.data(), indexes0_device.value().data, reduced_count,
-        cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync indexes0");
-    if (!copied) return copied.error();
-    auto synchronized = synchronize_stream(stream, "cudaStreamSynchronize indexes0");
-    if (!synchronized) return synchronized.error();
-    auto decoded0 = rans.decode_y(indexes0, assets.video_gaussian_y_group);
+    auto& indexes0 = video_decode_staging.indexes[0];
+    Result<void> copied;
+    Result<void> synchronized;
+    {
+        CpuProfileScope stage("p_indexes0_download_sync");
+        copied = copy_async(
+            indexes0.data, indexes0_device.value().data, reduced_count,
+            cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync indexes0");
+        if (!copied) return copied.error();
+        synchronized = synchronize_stream(stream, "cudaStreamSynchronize indexes0");
+        if (!synchronized) return synchronized.error();
+    }
+    auto decoded0 = [&]() -> Result<std::vector<std::int8_t>> {
+        CpuProfileScope stage("p_entropy_y0_decode");
+        return rans.decode_y(
+            std::span<const std::uint8_t>(indexes0.data, reduced_count),
+            assets.video_gaussian_y_group);
+    }();
     if (!decoded0) return decoded0.error();
-    HostTensor symbols0_host{"symbols0", reduced_shape,
-                             std::vector<__half>(decoded0.value().size())};
-    std::transform(decoded0.value().begin(), decoded0.value().end(),
-                   symbols0_host.values.begin(),
-                   [](std::int8_t value) { return to_half(static_cast<float>(value)); });
-    auto symbols0 = upload_tensor(symbols0_host, "symbols0", stream);
+    auto& symbols0_host = video_decode_staging.symbols[0];
+    std::copy(decoded0.value().begin(), decoded0.value().end(), symbols0_host.data);
+    auto symbols0 = [&]() -> Result<DeviceTensor> {
+        CpuProfileScope stage("p_symbols0_upload");
+        return upload_int8_tensor_scratch(
+            std::span<const std::int8_t>(symbols0_host.data, decoded0.value().size()),
+            reduced_shape, "symbols0", stream);
+    }();
     if (!symbols0) return symbols0.error();
     auto y_hat_device = allocate_device_tensor_scratch("y_hat", make_dims(128, y_height, y_width));
     if (!y_hat_device) return y_hat_device.error();
@@ -3070,15 +3110,18 @@ Result<CodecDecodeResult> decode_predicted(
     if (!spatial_context) return spatial_context.error();
     const auto y_bytes = prior_count * sizeof(__half);
     const auto params_bytes = 3 * y_bytes;
-    copied = copy_async(
-        spatial_context.value().storage.data, y_hat_device.value().storage.data, y_bytes,
-        cudaMemcpyDeviceToDevice, stream, "cudaMemcpyAsync spatial y");
-    if (!copied) return copied.error();
-    copied = copy_async(
-        static_cast<std::byte*>(spatial_context.value().storage.data) + y_bytes,
-        params_device.storage.data, params_bytes, cudaMemcpyDeviceToDevice, stream,
-        "cudaMemcpyAsync spatial params");
-    if (!copied) return copied.error();
+    {
+        CpuProfileScope stage("p_spatial_context_copy");
+        copied = copy_async(
+            spatial_context.value().storage.data, y_hat_device.value().storage.data, y_bytes,
+            cudaMemcpyDeviceToDevice, stream, "cudaMemcpyAsync spatial y");
+        if (!copied) return copied.error();
+        copied = copy_async(
+            static_cast<std::byte*>(spatial_context.value().storage.data) + y_bytes,
+            params_device.storage.data, params_bytes, cudaMemcpyDeviceToDevice, stream,
+            "cudaMemcpyAsync spatial params");
+        if (!copied) return copied.error();
+    }
     std::array<DeviceTensor*, 1> spatial_inputs{&spatial_context.value()};
     auto spatial_outputs = run_device_engine(
         engines[12], engine_specs[12], spatial_inputs, stream, EngineOutputStorage::scratch);
@@ -3104,21 +3147,31 @@ Result<CodecDecodeResult> decode_predicted(
         scales1.value().storage.data, static_cast<std::uint8_t*>(indexes1_device.value().data),
         reduced_count, 0.0F, stream);
     if (status != cudaSuccess) return cuda_error("cuda_ops::build_decode_indexes", status);
-    std::vector<std::uint8_t> indexes1(reduced_count);
-    copied = copy_async(
-        indexes1.data(), indexes1_device.value().data, reduced_count,
-        cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync indexes1");
-    if (!copied) return copied.error();
-    synchronized = synchronize_stream(stream, "cudaStreamSynchronize indexes1");
-    if (!synchronized) return synchronized.error();
-    auto decoded1 = rans.decode_y(indexes1, assets.video_gaussian_y_group);
+    auto& indexes1 = video_decode_staging.indexes[1];
+    {
+        CpuProfileScope stage("p_indexes1_download_sync");
+        copied = copy_async(
+            indexes1.data, indexes1_device.value().data, reduced_count,
+            cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync indexes1");
+        if (!copied) return copied.error();
+        synchronized = synchronize_stream(stream, "cudaStreamSynchronize indexes1");
+        if (!synchronized) return synchronized.error();
+    }
+    auto decoded1 = [&]() -> Result<std::vector<std::int8_t>> {
+        CpuProfileScope stage("p_entropy_y1_decode");
+        return rans.decode_y(
+            std::span<const std::uint8_t>(indexes1.data, reduced_count),
+            assets.video_gaussian_y_group);
+    }();
     if (!decoded1) return decoded1.error();
-    HostTensor symbols1_host{"symbols1", reduced_shape,
-                             std::vector<__half>(decoded1.value().size())};
-    std::transform(decoded1.value().begin(), decoded1.value().end(),
-                   symbols1_host.values.begin(),
-                   [](std::int8_t value) { return to_half(static_cast<float>(value)); });
-    auto symbols1 = upload_tensor(symbols1_host, "symbols1", stream);
+    auto& symbols1_host = video_decode_staging.symbols[1];
+    std::copy(decoded1.value().begin(), decoded1.value().end(), symbols1_host.data);
+    auto symbols1 = [&]() -> Result<DeviceTensor> {
+        CpuProfileScope stage("p_symbols1_upload");
+        return upload_int8_tensor_scratch(
+            std::span<const std::int8_t>(symbols1_host.data, decoded1.value().size()),
+            reduced_shape, "symbols1", stream);
+    }();
     if (!symbols1) return symbols1.error();
     auto reconstructed1 = allocate_device_tensor_scratch(
         "reconstructed1", make_dims(128, y_height, y_width));
@@ -3150,8 +3203,11 @@ Result<CodecDecodeResult> decode_predicted(
     if (!feature_device_result) return feature_device_result.error();
     auto frame_device = std::move(frame_device_result.value());
     auto feature_device = std::move(feature_device_result.value());
-    auto frame = ycbcr_device_to_yuv420p8(
-        frame_device, info.width, info.height, timestamp, output_frame_buffer, stream);
+    auto frame = [&]() -> Result<Frame> {
+        CpuProfileScope stage("p_output_yuv420p8");
+        return ycbcr_device_to_yuv420p8(
+            frame_device, info.width, info.height, timestamp, output_frame_buffer, stream);
+    }();
     if (!frame) return frame.error();
     device_dpb.frame = std::move(frame_device);
     device_dpb.feature = std::move(feature_device);
@@ -3349,7 +3405,7 @@ public:
             }
             auto result = decode_predicted(
                 payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_,
-                video_quant_cache_, decoded_frame_buffer_, stream_);
+                video_quant_cache_, video_decode_staging_, decoded_frame_buffer_, stream_);
             profiler.finish();
             return result;
         } catch (const std::exception& exception) {
@@ -3388,6 +3444,7 @@ private:
     RuntimeAssets assets_;
     ImageQuantDeviceCache image_quant_cache_;
     ImageDecodeStaging image_decode_staging_;
+    VideoDecodeStaging video_decode_staging_;
     VideoQuantDeviceCache video_quant_cache_;
     DeviceScratchArena scratch_arena_;
     PinnedHostBuffer<std::int8_t> z_symbols_buffer_;
