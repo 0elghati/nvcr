@@ -3,6 +3,7 @@
 #include <cuda_fp16.h>
 #include <cuda_runtime_api.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -155,6 +156,101 @@ void mask_test(cudaStream_t stream) {
     }
 }
 
+std::vector<std::uint8_t> reference_ycbcr_to_yuv420p8(
+    const std::vector<__half>& values,
+    std::int32_t padded_height,
+    std::int32_t padded_width,
+    std::int32_t visible_width,
+    std::int32_t visible_height) {
+    const auto y_size = static_cast<std::size_t>(visible_width) * visible_height;
+    const auto uv_width = visible_width / 2;
+    std::vector<std::uint8_t> output(y_size + y_size / 2);
+    const auto plane = static_cast<std::size_t>(padded_height) * padded_width;
+    const auto offset = [&](std::int32_t channel, std::int32_t y, std::int32_t x) {
+        return static_cast<std::size_t>(channel) * plane +
+            static_cast<std::size_t>(y) * padded_width + x;
+    };
+    const auto quantize_y = [](float value) {
+        return static_cast<std::uint8_t>(
+            std::lround(std::clamp(value, 0.0F, 1.0F) * 255.0F));
+    };
+    const auto quantize_uv = [](float value) {
+        return static_cast<std::uint8_t>(std::clamp(value * 255.0F, 0.0F, 255.0F));
+    };
+    for (std::int32_t y = 0; y < visible_height; ++y) {
+        for (std::int32_t x = 0; x < visible_width; ++x) {
+            output[static_cast<std::size_t>(y) * visible_width + x] =
+                quantize_y(__half2float(values[offset(0, y, x)]));
+        }
+    }
+    for (std::int32_t y = 0; y < visible_height; y += 2) {
+        for (std::int32_t x = 0; x < visible_width; x += 2) {
+            float cb_sum = 0.0F;
+            float cr_sum = 0.0F;
+            for (std::int32_t dy = 0; dy < 2; ++dy) {
+                for (std::int32_t dx = 0; dx < 2; ++dx) {
+                    cb_sum += __half2float(values[offset(1, y + dy, x + dx)]);
+                    cr_sum += __half2float(values[offset(2, y + dy, x + dx)]);
+                }
+            }
+            const auto chroma = static_cast<std::size_t>(y / 2) * uv_width + x / 2;
+            output[y_size + chroma] = quantize_uv(cb_sum * 0.25F);
+            output[y_size + y_size / 4 + chroma] = quantize_uv(cr_sum * 0.25F);
+        }
+    }
+    return output;
+}
+
+void ycbcr_to_yuv420_test(cudaStream_t stream) {
+    constexpr std::int32_t visible_width = 4;
+    constexpr std::int32_t visible_height = 2;
+    constexpr std::int32_t padded_width = 6;
+    constexpr std::int32_t padded_height = 4;
+    constexpr std::size_t plane = static_cast<std::size_t>(padded_width) * padded_height;
+    auto input = to_half(std::vector<float>(3 * plane, 0.875F));
+    const auto offset = [](std::int32_t channel, std::int32_t y, std::int32_t x) {
+        return static_cast<std::size_t>(channel) * plane +
+            static_cast<std::size_t>(y) * padded_width + x;
+    };
+
+    const auto y_values = to_half({
+        -0.25F, 0.0F, 0.49F / 255.0F, 0.5F / 255.0F,
+        127.49F / 255.0F, 127.5F / 255.0F, 1.0F, 1.25F});
+    for (std::int32_t y = 0; y < visible_height; ++y) {
+        for (std::int32_t x = 0; x < visible_width; ++x) {
+            input[offset(0, y, x)] = y_values[static_cast<std::size_t>(y) * visible_width + x];
+        }
+    }
+
+    const auto u_values = to_half({-1.0F, 0.5F, 1.0F, 2.0F, 1.5F, 0.5F, 1.0F, 1.0F});
+    const auto v_values = to_half({0.25F, 0.25F, -1.0F, -1.0F, 0.25F, 0.25F, -1.0F, -1.0F});
+    for (std::int32_t y = 0; y < visible_height; ++y) {
+        for (std::int32_t x = 0; x < visible_width; ++x) {
+            const auto source = static_cast<std::size_t>(y) * visible_width + x;
+            input[offset(1, y, x)] = u_values[source];
+            input[offset(2, y, x)] = v_values[source];
+        }
+    }
+
+    const auto expected = reference_ycbcr_to_yuv420p8(
+        input, padded_height, padded_width, visible_width, visible_height);
+    DeviceBuffer source(input.size() * sizeof(__half));
+    DeviceBuffer output(expected.size());
+    expect_cuda(cudaMemcpyAsync(
+        source.data, input.data(), input.size() * sizeof(__half),
+        cudaMemcpyHostToDevice, stream), "copy YCbCr input");
+    expect_cuda(nvcr::dcvcrt::cuda_ops::ycbcr_padded_to_yuv420p8(
+        source.data, {1, 3, padded_height, padded_width}, visible_width, visible_height,
+        static_cast<std::uint8_t*>(output.data), stream), "ycbcr_padded_to_yuv420p8");
+    std::vector<std::uint8_t> actual(expected.size());
+    expect_cuda(cudaMemcpyAsync(
+        actual.data(), output.data, actual.size(), cudaMemcpyDeviceToHost, stream),
+        "copy YUV420P8 output");
+    expect_cuda(cudaStreamSynchronize(stream), "synchronize YCbCr output test");
+    expect(actual == expected,
+           "device YCbCr to YUV420P8 matches CPU rounding, clamping, and 2x2 chroma averaging");
+}
+
 void quarter_reduction_test(cudaStream_t stream) {
     auto input = to_half({1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 6.0F, 7.0F, 8.0F});
     DeviceBuffer source(input.size() * sizeof(__half));
@@ -184,6 +280,7 @@ int main() {
         padding_test(stream);
         image_prior_test(stream);
         mask_test(stream);
+        ycbcr_to_yuv420_test(stream);
         quarter_reduction_test(stream);
         expect_cuda(cudaStreamDestroy(stream), "destroy stream");
     }
