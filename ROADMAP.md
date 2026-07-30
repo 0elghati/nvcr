@@ -4,7 +4,7 @@ This is the source of truth for the scoped neural video codec runtime
 architecture described in `docs/scope-and-support.md`. DCVC-RT is the first and
 currently only supported codec backend.
 
-Last reviewed: 2026-07-29
+Last reviewed: 2026-07-30
 
 ## Objective
 
@@ -53,10 +53,10 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: bind TensorRT outputs directly to downstream inputs where
-lifetimes permit, then make I-frame decode/reconstruction device-resident and
-byte-identical so verification no longer needs the debug DPB bridge. After that,
-run warmed QCIF/720p/1080p JSON profile captures, repeat the exact-tag clean RTX
+Current next action: reduce the remaining I-frame decode CPU rANS boundaries with
+reusable pinned index/symbol staging and dependency-scoped CUDA-event waits. The
+four spatial-prior entropy stages remain causally ordered. After that, run warmed
+QCIF/720p/1080p JSON profile captures, repeat the exact-tag clean RTX
 checkpoint→artifact→engine→native I/P workflow, the Orin target matrix, and
 pinned Python↔native I/P golden/performance gates. Remaining host-staging removal
 stays open under M1/M3; target support remains pending until that evidence is
@@ -73,12 +73,12 @@ the next published package/engine assets exist. The CLI now warns when
 multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
 Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and leaves
 integrated/Jetson-class devices on the conservative low-memory path. I-frame
-encode now keeps analysis, hyper-analysis/synthesis, image-prior transforms,
-four-way spatial prior processing, quarter reductions, entropy index
-construction, and normal CLI synthesis on GPU. Encode-side scratch tensors are
-served from a bounded per-session CUDA arena, and unused residual writes are
-skipped in normal entropy preparation. The decode-conformant DPB rebuild is now
-limited to verification mode.
+encode and decode now keep TensorRT transforms, image-prior processing,
+quarter reduction/restore, and synthesis on GPU. Image quantization tensors are
+cached once per QP, intermediate TensorRT outputs use the bounded per-session
+CUDA arena where lifetimes permit, and obsolete host inference/prior helpers have
+been removed. CPU rANS staging and the public decoded-frame download remain the
+intentional host boundaries.
 
 ## M0 — Baseline and entropy
 
@@ -112,10 +112,8 @@ Device execution:
 - [x] Add a bounded per-session CUDA arena.
 - [x] Default automatic TensorRT execution mode to persistent contexts on
   discrete GPUs while keeping integrated devices conservative.
-- [ ] Replace `run_host_engine` with reusable device-address binding.
-  Encode-side I-frame analysis, hyper-analysis/synthesis, and spatial prior
-  stages now use device-address binding in normal encode; decode-side I-frame
-  stages and verification-only DPB rebuilding still use host staging.
+- [x] Replace `run_host_engine` with reusable device-address binding for all
+  active TensorRT stages and remove the obsolete host-engine implementation.
 - [ ] Bind TensorRT outputs directly to downstream inputs where possible.
 - [ ] Remove steady-state `cudaMalloc`, `cudaFree`, and unconditional syncs.
   Encode-side manual scratch allocations now use the per-session arena; remaining
@@ -128,8 +126,8 @@ CUDA prior operations:
 - [x] Run encode-side padding, image-prior quantization, masks, prior processing,
   quarter reduction, scale indexing, and combined-symbol generation on the GPU.
 - [x] Copy only encode-side entropy symbols/indexes required by CPU rANS.
-- [ ] Move decode-side I-frame restore/synthesis to the same device-resident path
-  and remove the verification-only DPB conformance bridge.
+- [x] Move decode-side I-frame restore/synthesis to the same device-resident path
+  and remove the host-staged reconstruction bridge.
 
 v1 frame boundary:
 
@@ -137,12 +135,15 @@ v1 frame boundary:
 - [ ] Accept and produce YUV420P8 without RGB intermediates.
 - [ ] Separate visible dimensions from padded tensor dimensions.
 
-Verification evidence, 2026-07-29:
+Verification evidence, 2026-07-29 to 2026-07-30:
 
 - [x] Release build after encode-side I-frame GPU residency: `cmake --build build-release -j 8`.
 - [x] Release tests after encode-side I-frame GPU residency: `ctest --test-dir build-release --output-on-failure` passed 8/8.
 - [x] Release build after encode scratch arena: `cmake --build build-release -j 8` passed.
 - [x] Release tests after encode scratch arena: `ctest --test-dir build-release --output-on-failure` passed 8/8.
+- [x] Device-resident I-decode recovery and cleanup, 2026-07-30: Release build passed without backend warnings; registered tests passed 6/6; installed v0.4.1 720p/1080p TensorRT bundle validation passed; native I/P round trip passed.
+- [x] Repeated 720p GOP-8 decode, FourPeople, 97 frames, QP 32: 42.295, 42.108, and 42.390 fps after a 42.257 fps initial run. Matching encode produced 312,696 payload bytes at 73.891 fps.
+- [x] Short 720p profile confirmed no host TensorRT stages. I decode reports one allocation / 5,529,600 bytes, 5 H2D / 1,904,640 bytes, 5 D2H / 6,451,200 bytes, 6 D2D / 11,059,200 bytes, and 5 synchronizations.
 - [x] Encode scratch arena profile: 720p all-I, 3 frames, QP 32, profile `720p-fp16`, `--profile` showed I-frame allocations reduced to 10 allocations / 24,408,512 bytes, with remaining hot TensorRT enqueue stages around `i_analysis` 5.3 ms and `i_synthesis` 10.1 ms.
 - [x] Encode scratch arena 720p sweep on FourPeople, 97 frames, QP 32, profile `720p-fp16`: GOP 1 = 30.168 fps, GOP 8 = 73.689 fps, GOP 97 = 94.239 fps.
 - [x] CLI logging overhead cleanup: default encode/decode now omit per-frame progress and info startup logs unless `--verbose` is passed; quiet 720p all-I check produced 30.616 fps.
@@ -158,10 +159,9 @@ Exit criteria:
 
 - [ ] I-frame reconstruction is conformant at QCIF, 720p, and 1080p.
 - [ ] No device allocation occurs in steady-state frame processing.
-- [ ] Intermediate TensorRT tensors do not round-trip through host memory.
-  Encode-side I-frame intermediates no longer round-trip before CPU rANS in
-  normal CLI encode; verification-only DPB rebuilding remains intentionally
-  host-staged.
+- [x] Intermediate TensorRT tensors do not round-trip through host memory.
+  CPU rANS indexes/symbols and the public decoded-frame output remain explicit
+  host boundaries.
 - [ ] Warmed 720p and 1080p latency meets or beats Python under
   `docs/performance.md`.
 

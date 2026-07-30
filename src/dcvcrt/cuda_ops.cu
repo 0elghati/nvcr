@@ -225,6 +225,18 @@ __global__ void reduce_channel_quarters_kernel(
     store_half(output, index, value);
 }
 
+__global__ void reduce_masked_quarters_kernel(
+    const __half* input, const __half* mask, __half* output, std::size_t quarter_size) {
+    const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (index >= quarter_size) return;
+    float value = 0.0F;
+    for (std::size_t quarter = 0; quarter < 4; ++quarter) {
+        const auto source = index + quarter * quarter_size;
+        value += load_half(input, source) * load_half(mask, source);
+    }
+    store_half(output, index, value);
+}
+
 __global__ void restore_four_way_kernel(
     const __half* symbols,
     const __half* means,
@@ -509,6 +521,23 @@ cudaError_t reduce_channel_quarters(
     const auto quarter_size = volume(input_shape) / 4;
     reduce_channel_quarters_kernel<<<blocks(quarter_size), threads_per_block, 0, stream>>>(
         static_cast<const __half*>(input), static_cast<__half*>(output), quarter_size);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t reduce_masked_quarters(
+    const void* input,
+    const void* mask,
+    void* output,
+    Shape4D input_shape,
+    cudaStream_t stream) noexcept {
+    if (input == nullptr || mask == nullptr || output == nullptr ||
+        invalid_shape(input_shape) || input_shape.channels % 4 != 0) {
+        return cudaErrorInvalidValue;
+    }
+    const auto quarter_size = volume(input_shape) / 4;
+    reduce_masked_quarters_kernel<<<blocks(quarter_size), threads_per_block, 0, stream>>>(
+        static_cast<const __half*>(input), static_cast<const __half*>(mask),
+        static_cast<__half*>(output), quarter_size);
     return cudaPeekAtLastError();
 }
 

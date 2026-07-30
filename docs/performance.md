@@ -87,30 +87,48 @@ front half of the path:
 - I-frame z symbols and four compact y-index streams are copied through reusable
   pinned host buffers for CPU rANS.
 
-For conformance testing, I-frame encode can rebuild the encoder DPB by decoding
-the just-produced I-frame payload when `verify_encoder_reconstruction` is enabled.
-Normal CLI encoding does not pay this bridge; it uses the GPU-produced I-frame
-reconstruction directly. The bridge remains a test/debug guard until I-frame
-decode is device-resident or the GPU and host reconstruction paths are proven
-byte-identical.
+I-frame decode now runs hyperprior, four-way mask/reduction/restore, three
+spatial priors, and synthesis through device-address bindings. The reconstructed
+frame remains device-resident for the DPB and is downloaded once for the public
+frame result. The old host TensorRT and image-prior implementations have been
+removed.
 
-Encode-side temporary device tensors are now served from a bounded per-session
-CUDA scratch arena. Owned TensorRT outputs, DPB/reference tensors, entropy
-download buffers, and decode-side staging still allocate outside the arena where
-their lifetimes cross stage or frame boundaries. The final performance gate still
-needs warmed QCIF/720p/1080p JSON benchmark evidence.
+A bounded per-session CUDA scratch arena serves frame-local tensors and eligible
+TensorRT outputs. Image quantization tensors are cached once per QP. The remaining
+I-decode host boundaries are CPU rANS z/symbol/index staging and the public frame
+download. The final performance gate still needs warmed QCIF/720p/1080p JSON
+benchmark evidence.
 
-The next performance milestone is to finish the GPU-resident I-frame graph:
+The next performance milestone is to tighten the unavoidable entropy boundaries:
 
-1. Move I-frame decode hyperprior, spatial prior, restore, and synthesis to
-   device-address bindings.
-2. Replace the encode-time decode-conformance bridge with a shared
-   device-resident reconstruction path.
-3. Bind TensorRT outputs directly to the next stage's inputs where lifetimes
-   permit.
-4. Move remaining decode-side staging to reusable device storage.
-5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
+1. Reuse pinned index and symbol staging for all four I-decode prior stages.
+2. Replace broad stream synchronizations with dependency-scoped CUDA events.
+3. Profile direct rANS decode-into staging and int8-to-half GPU conversion.
+4. Bind TensorRT outputs directly to downstream inputs where lifetimes permit.
+5. Add an automated post-warmup comparison gate.
 
+
+### 2026-07-30 RTX 4070 device-resident I-frame decode
+
+The recovered implementation was rebuilt in Release mode and checked against the
+installed v0.4.1 `720p-fp16` and `1080p-fp16` TensorRT bundles. Registered tests
+passed 6/6, both bundle contract tests passed, and the native I/P round trip
+passed.
+
+The 720p GOP-8 stream used FourPeople, 97 frames, QP 32, and the installed
+`720p-fp16` bundle. Encode produced 312,696 payload bytes in 1.313 s
+(73.891 fps). Four decode measurements produced 42.257, 42.295, 42.108, and
+42.390 fps; the final three-run mean was 42.264 fps.
+
+A nine-frame profile reported one I-frame allocation / 5,529,600 bytes, 5 H2D /
+1,904,640 bytes, 5 D2H / 6,451,200 bytes, 6 D2D / 11,059,200 bytes, and 5
+synchronizations. No `host` TensorRT stage was present. Representative I-frame
+enqueue times were about 1.2 ms for hyper-synthesis, 1.15 ms for each spatial
+prior, and 10.0 ms for synthesis.
+
+This is repeated development evidence, not the final publication gate: it does
+not yet include the required warm-up discard, QCIF/1080p throughput matrix,
+matching pinned-Python run, or cross-runtime golden reconstruction comparison.
 
 ### 2026-07-29 RTX 4070 paired 720p/1080p smoke baseline
 
@@ -143,16 +161,6 @@ TensorRT enqueue stages were `i_synthesis` about 22-23 ms, `i_analysis` about
 12 ms, three spatial priors about 9 ms combined, and `i_hyper_synthesis` about
 2.7 ms. This makes direct TensorRT binding, exact-shape/tactic inspection, and
 I-path graph/partition work higher value than more allocator cleanup alone.
-
-MLVC-inspired interpretation: MLVC's published speed advantage comes largely
-from model and entropy-graph choices that reduce accelerator calls and
-neural/coder interleaving. For NVCR's faithful DCVC-RT runtime, the safe lessons
-to adopt first are paired JSON evidence, fixed-resolution package/profiling
-discipline, persistent runtime objects, explicit part metadata, exact-shape
-engine experiments, and measured partition ablations. MLVC-style transmitted
-scale design, activation redesign, unified I/P graphs, and smaller MLVC-S-style
-models are separate codec research unless introduced as a new opt-in backend or
-profile with its own fidelity/RD gates.
 
 ### 2026-07-29 RTX 4070 encode scratch arena
 

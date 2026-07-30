@@ -85,6 +85,13 @@ cudaError_t reduce_channel_quarters(
     Shape4D input_shape,
     cudaStream_t stream) noexcept;
 
+cudaError_t reduce_masked_quarters(
+    const void* input,
+    const void* mask,
+    void* output,
+    Shape4D input_shape,
+    cudaStream_t stream) noexcept;
+
 cudaError_t restore_four_way(
     const void* symbols,
     const void* means,
