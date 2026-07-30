@@ -48,8 +48,55 @@ The development runtime currently includes:
   roundtrip tests when a declared engine bundle is configured.
 
 Remaining v1 gates include the reusable device arena, GPU-resident I-frame and
-complete P-frame state paths, stable plane/stride session API, cross-runtime
-Python golden tests, performance gates, and a current clean-room Orin validation.
+complete P-frame state paths, stable plane/stride session API, pinned Python
+reference-quality gates, performance gates, and a current clean-room Orin
+validation.
+
+## Measured RTX 4070 snapshot
+
+The following numbers are practical development evidence, not portable
+performance guarantees or passed v1 release gates. They use the Release CLI on
+an NVIDIA GeForce RTX 4070 at QP 32 over 97 frames. Each FPS value is the mean
+of three measured runs after one warm-up run.
+
+| Resolution | Sequence | GOP | Encode | Decode |
+|---|---|---:|---:|---:|
+| 720p | FourPeople | 1 (all-I) | 30.525 fps | 35.340 fps |
+| 720p | FourPeople | 97 (I/P) | 94.773 fps | 44.292 fps |
+| 1080p | BQTerrace | 1 (all-I) | 13.160 fps | 14.967 fps |
+| 1080p | BQTerrace | 97 (I/P) | 44.182 fps | 19.921 fps |
+
+GOP-97 is the representative inter-frame throughput point; GOP-1 measures the
+more expensive all-intra path. Full protocol, payload, timing, software, and
+hardware details are in
+[Performance](docs/performance.md#2026-07-30-rtx-4070-warmed-encode-and-decode-diagnostic).
+
+The pinned 720p GOP-97 quality comparison shows that native NVCR closely tracks
+the Python reference when each runtime decodes its own stream:
+
+| Comparison | Average PSNR-YUV | Minimum / note |
+|---|---:|---|
+| Source to pinned Python reconstruction | 40.817787 dB | 97 frames |
+| Source to native reconstruction | 40.726269 dB | 97 frames |
+| Pinned Python to native reconstruction | 45.241436 dB | 44.137497 dB minimum |
+
+That result does **not** mean the raw entropy payloads are interchangeable.
+Framing-only two-frame probes completed decoding in both directions but failed
+quality from the first I frame:
+
+| Entropy payload direction | PSNR-YUV | Status |
+|---|---:|---|
+| Python payload decoded by native NVCR | 24.864091 dB | incompatible |
+| Native NVCR payload decoded by Python | 25.152377 dB | incompatible |
+
+The outer framing and model CDF assets match their expected contracts, while the
+remaining incompatibility is localized to the entropy symbol/index-map
+boundary. NVCR v1 therefore makes no upstream byte or payload-interchangeability
+promise. See the
+[GOP-97 conformance evidence](docs/evidence/2026-07-30-rtx4070-dcvcrt-gop97-conformance.json)
+and
+[cross-runtime probe evidence](docs/evidence/2026-07-30-rtx4070-dcvcrt-cross-runtime-probe.json).
+
 
 ## Workflow
 
