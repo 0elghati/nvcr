@@ -73,6 +73,11 @@ reconstruction at QP 32. It gates native source quality and cross-runtime
 reconstruction PSNR while preserving the payload-format distinction above. The recorded RTX 4070 result is in
 [`docs/evidence/2026-07-30-rtx4070-dcvcrt-i-frame-reference.json`](evidence/2026-07-30-rtx4070-dcvcrt-i-frame-reference.json).
 
+The follow-up 97-frame I/P comparison found byte-identical repeated native
+encodes and decodes. Python/native reconstruction remained above `44.13 dB`
+PSNR-YUV on every frame. The machine-readable result is in
+[`docs/evidence/2026-07-30-rtx4070-dcvcrt-gop97-conformance.json`](evidence/2026-07-30-rtx4070-dcvcrt-gop97-conformance.json).
+
 ## Current gates
 
 Implemented tests cover parser/allocation bounds, rANS vectors, CUDA operators,

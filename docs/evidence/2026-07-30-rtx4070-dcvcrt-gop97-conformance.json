@@ -1,0 +1,43 @@
+{
+  "schema": "nvcr.dcvcrt.gop-conformance.v1",
+  "date": "2026-07-30",
+  "target": "NVIDIA GeForce RTX 4070",
+  "native_commit": "366cf18",
+  "reference_commit": "48ab0ac5e5199d78fffb944bfbafafb2b6142f7b",
+  "engine_manifest_sha256": "42fa27c5fabd4fb43074985bdd61827a9a1790c98e2ec736865681a7020d81c0",
+  "sequence": "FourPeople_1280x720_60.yuv",
+  "source_frames_sha256": "98f7ad689e6c17c55928a398faf4b47137c1e2f40af3cc53463c0cc44d0ebc4d",
+  "width": 1280,
+  "height": 720,
+  "frames": 97,
+  "qp_i": 32,
+  "qp_p": 32,
+  "gop_size": 97,
+  "python_bitstream_sha256": "a3864a0ce96b1fabb88d3ea84947adcc6f9812f12d20b8278c98808afbcc8e8f",
+  "python_reconstruction_sha256": "745aa72e6f438d54c1c6009f19561500fa452cad96a0d3183e78d69713282efc",
+  "native_sequence_sha256": "316a1132b7929ed0c114c8520e9d47290e8a2cc68b7f50f452ae9bd611b8a478",
+  "native_reconstruction_sha256": "ca437d818f83434bcd88ddc2015b8585e526582b6cd843a9b82ee962a76d2439",
+  "native_repeated_encode_equal": true,
+  "native_repeated_decode_equal": true,
+  "native_payload_bytes": 86297,
+  "native_encode_fps": [
+    95.077,
+    96.805
+  ],
+  "native_decode_fps": [
+    57.320,
+    57.122
+  ],
+  "quality": {
+    "source_python_avg_psnr_yuv": 40.817787,
+    "source_native_avg_psnr_yuv": 40.726269,
+    "python_native_avg_psnr_yuv": 45.241436,
+    "python_native_min_psnr_yuv": 44.137497,
+    "python_native_min_frame": 1,
+    "python_native_frames_below_40db": 0,
+    "source_quality_delta_avg_db": 0.091517,
+    "source_quality_delta_max_db": 0.160259,
+    "source_quality_delta_max_frame": 60
+  },
+  "result": "pass"
+}

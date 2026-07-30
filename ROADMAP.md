@@ -53,12 +53,12 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: isolate P-frame divergence beginning at frame 2 using the
-new pinned 720p QP-32 I-frame golden as the trusted starting state. After
-deterministic I/P conformance is restored, add bidirectional I/P vectors, rerun
-the warmed 720p/1080p matrix from a clean release build, and continue the M1–M4
-target matrix. Remaining host-staging removal stays open under M1/M3; target
-support remains pending until that evidence is recorded.
+Current next action: define the upstream byte-compatibility position and add
+bidirectional I/P vector tests using the deterministic 720p GOP-97 baseline.
+Then cover two complete GOPs against pinned Python, rerun the warmed 720p/1080p
+matrix from a clean release build, and continue the M1-M4 target matrix.
+Remaining host-staging removal stays open under M1/M3; target support remains
+pending until that evidence is recorded.
 
 Deployment next action: reproduce the v2 `nvcr-artifacts` workflow and full
 registered suite on Orin Nano, then record its clean target, correctness,
@@ -209,10 +209,10 @@ State: **Active**
 - [x] Implement QP shifts, feature adaptation, reset intervals, and GOP rules.
 - [x] Cover native two-GOP and reset/reuse behavior on the RTX integration bundle.
 - [ ] Complete deterministic drain/flush semantics and their pending-work tests.
-- [ ] Resolve repeated native GOP decode divergence beginning at P-frame 2. The
-  same stream I frame is stable, and the behavior reproduces on parent
-  `1407b02`, so it is tracked as a pre-existing P-path issue rather than an
-  I-decode staging regression.
+- [x] Repeated 720p GOP-97 encode and decode are byte-deterministic. Fresh
+  pinned-Python comparison has `45.241436 dB` average and `44.137497 dB`
+  minimum Python/native PSNR-YUV; no frame is below `40 dB`. The earlier
+  frame-2 divergence is superseded by current evidence.
 
 Exit criteria:
 
