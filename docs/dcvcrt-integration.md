@@ -70,7 +70,8 @@ pre-v1 development formats, not containers.
 The opt-in `nvcr_dcvcrt_i_frame_golden` test pins the upstream commit,
 checkpoints, FourPeople 720p source frame, Python bitstream, and Python
 reconstruction at QP 32. It gates native source quality and cross-runtime
-reconstruction PSNR while preserving the payload-format distinction above.
+reconstruction PSNR while preserving the payload-format distinction above. The recorded RTX 4070 result is in
+[`docs/evidence/2026-07-30-rtx4070-dcvcrt-i-frame-reference.json`](evidence/2026-07-30-rtx4070-dcvcrt-i-frame-reference.json).
 
 ## Current gates
 

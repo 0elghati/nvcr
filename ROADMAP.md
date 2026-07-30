@@ -164,7 +164,7 @@ Verification evidence, 2026-07-29 to 2026-07-30:
 - [x] Superseded Week-2 baseline: the pre-fix Python/native output diverged at frame 1 and averaged 17.883866 dB over 97 frames; retained as failed history.
 - [x] Direct decoded-frame YUV420P8 output removes the full-range BT.709 YCbCr to RGB to limited-range BT.601 YUV conversion chain. At 720p QP 32, source quality is 38.627594 dB for Python and 38.619461 dB for native; Python versus native reconstruction is 43.950954 dB.
 - [x] CLI `decode --quality-metrics REFERENCE.yuv` reports aggregate Y, U, V, and 6:1:1 weighted PSNR outside codec timing.
-- [x] Pinned 720p QP-32 I-frame golden checks exact upstream commit, checkpoint, source, Python bitstream, and Python reconstruction identities, then gates native source quality and per-plane/weighted Python-native PSNR.
+- [x] Pinned 720p QP-32 I-frame golden checks exact upstream commit, checkpoint, source, Python bitstream, and Python reconstruction identities, then gates native source quality and per-plane/weighted Python-native PSNR. Evidence: `docs/evidence/2026-07-30-rtx4070-dcvcrt-i-frame-reference.json`.
 
 Exit criteria:
 
