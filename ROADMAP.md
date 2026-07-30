@@ -53,14 +53,16 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: reduce the remaining I-frame decode CPU rANS boundaries with
-reusable pinned index/symbol staging and dependency-scoped CUDA-event waits. The
-four spatial-prior entropy stages remain causally ordered. After that, run warmed
-QCIF/720p/1080p JSON profile captures, repeat the exact-tag clean RTX
-checkpoint→artifact→engine→native I/P workflow, the Orin target matrix, and
-pinned Python↔native I/P golden/performance gates. Remaining host-staging removal
-stays open under M1/M3; target support remains pending until that evidence is
-recorded.
+Current next action: compare the corrected I-frame reconstruction against the
+pinned Python DCVC-RT runtime, then isolate the pre-existing P-frame
+nondeterminism that begins at frame 2 in repeated native GOP decodes. Reusable
+pinned I-decode staging, packed int8 symbol uploads, and dependency-scoped
+CUDA-event waits are implemented; the four spatial-prior entropy stages remain
+causally ordered. After conformance is established, run warmed QCIF/720p/1080p
+JSON profile captures, repeat the exact-tag clean RTX
+checkpoint→artifact→engine→native I/P workflow, and complete the Orin target
+matrix. Remaining host-staging removal stays open under M1/M3; target support
+remains pending until that evidence is recorded.
 
 Deployment next action: reproduce the v2 `nvcr-artifacts` workflow and full
 registered suite on Orin Nano, then record its clean target, correctness,
@@ -78,7 +80,9 @@ quarter reduction/restore, and synthesis on GPU. Image quantization tensors are
 cached once per QP, intermediate TensorRT outputs use the bounded per-session
 CUDA arena where lifetimes permit, and obsolete host inference/prior helpers have
 been removed. CPU rANS staging and the public decoded-frame download remain the
-intentional host boundaries.
+intentional host boundaries. I-decode now reuses pinned buffers at those entropy
+boundaries and uploads packed int8 symbols before converting them to FP16 on the
+GPU.
 
 ## M0 — Baseline and entropy
 
@@ -144,6 +148,12 @@ Verification evidence, 2026-07-29 to 2026-07-30:
 - [x] Device-resident I-decode recovery and cleanup, 2026-07-30: Release build passed without backend warnings; registered tests passed 6/6; installed v0.4.1 720p/1080p TensorRT bundle validation passed; native I/P round trip passed.
 - [x] Repeated 720p GOP-8 decode, FourPeople, 97 frames, QP 32: 42.295, 42.108, and 42.390 fps after a 42.257 fps initial run. Matching encode produced 312,696 payload bytes at 73.891 fps.
 - [x] Short 720p profile confirmed no host TensorRT stages. I decode reports one allocation / 5,529,600 bytes, 5 H2D / 1,904,640 bytes, 5 D2H / 6,451,200 bytes, 6 D2D / 11,059,200 bytes, and 5 synchronizations.
+- [x] Packed I-decode entropy staging, 2026-07-30: clean temporary Release build passed; registered tests passed 6/6; CUDA coverage includes int8-to-FP16 conversion and decode-side image-prior transforms; native I/P round trip and installed v0.4.1 720p/1080p bundle tests passed.
+- [x] The packed path reduced profiled I-frame H2D traffic from 1,904,640 to 952,320 bytes while preserving one allocation / 5,529,600 bytes, 5 H2D, 5 D2H / 6,451,200 bytes, 6 D2D / 11,059,200 bytes, and 5 causal entropy synchronizations.
+- [x] Corrected 720p all-I decode, FourPeople, 97 frames, QP 32: 35.434, 35.485, and 35.511 fps; all three output hashes were `3c3da066e973e06352ecc473a9f64e0750ed5075148b43f6105d51bf329fd056`.
+- [x] Parent `1407b02` and the corrected device candidate encoded the same 720p GOP-8 access units byte-for-byte: 312,696 payload bytes and SHA-256 `76f6bfc6edc16dea56d073c40eb431256a27600291653fecd7a2dc9c67168c08`. Decoding that stream measured 30.673 fps on the parent host path and 43.098 fps on the corrected device path.
+- [x] Development-only source comparison for that 97-frame GOP-8 stream measured 22.872802 dB average PSNR on the parent decoder and 31.569734 dB on the corrected device decoder. This identifies a missing decode-side image-prior sigmoid transform in the recovered path, but does not replace the required pinned-Python golden comparison.
+- [x] Superseded experiment: pinned staging and CUDA events without packed symbol uploads averaged 42.109 fps versus a 42.264 fps baseline (-0.37%, within run noise), so it was not accepted as an independent speed claim.
 - [x] Encode scratch arena profile: 720p all-I, 3 frames, QP 32, profile `720p-fp16`, `--profile` showed I-frame allocations reduced to 10 allocations / 24,408,512 bytes, with remaining hot TensorRT enqueue stages around `i_analysis` 5.3 ms and `i_synthesis` 10.1 ms.
 - [x] Encode scratch arena 720p sweep on FourPeople, 97 frames, QP 32, profile `720p-fp16`: GOP 1 = 30.168 fps, GOP 8 = 73.689 fps, GOP 97 = 94.239 fps.
 - [x] CLI logging overhead cleanup: default encode/decode now omit per-frame progress and info startup logs unless `--verbose` is passed; quiet 720p all-I check produced 30.616 fps.
@@ -196,6 +206,10 @@ State: **Active**
 - [x] Implement QP shifts, feature adaptation, reset intervals, and GOP rules.
 - [x] Cover native two-GOP and reset/reuse behavior on the RTX integration bundle.
 - [ ] Complete deterministic drain/flush semantics and their pending-work tests.
+- [ ] Resolve repeated native GOP decode divergence beginning at P-frame 2. The
+  same stream I frame is stable, and the behavior reproduces on parent
+  `1407b02`, so it is tracked as a pre-existing P-path issue rather than an
+  I-decode staging regression.
 
 Exit criteria:
 

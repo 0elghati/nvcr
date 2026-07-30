@@ -87,26 +87,69 @@ front half of the path:
 - I-frame z symbols and four compact y-index streams are copied through reusable
   pinned host buffers for CPU rANS.
 
-I-frame decode now runs hyperprior, four-way mask/reduction/restore, three
-spatial priors, and synthesis through device-address bindings. The reconstructed
-frame remains device-resident for the DPB and is downloaded once for the public
-frame result. The old host TensorRT and image-prior implementations have been
-removed.
+I-frame decode now runs hyperprior, image-prior transforms, four-way
+mask/reduction/restore, three spatial priors, and synthesis through
+device-address bindings. The reconstructed frame remains device-resident for
+the DPB and is downloaded once for the public frame result. The old host
+TensorRT and image-prior implementations have been removed.
 
 A bounded per-session CUDA scratch arena serves frame-local tensors and eligible
-TensorRT outputs. Image quantization tensors are cached once per QP. The remaining
-I-decode host boundaries are CPU rANS z/symbol/index staging and the public frame
-download. The final performance gate still needs warmed QCIF/720p/1080p JSON
-benchmark evidence.
+TensorRT outputs. Image quantization tensors are cached once per QP. I-decode
+reuses pinned host buffers at the CPU rANS z/symbol/index boundaries, transfers
+symbols as packed int8, and converts them to FP16 on the GPU. The public frame
+download remains the other host boundary. The final performance gate still
+needs warmed QCIF/720p/1080p JSON benchmark evidence.
 
 The next performance milestone is to tighten the unavoidable entropy boundaries:
 
-1. Reuse pinned index and symbol staging for all four I-decode prior stages.
-2. Replace broad stream synchronizations with dependency-scoped CUDA events.
-3. Profile direct rANS decode-into staging and int8-to-half GPU conversion.
+1. Establish pinned-Python golden reconstruction for corrected I/P decoding.
+2. Isolate the pre-existing P-frame nondeterminism beginning at frame 2.
+3. Profile direct rANS decode-into staging to remove the remaining vector copy.
 4. Bind TensorRT outputs directly to downstream inputs where lifetimes permit.
 5. Add an automated post-warmup comparison gate.
 
+
+### 2026-07-30 RTX 4070 packed I-frame decode staging
+
+This candidate adds reusable pinned index/symbol staging for all four
+spatial-prior entropy stages, dependency-scoped CUDA-event waits, packed int8
+symbol uploads, and GPU int8-to-FP16 conversion. It also restores the
+decode-side image-prior sigmoid transform required before using q-decode values.
+
+A clean temporary Release build passed all 6/6 registered tests. The native I/P
+round trip and installed v0.4.1 `720p-fp16` and `1080p-fp16` TensorRT bundle
+tests passed. CUDA unit coverage now checks packed symbol conversion and the
+decode-only image-prior transform.
+
+The 720p I-frame profile retained one allocation / 5,529,600 bytes, 5 H2D, 5
+D2H / 6,451,200 bytes, 6 D2D / 11,059,200 bytes, and 5 causal entropy
+synchronizations. Packed uploads halved H2D traffic from 1,904,640 to 952,320
+bytes. Representative enqueue times remained about 1.24 ms for
+hyper-synthesis, 1.15-1.17 ms for each spatial prior, and 10.03-10.08 ms for
+synthesis.
+
+FourPeople 1280x720, 97 frames, QP 32, all-I decode produced 35.434, 35.485,
+and 35.511 fps. All three decoded outputs had SHA-256
+`3c3da066e973e06352ecc473a9f64e0750ed5075148b43f6105d51bf329fd056`.
+
+For a normal GOP-8 comparison, parent `1407b02` and the candidate encoded
+byte-identical access units: 312,696 payload bytes, SHA-256
+`76f6bfc6edc16dea56d073c40eb431256a27600291653fecd7a2dc9c67168c08`.
+Decoding that exact stream measured 30.673 fps on the parent host path and
+43.098 fps on the corrected device path, a 40.5% point improvement. Source
+comparison measured 22.872802 dB average PSNR for the parent decoder and
+31.569734 dB for the corrected device decoder.
+
+The PSNR result diagnoses a missing image-prior transform in the parent decode
+path; it is not a cross-runtime conformance result. Pinned Python DCVC-RT golden
+comparison remains required. Repeated normal-GOP decodes also diverge beginning
+at P-frame 2 on both parent `1407b02` and the candidate, while the corrected
+all-I output is deterministic. The P-path issue therefore remains an explicit
+M3 blocker.
+
+Superseded result: reusable pinned staging and CUDA events without packed
+uploads averaged 42.109 fps against a 42.264 fps baseline (-0.37%, within run
+noise). That partial version was rejected as an independent optimization.
 
 ### 2026-07-30 RTX 4070 device-resident I-frame decode
 

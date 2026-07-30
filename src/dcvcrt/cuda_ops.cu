@@ -45,6 +45,13 @@ __global__ void round_to_int8_kernel(
     quantized[index] = static_cast<std::int8_t>(value);
 }
 
+__global__ void int8_to_half_kernel(
+    const std::int8_t* values, __half* output, std::size_t count) {
+    const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (index >= count) return;
+    output[index] = __int2half_rn(static_cast<int>(values[index]));
+}
+
 __global__ void replicate_pad_kernel(
     const __half* input,
     __half* output,
@@ -83,6 +90,15 @@ __global__ void crop_spatial_kernel(
         (channel_batch * static_cast<std::size_t>(input_shape.height) + y) *
             static_cast<std::size_t>(input_shape.width) + x;
     output[index] = input[source];
+}
+
+__global__ void image_prior_kernel(__half* params, std::size_t spatial_count) {
+    const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (index >= spatial_count) return;
+    const float q_enc_sigmoid = 1.0F / (1.0F + expf(-load_half(params, index)));
+    const float q_dec_sigmoid = 1.0F / (1.0F + expf(-load_half(params, spatial_count + index)));
+    store_half(params, index, q_enc_sigmoid * 1.5F + 0.5F);
+    store_half(params, spatial_count + index, q_dec_sigmoid * 1.5F + 0.5F);
 }
 
 __global__ void image_prior_quant_kernel(__half* params, __half* values, std::size_t spatial_count) {
@@ -400,6 +416,17 @@ cudaError_t round_to_int8(
     return cudaPeekAtLastError();
 }
 
+cudaError_t int8_to_half(
+    const std::int8_t* values,
+    void* output,
+    std::size_t count,
+    cudaStream_t stream) noexcept {
+    if (values == nullptr || output == nullptr || count == 0) return cudaErrorInvalidValue;
+    int8_to_half_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
+        values, static_cast<__half*>(output), count);
+    return cudaPeekAtLastError();
+}
+
 cudaError_t replicate_pad(
     const void* input,
     void* output,
@@ -440,6 +467,14 @@ cudaError_t crop_spatial(
     crop_spatial_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
         static_cast<const __half*>(input), static_cast<__half*>(output), input_shape,
         output_height, output_width, count);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t apply_image_prior(
+    void* params, std::size_t spatial_count, cudaStream_t stream) noexcept {
+    if (params == nullptr || spatial_count == 0) return cudaErrorInvalidValue;
+    image_prior_kernel<<<blocks(spatial_count), threads_per_block, 0, stream>>>(
+        static_cast<__half*>(params), spatial_count);
     return cudaPeekAtLastError();
 }
 

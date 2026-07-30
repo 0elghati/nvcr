@@ -20,6 +20,12 @@ cudaError_t round_to_int8(
     std::size_t count,
     cudaStream_t stream) noexcept;
 
+cudaError_t int8_to_half(
+    const std::int8_t* values,
+    void* output,
+    std::size_t count,
+    cudaStream_t stream) noexcept;
+
 cudaError_t replicate_pad(
     const void* input,
     void* output,
@@ -58,6 +64,11 @@ cudaError_t make_four_way_mask(
     void* mask,
     Shape4D shape,
     std::int32_t stage,
+    cudaStream_t stream) noexcept;
+
+cudaError_t apply_image_prior(
+    void* params,
+    std::size_t spatial_count,
     cudaStream_t stream) noexcept;
 
 cudaError_t apply_image_prior_and_quantize(

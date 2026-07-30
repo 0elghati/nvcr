@@ -74,6 +74,25 @@ void round_test(cudaStream_t stream) {
            "rounding and int8 clamping match DCVC-RT");
 }
 
+void int8_to_half_test(cudaStream_t stream) {
+    constexpr std::array<std::int8_t, 5> input{-128, -2, 0, 64, 127};
+    DeviceBuffer values(input.size() * sizeof(std::int8_t));
+    DeviceBuffer converted(input.size() * sizeof(__half));
+    expect_cuda(cudaMemcpyAsync(
+        values.data, input.data(), input.size() * sizeof(std::int8_t),
+        cudaMemcpyHostToDevice, stream), "copy int8 input");
+    expect_cuda(nvcr::dcvcrt::cuda_ops::int8_to_half(
+        static_cast<const std::int8_t*>(values.data), converted.data, input.size(), stream),
+        "int8_to_half");
+    std::vector<__half> output(input.size());
+    expect_cuda(cudaMemcpyAsync(
+        output.data(), converted.data, output.size() * sizeof(__half),
+        cudaMemcpyDeviceToHost, stream), "copy converted symbols");
+    expect_cuda(cudaStreamSynchronize(stream), "synchronize int8 conversion test");
+    expect(to_float(output) == std::vector<float>{-128.0F, -2.0F, 0.0F, 64.0F, 127.0F},
+           "int8 to half conversion preserves entropy symbols");
+}
+
 void padding_test(cudaStream_t stream) {
     auto input = to_half({1.0F, 2.0F, 3.0F, 4.0F});
     DeviceBuffer source(input.size() * sizeof(__half));
@@ -93,6 +112,23 @@ void padding_test(cudaStream_t stream) {
         3.0F, 4.0F, 4.0F, 4.0F,
         3.0F, 4.0F, 4.0F, 4.0F},
         "replicate padding matches upstream semantics");
+}
+
+void image_prior_test(cudaStream_t stream) {
+    auto input = to_half({0.0F, 0.0F, 0.0F, 0.0F});
+    DeviceBuffer params(input.size() * sizeof(__half));
+    expect_cuda(cudaMemcpyAsync(
+        params.data, input.data(), input.size() * sizeof(__half),
+        cudaMemcpyHostToDevice, stream), "copy image prior input");
+    expect_cuda(nvcr::dcvcrt::cuda_ops::apply_image_prior(
+        params.data, 2, stream), "apply_image_prior");
+    std::vector<__half> output(input.size());
+    expect_cuda(cudaMemcpyAsync(
+        output.data(), params.data, output.size() * sizeof(__half),
+        cudaMemcpyDeviceToHost, stream), "copy image prior output");
+    expect_cuda(cudaStreamSynchronize(stream), "synchronize image prior test");
+    expect(to_float(output) == std::vector<float>{1.25F, 1.25F, 1.25F, 1.25F},
+           "image prior transforms q-encode and q-decode logits");
 }
 
 void mask_test(cudaStream_t stream) {
@@ -144,7 +180,9 @@ int main() {
     expect_cuda(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking), "create stream");
     if (stream != nullptr) {
         round_test(stream);
+        int8_to_half_test(stream);
         padding_test(stream);
+        image_prior_test(stream);
         mask_test(stream);
         quarter_reduction_test(stream);
         expect_cuda(cudaStreamDestroy(stream), "destroy stream");
