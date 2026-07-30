@@ -53,16 +53,12 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: compare the corrected I-frame reconstruction against the
-pinned Python DCVC-RT runtime, then isolate the pre-existing P-frame
-nondeterminism that begins at frame 2 in repeated native GOP decodes. Reusable
-pinned I-decode staging, packed int8 symbol uploads, and dependency-scoped
-CUDA-event waits are implemented; the four spatial-prior entropy stages remain
-causally ordered. After conformance is established, run warmed QCIF/720p/1080p
-JSON profile captures, repeat the exact-tag clean RTX
-checkpoint→artifact→engine→native I/P workflow, and complete the Orin target
-matrix. Remaining host-staging removal stays open under M1/M3; target support
-remains pending until that evidence is recorded.
+Current next action: isolate the first-frame 720p reconstruction mismatch
+between the pinned Python DCVC-RT runtime and native NVCR. Once I-frame
+conformance is restored, add durable Python↔native I/P golden vectors, rerun the
+warmed 720p/1080p matrix from a clean release build, and continue the M1–M4
+target matrix. Remaining host-staging removal stays open under M1/M3; target
+support remains pending until that evidence is recorded.
 
 Deployment next action: reproduce the v2 `nvcr-artifacts` workflow and full
 registered suite on Orin Nano, then record its clean target, correctness,
@@ -161,9 +157,11 @@ Verification evidence, 2026-07-29 to 2026-07-30:
 - [x] Commit `f88c2b2e24be` 720p GOP sweep on FourPeople, 97 frames, QP 32, profile `720p-fp16`: GOP 1 = 29.154 fps, GOP 2 = 44.174 fps, GOP 4 = 60.082 fps, GOP 8 = 72.978 fps, GOP 16 = 81.792 fps, GOP 32 = 87.487 fps, GOP 97 = 93.916 fps.
 - [x] 720p all-I profile after making the DPB bridge verification-only: `./build-release/cli/nvcr encode -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv -o /tmp/fourpeople_720p_alli_fast.nvcr -s 1280x720 -r 30 --frames 97 --gop-size 1 --qp 32 --engine-profile 720p-fp16 --profile` produced 97 frames in 3.353 s (28.927 fps); warmed I frames were ~34.2-34.8 ms.
 - [x] 720p GOP-8 profile sample before the bridge fix: `./build-release/cli/nvcr encode -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv -o /tmp/fourpeople_720p_opt.nvcr -s 1280x720 -r 30 --frames 97 --gop-size 8 --qp 32 --engine-profile 720p-fp16 --profile` produced 97 frames in 2.405 s (40.331 fps); warmed P frames were ~10.3-10.9 ms.
-- [ ] Warmed QCIF/1080p matrix and repeated JSON benchmark output are not recorded yet.
+- [ ] Clean-release warmed 720p/1080p matrix and repeated JSON benchmark output are not recorded yet.
 - [x] Paired 720p/1080p diagnostic smoke added with `scripts/benchmark_resolution_pair.sh`; current single-run baseline: 720p GOP 1 = 30.518 fps, 720p GOP 97 = 94.170 fps, 1080p GOP 1 = 13.254 fps, 1080p GOP 97 = 44.103 fps.
 - [x] 1080p all-I diagnostic profile after scratch arena: 10 allocations / 54,477,632 bytes per I frame; hot enqueue stages are `i_synthesis` about 22-23 ms, `i_analysis` about 12 ms, and three spatial priors about 9 ms combined.
+- [x] 720p/1080p warmed Week-1 re-run: `/tmp/nvcr-week1-m1-720p-clean.jsonl` (10 warm-up frames, 3 measured runs per point). Key 720p averages: GOP1 = 30.497667 fps, GOP97 = 94.776667 fps.
+- [ ] Week-2 720p I/P parity remains blocked by first-frame divergence between Python DCVC-RT and native NVCR; `/tmp/week2_720p_conformance/week2_720p_frame_mismatch.tsv` records average full-frame PSNR 17.883866 dB.
 
 Exit criteria:
 
@@ -187,6 +185,7 @@ State: **Active**
 - [x] Define bounds/version behavior and add parser/writer plus deterministic fuzz tests.
 - [x] Separate the generic codec backend/session boundary from the DCVC-RT TensorRT implementation.
 - [ ] Add Python→native and native→Python I/P golden vectors.
+- [ ] Current 720p baseline diverges at frame 1 after 97 frames at QP 32/GOP 97; see `/tmp/week2_720p_conformance/week2_720p_frame_mismatch.tsv` and `/tmp/week2_720p_conformance/py_week2.json`.
 
 Exit criteria:
 
