@@ -195,7 +195,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     if (decoded.value().width() != width || decoded.value().height() != height ||
-        decoded.value().pixel_format() != nvcr::PixelFormat::rgb24 ||
+        decoded.value().pixel_format() != nvcr::PixelFormat::yuv420p8 ||
         decoded.value().timestamp() != timestamp || decoded.value().size_bytes() == 0) {
         std::cerr << "native decoder returned an invalid reconstructed frame\n";
         return 1;
@@ -226,6 +226,7 @@ int main(int argc, char* argv[]) {
     }
     if (predicted_decoded.value().width() != width ||
         predicted_decoded.value().height() != height ||
+        predicted_decoded.value().pixel_format() != nvcr::PixelFormat::yuv420p8 ||
         predicted_decoded.value().timestamp() != nvcr::Timestamp{83'334}) {
         std::cerr << "native decoder returned an invalid P-frame reconstruction\n";
         return 1;

@@ -47,6 +47,10 @@ require a reference. `reset()` clears state immediately and `flush()` completes
 backend work then resets the session. Two-GOP and reset/reuse behavior is covered
 by the registered TensorRT roundtrip test.
 
+DCVC-RT reconstructed frames are returned as direct full-range `YUV420P8`. The
+backend rounds luma and averages each 2x2 chroma block from the model output,
+avoiding an RGB color-matrix round trip. The CLI writes this format directly.
+
 `automatic`, `low_memory`, and `performance` TensorRT execution modes are selected
 per runtime configuration. Performance mode reuses execution contexts; low-memory
 mode recreates them to lower residency. The reusable device arena and removal of

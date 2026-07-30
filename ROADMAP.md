@@ -53,10 +53,10 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: isolate the first-frame 720p reconstruction mismatch
-between the pinned Python DCVC-RT runtime and native NVCR. Once I-frame
-conformance is restored, add durable Python↔native I/P golden vectors, rerun the
-warmed 720p/1080p matrix from a clean release build, and continue the M1–M4
+Current next action: add a durable 720p Python↔native I-frame golden test at
+QP 32 using the corrected direct-YUV output path, then isolate P-frame divergence
+beginning at frame 2. After deterministic I/P conformance is restored, rerun the
+warmed 720p/1080p matrix from a clean release build and continue the M1–M4
 target matrix. Remaining host-staging removal stays open under M1/M3; target
 support remains pending until that evidence is recorded.
 
@@ -132,7 +132,7 @@ CUDA prior operations:
 v1 frame boundary:
 
 - [ ] Add planar frame views with per-plane strides.
-- [ ] Accept and produce YUV420P8 without RGB intermediates.
+- [x] Accept and produce YUV420P8 without RGB intermediates.
 - [ ] Separate visible dimensions from padded tensor dimensions.
 
 Verification evidence, 2026-07-29 to 2026-07-30:
@@ -161,7 +161,9 @@ Verification evidence, 2026-07-29 to 2026-07-30:
 - [x] Paired 720p/1080p diagnostic smoke added with `scripts/benchmark_resolution_pair.sh`; current single-run baseline: 720p GOP 1 = 30.518 fps, 720p GOP 97 = 94.170 fps, 1080p GOP 1 = 13.254 fps, 1080p GOP 97 = 44.103 fps.
 - [x] 1080p all-I diagnostic profile after scratch arena: 10 allocations / 54,477,632 bytes per I frame; hot enqueue stages are `i_synthesis` about 22-23 ms, `i_analysis` about 12 ms, and three spatial priors about 9 ms combined.
 - [x] RTX 4070 warmed-process diagnostic at commit `4b7e181`, 3 encode and 3 decode runs per point: 720p GOP1 encode/decode = 30.524667/35.340000 fps; 720p GOP97 = 94.773000/44.292000 fps; 1080p GOP1 = 13.160000/14.967000 fps; 1080p GOP97 = 44.182333/19.920667 fps. Per-run JSONL is under `docs/evidence`; the formal gate remains open because warm-up used a separate process.
-- [ ] Week-2 720p I/P parity remains blocked by first-frame divergence between Python DCVC-RT and native NVCR; `/tmp/week2_720p_conformance/week2_720p_frame_mismatch.tsv` records average full-frame PSNR 17.883866 dB.
+- [x] Superseded Week-2 baseline: the pre-fix Python/native output diverged at frame 1 and averaged 17.883866 dB over 97 frames; retained as failed history.
+- [x] Direct decoded-frame YUV420P8 output removes the full-range BT.709 YCbCr to RGB to limited-range BT.601 YUV conversion chain. At 720p QP 32, source quality is 38.627594 dB for Python and 38.619461 dB for native; Python versus native reconstruction is 43.950954 dB.
+- [x] CLI `decode --quality-metrics REFERENCE.yuv` reports aggregate Y, U, V, and 6:1:1 weighted PSNR outside codec timing.
 
 Exit criteria:
 
@@ -185,7 +187,7 @@ State: **Active**
 - [x] Define bounds/version behavior and add parser/writer plus deterministic fuzz tests.
 - [x] Separate the generic codec backend/session boundary from the DCVC-RT TensorRT implementation.
 - [ ] Add Python→native and native→Python I/P golden vectors.
-- [ ] Current 720p baseline diverges at frame 1 after 97 frames at QP 32/GOP 97; see `/tmp/week2_720p_conformance/week2_720p_frame_mismatch.tsv` and `/tmp/week2_720p_conformance/py_week2.json`.
+- [x] 720p frame-1 quality parity restored at QP 32 by returning direct YUV420P8 reconstruction; durable cross-runtime golden vectors remain the next M2 action.
 
 Exit criteria:
 
