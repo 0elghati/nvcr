@@ -1,0 +1,52 @@
+{
+  "checks": {
+    "cross_runtime_psnr_u": true,
+    "cross_runtime_psnr_v": true,
+    "cross_runtime_psnr_y": true,
+    "cross_runtime_psnr_yuv": true,
+    "native_source_psnr_yuv": true,
+    "source_psnr_yuv_delta": true
+  },
+  "metrics": {
+    "python_native": {
+      "psnr_u": 51.375669486097486,
+      "psnr_v": 51.955867504096986,
+      "psnr_y": 41.628076286354705,
+      "psnr_yuv": 44.13749933854034
+    },
+    "source_native": {
+      "psnr_u": 43.75022397181016,
+      "psnr_v": 45.006273294662186,
+      "psnr_y": 36.69986575822871,
+      "psnr_yuv": 38.61946147698058
+    },
+    "source_python": {
+      "psnr_u": 43.931074115748594,
+      "psnr_v": 45.24074511161722,
+      "psnr_y": 36.699660353511064,
+      "psnr_yuv": 38.67122266855402
+    }
+  },
+  "passed": true,
+  "pins": {
+    "engine_manifest_sha256": "42fa27c5fabd4fb43074985bdd61827a9a1790c98e2ec736865681a7020d81c0",
+    "image_checkpoint_sha256": "555eff5f4026774f477bebdcbb3b52548e0da230803959dcebcea4d732a90dd9",
+    "native_commit": "25a25a410e7fb4c12658a905dbdea8386eb954f3",
+    "native_reconstruction_sha256": "50959ac0fe1ba76981aac279cf32b6706730e260b82b61035fb961901311e410",
+    "native_sequence_sha256": "fd5d4032dea18d0d093f9a947f0117ef07cf7177c56524e511f033a0cd418aa4",
+    "python_bitstream_sha256": "f3370ae14b12735e123d6e08f6203c2ec65f3ec47e217dbc4623a16df4f5536b",
+    "python_reconstruction_sha256": "fc6ab9bc2290a03a6d36ca2ff49369b40eb888b8a309982d38a5ccc6876113ce",
+    "reference_commit": "48ab0ac5e5199d78fffb944bfbafafb2b6142f7b",
+    "source_frame_sha256": "c575f55fe861753059d76d29add8df5af91c03d3942d9f41b08188ef876562b2",
+    "video_checkpoint_sha256": "b12e7faf4ddb6126d8e138a627ed6a349b8e1052d3ed9e343e1ba266466675d6"
+  },
+  "schema": "nvcr.dcvcrt.i-frame-golden.v1",
+  "thresholds": {
+    "cross_runtime_psnr_u_min": 49.0,
+    "cross_runtime_psnr_v_min": 49.0,
+    "cross_runtime_psnr_y_min": 40.0,
+    "cross_runtime_psnr_yuv_min": 43.0,
+    "native_source_psnr_yuv_min": 38.0,
+    "source_psnr_yuv_delta_max": 0.5
+  }
+}

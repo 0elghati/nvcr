@@ -1,0 +1,21 @@
+{
+  "schema": "nvcr.dcvcrt.i-frame-golden.v1",
+  "width": 1280,
+  "height": 720,
+  "frames": 1,
+  "qp": 32,
+  "reference_commit": "48ab0ac5e5199d78fffb944bfbafafb2b6142f7b",
+  "image_checkpoint_sha256": "555eff5f4026774f477bebdcbb3b52548e0da230803959dcebcea4d732a90dd9",
+  "video_checkpoint_sha256": "b12e7faf4ddb6126d8e138a627ed6a349b8e1052d3ed9e343e1ba266466675d6",
+  "source_frame_sha256": "c575f55fe861753059d76d29add8df5af91c03d3942d9f41b08188ef876562b2",
+  "python_bitstream_sha256": "f3370ae14b12735e123d6e08f6203c2ec65f3ec47e217dbc4623a16df4f5536b",
+  "python_reconstruction_sha256": "fc6ab9bc2290a03a6d36ca2ff49369b40eb888b8a309982d38a5ccc6876113ce",
+  "thresholds": {
+    "native_source_psnr_yuv_min": 38.0,
+    "source_psnr_yuv_delta_max": 0.5,
+    "cross_runtime_psnr_y_min": 40.0,
+    "cross_runtime_psnr_u_min": 49.0,
+    "cross_runtime_psnr_v_min": 49.0,
+    "cross_runtime_psnr_yuv_min": 43.0
+  }
+}

@@ -21,6 +21,12 @@ set(
     CACHE PATH
     "Directory containing built DCVC-RT TensorRT plans for integration tests")
 
+set(
+    NVCR_DCVCRT_720P_GOLDEN_INPUT
+    ""
+    CACHE FILEPATH
+    "FourPeople 1280x720 YUV420P8 source used by the pinned I-frame golden test")
+
 set(NVCR_CUDA_ARCH_SET "auto" CACHE STRING
     "CUDA architecture selection when CMAKE_CUDA_ARCHITECTURES is not set explicitly: \
 'auto' detects this build machine's GPU (fastest build, single-GPU dev/local installs); \

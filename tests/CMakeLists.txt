@@ -60,6 +60,27 @@ if(NVCR_ENABLE_TENSORRT)
         add_test(NAME nvcr_tensorrt_ip_frame_roundtrip
             COMMAND nvcr_tensorrt_roundtrip_tests "${NVCR_TENSORRT_ENGINE_DIR}")
     endif()
+    if(Python3_Interpreter_FOUND
+       AND TARGET nvcr_cli
+       AND NVCR_DCVCRT_ROOT
+       AND NVCR_TENSORRT_ENGINE_DIR
+       AND NVCR_DCVCRT_720P_GOLDEN_INPUT)
+        add_test(
+            NAME nvcr_dcvcrt_i_frame_golden
+            COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/dcvcrt/i_frame_golden.py"
+                --nvcr $<TARGET_FILE:nvcr_cli>
+                --dcvcrt-root "${NVCR_DCVCRT_ROOT}"
+                --python "${NVCR_DCVCRT_ROOT}/src/venv/bin/python3"
+                --input "${NVCR_DCVCRT_720P_GOLDEN_INPUT}"
+                --engine-dir "${NVCR_TENSORRT_ENGINE_DIR}"
+                --output "${CMAKE_CURRENT_BINARY_DIR}/dcvcrt-i-frame-golden.json")
+        set_tests_properties(
+            nvcr_dcvcrt_i_frame_golden
+            PROPERTIES
+                LABELS "gpu;conformance"
+                TIMEOUT 180)
+    endif()
 endif()
 
 
