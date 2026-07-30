@@ -2,6 +2,7 @@
 #include <nvcr/nvcr.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <charconv>
 #include <chrono>
@@ -35,6 +36,7 @@ struct Options final {
     fs::path input;
     fs::path output;
     fs::path engine_dir;
+    fs::path quality_reference;
     std::string backend{"default"};
     std::string engine_profile;
     std::uint32_t width{};
@@ -55,7 +57,7 @@ void usage(std::ostream& out) {
         << "  nvcr encode -i INPUT.yuv -o OUTPUT.nvcr -s WIDTHxHEIGHT\n"
         << "              [--backend NAME] [--engine-profile NAME] [--frames N] [--qp N]\n"
         << "              [--gop-size N] [-r FPS] [--engine-dir DIR]\n"
-        << "  nvcr decode -i INPUT.nvcr -o OUTPUT.yuv\n"
+        << "  nvcr decode -i INPUT.nvcr -o OUTPUT.yuv [--quality-metrics REFERENCE.yuv]\n"
         << "              [--backend NAME] [--engine-profile NAME] [--frames N]\n"
         << "              [--device-id N] [--engine-dir DIR]\n\n"
         << "Input and output video use planar 8-bit YUV 4:2:0. A frame count of zero\n"
@@ -79,6 +81,7 @@ void usage(std::ostream& out) {
         << "      --frame-period-us N   Exact timestamp interval (alternative to --fps)\n"
         << "      --device-id N         CUDA device (default: 0)\n"
         << "      --profile             Print TensorRT/CUDA per-frame profiling counters\n"
+        << "      --quality-metrics FILE  Report decoded Y/U/V and weighted PSNR against FILE\n"
         << "  -v, --verbose             Print per-frame CLI progress and info logs\n"
         << "  -h, --help                Show this help\n";
 }
@@ -242,6 +245,9 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 std::cerr << "nvcr: invalid frame period: " << value << '\n';
                 return false;
             }
+        } else if (argument == "--quality-metrics") {
+            options.quality_reference = value_after(argument);
+            if (options.quality_reference.empty()) return false;
         } else if (argument == "--profile") {
             options.profile = true;
         } else if (argument == "--verbose" || argument == "-v") {
@@ -269,6 +275,14 @@ bool parse_options(int argc, char* argv[], Options& options) {
     }
     if (options.qp >= 64) {
         std::cerr << "nvcr: QP must be between 0 and 63\n";
+        return false;
+    }
+    if (options.command == Command::encode && !options.quality_reference.empty()) {
+        std::cerr << "nvcr: --quality-metrics is available only for decode\n";
+        return false;
+    }
+    if (!options.quality_reference.empty() && options.quality_reference == options.output) {
+        std::cerr << "nvcr: quality reference and output must be different files\n";
         return false;
     }
     if (options.command == Command::encode &&
@@ -316,6 +330,45 @@ std::vector<std::byte> rgb24_to_yuv420p8(
     }
     return yuv;
 }
+
+struct QualityAccumulator final {
+    std::array<long double, 3> squared_error{};
+    std::array<std::uint64_t, 3> sample_count{};
+    std::size_t frame_count{};
+
+    bool add(
+        std::span<const std::byte> reference,
+        std::span<const std::byte> reconstructed,
+        std::uint32_t width,
+        std::uint32_t height) {
+        const auto y_size = static_cast<std::size_t>(width) * height;
+        const std::array<std::size_t, 3> plane_sizes{y_size, y_size / 4U, y_size / 4U};
+        const auto expected_size = y_size + y_size / 2U;
+        if (reference.size() != expected_size || reconstructed.size() != expected_size) {
+            return false;
+        }
+        std::size_t offset = 0;
+        for (std::size_t plane = 0; plane < plane_sizes.size(); ++plane) {
+            for (std::size_t index = 0; index < plane_sizes[plane]; ++index) {
+                const auto expected = std::to_integer<int>(reference[offset + index]);
+                const auto actual = std::to_integer<int>(reconstructed[offset + index]);
+                const auto difference = expected - actual;
+                squared_error[plane] += static_cast<long double>(difference * difference);
+            }
+            sample_count[plane] += plane_sizes[plane];
+            offset += plane_sizes[plane];
+        }
+        ++frame_count;
+        return true;
+    }
+
+    [[nodiscard]] double psnr(std::size_t plane) const {
+        if (sample_count[plane] == 0U) return 0.0;
+        if (squared_error[plane] == 0.0L) return std::numeric_limits<double>::infinity();
+        const auto mse = squared_error[plane] / static_cast<long double>(sample_count[plane]);
+        return 10.0 * std::log10(65025.0 / static_cast<double>(mse));
+    }
+};
 
 bool write_u16(std::ostream& output, std::uint16_t value) {
     const char bytes[] = {
@@ -504,6 +557,15 @@ int decode(const Options& options) {
         std::cerr << "nvcr: " << runtime.error().describe() << '\n';
         return 1;
     }
+    std::ifstream quality_reference;
+    if (!options.quality_reference.empty()) {
+        quality_reference.open(options.quality_reference, std::ios::binary);
+        if (!quality_reference) {
+            std::cerr << "nvcr: cannot open quality reference: "
+                      << options.quality_reference << "\n";
+            return 1;
+        }
+    }
     std::ofstream output(options.output, std::ios::binary | std::ios::trunc);
     if (!output) {
         std::cerr << "nvcr: cannot create output: " << options.output << '\n';
@@ -515,6 +577,8 @@ int decode(const Options& options) {
     std::uint32_t sequence_width = 0;
     std::uint32_t sequence_height = 0;
     std::chrono::nanoseconds codec_time{};
+    QualityAccumulator quality;
+    std::vector<std::byte> reference_yuv;
     while (options.frames == 0 || frame_index < options.frames) {
         const auto status = read_record(input, wire);
         if (status == RecordRead::end) {
@@ -564,6 +628,21 @@ int decode(const Options& options) {
                 frame.value().data(), frame.value().width(), frame.value().height());
             yuv = converted_yuv;
         }
+        if (quality_reference.is_open()) {
+            reference_yuv.resize(yuv.size());
+            quality_reference.read(
+                reinterpret_cast<char*>(reference_yuv.data()),
+                static_cast<std::streamsize>(reference_yuv.size()));
+            if (static_cast<std::size_t>(quality_reference.gcount()) != reference_yuv.size()) {
+                std::cerr << "nvcr: quality reference ended before decoded frame "
+                          << frame_index << "\n";
+                return 1;
+            }
+            if (!quality.add(reference_yuv, yuv, frame.value().width(), frame.value().height())) {
+                std::cerr << "nvcr: quality metric frame dimensions are invalid\n";
+                return 1;
+            }
+        }
         output.write(reinterpret_cast<const char*>(yuv.data()),
                      static_cast<std::streamsize>(yuv.size()));
         if (!output) {
@@ -588,6 +667,17 @@ int decode(const Options& options) {
               << std::setprecision(3) << seconds << " s";
     if (seconds > 0.0) {
         std::cout << " (" << static_cast<double>(frame_index) / seconds << " fps)";
+    }
+    if (quality.frame_count > 0U) {
+        const auto y_psnr = quality.psnr(0);
+        const auto u_psnr = quality.psnr(1);
+        const auto v_psnr = quality.psnr(2);
+        const auto weighted_psnr = (6.0 * y_psnr + u_psnr + v_psnr) / 8.0;
+        std::cout << "\nQuality " << quality.frame_count
+                  << " frame(s): PSNR-Y " << std::setprecision(6) << y_psnr
+                  << " dB, PSNR-U " << u_psnr
+                  << " dB, PSNR-V " << v_psnr
+                  << " dB, PSNR-YUV " << weighted_psnr << " dB";
     }
     std::cout << "\nWrote YUV420p8 " << sequence_width << 'x' << sequence_height
               << " to " << options.output << '\n';

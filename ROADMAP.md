@@ -163,6 +163,7 @@ Verification evidence, 2026-07-29 to 2026-07-30:
 - [x] RTX 4070 warmed-process diagnostic at commit `4b7e181`, 3 encode and 3 decode runs per point: 720p GOP1 encode/decode = 30.524667/35.340000 fps; 720p GOP97 = 94.773000/44.292000 fps; 1080p GOP1 = 13.160000/14.967000 fps; 1080p GOP97 = 44.182333/19.920667 fps. Per-run JSONL is under `docs/evidence`; the formal gate remains open because warm-up used a separate process.
 - [x] Superseded Week-2 baseline: the pre-fix Python/native output diverged at frame 1 and averaged 17.883866 dB over 97 frames; retained as failed history.
 - [x] Direct decoded-frame YUV420P8 output removes the full-range BT.709 YCbCr to RGB to limited-range BT.601 YUV conversion chain. At 720p QP 32, source quality is 38.627594 dB for Python and 38.619461 dB for native; Python versus native reconstruction is 43.950954 dB.
+- [x] CLI `decode --quality-metrics REFERENCE.yuv` reports aggregate Y, U, V, and 6:1:1 weighted PSNR outside codec timing.
 
 Exit criteria:
 

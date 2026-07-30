@@ -73,6 +73,20 @@ The decoder reads dimensions, QP, frame type, and timestamp information from the
 stored packets. Raw YUV output cannot represent mid-stream resolution changes, so
 the CLI rejects those sequences.
 
+Report objective reconstruction quality against the matching raw source:
+
+```bash
+nvcr decode \
+  -i /tmp/akiyo_qcif.nvcr \
+  -o /tmp/akiyo_qcif.decoded.yuv \
+  --quality-metrics /path/to/akiyo_qcif.yuv \
+  --engine-dir build/engines/dcvcrt
+```
+
+The summary reports aggregate PSNR for Y, U, and V plus the DCVC 6:1:1 weighted
+YUV value. Metric calculation is outside the reported codec time. The reference
+must be planar 8-bit YUV 4:2:0 with the decoded dimensions and frame order.
+
 Preview the result:
 
 ```bash
