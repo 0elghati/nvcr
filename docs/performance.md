@@ -109,6 +109,31 @@ The next performance milestone is to tighten the unavoidable entropy boundaries:
 5. Add an automated post-warmup comparison gate.
 
 
+### 2026-07-30 RTX 4070 warmed encode and decode diagnostic
+
+Commit `4b7e181` was measured with the Release CLI on an NVIDIA GeForce RTX
+4070, driver 580.159.03, CUDA 12.6, and TensorRT 10.7.0.23. Inputs were
+FourPeople 1280x720 and BQTerrace 1920x1080, YUV420P8, 97 frames, QP 32.
+Each point used a 10-frame warm-up CLI invocation followed by three measured
+CLI invocations. Codec initialization is excluded from the reported codec time.
+
+| Resolution | GOP | Encode payload | Encode time | Encode | Decode time | Decode |
+|---|---:|---:|---:|---:|---:|---:|
+| 720p | 1 | 1,104,333 bytes | 3.177667 s | 30.524667 fps | 2.744667 s | 35.340000 fps |
+| 1080p | 1 | 4,421,239 bytes | 7.371000 s | 13.160000 fps | 6.481000 s | 14.967000 fps |
+| 720p | 97 | 86,297 bytes | 1.023333 s | 94.773000 fps | 2.190000 s | 44.292000 fps |
+| 1080p | 97 | 396,285 bytes | 2.195667 s | 44.182333 fps | 4.869333 s | 19.920667 fps |
+
+Per-run records: [encode JSONL](evidence/2026-07-30-rtx4070-warmed-encode.jsonl)
+and [decode JSONL](evidence/2026-07-30-rtx4070-warmed-decode.jsonl). Both files
+contain three measured rows and one aggregate row per resolution/GOP point.
+
+This is diagnostic evidence, not a passed release gate. The warm-up runs in a
+separate process and therefore do not implement the required same-session
+10-frame discard. Python/native reconstruction conformance is also still
+blocked by the frame-1 mismatch. The next benchmark-harness change must measure
+post-warm-up frames in one runtime session and record encode and decode together.
+
 ### 2026-07-30 RTX 4070 packed I-frame decode staging
 
 This candidate adds reusable pinned index/symbol staging for all four
