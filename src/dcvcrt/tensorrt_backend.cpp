@@ -1564,6 +1564,52 @@ Result<Frame> ycbcr_to_yuv420p8(
     return Frame::copy_from(width, height, PixelFormat::yuv420p8, bytes, timestamp);
 }
 
+Result<Frame> ycbcr_device_to_yuv420p8(
+    const DeviceTensor& tensor,
+    std::uint32_t width,
+    std::uint32_t height,
+    Timestamp timestamp,
+    PinnedHostBuffer<std::byte>& host_buffer,
+    cudaStream_t stream) {
+    if ((width & 1U) != 0U || (height & 1U) != 0U) {
+        return Error(
+            ErrorCode::invalid_argument,
+            "YUV420 reconstruction requires even dimensions",
+            std::string(subsystem));
+    }
+    if (tensor.shape.nbDims != 4 || tensor.shape.d[0] != 1 || tensor.shape.d[1] != 3 ||
+        tensor.shape.d[2] <= 0 || tensor.shape.d[3] <= 0 ||
+        static_cast<std::uint32_t>(tensor.shape.d[2]) < height ||
+        static_cast<std::uint32_t>(tensor.shape.d[3]) < width) {
+        return backend_error("decoded frame_hat tensor has an invalid visible shape");
+    }
+
+    const auto y_size = static_cast<std::size_t>(width) * height;
+    const auto byte_count = y_size + y_size / 2U;
+    auto output_device = allocate_cuda_scratch(byte_count);
+    if (!output_device) return output_device.error();
+    const auto converted = cuda_ops::ycbcr_padded_to_yuv420p8(
+        tensor.storage.data,
+        cuda_ops::Shape4D{1, 3, static_cast<std::int32_t>(tensor.shape.d[2]),
+                          static_cast<std::int32_t>(tensor.shape.d[3])},
+        static_cast<std::int32_t>(width), static_cast<std::int32_t>(height),
+        static_cast<std::uint8_t*>(output_device.value().data), stream);
+    if (converted != cudaSuccess) {
+        return cuda_error("cuda_ops::ycbcr_padded_to_yuv420p8", converted);
+    }
+    auto ready = host_buffer.ensure(byte_count, "decoded_yuv420p8_frame");
+    if (!ready) return ready.error();
+    auto copied = copy_async(
+        host_buffer.data, output_device.value().data, byte_count,
+        cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync decoded YUV420P8 frame");
+    if (!copied) return copied.error();
+    auto synchronized = synchronize_stream(stream, "cudaStreamSynchronize decoded YUV420P8 frame");
+    if (!synchronized) return synchronized.error();
+    return Frame::copy_from(
+        width, height, PixelFormat::yuv420p8,
+        std::span<const std::byte>(host_buffer.data, byte_count), timestamp);
+}
+
 class AssetReader final {
 public:
     AssetReader(fs::path path, std::span<const std::byte> bytes)
@@ -2906,6 +2952,7 @@ Result<CodecDecodeResult> decode_predicted(
     DeviceDpb& device_dpb,
     std::vector<EngineInstance>& engines, RansCodec& rans,
     const RuntimeAssets& assets, VideoQuantDeviceCache& quant_cache,
+    PinnedHostBuffer<std::byte>& output_frame_buffer,
     cudaStream_t stream) {
     auto parsed = parse_predicted_payload(payload);
     if (!parsed) return parsed.error();
@@ -3103,12 +3150,8 @@ Result<CodecDecodeResult> decode_predicted(
     if (!feature_device_result) return feature_device_result.error();
     auto frame_device = std::move(frame_device_result.value());
     auto feature_device = std::move(feature_device_result.value());
-    std::array<DeviceTensor*, 1> reconstruction_inputs{&frame_device};
-    auto reconstruction = download_tensors(reconstruction_inputs, stream);
-    if (!reconstruction) return reconstruction.error();
-    auto frame_result = take_tensor(reconstruction.value(), "frame_hat");
-    if (!frame_result) return frame_result.error();
-    auto frame = ycbcr_to_yuv420p8(frame_result.value(), info.width, info.height, timestamp);
+    auto frame = ycbcr_device_to_yuv420p8(
+        frame_device, info.width, info.height, timestamp, output_frame_buffer, stream);
     if (!frame) return frame.error();
     device_dpb.frame = std::move(frame_device);
     device_dpb.feature = std::move(feature_device);
@@ -3306,7 +3349,7 @@ public:
             }
             auto result = decode_predicted(
                 payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_,
-                video_quant_cache_, stream_);
+                video_quant_cache_, decoded_frame_buffer_, stream_);
             profiler.finish();
             return result;
         } catch (const std::exception& exception) {
@@ -3355,6 +3398,7 @@ private:
     PinnedHostBuffer<std::int16_t> image_indexes3_buffer_;
     PinnedHostBuffer<std::int16_t> indexes0_buffer_;
     PinnedHostBuffer<std::int16_t> indexes1_buffer_;
+    PinnedHostBuffer<std::byte> decoded_frame_buffer_;
     cudaStream_t stream_{};
     DeviceDpb encoder_dpb_;
     DeviceDpb decoder_dpb_;

@@ -53,13 +53,12 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: localize the first native/Python entropy index-map
-divergence on the pinned 720p QP-32 I frame. Compare z symbols, hyper-synthesis
-parameters, and the first y index map before changing any bitstream code; outer
-framing, model CDF assets, and the low-level rANS implementation are ruled out.
-After restoring a deterministic index contract, rerun bidirectional I/P vectors,
-then two complete GOPs and the warmed 720p/1080p release matrix. Remaining
-host-staging removal stays open under M1/M3; target support remains pending.
+Current next action: with P-frame visible-output conversion accepted on RTX
+4070, profile the remaining GOP-97 decode boundaries separately: CPU rANS
+decode, pageable P-frame index downloads, TensorRT execution, and the remaining
+`cudaMallocAsync`/`cudaFree` churn. Do not start a GPU entropy-coder rewrite
+until those smaller boundaries are measured. Cross-runtime I/P golden vectors,
+drain/flush semantics, and target support remain pending.
 
 Deployment next action: reproduce the v2 `nvcr-artifacts` workflow and full
 registered suite on Orin Nano, then record its clean target, correctness,
@@ -105,7 +104,7 @@ Measurement:
 
 - [x] Add per-stage CPU and CUDA-event timing.
 - [x] Count per-frame allocations, transfers, bytes, and synchronizations.
-- [ ] Add warmed QCIF, 720p, and 1080p benchmarks with machine-readable output.
+- [x] Add warmed QCIF, 720p, and 1080p benchmarks with machine-readable output.
 
 Device execution:
 
@@ -166,6 +165,9 @@ Verification evidence, 2026-07-29 to 2026-07-30:
 - [x] Direct decoded-frame YUV420P8 output removes the full-range BT.709 YCbCr to RGB to limited-range BT.601 YUV conversion chain. At 720p QP 32, source quality is 38.627594 dB for Python and 38.619461 dB for native; Python versus native reconstruction is 43.950954 dB.
 - [x] CLI `decode --quality-metrics REFERENCE.yuv` reports aggregate Y, U, V, and 6:1:1 weighted PSNR outside codec timing.
 - [x] Pinned 720p QP-32 I-frame golden checks exact upstream commit, checkpoint, source, Python bitstream, and Python reconstruction identities, then gates native source quality and per-plane/weighted Python-native PSNR. Evidence: `docs/evidence/2026-07-30-rtx4070-dcvcrt-i-frame-reference.json`.
+- [x] P-frame visible decoded-output conversion, 2026-07-30: Release build passed; standalone CUDA operator coverage passed; all eight TensorRT profile contract/roundtrip gates passed for QCIF, CIF, 720p, and 1080p. The full registered suite was 14/15 because `nvcr_dcvcrt_i_frame_golden` is currently generated with the QCIF engine directory for a 720p input; this is a pre-existing test configuration issue, not a candidate output regression.
+- [x] Four-resolution matrix after device-side P-frame YUV420P8 output, 2026-07-30: evidence `docs/evidence/dcvcrt-resolution-matrix-device-yuv420-2026-07-30.jsonl`. GOP-97 decode improved from 808.001 to 944.322 fps at QCIF (+16.9%), 377.522 to 519.126 fps at CIF (+37.5%), 57.112 to 90.416 fps at 720p (+58.3%), and 26.060 to 41.843 fps at 1080p (+60.6%). Payload bytes and PSNR-YUV are identical to the baseline for every GOP/resolution point; encode remains within normal variance.
+- [x] 720p GOP-97 Nsight trace after device-side output conversion: `docs/evidence/dcvcrt-device-yuv420-720p-gop97-decode-2026-07-30.nsys-rep`, stats text, and memcpy CSV. Under tracing, decode measured 89.157 fps; D2H traffic fell from the baseline ~581.5 MB to 183,398,400 bytes, `cudaMemcpyAsync` API time fell from ~711 ms to 367.728 ms, total GPU kernel time was 811.426 ms, and the new luma/chroma output kernels contributed about 1.018 ms across the 96 P frames.
 
 Exit criteria:
 
