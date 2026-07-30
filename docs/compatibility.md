@@ -84,7 +84,7 @@ be called supported until the evidence rules below pass on the relevant target.
 | Reset/reuse and multiple GOPs | Implemented and tested on RTX | Declared, target-gated on both targets |
 | `NVAU` access unit | Implemented, versioned, bounded | Candidate v1 codec contract; cross-runtime evidence pending |
 | `NVCR` packet / `NVCS` sequence files | Implemented CLI development framing | No stable pre-v1 compatibility promise |
-| Upstream Python payload/frame compatibility | Partial reference infrastructure | Unsupported until golden tests pass |
+| Upstream Python payload/frame compatibility | Bidirectional framing-only probe fails at the I-frame entropy boundary | Unsupported in v1; no byte-compatibility promise |
 | Reusable CUDA arena / fully device-resident state | In progress | Required performance/runtime gate |
 | INT8 | Experimental builder flag | Unsupported/default-disabled in v1 |
 | Additional codec backends | Architecture boundary introduced; none implemented | Post-v1 |

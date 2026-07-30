@@ -118,8 +118,10 @@ rights are reviewed and recorded in the roadmap.
   `docs/bitstream.md`.
 - Reading older development payloads may remain temporarily when inexpensive,
   but no pre-v1 bitstream compatibility promise is made.
-- Upstream DCVC-RT byte or reconstruction compatibility is claimed only after
-  Python-to-native and native-to-Python golden tests pass.
+- NVCR v1 does not promise upstream DCVC-RT byte or payload interchangeability.
+  Independent reconstruction quality remains pinned reference evidence; any
+  future interoperability claim requires passing Python-to-native and
+  native-to-Python golden tests.
 - TensorRT engines are never portable across a different GPU model or TensorRT
   runtime merely because deserialization succeeds.
 
