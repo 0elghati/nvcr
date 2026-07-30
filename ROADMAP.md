@@ -160,7 +160,7 @@ Verification evidence, 2026-07-29 to 2026-07-30:
 - [ ] Clean-release warmed 720p/1080p matrix and repeated JSON benchmark output are not recorded yet.
 - [x] Paired 720p/1080p diagnostic smoke added with `scripts/benchmark_resolution_pair.sh`; current single-run baseline: 720p GOP 1 = 30.518 fps, 720p GOP 97 = 94.170 fps, 1080p GOP 1 = 13.254 fps, 1080p GOP 97 = 44.103 fps.
 - [x] 1080p all-I diagnostic profile after scratch arena: 10 allocations / 54,477,632 bytes per I frame; hot enqueue stages are `i_synthesis` about 22-23 ms, `i_analysis` about 12 ms, and three spatial priors about 9 ms combined.
-- [x] 720p/1080p warmed Week-1 re-run: `/tmp/nvcr-week1-m1-720p-clean.jsonl` (10 warm-up frames, 3 measured runs per point). Key 720p averages: GOP1 = 30.497667 fps, GOP97 = 94.776667 fps.
+- [x] RTX 4070 warmed-process diagnostic at commit `4b7e181`, 3 encode and 3 decode runs per point: 720p GOP1 encode/decode = 30.524667/35.340000 fps; 720p GOP97 = 94.773000/44.292000 fps; 1080p GOP1 = 13.160000/14.967000 fps; 1080p GOP97 = 44.182333/19.920667 fps. Per-run JSONL is under `docs/evidence`; the formal gate remains open because warm-up used a separate process.
 - [ ] Week-2 720p I/P parity remains blocked by first-frame divergence between Python DCVC-RT and native NVCR; `/tmp/week2_720p_conformance/week2_720p_frame_mismatch.tsv` records average full-frame PSNR 17.883866 dB.
 
 Exit criteria:
