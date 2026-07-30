@@ -1013,6 +1013,32 @@ struct PinnedHostBuffer final {
     std::size_t capacity{};
 };
 
+struct ImageDecodeStaging final {
+    Result<void> ensure(std::size_t z_count, std::size_t reduced_count) {
+        auto ready = z_symbols.ensure(z_count, "image_decode_z_symbols");
+        if (!ready) return ready.error();
+        for (std::size_t stage = 0; stage < indexes.size(); ++stage) {
+            ready = indexes[stage].ensure(reduced_count, "image_decode_indexes");
+            if (!ready) return ready.error();
+            ready = symbols[stage].ensure(reduced_count, "image_decode_symbols");
+            if (!ready) return ready.error();
+            if (indexes_ready[stage].data == nullptr) {
+                const auto status = cudaEventCreateWithFlags(
+                    &indexes_ready[stage].data, cudaEventDisableTiming);
+                if (status != cudaSuccess) {
+                    return cuda_error("cudaEventCreateWithFlags I decode indexes", status);
+                }
+            }
+        }
+        return {};
+    }
+
+    PinnedHostBuffer<std::int8_t> z_symbols;
+    std::array<PinnedHostBuffer<std::uint8_t>, 4> indexes;
+    std::array<PinnedHostBuffer<std::int8_t>, 4> symbols;
+    std::array<CudaEvent, 4> indexes_ready;
+};
+
 Result<CudaAllocation> allocate_cuda(std::size_t bytes) {
     void* pointer = nullptr;
     const auto stream = allocation_stream;
@@ -1067,6 +1093,13 @@ Result<void> copy_async(
 Result<void> synchronize_stream(cudaStream_t stream, std::string_view operation) {
     if (active_profiler != nullptr) active_profiler->record_synchronization();
     const auto synchronized = cudaStreamSynchronize(stream);
+    if (synchronized != cudaSuccess) return cuda_error(operation, synchronized);
+    return {};
+}
+
+Result<void> synchronize_event(cudaEvent_t event, std::string_view operation) {
+    if (active_profiler != nullptr) active_profiler->record_synchronization();
+    const auto synchronized = cudaEventSynchronize(event);
     if (synchronized != cudaSuccess) return cuda_error(operation, synchronized);
     return {};
 }
@@ -1269,16 +1302,22 @@ Result<DeviceTensor> upload_tensor(
     return DeviceTensor{std::move(name), input.shape, std::move(storage.value())};
 }
 
-Result<DeviceTensor> upload_tensor_scratch(
-    const HostTensor& input, std::string name, cudaStream_t stream) {
-    const auto bytes = input.values.size() * sizeof(__half);
-    auto storage = allocate_cuda_scratch(bytes);
+Result<DeviceTensor> upload_int8_tensor_scratch(
+    std::span<const std::int8_t> values, nvinfer1::Dims shape, std::string name,
+    cudaStream_t stream) {
+    auto packed = allocate_cuda_scratch(values.size() * sizeof(std::int8_t));
+    if (!packed) return packed.error();
+    auto storage = allocate_cuda_scratch(values.size() * sizeof(__half));
     if (!storage) return storage.error();
     auto copied = copy_async(
-        storage.value().data, input.values.data(), bytes, cudaMemcpyHostToDevice, stream,
-        "cudaMemcpyAsync scratch upload");
+        packed.value().data, values.data(), values.size() * sizeof(std::int8_t),
+        cudaMemcpyHostToDevice, stream, "cudaMemcpyAsync packed symbol upload");
     if (!copied) return copied.error();
-    return DeviceTensor{std::move(name), input.shape, std::move(storage.value())};
+    const auto converted = cuda_ops::int8_to_half(
+        static_cast<const std::int8_t*>(packed.value().data), storage.value().data,
+        values.size(), stream);
+    if (converted != cudaSuccess) return cuda_error("cuda_ops::int8_to_half", converted);
+    return DeviceTensor{std::move(name), shape, std::move(storage.value())};
 }
 
 Result<DeviceTensor> allocate_device_tensor(
@@ -1981,6 +2020,7 @@ Result<CodecDecodeResult> decode_intra(
     RansCodec& rans,
     const RuntimeAssets& assets,
     ImageQuantDeviceCache& image_quant_cache,
+    ImageDecodeStaging& image_decode_staging,
     cudaStream_t stream);
 
 Result<CodecEncodeResult> encode_intra(
@@ -1992,6 +2032,7 @@ Result<CodecEncodeResult> encode_intra(
     RansCodec& rans,
     const RuntimeAssets& assets,
     ImageQuantDeviceCache& image_quant_cache,
+    ImageDecodeStaging& image_decode_staging,
     PinnedHostBuffer<std::int8_t>& image_z_symbols_buffer,
     PinnedHostBuffer<std::int16_t>& image_indexes0_buffer,
     PinnedHostBuffer<std::int16_t>& image_indexes1_buffer,
@@ -2285,7 +2326,7 @@ Result<CodecEncodeResult> encode_intra(
 
     if (verify_reconstruction) {
         auto conformant_reconstruction = decode_intra(
-            payload, frame.timestamp(), state, device_dpb, engines, rans, assets, image_quant_cache, stream);
+            payload, frame.timestamp(), state, device_dpb, engines, rans, assets, image_quant_cache, image_decode_staging, stream);
         if (!conformant_reconstruction) return conformant_reconstruction.error();
         return CodecEncodeResult{
             std::move(payload), std::move(conformant_reconstruction.value().frame),
@@ -2305,6 +2346,7 @@ Result<CodecDecodeResult> decode_intra(
     RansCodec& rans,
     const RuntimeAssets& assets,
     ImageQuantDeviceCache& image_quant_cache,
+    ImageDecodeStaging& image_decode_staging,
     cudaStream_t stream) {
     auto parsed = parse_intra_payload(payload);
     if (!parsed) return parsed.error();
@@ -2326,11 +2368,18 @@ Result<CodecDecodeResult> decode_intra(
         128 * per_channel, assets.image_z_group,
         static_cast<std::size_t>(info.qp) * 128, per_channel);
     if (!z_values) return z_values.error();
-    HostTensor z{"z_hat", make_dims(128, z_height, z_width),
-                 std::vector<__half>(z_values.value().size())};
-    std::transform(z_values.value().begin(), z_values.value().end(), z.values.begin(),
-                   [](std::int8_t value) { return to_half(static_cast<float>(value)); });
-    auto z_device = upload_tensor_scratch(z, "z_hat", stream);
+    const auto staging_reduced_count =
+        static_cast<std::size_t>(64) * y_height * y_width;
+    auto staging_ready = image_decode_staging.ensure(
+        z_values.value().size(), staging_reduced_count);
+    if (!staging_ready) return staging_ready.error();
+    std::copy(
+        z_values.value().begin(), z_values.value().end(),
+        image_decode_staging.z_symbols.data);
+    auto z_device = upload_int8_tensor_scratch(
+        std::span<const std::int8_t>(
+            image_decode_staging.z_symbols.data, z_values.value().size()),
+        make_dims(128, z_height, z_width), "z_hat", stream);
     if (!z_device) return z_device.error();
 
     std::array<DeviceTensor*, 1> hyper_inputs{&z_device.value()};
@@ -2365,6 +2414,11 @@ Result<CodecDecodeResult> decode_intra(
     const auto reduced_shape = make_dims(64, y_height, y_width);
     const auto reduced_count = prior_count / 4;
     const cuda_ops::Shape4D y_shape{1, 256, y_height, y_width};
+    status = cuda_ops::apply_image_prior(
+        params.value().storage.data, spatial_count, stream);
+    if (status != cudaSuccess) {
+        return cuda_error("cuda_ops::apply_image_prior I decode", status);
+    }
     auto* params_values = static_cast<__half*>(params.value().storage.data);
     auto* q_dec_values = params_values + spatial_count;
     auto* current_scales = params_values + 2 * spatial_count;
@@ -2390,20 +2444,30 @@ Result<CodecDecodeResult> decode_intra(
             scales.value().storage.data, static_cast<std::uint8_t*>(indexes_device.value().data),
             reduced_count, 0.0F, stream);
         if (status != cudaSuccess) return cuda_error("cuda_ops::build_decode_indexes I", status);
-        std::vector<std::uint8_t> indexes(reduced_count);
+        const auto stage_slot = static_cast<std::size_t>(stage);
+        auto& indexes = image_decode_staging.indexes[stage_slot];
         auto copied = copy_async(
-            indexes.data(), indexes_device.value().data, reduced_count,
+            indexes.data, indexes_device.value().data, reduced_count,
             cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync I decode indexes");
         if (!copied) return copied.error();
-        auto synchronized = synchronize_stream(stream, "cudaStreamSynchronize I decode indexes");
+        auto recorded = record_cuda_event(
+            image_decode_staging.indexes_ready[stage_slot].data, stream,
+            "cudaEventRecord I decode indexes");
+        if (!recorded) return recorded.error();
+        auto synchronized = synchronize_event(
+            image_decode_staging.indexes_ready[stage_slot].data,
+            "cudaEventSynchronize I decode indexes");
         if (!synchronized) return synchronized.error();
 
-        auto decoded = rans.decode_y(indexes, assets.gaussian_y_group);
+        auto decoded = rans.decode_y(
+            std::span<const std::uint8_t>(indexes.data, reduced_count),
+            assets.gaussian_y_group);
         if (!decoded) return decoded.error();
-        HostTensor symbols{"symbols", reduced_shape, std::vector<__half>(decoded.value().size())};
-        std::transform(decoded.value().begin(), decoded.value().end(), symbols.values.begin(),
-                       [](std::int8_t value) { return to_half(static_cast<float>(value)); });
-        auto symbols_device = upload_tensor_scratch(symbols, "symbols", stream);
+        auto& symbols = image_decode_staging.symbols[stage_slot];
+        std::copy(decoded.value().begin(), decoded.value().end(), symbols.data);
+        auto symbols_device = upload_int8_tensor_scratch(
+            std::span<const std::int8_t>(symbols.data, decoded.value().size()),
+            reduced_shape, "symbols", stream);
         if (!symbols_device) return symbols_device.error();
         auto reconstructed = allocate_device_tensor_scratch("reconstructed", make_dims(256, y_height, y_width));
         if (!reconstructed) return reconstructed.error();
@@ -3174,7 +3238,7 @@ public:
             if (frame_type == FrameType::intra) {
                 auto result = encode_intra(
                     frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_,
-                    image_quant_cache_,
+                    image_quant_cache_, image_decode_staging_,
                     image_z_symbols_buffer_, image_indexes0_buffer_, image_indexes1_buffer_,
                     image_indexes2_buffer_, image_indexes3_buffer_,
                     verify_encoder_reconstruction_, stream_);
@@ -3213,7 +3277,7 @@ public:
             CudaAllocationScope allocation_scope(stream_, &profiler, &scratch_arena_);
             if (frame_type == FrameType::intra) {
                 auto result = decode_intra(
-                    payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_, image_quant_cache_, stream_);
+                    payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_, image_quant_cache_, image_decode_staging_, stream_);
                 profiler.finish();
                 return result;
             }
@@ -3257,6 +3321,7 @@ private:
     RansCodec rans_;
     RuntimeAssets assets_;
     ImageQuantDeviceCache image_quant_cache_;
+    ImageDecodeStaging image_decode_staging_;
     VideoQuantDeviceCache video_quant_cache_;
     DeviceScratchArena scratch_arena_;
     PinnedHostBuffer<std::int8_t> z_symbols_buffer_;
