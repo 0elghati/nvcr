@@ -62,21 +62,288 @@ The rANS optimization in this tree reduced its synthetic 1080p-sized round trip
 from 91.6 to 46.6 ms with one coder and from 48.0 to 25.2 ms with two coders. The
 encoded sizes and upstream golden streams remain unchanged.
 
-## Dominant remaining work
+## Current optimization state
 
-The P-frame reference, analysis, hyper-analysis, prior, and synthesis stages now
-chain through `DeviceTensor` buffers on one CUDA stream. The remaining P spatial
-prior, mask/reduction/restore/index work, entropy boundary, and serialized feature
-DPB are host-staged. Device allocations are still per-frame rather than arena-backed.
-The I-frame path also remains host-staged.
+The TensorRT backend now defaults to persistent execution contexts on discrete
+GPUs, avoiding per-frame context recreation in the normal RTX performance path.
+Integrated and Jetson-class devices keep the conservative low-memory mode unless
+`NVCR_TENSORRT_LOW_MEMORY_MODE=0` explicitly overrides it.
 
-The next performance milestone is a GPU-resident I-frame graph:
+P-frame encode already chains reference, analysis, hyper-analysis, prior, spatial
+prior, synthesis, and feature-DPB updates through `DeviceTensor` buffers on one
+CUDA stream. Only compact rANS entropy symbols/indexes and optional verification
+frames cross back to the host.
 
-1. Introduce reusable device tensor storage sized once per resolution.
-2. Bind TensorRT outputs directly to the next stage's inputs.
-3. Use the existing CUDA operators for prior, mask, quantization, and index work.
-4. Transfer only entropy symbols/indexes and the final reconstructed frame.
-5. Add CUDA-event stage timings and an automated post-warmup comparison gate.
+I-frame encode now uses the same device-resident strategy for the expensive
+front half of the path:
+
+- input YUV420P8/RGB24 conversion and padding happen in CUDA;
+- `i_analysis`, `i_hyper_analysis`, and `i_hyper_synthesis` run through
+  device-address TensorRT bindings;
+- padded hyperprior outputs are cropped on GPU;
+- image-prior sigmoid transforms, q-encode multiplication, four-way masks,
+  symbol reconstruction, quarter reductions, q-decode multiplication, and
+  entropy index construction run in CUDA;
+- I-frame z symbols and four compact y-index streams are copied through reusable
+  pinned host buffers for CPU rANS.
+
+I-frame decode now runs hyperprior, four-way mask/reduction/restore, three
+spatial priors, and synthesis through device-address bindings. The reconstructed
+frame remains device-resident for the DPB and is downloaded once for the public
+frame result. The old host TensorRT and image-prior implementations have been
+removed.
+
+A bounded per-session CUDA scratch arena serves frame-local tensors and eligible
+TensorRT outputs. Image quantization tensors are cached once per QP. The remaining
+I-decode host boundaries are CPU rANS z/symbol/index staging and the public frame
+download. The final performance gate still needs warmed QCIF/720p/1080p JSON
+benchmark evidence.
+
+The next performance milestone is to tighten the unavoidable entropy boundaries:
+
+1. Reuse pinned index and symbol staging for all four I-decode prior stages.
+2. Replace broad stream synchronizations with dependency-scoped CUDA events.
+3. Profile direct rANS decode-into staging and int8-to-half GPU conversion.
+4. Bind TensorRT outputs directly to downstream inputs where lifetimes permit.
+5. Add an automated post-warmup comparison gate.
+
+
+### 2026-07-30 RTX 4070 device-resident I-frame decode
+
+The recovered implementation was rebuilt in Release mode and checked against the
+installed v0.4.1 `720p-fp16` and `1080p-fp16` TensorRT bundles. Registered tests
+passed 6/6, both bundle contract tests passed, and the native I/P round trip
+passed.
+
+The 720p GOP-8 stream used FourPeople, 97 frames, QP 32, and the installed
+`720p-fp16` bundle. Encode produced 312,696 payload bytes in 1.313 s
+(73.891 fps). Four decode measurements produced 42.257, 42.295, 42.108, and
+42.390 fps; the final three-run mean was 42.264 fps.
+
+A nine-frame profile reported one I-frame allocation / 5,529,600 bytes, 5 H2D /
+1,904,640 bytes, 5 D2H / 6,451,200 bytes, 6 D2D / 11,059,200 bytes, and 5
+synchronizations. No `host` TensorRT stage was present. Representative I-frame
+enqueue times were about 1.2 ms for hyper-synthesis, 1.15 ms for each spatial
+prior, and 10.0 ms for synthesis.
+
+This is repeated development evidence, not the final publication gate: it does
+not yet include the required warm-up discard, QCIF/1080p throughput matrix,
+matching pinned-Python run, or cross-runtime golden reconstruction comparison.
+
+### 2026-07-29 RTX 4070 paired 720p/1080p smoke baseline
+
+Paired performance smoke is now required before accepting CUDA/TensorRT
+optimization direction changes. The helper is diagnostic rather than the final
+publication harness, but it prevents accepting a 720p-only win that regresses the
+1080p path.
+
+Command:
+
+```bash
+./scripts/benchmark_resolution_pair.sh \
+  --gops "1 97" \
+  --jsonl /tmp/nvcr-paired-baseline-e7de44f.jsonl
+```
+
+Inputs: `FourPeople_1280x720_60.yuv` for 720p and
+`BQTerrace_1920x1080_60.yuv` for 1080p, 97 frames, QP 32.
+
+| Resolution | GOP | Engine profile | Payload bytes | Codec time | Throughput |
+|---|---:|---|---:|---:|---:|
+| 720p | 1 | `720p-fp16` | 1,104,333 | 3.178 s | 30.518 fps |
+| 1080p | 1 | `1080p-fp16` | 4,421,239 | 7.318 s | 13.254 fps |
+| 720p | 97 | `720p-fp16` | 86,297 | 1.030 s | 94.170 fps |
+| 1080p | 97 | `1080p-fp16` | 396,285 | 2.199 s | 44.103 fps |
+
+Short 1080p all-I diagnostic profile, collected separately with `--profile`,
+reported 10 allocations / 54,477,632 bytes per I frame. Representative hot
+TensorRT enqueue stages were `i_synthesis` about 22-23 ms, `i_analysis` about
+12 ms, three spatial priors about 9 ms combined, and `i_hyper_synthesis` about
+2.7 ms. This makes direct TensorRT binding, exact-shape/tactic inspection, and
+I-path graph/partition work higher value than more allocator cleanup alone.
+
+### 2026-07-29 RTX 4070 encode scratch arena
+
+Change under test: route encode-side manual temporary CUDA allocations through a
+bounded per-session scratch arena and skip writing residual tensors that are not
+consumed by the normal encode path. TensorRT outputs, DPB/reference tensors, and
+CPU entropy download boundaries remain owned allocations because their lifetimes
+can outlive a single scratch frame.
+
+Profile command:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_arena_nores_profile_final.nvcr \
+  -s 1280x720 -r 30 --frames 3 --gop-size 1 --qp 32 \
+  --engine-profile 720p-fp16 --profile
+```
+
+Profile result: each sampled I frame reported 10 allocations and 24,408,512
+allocated bytes. Before the arena pass, the same path reported about 51
+allocations and 92,314,112 allocated bytes per I frame. The remaining hot stages
+are TensorRT engine execution, especially `i_synthesis` around 10.1 ms and
+`i_analysis` around 5.3 ms, so allocator cleanup is now mostly a prerequisite for
+direct binding and CUDA graph work rather than the dominant latency lever.
+
+Release sweep command template:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_arena_nores_final_gop<GOP>.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size <GOP> --qp 32 \
+  --engine-profile 720p-fp16
+```
+
+| Build state | GOP | Frames | Payload bytes | Codec time | Throughput |
+|---|---:|---:|---:|---:|---:|
+| scratch arena + no residual write | 1 | 97 | 1,104,333 | 3.215 s | 30.168 fps |
+| scratch arena + no residual write | 8 | 97 | 312,696 | 1.316 s | 73.689 fps |
+| scratch arena + no residual write | 97 | 97 | 86,297 | 1.029 s | 94.239 fps |
+
+Interpretation: all-I throughput is roughly neutral versus the previous quiet
+30.616 fps run, while normal GOP points remain slightly ahead of the `f88c2b2e24be`
+reference sweep. The main measurable improvement is the much smaller allocation
+footprint, which reduces allocator jitter and prepares the backend for direct
+TensorRT output binding.
+
+### 2026-07-29 CLI logging overhead cleanup
+
+Default CLI encode/decode output now prints only the final summary. Per-frame
+progress and runtime info logs require `--verbose`; detailed TensorRT/CUDA stage
+counters still require `--profile`. This keeps benchmark stdout small and avoids
+terminal/log-processing overhead in normal runs.
+
+Quiet 720p all-I check after the change:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_720p_quiet_gop1_final.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size 1 --qp 32 \
+  --engine-profile 720p-fp16
+```
+
+Result: 97 frames, 1,104,333 payload bytes, 3.168 s codec time, 30.616 fps.
+
+### 2026-07-29 RTX 4070 720p entropy threshold update
+
+Change under test: enable the two-rANS-coder path at exactly 1280x720 instead
+of only above 1280x720, and avoid serializing the unused normal encode-side
+I-frame latent-state copy.
+
+Command:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_720p_kept_opts_gop1.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size 1 --qp 32 \
+  --engine-profile 720p-fp16
+```
+
+| Build state | GOP | Payload bytes | Codec time | Throughput |
+|---|---:|---:|---:|---:|
+| `f88c2b2e24be` reference | 1 | 1,103,993 | 3.327 s | 29.154 fps |
+| two-coder 720p + no latent copy | 1 | 1,104,333 | 3.185 s | 30.452 fps |
+
+A larger experiment that skipped normal I-frame host reconstruction entirely was
+rejected: it improved GOP-97 slightly but regressed all-I to 24.683 fps, likely
+because removing the final synchronization changed frame-to-frame allocation and
+stream retirement behavior. Keep that path out until the arena/direct-bind work
+provides stable lifetimes and explicit synchronization boundaries.
+
+### 2026-07-29 RTX 4070 720p GOP sweep by commit
+
+Commit: `f88c2b2e24be` (`f88c2b2e24be5f8d28d3cc147bb5c4d1ddb8d44f`)
+
+Command template:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_720p_gop<GOP>_f88c2b2e24be.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size <GOP> --qp 32 \
+  --engine-profile 720p-fp16
+```
+
+Single-run codec-time summaries:
+
+| Commit | GOP | Frames | Payload bytes | Codec time | Throughput |
+|---|---:|---:|---:|---:|---:|
+| `f88c2b2e24be` | 1 | 97 | 1,103,993 | 3.327 s | 29.154 fps |
+| `f88c2b2e24be` | 2 | 97 | 910,474 | 2.196 s | 44.174 fps |
+| `f88c2b2e24be` | 4 | 97 | 500,953 | 1.614 s | 60.082 fps |
+| `f88c2b2e24be` | 8 | 97 | 312,353 | 1.329 s | 72.978 fps |
+| `f88c2b2e24be` | 16 | 97 | 191,276 | 1.186 s | 81.792 fps |
+| `f88c2b2e24be` | 32 | 97 | 125,481 | 1.109 s | 87.487 fps |
+| `f88c2b2e24be` | 97 | 97 | 85,951 | 1.033 s | 93.916 fps |
+
+Interpretation: longer GOPs amortize the current I-frame cost and lean on the
+faster P-frame path. The GOP-97 run is the best throughput point in this sweep
+because it contains one I frame followed by 96 P frames; GOP-1 is the all-I stress
+case and remains the main I-frame optimization target. These are reference
+single-run numbers, not final repeated release evidence under the full protocol.
+
+### 2026-07-29 RTX 4070 720p all-I profile
+
+Command:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_720p_alli_fast.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size 1 --qp 32 \
+  --engine-profile 720p-fp16 --profile
+```
+
+Result after making the decode-conformance bridge verification-only:
+
+| Metric | Value |
+|---|---:|
+| Frames | 97 |
+| GOP size | 1 |
+| Payload bytes | 1,103,993 |
+| Codec time | 3.353 s |
+| Throughput | 28.927 fps |
+| Representative warmed I-frame latency | ~34.2-34.8 ms |
+
+Interpretation: this fixes the accidental all-I benchmark penalty from running
+a full decode-conformance rebuild for every encoded I frame. The remaining hot
+stages are `i_analysis` (~5.0 ms), three image spatial-prior engines (~3.1 ms
+combined), `i_synthesis` (~9.4 ms), per-frame allocations, entropy, and final
+reconstruction download.
+
+### 2026-07-29 RTX 4070 720p GOP-8 profile
+
+Command:
+
+```bash
+./build-release/cli/nvcr encode \
+  -i /home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/fourpeople_720p_opt.nvcr \
+  -s 1280x720 -r 30 --frames 97 --gop-size 8 --qp 32 \
+  --engine-profile 720p-fp16 --profile
+```
+
+Result after the encode-side I-frame GPU-residency patch:
+
+| Metric | Value |
+|---|---:|
+| Frames | 97 |
+| GOP size | 8 |
+| Payload bytes | 466,023 |
+| Codec time | 2.405 s |
+| Throughput | 40.331 fps |
+| Representative P-frame latency | ~10.3-10.9 ms |
+| Representative warmed I-frame latency | ~115 ms |
+
+Interpretation: the P-frame hot path is now close to 10 ms/frame at 720p. This
+GOP-8 sample was captured before the all-I bridge fix above, so its I-frame rows
+still include verification-style bridge cost and should not be used as the
+current I-frame latency point.
 
 ## Jetson energy profiling
 

@@ -104,7 +104,9 @@ private staging repositories can pass `--repo OWNER/REPO` to `scripts/install.sh
 
 Other NVIDIA Linux configurations are experimental until they have equivalent
 recorded evidence. A multi-architecture CUDA binary does not make TensorRT plans
-portable; every engine bundle is tied to its recorded target.
+portable; every engine bundle is tied to its recorded target. Discrete GPUs use
+persistent TensorRT execution contexts by default; set
+`NVCR_TENSORRT_LOW_MEMORY_MODE=1` only when memory pressure requires it.
 
 ### 2. Prepare model artifacts and engines
 
@@ -179,7 +181,8 @@ without passing an engine path:
 NVCR_ENGINE_PROFILE=1080p-fp16 ./build-release/cli/nvcr decode ...
 ```
 
-Use `--backend NAME` when multiple backends are installed. `--engine-dir` remains
+Use `--backend NAME` when multiple backends are installed; `dcvcrt`, `dcvc_rt`,
+and `dcvc-rt` currently select the same backend. `--engine-dir` remains
 available only for custom bundles and local development tests. Input and output
 frames are planar YUV420P8. `NVCR`/`NVCS` are development
 framing formats and have no stable pre-v1 compatibility promise. Container

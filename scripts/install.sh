@@ -82,7 +82,7 @@ Linux:aarch64) package_family="linux-aarch64-jetson-l4t36" ;;
 esac
 
 case "$backend" in
-default|dcvcrt)
+default|dcvcrt|dcvc_rt|dcvc-rt)
     resolved_backend="dcvcrt"
     backend_asset_id="dcvcrt-cvpr2025"
     backend_archive_dir="dcvcrt"
