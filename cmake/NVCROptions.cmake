@@ -22,6 +22,12 @@ set(
     "Directory containing built DCVC-RT TensorRT plans for integration tests")
 
 set(
+    NVCR_TENSORRT_ENGINE_DIRS
+    ""
+    CACHE STRING
+    "Semicolon-separated additional DCVC-RT TensorRT engine directories for profile-matrix tests")
+
+set(
     NVCR_DCVCRT_720P_GOLDEN_INPUT
     ""
     CACHE FILEPATH

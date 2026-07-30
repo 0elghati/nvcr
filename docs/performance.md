@@ -498,3 +498,49 @@ NVCR_TENSORRT_LOW_MEMORY_MODE=0 \
 - [Architecture](architecture.md)
 - [DCVC-RT integration contract](dcvcrt-integration.md)
 - [Native command-line interface](cli.md)
+
+## Four-resolution DCVC-RT baseline (2026-07-30)
+
+This is the pre-decode-optimization baseline for the M4 resolution-profile gate.
+It uses the release build and target-local FP16 TensorRT plans built on the
+`rtx4070-ubuntu2404` target profile (RTX 4070, CUDA 12.6, TensorRT 10.7.0).
+
+Protocol:
+
+- Inputs: `akiyo_qcif.yuv`, `paris_cif.yuv`, `FourPeople_1280x720_60.yuv`, and `BQTerrace_1920x1080_60.yuv` from `/home/oelghati/DCVC/datasets/`.
+- QP 32, 97 measured frames, and GOP sizes 1 and 97.
+- One 10-frame encode warm-up and one 10-frame decode warm-up per case.
+- Three measured encode/decode repetitions per point; table values are arithmetic means.
+- FPS is codec-reported timing. Weighted YUV PSNR is computed during decode outside codec timing.
+- GOP 1 is the all-I development path. GOP 97 is the practical warmed I/P path and the decode-optimization baseline.
+
+| Resolution | GOP | Payload bytes | Encode FPS | Decode FPS | PSNR-YUV (dB) |
+|---|---:|---:|---:|---:|---:|
+| QCIF (176x144) | 1 | 64,153 | 487.411 | 578.714 | 35.784883 |
+| CIF (352x288) | 1 | 1,311,398 | 225.416 | 247.506 | 28.044318 |
+| 720p (1280x720) | 1 | 1,104,333 | 35.343 | 42.163 | 38.648032 |
+| 1080p (1920x1080) | 1 | 4,421,239 | 15.204 | 17.729 | 34.701453 |
+| QCIF (176x144) | 97 | 11,124 | 830.164 | 808.001 | 38.355843 |
+| CIF (352x288) | 97 | 155,448 | 536.522 | 377.522 | 25.965082 |
+| 720p (1280x720) | 97 | 86,297 | 95.403 | 57.112 | 40.711093 |
+| 1080p (1920x1080) | 97 | 396,285 | 44.379 | 26.060 | 35.242946 |
+
+Machine-readable per-run and aggregate evidence is in
+`docs/evidence/dcvcrt-resolution-matrix-2026-07-30.jsonl`.
+
+The practical GOP-97 decode/encode ratios are approximately 97.3% at QCIF,
+70.4% at CIF, 59.9% at 720p, and 58.7% at 1080p. The increasing gap makes
+resolution-scaled decode execution the next optimization target. These values
+are the before measurements; any decode change must rerun the same matrix and
+report both FPS and PSNR-YUV.
+
+### Superseded build and validation attempts
+
+The following failures are retained as diagnostic history and are not release
+evidence:
+
+- Exporting from the dirty pinned DCVC-RT checkout folded required ONNX inputs away; TensorRT then rejected `i_hyper_synthesis` because `z_hat` was absent. A clean detached pinned source exported the correct inputs.
+- PyTorch 2.9 Dynamo export repeatedly failed with FakeTensor recursion in spatial-prior and P-synthesis stages. The deterministic legacy TorchScript ONNX path completed from the clean pinned source.
+- The first successful QCIF plan build reached manifest generation but lacked `--target-profile-path`. Artifact preparation now rejects that omission before expensive work.
+- The first QCIF contract run rejected the `192x192` warm-up because its I-frame maximum stopped at visible dimensions. QCIF now keeps `176x144` as its optimization point while admitting the padded maximum.
+- The first CIF roundtrip rejected the padded `20x24` I hyper-latent. The CIF hyper-analysis profile now matches runtime latent padding.
