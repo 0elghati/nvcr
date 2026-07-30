@@ -31,10 +31,12 @@ state reset. Timestamps, time bases, packet side data, and container metadata ar
 not part of `NVAU`.
 
 The TensorRT backend currently encapsulates entropy data in isolated internal
-`NVI1` and `NVP1` payload layouts. Those are implementation formats until
-cross-runtime Python golden tests define any upstream compatibility position.
-`NVAU` versioning permits replacing the inner development layouts without
-pretending they are standardized DCVC-RT streams.
+`NVI1` and `NVP1` payload layouts. They are NVCR implementation formats, not
+upstream DCVC-RT frame records. A pinned framing-only bidirectional probe decoded
+structurally but failed reconstruction quality from the first I frame, so v1
+makes no upstream byte or payload-interchangeability promise. `NVAU` versioning
+permits replacing these inner layouts without pretending they are standardized
+DCVC-RT streams.
 
 ## Development packet envelope: `NVCR` version 1
 
@@ -78,8 +80,10 @@ development migration.
 
 ## Compatibility evidence
 
-No claim of upstream DCVC-RT byte or reconstruction compatibility is made until
-native payload decoding and reconstructed frames pass golden tests against the
-pinned Python implementation. Additional codec backends would need their own
-access-unit compatibility position and evidence. See [Compatibility](compatibility.md)
-and the M2 gates in [ROADMAP.md](../ROADMAP.md).
+NVCR v1 does not claim upstream DCVC-RT byte or payload interchangeability.
+Independent native/Python reconstruction remains a pinned quality reference; a
+future interoperability claim requires passing framing-only decode vectors in
+both directions. The current failed result is recorded in
+[`docs/evidence/2026-07-30-rtx4070-dcvcrt-cross-runtime-probe.json`](evidence/2026-07-30-rtx4070-dcvcrt-cross-runtime-probe.json). Additional codec backends
+need their own access-unit compatibility position and evidence. See
+[Compatibility](compatibility.md) and the M2 gates in [ROADMAP.md](../ROADMAP.md).
