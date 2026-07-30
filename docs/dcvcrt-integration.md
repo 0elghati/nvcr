@@ -67,6 +67,11 @@ No upstream Python payload or reconstruction compatibility claim is made until
 cross-runtime golden tests pass. The CLI's `NVCR`/`NVCS` wrappers are also
 pre-v1 development formats, not containers.
 
+The opt-in `nvcr_dcvcrt_i_frame_golden` test pins the upstream commit,
+checkpoints, FourPeople 720p source frame, Python bitstream, and Python
+reconstruction at QP 32. It gates native source quality and cross-runtime
+reconstruction PSNR while preserving the payload-format distinction above.
+
 ## Current gates
 
 Implemented tests cover parser/allocation bounds, rANS vectors, CUDA operators,
@@ -74,6 +79,6 @@ model/profile and bundle tampering, wrong-model/corrupt bundle rejection, I/P
 reconstruction equality, maximum effective P QP, two GOPs, and reset/reuse on the
 configured RTX engine bundle.
 
-Still required for v1 are reference Python golden evidence, a stable plane/stride
-session API, the reusable device arena and complete GPU state path, release-build
-performance gates, and a fresh Orin clean-room workflow. See [ROADMAP.md](../ROADMAP.md).
+Still required for v1 are expanded Python/native I/P golden evidence, a stable
+plane/stride session API, the reusable device arena and complete GPU state path,
+release-build performance gates, and a fresh Orin clean-room workflow. See [ROADMAP.md](../ROADMAP.md).

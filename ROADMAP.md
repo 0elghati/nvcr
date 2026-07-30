@@ -53,10 +53,10 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: add a durable 720p Python↔native I-frame golden test at
-QP 32 using the corrected direct-YUV output path, then isolate P-frame divergence
-beginning at frame 2. After deterministic I/P conformance is restored, rerun the
-warmed 720p/1080p matrix from a clean release build and continue the M1–M4
+Current next action: isolate P-frame divergence beginning at frame 2 using the
+new pinned 720p QP-32 I-frame golden as the trusted starting state. After
+deterministic I/P conformance is restored, add bidirectional I/P vectors, rerun
+the warmed 720p/1080p matrix from a clean release build, and continue the M1–M4
 target matrix. Remaining host-staging removal stays open under M1/M3; target
 support remains pending until that evidence is recorded.
 
@@ -164,6 +164,7 @@ Verification evidence, 2026-07-29 to 2026-07-30:
 - [x] Superseded Week-2 baseline: the pre-fix Python/native output diverged at frame 1 and averaged 17.883866 dB over 97 frames; retained as failed history.
 - [x] Direct decoded-frame YUV420P8 output removes the full-range BT.709 YCbCr to RGB to limited-range BT.601 YUV conversion chain. At 720p QP 32, source quality is 38.627594 dB for Python and 38.619461 dB for native; Python versus native reconstruction is 43.950954 dB.
 - [x] CLI `decode --quality-metrics REFERENCE.yuv` reports aggregate Y, U, V, and 6:1:1 weighted PSNR outside codec timing.
+- [x] Pinned 720p QP-32 I-frame golden checks exact upstream commit, checkpoint, source, Python bitstream, and Python reconstruction identities, then gates native source quality and per-plane/weighted Python-native PSNR.
 
 Exit criteria:
 
@@ -188,6 +189,7 @@ State: **Active**
 - [x] Separate the generic codec backend/session boundary from the DCVC-RT TensorRT implementation.
 - [ ] Add Python→native and native→Python I/P golden vectors.
 - [x] 720p frame-1 quality parity restored at QP 32 by returning direct YUV420P8 reconstruction; durable cross-runtime golden vectors remain the next M2 action.
+- [x] Add an opt-in deterministic Python/native 720p I-frame reconstruction golden at QP 32 with machine-readable evidence.
 
 Exit criteria:
 
