@@ -53,12 +53,13 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: define the upstream byte-compatibility position and add
-bidirectional I/P vector tests using the deterministic 720p GOP-97 baseline.
-Then cover two complete GOPs against pinned Python, rerun the warmed 720p/1080p
-matrix from a clean release build, and continue the M1-M4 target matrix.
-Remaining host-staging removal stays open under M1/M3; target support remains
-pending until that evidence is recorded.
+Current next action: localize the first native/Python entropy index-map
+divergence on the pinned 720p QP-32 I frame. Compare z symbols, hyper-synthesis
+parameters, and the first y index map before changing any bitstream code; outer
+framing, model CDF assets, and the low-level rANS implementation are ruled out.
+After restoring a deterministic index contract, rerun bidirectional I/P vectors,
+then two complete GOPs and the warmed 720p/1080p release matrix. Remaining
+host-staging removal stays open under M1/M3; target support remains pending.
 
 Deployment next action: reproduce the v2 `nvcr-artifacts` workflow and full
 registered suite on Orin Nano, then record its clean target, correctness,
@@ -181,13 +182,20 @@ Exit criteria:
 
 State: **Active**
 
-- [ ] Decide and document upstream byte compatibility.
+- [x] Decide and document upstream byte compatibility: v1 does not promise
+  upstream byte or payload interchangeability. Pinned two-frame framing-only
+  probes decode structurally in both directions but fail quality from the first
+  I frame; independent native and Python reconstruction comparison remains the
+  reference conformance contract.
 - [x] Separate codec access units from `NVCR`/`NVCS` envelopes.
 - [x] Define a versioned access unit with model identity, dimensions, and features.
 - [x] Define syntax for frame type, effective QP, reset state, and payload lengths.
 - [x] Define bounds/version behavior and add parser/writer plus deterministic fuzz tests.
 - [x] Separate the generic codec backend/session boundary from the DCVC-RT TensorRT implementation.
-- [ ] Add Python→native and native→Python I/P golden vectors.
+- [ ] Add Python→native and native→Python I/P golden vectors. The initial
+  720p two-frame probe is preserved as failed evidence: Python→native reaches
+  `24.864091 dB`, native→Python reaches `25.152377 dB`, and both diverge at
+  the I-frame entropy/index-map boundary despite byte-identical CDF assets.
 - [x] 720p frame-1 quality parity restored at QP 32 by returning direct YUV420P8 reconstruction; durable cross-runtime golden vectors remain the next M2 action.
 - [x] Add an opt-in deterministic Python/native 720p I-frame reconstruction golden at QP 32 with machine-readable evidence.
 
