@@ -1345,3 +1345,19 @@ Architectural decisions:
 Current next action: branch from this profile checkpoint for decode optimization,
 profile the GOP-97 decode path, fix the dominant resolution-scaled bottleneck,
 and rerun the identical four-resolution matrix against the baseline above.
+
+### 2026-08-02 — Reject reference/prior TensorRT graph fusion on Orin
+
+The bitstream-preserving P-frame decode experiment combined reference feature
+extraction and the temporal prior into two larger TensorRT plans (frame-reference
+and feature-reference variants). The reconstructed 640x360 BasketballDrive
+output remained bit-exact, but three locked-clock runs averaged 46.377 FPS versus
+the accepted 45.872 FPS baseline: only +1.10%. The experiment is preserved in
+`docs/evidence/orin-reference-prior-fusion-rejected-2026-08-02.json` and the
+implementation was removed because it missed the 10% material-gain gate while
+adding two large plans and a decode-only bundle path.
+
+Current next action: stop pursuing engine-boundary and launch-overhead changes;
+prototype precision or network-compute reduction in the dominant reference and
+synthesis networks, with cross-runtime quality/bitstream gates and an explicit
+10% Orin throughput threshold before integration.
