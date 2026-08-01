@@ -226,6 +226,18 @@ bundle is optimized at 1280x720 rather than either measured shape, so this is a
 current-backend edge baseline rather than a dedicated-profile claim. An initial
 post-reboot matrix with unlocked 306 MHz GPU minimum clock is retained only as
 superseded diagnostic history and is excluded from the evidence file.
+Accepted P-decode entropy staging, 2026-08-01: the predicted-frame decoder now
+reuses pinned host buffers for both scale-index stages and z symbols, uploads
+decoded symbols as packed int8, and performs int8-to-FP16 conversion on CUDA.
+This removes per-frame pageable index vectors, CPU half conversion, and FP16
+symbol uploads while preserving the two entropy dependency waits. On the exact
+locked-clock BasketballDrive baseline streams, three-run decode means improved
+from 44.035 to 44.991 fps at 640x360 (+2.17%) and from 20.578 to 20.849 fps at
+960x540 (+1.32%). Reconstruction SHA-256 and PSNR-YUV were identical at both
+resolutions, and the direct-GPU Release suite passed 6/6. Evidence is in
+`docs/evidence/orin-p-decode-staging-2026-08-01.json`. A TensorRT input-shape
+cache probe did not reduce warmed setup time or provide repeatable throughput
+gain and was removed rather than retained speculatively.
 
 ## M0 — Baseline and entropy
 

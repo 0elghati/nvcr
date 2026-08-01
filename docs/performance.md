@@ -180,6 +180,13 @@ point is 1280x720. TensorRT also emitted its cross-device-model plan warning.
 Accordingly, this is the present backend's edge baseline, not a claim for
 dedicated 360p/540p plans or a directly matched MLVC protocol.
 
+The subsequent P-frame decode staging pass reused pinned index/symbol buffers,
+uploaded entropy symbols as int8 instead of FP16, and converted them on CUDA.
+Against the exact BasketballDrive streams above, three-run means improved from
+44.035 to 44.991 fps at 360p (+2.17%) and from 20.578 to 20.849 fps at 540p
+(+1.32%). Decoded output hashes and PSNR were unchanged. Candidate evidence is
+in [`evidence/orin-p-decode-staging-2026-08-01.json`](evidence/orin-p-decode-staging-2026-08-01.json).
+
 
 ### 2026-07-30 RTX 4070 warmed encode and decode diagnostic
 
