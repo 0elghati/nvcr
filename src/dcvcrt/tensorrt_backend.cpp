@@ -156,14 +156,46 @@ public:
     }
 };
 
+struct CudaGraphInvocation final {
+    ~CudaGraphInvocation() {
+        if (executable != nullptr) static_cast<void>(cudaGraphExecDestroy(executable));
+        if (graph != nullptr) static_cast<void>(cudaGraphDestroy(graph));
+    }
+    CudaGraphInvocation() = default;
+    CudaGraphInvocation(const CudaGraphInvocation&) = delete;
+    CudaGraphInvocation& operator=(const CudaGraphInvocation&) = delete;
+    CudaGraphInvocation(CudaGraphInvocation&& other) noexcept
+        : signature(std::move(other.signature)),
+          graph(std::exchange(other.graph, nullptr)),
+          executable(std::exchange(other.executable, nullptr)) {}
+    CudaGraphInvocation& operator=(CudaGraphInvocation&& other) noexcept {
+        if (this != &other) {
+            if (executable != nullptr) static_cast<void>(cudaGraphExecDestroy(executable));
+            if (graph != nullptr) static_cast<void>(cudaGraphDestroy(graph));
+            signature = std::move(other.signature);
+            graph = std::exchange(other.graph, nullptr);
+            executable = std::exchange(other.executable, nullptr);
+        }
+        return *this;
+    }
+
+    std::vector<std::uintptr_t> signature;
+    cudaGraph_t graph{};
+    cudaGraphExec_t executable{};
+};
+
 struct EngineInstance final {
     fs::path path;
     std::unique_ptr<nvinfer1::ICudaEngine> engine;
     std::unique_ptr<nvinfer1::IExecutionContext> context;
+    std::vector<CudaGraphInvocation> graph_invocations;
     // Execution mode is owned by this backend session, never process-global.
     bool low_memory_mode{true};
     void* shared_context_memory{};
     std::int64_t shared_context_memory_bytes{};
+    bool use_cuda_graphs{};
+    std::size_t graph_hits{};
+    std::size_t graph_captures{};
 };
 
 enum class ContextPolicy : std::uint8_t {
@@ -714,7 +746,7 @@ Result<EngineInstance> load_engine(
     auto valid = validate_engine(*engine, specification);
     if (!valid) return valid.error();
 
-    return EngineInstance{path, std::move(engine), nullptr};
+    return EngineInstance{path, std::move(engine), nullptr, {}};
 }
 
 struct ProfileStage final {
@@ -848,6 +880,7 @@ private:
 
 thread_local cudaStream_t allocation_stream = nullptr;
 thread_local BackendProfiler* active_profiler = nullptr;
+thread_local bool cuda_graphs_allowed = false;
 class DeviceScratchArena;
 thread_local DeviceScratchArena* active_scratch_arena = nullptr;
 
@@ -874,14 +907,19 @@ private:
 
 class CudaAllocationScope final {
 public:
-    CudaAllocationScope(cudaStream_t stream, BackendProfiler* profiler, DeviceScratchArena* arena)
+    CudaAllocationScope(
+        cudaStream_t stream, BackendProfiler* profiler, DeviceScratchArena* arena,
+        bool allow_cuda_graphs = false)
         : previous_stream_(std::exchange(allocation_stream, stream)),
           previous_profiler_(std::exchange(active_profiler, profiler)),
-          previous_arena_(std::exchange(active_scratch_arena, arena)) {}
+          previous_arena_(std::exchange(active_scratch_arena, arena)),
+          previous_cuda_graphs_allowed_(
+              std::exchange(cuda_graphs_allowed, allow_cuda_graphs)) {}
     ~CudaAllocationScope() {
         allocation_stream = previous_stream_;
         active_profiler = previous_profiler_;
         active_scratch_arena = previous_arena_;
+        cuda_graphs_allowed = previous_cuda_graphs_allowed_;
     }
     CudaAllocationScope(const CudaAllocationScope&) = delete;
     CudaAllocationScope& operator=(const CudaAllocationScope&) = delete;
@@ -890,6 +928,7 @@ private:
     cudaStream_t previous_stream_{};
     BackendProfiler* previous_profiler_{};
     DeviceScratchArena* previous_arena_{};
+    bool previous_cuda_graphs_allowed_{};
 };
 
 void release_cuda(void* pointer, cudaStream_t stream) noexcept {
@@ -1454,6 +1493,76 @@ Result<void> populate_video_quant_cache(
     return {};
 }
 
+void append_graph_tensor_signature(
+    std::vector<std::uintptr_t>& signature, const DeviceTensor& tensor) {
+    signature.push_back(reinterpret_cast<std::uintptr_t>(tensor.storage.data));
+    signature.push_back(static_cast<std::uintptr_t>(tensor.shape.nbDims));
+    for (std::int32_t index = 0; index < tensor.shape.nbDims; ++index) {
+        signature.push_back(static_cast<std::uintptr_t>(tensor.shape.d[index]));
+    }
+}
+
+Result<void> enqueue_engine(
+    EngineInstance& instance, nvinfer1::IExecutionContext& context,
+    cudaStream_t stream, std::vector<std::uintptr_t> signature) {
+    if (!instance.use_cuda_graphs || !cuda_graphs_allowed) {
+        if (!context.enqueueV3(stream)) {
+            return backend_error(instance.path.filename().string() + " enqueueV3 failed");
+        }
+        return {};
+    }
+
+    for (const auto& invocation : instance.graph_invocations) {
+        if (invocation.signature != signature) continue;
+        const auto launched = cudaGraphLaunch(invocation.executable, stream);
+        if (launched != cudaSuccess) return cuda_error("cudaGraphLaunch TensorRT engine", launched);
+        ++instance.graph_hits;
+        return {};
+    }
+
+    // Bound address/shape variants prevent an unbounded graph cache if an
+    // application alternates many buffers or resolutions in one session.
+    constexpr std::size_t max_graph_invocations = 16;
+    if (instance.graph_invocations.size() >= max_graph_invocations) {
+        if (!context.enqueueV3(stream)) {
+            return backend_error(instance.path.filename().string() + " enqueueV3 failed");
+        }
+        return {};
+    }
+
+    auto capture_status = cudaStreamBeginCapture(stream, cudaStreamCaptureModeThreadLocal);
+    if (capture_status != cudaSuccess) {
+        return cuda_error("cudaStreamBeginCapture TensorRT engine", capture_status);
+    }
+    if (!context.enqueueV3(stream)) {
+        cudaGraph_t discarded{};
+        static_cast<void>(cudaStreamEndCapture(stream, &discarded));
+        if (discarded != nullptr) static_cast<void>(cudaGraphDestroy(discarded));
+        return backend_error(instance.path.filename().string() + " captured enqueueV3 failed");
+    }
+    cudaGraph_t graph{};
+    capture_status = cudaStreamEndCapture(stream, &graph);
+    if (capture_status != cudaSuccess) {
+        if (graph != nullptr) static_cast<void>(cudaGraphDestroy(graph));
+        return cuda_error("cudaStreamEndCapture TensorRT engine", capture_status);
+    }
+    cudaGraphExec_t executable{};
+    const auto instantiated = cudaGraphInstantiate(&executable, graph, 0);
+    if (instantiated != cudaSuccess) {
+        static_cast<void>(cudaGraphDestroy(graph));
+        return cuda_error("cudaGraphInstantiate TensorRT engine", instantiated);
+    }
+    CudaGraphInvocation invocation;
+    invocation.signature = std::move(signature);
+    invocation.graph = graph;
+    invocation.executable = executable;
+    const auto launched = cudaGraphLaunch(invocation.executable, stream);
+    if (launched != cudaSuccess) return cuda_error("cudaGraphLaunch captured TensorRT engine", launched);
+    instance.graph_invocations.push_back(std::move(invocation));
+    ++instance.graph_captures;
+    return {};
+}
+
 Result<std::vector<DeviceTensor>> run_device_engine(
     EngineInstance& instance,
     const EngineSpec& specification,
@@ -1482,6 +1591,8 @@ Result<std::vector<DeviceTensor>> run_device_engine(
         }
     }
 
+    std::vector<std::uintptr_t> graph_signature;
+    graph_signature.reserve(specification.tensors.size() * 6);
     std::vector<DeviceTensor> outputs;
     outputs.reserve(specification.tensors.size());
     for (const auto& tensor : specification.tensors) {
@@ -1492,6 +1603,7 @@ Result<std::vector<DeviceTensor>> run_device_engine(
                 return backend_error(std::string(specification.filename) +
                                      " rejected device address for " + name);
             }
+            append_graph_tensor_signature(graph_signature, *input);
             continue;
         }
         const auto shape = context->getTensorShape(name.c_str());
@@ -1502,6 +1614,7 @@ Result<std::vector<DeviceTensor>> run_device_engine(
             return backend_error(std::string(specification.filename) +
                                  " rejected device output address for " + name);
         }
+        append_graph_tensor_signature(graph_signature, output.value());
         outputs.push_back(std::move(output.value()));
     }
     std::pair<cudaEvent_t, cudaEvent_t> events{};
@@ -1517,12 +1630,13 @@ Result<std::vector<DeviceTensor>> run_device_engine(
             return recorded.error();
         }
     }
-    if (!context->enqueueV3(stream)) {
+    auto enqueued = enqueue_engine(instance, *context, stream, std::move(graph_signature));
+    if (!enqueued) {
         if (profile_cuda) {
             static_cast<void>(cudaEventDestroy(events.first));
             static_cast<void>(cudaEventDestroy(events.second));
         }
-        return backend_error(std::string(specification.filename) + " enqueueV3 failed");
+        return enqueued.error();
     }
     if (profile_cuda) {
         auto recorded = record_cuda_event(events.second, stream, "cudaEventRecord engine stop");
@@ -3260,6 +3374,16 @@ public:
             static_cast<void>(cudaStreamDestroy(stream_));
             stream_ = nullptr;
         }
+        std::size_t graph_captures = 0;
+        std::size_t graph_hits = 0;
+        for (const auto& engine : engines_) {
+            graph_captures += engine.graph_captures;
+            graph_hits += engine.graph_hits;
+        }
+        if (graph_captures != 0 || graph_hits != 0) {
+            std::clog << "[nvcr.dcvcrt] [info] CUDA Graph TensorRT captures="
+                      << graph_captures << " hits=" << graph_hits << '\n';
+        }
     }
 
     Result<void> initialize(const RuntimeConfiguration& configuration) override {
@@ -3371,6 +3495,9 @@ public:
                     return warmed.error();
                 }
             }
+            if (selected_context_policy == ContextPolicy::shared_workspace_persistent) {
+                for (auto& engine : engines) engine.use_cuda_graphs = true;
+            }
 
             runtime_ = std::move(runtime);
             engines_ = std::move(engines);
@@ -3453,7 +3580,17 @@ public:
             BackendProfiler profiler(profiling_enabled_);
             profiler.begin("decode", frame_type, state.frame_index);
             scratch_arena_.reset();
-            CudaAllocationScope allocation_scope(stream_, &profiler, &scratch_arena_);
+            bool allow_cuda_graphs = false;
+            if (frame_type == FrameType::predicted) {
+                auto predicted_info = parse_predicted_payload(payload);
+                if (!predicted_info) return predicted_info.error();
+                constexpr std::uint64_t graph_area_limit = 640ULL * 360ULL;
+                allow_cuda_graphs =
+                    static_cast<std::uint64_t>(predicted_info.value().width) *
+                        predicted_info.value().height <= graph_area_limit;
+            }
+            CudaAllocationScope allocation_scope(
+                stream_, &profiler, &scratch_arena_, allow_cuda_graphs);
             if (frame_type == FrameType::intra) {
                 auto result = decode_intra(
                     payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_, image_quant_cache_, image_decode_staging_, stream_);

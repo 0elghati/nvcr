@@ -238,6 +238,19 @@ resolutions, and the direct-GPU Release suite passed 6/6. Evidence is in
 `docs/evidence/orin-p-decode-staging-2026-08-01.json`. A TensorRT input-shape
 cache probe did not reduce warmed setup time or provide repeatable throughput
 gain and was removed rather than retained speculatively.
+Accepted launch-bound CUDA Graph policy, 2026-08-01: integrated automatic-mode
+predicted-frame decode now caches up to 16 TensorRT CUDA Graph binding variants
+per engine at visible areas through 640x360. Capture is decode-only and excludes
+I-frames; encode, discrete GPUs, explicit TensorRT modes, and larger resolutions
+retain ordinary `enqueueV3`. At 360p, stable graph hits reduced warmed per-engine
+CPU setup from roughly 0.5--0.7 ms to 0.03--0.06 ms. Three-run BasketballDrive
+decode improved from the accepted pinned-staging mean of 44.991 to 45.872 fps
+(+1.96%), or +4.17% cumulatively over the original 44.035 fps edge baseline,
+with nine captures and 375 hits per run. Graphs were disabled at 540p after a
+broad probe showed no benefit; the final non-graph 540p control averaged 20.826
+fps versus 20.849 fps (-0.11%, normal variance). Reconstruction hashes and PSNR
+were unchanged and the direct-GPU Release suite passed 6/6. Evidence is in
+`docs/evidence/orin-cuda-graphs-2026-08-01.json`.
 
 ## M0 — Baseline and entropy
 

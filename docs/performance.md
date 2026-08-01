@@ -187,6 +187,16 @@ Against the exact BasketballDrive streams above, three-run means improved from
 (+1.32%). Decoded output hashes and PSNR were unchanged. Candidate evidence is
 in [`evidence/orin-p-decode-staging-2026-08-01.json`](evidence/orin-p-decode-staging-2026-08-01.json).
 
+An adaptive CUDA Graph pass then cached stable TensorRT binding variants only
+for integrated automatic-mode predicted-frame decode through 640x360. At 360p,
+three-run mean decode rose again from 44.991 to 45.872 fps (+1.96%), a cumulative
++4.17% over the original 44.035 fps baseline. Each run recorded nine captures
+and 375 hits, and warmed per-engine setup fell to approximately 0.03--0.06 ms.
+A broad graph probe did not help encode or 540p, so those paths deliberately
+retain ordinary TensorRT enqueue. The final 540p control was neutral at 20.826
+fps versus 20.849 fps. Evidence is in
+[`evidence/orin-cuda-graphs-2026-08-01.json`](evidence/orin-cuda-graphs-2026-08-01.json).
+
 
 ### 2026-07-30 RTX 4070 warmed encode and decode diagnostic
 
