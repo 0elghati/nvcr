@@ -162,25 +162,33 @@ struct EngineInstance final {
     std::unique_ptr<nvinfer1::IExecutionContext> context;
     // Execution mode is owned by this backend session, never process-global.
     bool low_memory_mode{true};
+    void* shared_context_memory{};
+    std::int64_t shared_context_memory_bytes{};
 };
 
-Result<bool> determine_low_memory_mode(const RuntimeConfiguration& configuration) {
+enum class ContextPolicy : std::uint8_t {
+    per_engine,
+    shared_workspace_persistent,
+    persistent,
+};
+
+Result<ContextPolicy> determine_context_policy(const RuntimeConfiguration& configuration) {
     if (configuration.tensorrt_execution_mode == TensorRTExecutionMode::low_memory) {
-        return true;
+        return ContextPolicy::per_engine;
     }
     if (configuration.tensorrt_execution_mode == TensorRTExecutionMode::performance) {
-        return false;
+        return ContextPolicy::persistent;
     }
     const auto device_id = configuration.device_id;
     if (const char* raw = std::getenv("NVCR_TENSORRT_LOW_MEMORY_MODE"); raw != nullptr) {
         const std::string_view value(raw);
         if (value == "1" || value == "true" || value == "TRUE" ||
             value == "on" || value == "ON") {
-            return true;
+            return ContextPolicy::per_engine;
         }
         if (value == "0" || value == "false" || value == "FALSE" ||
             value == "off" || value == "OFF") {
-            return false;
+            return ContextPolicy::persistent;
         }
         return Error(
             ErrorCode::invalid_argument,
@@ -200,23 +208,41 @@ Result<bool> determine_low_memory_mode(const RuntimeConfiguration& configuration
     // Discrete GPUs should keep persistent TensorRT contexts by default. A
     // capacity-only cutoff incorrectly classified 12 GiB RTX 4070 cards as
     // low-memory, adding context churn and stream waits to every device stage.
-    // Integrated/Jetson-class devices remain conservative unless explicitly
-    // overridden through configuration or NVCR_TENSORRT_LOW_MEMORY_MODE.
-    if (properties.integrated != 0) return true;
+    // Integrated/Jetson-class devices keep persistent context metadata while
+    // sharing one user-managed activation workspace across engines. All engine
+    // invocations use one stream, so their workspace lifetimes do not overlap.
+    if (properties.integrated != 0) return ContextPolicy::shared_workspace_persistent;
     constexpr std::size_t constrained_discrete_bytes = 8ULL * 1024ULL * 1024ULL * 1024ULL;
-    return static_cast<std::size_t>(properties.totalGlobalMem) <= constrained_discrete_bytes;
+    return static_cast<std::size_t>(properties.totalGlobalMem) <= constrained_discrete_bytes ?
+        ContextPolicy::per_engine : ContextPolicy::persistent;
+}
+
+std::string_view context_policy_name(ContextPolicy policy) noexcept {
+    switch (policy) {
+    case ContextPolicy::per_engine: return "low-memory";
+    case ContextPolicy::shared_workspace_persistent: return "shared-workspace";
+    case ContextPolicy::persistent: return "performance";
+    }
+    return "unknown";
 }
 
 
 Result<nvinfer1::IExecutionContext*> acquire_context(EngineInstance& instance) {
     if (!instance.low_memory_mode) {
         if (!instance.context) {
-            instance.context.reset(instance.engine->createExecutionContext());
+            const auto strategy = instance.shared_context_memory != nullptr ?
+                nvinfer1::ExecutionContextAllocationStrategy::kUSER_MANAGED :
+                nvinfer1::ExecutionContextAllocationStrategy::kSTATIC;
+            instance.context.reset(instance.engine->createExecutionContext(strategy));
             if (!instance.context) {
                 return Error(
                     ErrorCode::backend_error,
                     "failed to create execution context: " + instance.path.string(),
                     std::string(subsystem));
+            }
+            if (instance.shared_context_memory != nullptr) {
+                instance.context->setDeviceMemoryV2(
+                    instance.shared_context_memory, instance.shared_context_memory_bytes);
             }
         }
         return instance.context.get();
@@ -913,12 +939,14 @@ public:
     DeviceScratchArena(DeviceScratchArena&& other) noexcept
         : data_(std::exchange(other.data_, nullptr)),
           capacity_(std::exchange(other.capacity_, 0)),
+          reserved_(std::exchange(other.reserved_, 0)),
           offset_(std::exchange(other.offset_, 0)) {}
     DeviceScratchArena& operator=(DeviceScratchArena&& other) noexcept {
         if (this != &other) {
             if (data_ != nullptr) static_cast<void>(cudaFree(data_));
             data_ = std::exchange(other.data_, nullptr);
             capacity_ = std::exchange(other.capacity_, 0);
+            reserved_ = std::exchange(other.reserved_, 0);
             offset_ = std::exchange(other.offset_, 0);
         }
         return *this;
@@ -933,11 +961,26 @@ public:
         if (status != cudaSuccess) return cuda_error("cudaMalloc device scratch arena", status);
         data_ = static_cast<std::byte*>(pointer);
         capacity_ = byte_count;
+        reserved_ = 0;
         offset_ = 0;
         return {};
     }
 
-    void reset() noexcept { offset_ = 0; }
+    Result<void*> reserve(std::size_t bytes) noexcept {
+        constexpr std::size_t alignment = 256;
+        const auto aligned_bytes = (bytes + alignment - 1) & ~(alignment - 1);
+        if (data_ == nullptr || aligned_bytes > capacity_) {
+            return Error(
+                ErrorCode::resource_exhausted,
+                "device scratch arena cannot reserve TensorRT context workspace",
+                std::string(subsystem));
+        }
+        reserved_ = aligned_bytes;
+        offset_ = reserved_;
+        return data_;
+    }
+
+    void reset() noexcept { offset_ = reserved_; }
 
     Result<CudaAllocation> allocate(std::size_t bytes) noexcept {
         constexpr std::size_t alignment = 256;
@@ -957,6 +1000,7 @@ public:
 private:
     std::byte* data_{};
     std::size_t capacity_{};
+    std::size_t reserved_{};
     std::size_t offset_{};
 };
 
@@ -1390,10 +1434,14 @@ Result<std::vector<DeviceTensor>> run_device_engine(
     std::span<const DeviceTensor* const> inputs,
     cudaStream_t stream,
     EngineOutputStorage output_storage = EngineOutputStorage::owned) {
+    // Context creation is deliberately inside this interval. In low-memory
+    // mode it happens for every invocation and can dominate TensorRT execution,
+    // especially on integrated devices. Keeping it outside the profiler made
+    // that policy cost invisible in --profile output.
+    const auto cpu_start = std::chrono::steady_clock::now();
     auto context_result = acquire_context(instance);
     if (!context_result) return context_result.error();
     auto* context = context_result.value();
-    const auto cpu_start = std::chrono::steady_clock::now();
     for (const auto& tensor : specification.tensors) {
         if (tensor.mode != nvinfer1::TensorIOMode::kINPUT) continue;
         const auto* input = find_device_tensor(inputs, tensor.name);
@@ -3203,11 +3251,12 @@ public:
 
         const auto device_status = cudaSetDevice(configuration.device_id);
         if (device_status != cudaSuccess) return cuda_error("cudaSetDevice", device_status);
-        auto low_memory_mode = determine_low_memory_mode(configuration);
-        if (!low_memory_mode) return low_memory_mode.error();
+        auto context_policy = determine_context_policy(configuration);
+        if (!context_policy) return context_policy.error();
         auto manifest = validate_engine_manifest(
             configuration.intra_engine_path, configuration.device_id, configuration.model_id);
         if (!manifest) return manifest.error();
+        auto selected_context_policy = context_policy.value();
 
         try {
             std::unique_ptr<nvinfer1::IRuntime> runtime(nvinfer1::createInferRuntime(logger_));
@@ -3237,6 +3286,29 @@ public:
                 static_cast<void>(cudaStreamDestroy(stream));
                 return scratch_ready.error();
             }
+            if (selected_context_policy == ContextPolicy::shared_workspace_persistent) {
+                std::int64_t workspace_bytes = 0;
+                for (const auto& engine : engines) {
+                    workspace_bytes = std::max(
+                        workspace_bytes, engine.engine->getDeviceMemorySizeV2());
+                }
+                if (workspace_bytes < 0 ||
+                    static_cast<std::uint64_t>(workspace_bytes) >
+                        std::numeric_limits<std::size_t>::max()) {
+                    static_cast<void>(cudaStreamDestroy(stream));
+                    return backend_error("invalid TensorRT context workspace size");
+                }
+                auto workspace = scratch_arena.reserve(
+                    static_cast<std::size_t>(workspace_bytes));
+                if (!workspace) {
+                    static_cast<void>(cudaStreamDestroy(stream));
+                    return workspace.error();
+                }
+                for (auto& engine : engines) {
+                    engine.shared_context_memory = workspace.value();
+                    engine.shared_context_memory_bytes = workspace_bytes;
+                }
+            }
             ImageQuantDeviceCache image_quant_cache;
             auto image_quant_cache_loaded = populate_image_quant_cache(
                 assets.value(), image_quant_cache, stream);
@@ -3251,7 +3323,8 @@ public:
                 return quant_cache_loaded.error();
             }
             for (std::size_t index = 0; index < engines.size(); ++index) {
-                engines[index].low_memory_mode = low_memory_mode.value();
+                engines[index].low_memory_mode =
+                    selected_context_policy == ContextPolicy::per_engine;
                 auto warmed = warm_up_engine(engines[index], engine_specs[index], stream);
                 if (!warmed) {
                     static_cast<void>(cudaStreamDestroy(stream));
@@ -3270,10 +3343,10 @@ public:
             intra_qp_ = configuration.intra_qp;
             profiling_enabled_ = configuration.enable_profiling;
             verify_encoder_reconstruction_ = configuration.verify_encoder_reconstruction;
-            low_memory_mode_ = low_memory_mode.value();
+            context_policy_ = selected_context_policy;
             if (configuration.log_level <= LogLevel::info) {
                 std::clog << "[nvcr.dcvcrt] [info] TensorRT mode: "
-                          << (low_memory_mode_ ? "low-memory" : "performance")
+                          << context_policy_name(context_policy_)
                           << '\n';
             }
             initialized_ = true;
@@ -3405,7 +3478,7 @@ private:
     std::uint32_t intra_qp_{};
     bool profiling_enabled_{false};
     bool verify_encoder_reconstruction_{false};
-    bool low_memory_mode_{true};
+    ContextPolicy context_policy_{ContextPolicy::per_engine};
     bool initialized_{false};
 };
 
