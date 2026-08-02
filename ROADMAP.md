@@ -66,11 +66,12 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: restore the pinned PyTorch/ONNX exporter, regenerate a
-traceable `p_synthesis.onnx`, and build fully fixed 360p/540p Orin bundles.
-Repeat the balanced A/B under locked clocks, then profile the 540p decode path
-because its current +2.35% result misses the 3% candidate gate. Cross-runtime
-I/P golden vectors, drain/flush semantics, and target support remain pending.
+Current next action: repeat the accepted I-frame entropy/synthesis overlap and
+integrated encode CUDA Graph candidate under locked clocks, then measure the
+unchanged desktop policy on RTX. In parallel, restore the pinned PyTorch/ONNX
+exporter, regenerate a traceable `p_synthesis.onnx`, and build fully fixed
+360p/540p Orin bundles. Cross-runtime I/P golden vectors, drain/flush semantics,
+and target support remain pending.
 
 Deployment next action: upload the locally validated v0.5.0 Orin QCIF, CIF,
 720p, and 1080p engine assets to staging, run the exact-tag upload workflow,
@@ -1430,3 +1431,97 @@ Current next action: restore the pinned exporter environment, regenerate the
 canonical synthesis graph, build all 14 engines fixed per resolution, and
 repeat under locked clocks. Investigate 540p decode independently if it remains
 below the 3% gate; do not publish the current hybrid bundles as fixed profiles.
+
+### 2026-08-02 — Accept I-frame entropy/synthesis overlap on Orin
+
+- Filled the remaining CPU rANS entropy timing gaps under `--profile`: I-frame
+  encode (`i_entropy_encode`), I-frame decode (`i_entropy_decode_z`,
+  `i_entropy_decode_y`), and P-frame decode (`p_entropy_decode_z`,
+  `p_entropy_decode_y0`, `p_entropy_decode_y1`). `p_entropy_encode` was already
+  instrumented before this change. No entropy algorithm, bitstream, or model
+  change was made. The profiling scope is inactive and avoids clock/allocation
+  work unless `--profile` is enabled.
+- On `orin-nano-l4t3647` with the `720p-fp16` bundle and 3 all-intra FourPeople
+  frames (interactive `--profile`, unlocked clocks — not a locked-clock
+  benchmark), `i_entropy_encode` cost 8.1-9.7 ms/frame and the four
+  `i_entropy_decode_y` stages plus `i_entropy_decode_z` cost 11.6-12.3 ms/frame
+  combined, versus 88-126 ms/frame for the `i_synthesis.plan` TensorRT enqueue
+  alone (and more again for `i_analysis` and the hyper/prior plans). I-frame
+  time on this device is GPU-compute-bound, not entropy-bound.
+- I-frame encode now queues synthesis immediately after the entropy D2H copies
+  and their readiness event, then runs CPU rANS after synchronizing only that
+  event. CPU entropy therefore overlaps GPU synthesis; final reconstruction
+  download still synchronizes the stream. At 540p, where CUDA Graphs are
+  excluded by the area cap, balanced A-B-B-A-A-B GOP-1 encode improved from
+  8.7120 to 9.0873 fps (+4.31%). GOP-97 improved from 17.9170 to 18.2497 fps
+  (+1.86%, below the standalone 3% gate because only one frame benefits).
+- This does not confirm or refute the RTX 4070-derived entropy hypothesis in
+  `docs/performance.md`; no RTX 4070 hardware was available in this session to
+  re-measure there. Do not generalize the Orin finding to discrete-GPU targets
+  without re-measuring on one.
+- Every 540p baseline/candidate stream was bit-exact. Balanced decode checks
+  remained within variance: -0.66% at GOP-1 and -0.31% at GOP-97. Verification
+  passed the direct Release suite 6/6 and portable TensorRT-disabled suite 4/4.
+  Evidence is in
+  `docs/evidence/orin-entropy-instrumentation-2026-08-02.json`.
+
+Current next action: re-run this same entropy-vs-compute breakdown on
+`rtx4070-ubuntu2404` (or another discrete GPU) before treating entropy as a
+solved non-issue project-wide; the compute-bound result above is Orin-specific
+evidence only.
+
+### 2026-08-02 — Accept integrated-Orin encode CUDA Graph replay
+
+- Extended the existing launch-bound CUDA Graph policy (2026-08-01, integrated
+  predicted-frame decode only, area-capped at 640x360) to encode on the same
+  integrated `shared_workspace_persistent` policy. It reuses the bounded,
+  signature-keyed per-engine cache; discrete-GPU `persistent`, low-memory, and
+  all resolutions above 640x360 retain ordinary `enqueueV3`.
+- Balanced 360p A-B-B-A-A-B runs against commit `c3fc4d7e` measured GOP-1
+  encode at 17.8223 versus 19.1120 fps (+7.24%) and GOP-97 at 38.7803 versus
+  40.1893 fps (+3.63%). The candidate includes the accepted I-frame overlap
+  above. Final decode remained flat: -0.42% at GOP-1 and +0.07% at GOP-97.
+- All six streams per 360p GOP case were bit-exact. Baseline/candidate
+  reconstruction SHA-256 was
+  `e15135ffac42cd14fc3e616bb2217a32b84f6a70e3f99c6e3450025487e574d0`
+  with identical 34.892588 dB PSNR-YUV. A nine-frame encode recorded 19 graph
+  captures and 36 hits. A 720p sanity run emitted no graph log, confirming the
+  area cap.
+- The initial I-frame decode graph extension regressed the first balanced probe
+  and was removed. The untested discrete-GPU extension was also removed rather
+  than reasoning about RTX compatibility without hardware. Desktop policy is
+  unchanged. Evidence is in
+  `docs/evidence/orin-cuda-graph-extension-2026-08-02.json`.
+- GPU/CPU clocks remained unlocked, so repeat under locked clocks before using
+  these as release headline numbers. The balanced direction, bit-exact output,
+  direct Release suite 6/6, native QCIF I/P roundtrip, and portable suite 4/4
+  are sufficient to retain the scoped candidate.
+
+Current next action: repeat the accepted combined encode candidate under locked
+clocks and on RTX before considering any discrete-GPU graph expansion. Restore
+the pinned exporter separately for fully fixed 360p/540p engine work.
+
+### 2026-08-02 — Builder optimization level bump rejected without a run
+
+- Investigated bumping `builder_optimization_level` (Tier-1 item 3 from the
+  session's optimization plan) toward TensorRT's maximum (5). Found each
+  profile under `configs/engine-profiles/` already declares its own
+  deliberately tuned level (qcif/cif=1, 1080p/720p=2, 360p/540p=4) per the
+  2026-07-08 decision made specifically to avoid Orin TensorRT build-time OOM
+  at higher levels; `scripts/backends/dcvcrt/build_tensorrt.sh`'s flat default
+  of 3 is effectively unused because every shipped profile overrides it.
+- A scoped test (bumping the qcif profile to level 3 and rebuilding) failed
+  before producing any timing data: `prepare_artifacts.sh --skip-export`
+  rejected `build/models/dcvcrt-v2` with a `p_synthesis.onnx` SHA-256 mismatch
+  against the manifest-recorded hash. This is a pre-existing, unrelated
+  model-bundle integrity problem, not caused by this session's changes, and
+  fixing it requires an out-of-scope ONNX re-export from the pinned exporter
+  environment.
+- Decision: stop pursuing this item now rather than chase a speculative,
+  already-scoped-down builder setting change by first fixing an unrelated
+  model-export problem. No profile, script, or engine change was made.
+
+Current next action: when the pinned exporter environment is restored for the
+360p/540p fixed-profile work already tracked above, re-attempt a
+locked-clock builder-optimization-level probe on one profile as a small
+follow-up, gated at the standard 3% material-gain threshold.
