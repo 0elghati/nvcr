@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/0elghati/nvcr/compare/v0.5.0...v0.5.1) (2026-08-02)
+
+
+### Performance Improvements
+
+* **dcvcrt:** optimize Orin execution and validate fixed edge profiles ([#45](https://github.com/0elghati/nvcr/issues/45)) ([06397b3](https://github.com/0elghati/nvcr/commit/06397b337cdb4a88dc875ce6544408943610691f))
+
 ## [0.5.0](https://github.com/0elghati/nvcr/compare/v0.4.1...v0.5.0) (2026-07-30)
 
 
