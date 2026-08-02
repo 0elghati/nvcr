@@ -917,12 +917,16 @@ thread_local DeviceScratchArena* active_scratch_arena = nullptr;
 
 class CpuProfileScope final {
 public:
-    explicit CpuProfileScope(std::string name)
+    explicit CpuProfileScope(std::string_view name)
         : profiler_(active_profiler),
-          name_(std::move(name)),
-          start_(std::chrono::steady_clock::now()) {}
+          enabled_(profiler_ != nullptr && profiler_->enabled()) {
+        if (enabled_) {
+            name_ = name;
+            start_ = std::chrono::steady_clock::now();
+        }
+    }
     ~CpuProfileScope() {
-        if (profiler_ == nullptr || !profiler_->enabled()) return;
+        if (!enabled_) return;
         const auto elapsed = std::chrono::steady_clock::now() - start_;
         profiler_->record_cpu_stage(
             std::move(name_), std::chrono::duration<double, std::milli>(elapsed).count());
@@ -933,6 +937,7 @@ public:
 private:
     BackendProfiler* profiler_{};
     std::string name_;
+    bool enabled_{};
     std::chrono::steady_clock::time_point start_;
 };
 
@@ -2569,6 +2574,21 @@ Result<CodecEncodeResult> encode_intra(
     status = cudaEventRecord(entropy_ready.data, stream);
     if (status != cudaSuccess) return cuda_error("cudaEventRecord I entropy", status);
 
+    // Reconstruction depends on y_hat and q_dec, but not on the CPU rANS
+    // output. Queue it behind the entropy D2H copies so that, once those
+    // copies complete, CPU entropy coding can overlap I-frame synthesis just
+    // as it already does in the predicted-frame path.
+    auto& q_dec_opt = image_quant_cache.q_dec[qp];
+    if (!q_dec_opt.has_value()) return backend_error("missing cached image q_dec tensor");
+    auto* q_dec = &q_dec_opt.value();
+    std::array<DeviceTensor*, 2> synthesis_inputs{&*y_hat_device, q_dec};
+    auto synthesis_outputs = run_device_engine(
+        engines[6], engine_specs[6], synthesis_inputs, stream);
+    if (!synthesis_outputs) return synthesis_outputs.error();
+    auto frame_device_result = take_device_tensor(synthesis_outputs.value(), "frame_hat");
+    if (!frame_device_result) return frame_device_result.error();
+    auto frame_device = std::move(frame_device_result.value());
+
     status = cudaEventSynchronize(entropy_ready.data);
     if (status != cudaSuccess) return cuda_error("cudaEventSynchronize I entropy", status);
 
@@ -2578,28 +2598,21 @@ Result<CodecEncodeResult> encode_intra(
     auto mode = rans.set_use_two_coders(two_coders);
     if (!mode) return mode.error();
     const auto per_channel = static_cast<std::size_t>(z_device.shape.d[2] * z_device.shape.d[3]);
-    auto encoded_z = rans.encode_z(
-        z_symbols, assets.image_z_group, static_cast<std::size_t>(qp) * 128, per_channel);
-    if (!encoded_z) return encoded_z.error();
-    for (std::size_t stage_index = 0; stage_index < 4; ++stage_index) {
-        std::span<std::int16_t> indexes(index_buffers[stage_index]->data, reduced_count);
-        auto encoded_y = rans.encode_y(indexes, assets.gaussian_y_group);
-        if (!encoded_y) return encoded_y.error();
-    }
-    auto stream_bytes = rans.finish_encode();
+    auto stream_bytes = [&]() -> Result<std::vector<std::byte>> {
+        CpuProfileScope entropy_scope("i_entropy_encode");
+        auto encoded_z = rans.encode_z(
+            z_symbols, assets.image_z_group, static_cast<std::size_t>(qp) * 128, per_channel);
+        if (!encoded_z) return encoded_z.error();
+        for (std::size_t stage_index = 0; stage_index < 4; ++stage_index) {
+            std::span<std::int16_t> indexes(index_buffers[stage_index]->data, reduced_count);
+            auto encoded_y = rans.encode_y(indexes, assets.gaussian_y_group);
+            if (!encoded_y) return encoded_y.error();
+        }
+        return rans.finish_encode();
+    }();
     if (!stream_bytes) return stream_bytes.error();
     auto payload = make_intra_payload(
         frame.width(), frame.height(), qp, two_coders, stream_bytes.value());
-
-    auto& q_dec_opt = image_quant_cache.q_dec[qp];
-    if (!q_dec_opt.has_value()) return backend_error("missing cached image q_dec tensor");
-    auto* q_dec = &q_dec_opt.value();
-    std::array<DeviceTensor*, 2> synthesis_inputs{&*y_hat_device, q_dec};
-    auto synthesis_outputs = run_device_engine(engines[6], engine_specs[6], synthesis_inputs, stream);
-    if (!synthesis_outputs) return synthesis_outputs.error();
-    auto frame_device_result = take_device_tensor(synthesis_outputs.value(), "frame_hat");
-    if (!frame_device_result) return frame_device_result.error();
-    auto frame_device = std::move(frame_device_result.value());
 
     std::array<const DeviceTensor*, 1> tensors{&frame_device};
     auto downloaded = download_tensors(tensors, stream);
@@ -2657,9 +2670,12 @@ Result<CodecDecodeResult> decode_intra(
     auto stream_set = rans.set_stream(info.rans);
     if (!stream_set) return stream_set.error();
     const auto per_channel = static_cast<std::size_t>(z_height * z_width);
-    auto z_values = rans.decode_z(
-        128 * per_channel, assets.image_z_group,
-        static_cast<std::size_t>(info.qp) * 128, per_channel);
+    auto z_values = [&]() -> Result<std::vector<std::int8_t>> {
+        CpuProfileScope entropy_scope("i_entropy_decode_z");
+        return rans.decode_z(
+            128 * per_channel, assets.image_z_group,
+            static_cast<std::size_t>(info.qp) * 128, per_channel);
+    }();
     if (!z_values) return z_values.error();
     const auto staging_reduced_count =
         static_cast<std::size_t>(64) * y_height * y_width;
@@ -2752,9 +2768,12 @@ Result<CodecDecodeResult> decode_intra(
             "cudaEventSynchronize I decode indexes");
         if (!synchronized) return synchronized.error();
 
-        auto decoded = rans.decode_y(
-            std::span<const std::uint8_t>(indexes.data, reduced_count),
-            assets.gaussian_y_group);
+        auto decoded = [&]() -> Result<std::vector<std::int8_t>> {
+            CpuProfileScope entropy_scope("i_entropy_decode_y");
+            return rans.decode_y(
+                std::span<const std::uint8_t>(indexes.data, reduced_count),
+                assets.gaussian_y_group);
+        }();
         if (!decoded) return decoded.error();
         auto& symbols = image_decode_staging.symbols[stage_slot];
         std::copy(decoded.value().begin(), decoded.value().end(), symbols.data);
@@ -3224,8 +3243,11 @@ Result<CodecDecodeResult> decode_predicted(
     auto stream_set = rans.set_stream(info.rans);
     if (!stream_set) return stream_set.error();
     const auto per_channel = static_cast<std::size_t>(z_height * z_width);
-    auto z_values = rans.decode_z(128 * per_channel, assets.video_z_group,
-        static_cast<std::size_t>(info.qp) * 128, per_channel);
+    auto z_values = [&]() -> Result<std::vector<std::int8_t>> {
+        CpuProfileScope entropy_scope("p_entropy_decode_z");
+        return rans.decode_z(128 * per_channel, assets.video_z_group,
+            static_cast<std::size_t>(info.qp) * 128, per_channel);
+    }();
     if (!z_values) return z_values.error();
     const auto reduced_count = static_cast<std::size_t>(64) * y_height * y_width;
     auto staging_ready = decode_staging.ensure(z_values.value().size(), reduced_count);
@@ -3281,9 +3303,12 @@ Result<CodecDecodeResult> decode_predicted(
     auto synchronized = synchronize_event(
         decode_staging.indexes_ready[0].data, "cudaEventSynchronize indexes0");
     if (!synchronized) return synchronized.error();
-    auto decoded0 = rans.decode_y(
-        std::span<const std::uint8_t>(indexes0.data, reduced_count),
-        assets.video_gaussian_y_group);
+    auto decoded0 = [&]() -> Result<std::vector<std::int8_t>> {
+        CpuProfileScope entropy_scope("p_entropy_decode_y0");
+        return rans.decode_y(
+            std::span<const std::uint8_t>(indexes0.data, reduced_count),
+            assets.video_gaussian_y_group);
+    }();
     if (!decoded0) return decoded0.error();
     auto& symbols0_host = decode_staging.symbols[0];
     std::copy(decoded0.value().begin(), decoded0.value().end(), symbols0_host.data);
@@ -3348,9 +3373,12 @@ Result<CodecDecodeResult> decode_predicted(
     synchronized = synchronize_event(
         decode_staging.indexes_ready[1].data, "cudaEventSynchronize indexes1");
     if (!synchronized) return synchronized.error();
-    auto decoded1 = rans.decode_y(
-        std::span<const std::uint8_t>(indexes1.data, reduced_count),
-        assets.video_gaussian_y_group);
+    auto decoded1 = [&]() -> Result<std::vector<std::int8_t>> {
+        CpuProfileScope entropy_scope("p_entropy_decode_y1");
+        return rans.decode_y(
+            std::span<const std::uint8_t>(indexes1.data, reduced_count),
+            assets.video_gaussian_y_group);
+    }();
     if (!decoded1) return decoded1.error();
     auto& symbols1_host = decode_staging.symbols[1];
     std::copy(decoded1.value().begin(), decoded1.value().end(), symbols1_host.data);
@@ -3533,6 +3561,10 @@ public:
                     return warmed.error();
                 }
             }
+            // Keep CUDA Graph policy target-scoped until the persistent-context
+            // path has direct discrete-GPU evidence. Integrated shared-workspace
+            // contexts remain alive across frames; low-memory mode destroys its
+            // context after every call and cannot replay captured graphs.
             if (selected_context_policy == ContextPolicy::shared_workspace_persistent) {
                 for (auto& engine : engines) engine.use_cuda_graphs = true;
             }
@@ -3578,7 +3610,13 @@ public:
             BackendProfiler profiler(profiling_enabled_);
             profiler.begin("encode", frame_type, state.frame_index);
             scratch_arena_.reset();
-            CudaAllocationScope allocation_scope(stream_, &profiler, &scratch_arena_);
+            // Same area cap as decode: a broad probe found no captured-graph benefit
+            // above 640x360 (docs/performance.md, 2026-08-01 CUDA Graph note).
+            constexpr std::uint64_t graph_area_limit = 640ULL * 360ULL;
+            const bool allow_cuda_graphs =
+                static_cast<std::uint64_t>(frame.width()) * frame.height() <= graph_area_limit;
+            CudaAllocationScope allocation_scope(
+                stream_, &profiler, &scratch_arena_, allow_cuda_graphs);
             if (frame_type == FrameType::intra) {
                 auto result = encode_intra(
                     frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_,
