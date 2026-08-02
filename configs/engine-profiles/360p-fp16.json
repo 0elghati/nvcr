@@ -1,0 +1,13 @@
+{
+  "schema": "nvcr.engine-profile.v1",
+  "id": "360p-fp16",
+  "optimization_point": "360p",
+  "precision": "fp16",
+  "visible_dimensions": {
+    "minimum": [640, 360],
+    "optimum": [640, 360],
+    "maximum": [640, 360]
+  },
+  "workspace_mib": 1024,
+  "builder_optimization_level": 4
+}

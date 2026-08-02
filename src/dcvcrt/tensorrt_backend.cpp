@@ -156,31 +156,71 @@ public:
     }
 };
 
+struct CudaGraphInvocation final {
+    ~CudaGraphInvocation() {
+        if (executable != nullptr) static_cast<void>(cudaGraphExecDestroy(executable));
+        if (graph != nullptr) static_cast<void>(cudaGraphDestroy(graph));
+    }
+    CudaGraphInvocation() = default;
+    CudaGraphInvocation(const CudaGraphInvocation&) = delete;
+    CudaGraphInvocation& operator=(const CudaGraphInvocation&) = delete;
+    CudaGraphInvocation(CudaGraphInvocation&& other) noexcept
+        : signature(std::move(other.signature)),
+          graph(std::exchange(other.graph, nullptr)),
+          executable(std::exchange(other.executable, nullptr)) {}
+    CudaGraphInvocation& operator=(CudaGraphInvocation&& other) noexcept {
+        if (this != &other) {
+            if (executable != nullptr) static_cast<void>(cudaGraphExecDestroy(executable));
+            if (graph != nullptr) static_cast<void>(cudaGraphDestroy(graph));
+            signature = std::move(other.signature);
+            graph = std::exchange(other.graph, nullptr);
+            executable = std::exchange(other.executable, nullptr);
+        }
+        return *this;
+    }
+
+    std::vector<std::uintptr_t> signature;
+    cudaGraph_t graph{};
+    cudaGraphExec_t executable{};
+};
+
 struct EngineInstance final {
     fs::path path;
     std::unique_ptr<nvinfer1::ICudaEngine> engine;
     std::unique_ptr<nvinfer1::IExecutionContext> context;
+    std::vector<CudaGraphInvocation> graph_invocations;
     // Execution mode is owned by this backend session, never process-global.
     bool low_memory_mode{true};
+    void* shared_context_memory{};
+    std::int64_t shared_context_memory_bytes{};
+    bool use_cuda_graphs{};
+    std::size_t graph_hits{};
+    std::size_t graph_captures{};
 };
 
-Result<bool> determine_low_memory_mode(const RuntimeConfiguration& configuration) {
+enum class ContextPolicy : std::uint8_t {
+    per_engine,
+    shared_workspace_persistent,
+    persistent,
+};
+
+Result<ContextPolicy> determine_context_policy(const RuntimeConfiguration& configuration) {
     if (configuration.tensorrt_execution_mode == TensorRTExecutionMode::low_memory) {
-        return true;
+        return ContextPolicy::per_engine;
     }
     if (configuration.tensorrt_execution_mode == TensorRTExecutionMode::performance) {
-        return false;
+        return ContextPolicy::persistent;
     }
     const auto device_id = configuration.device_id;
     if (const char* raw = std::getenv("NVCR_TENSORRT_LOW_MEMORY_MODE"); raw != nullptr) {
         const std::string_view value(raw);
         if (value == "1" || value == "true" || value == "TRUE" ||
             value == "on" || value == "ON") {
-            return true;
+            return ContextPolicy::per_engine;
         }
         if (value == "0" || value == "false" || value == "FALSE" ||
             value == "off" || value == "OFF") {
-            return false;
+            return ContextPolicy::persistent;
         }
         return Error(
             ErrorCode::invalid_argument,
@@ -200,23 +240,41 @@ Result<bool> determine_low_memory_mode(const RuntimeConfiguration& configuration
     // Discrete GPUs should keep persistent TensorRT contexts by default. A
     // capacity-only cutoff incorrectly classified 12 GiB RTX 4070 cards as
     // low-memory, adding context churn and stream waits to every device stage.
-    // Integrated/Jetson-class devices remain conservative unless explicitly
-    // overridden through configuration or NVCR_TENSORRT_LOW_MEMORY_MODE.
-    if (properties.integrated != 0) return true;
+    // Integrated/Jetson-class devices keep persistent context metadata while
+    // sharing one user-managed activation workspace across engines. All engine
+    // invocations use one stream, so their workspace lifetimes do not overlap.
+    if (properties.integrated != 0) return ContextPolicy::shared_workspace_persistent;
     constexpr std::size_t constrained_discrete_bytes = 8ULL * 1024ULL * 1024ULL * 1024ULL;
-    return static_cast<std::size_t>(properties.totalGlobalMem) <= constrained_discrete_bytes;
+    return static_cast<std::size_t>(properties.totalGlobalMem) <= constrained_discrete_bytes ?
+        ContextPolicy::per_engine : ContextPolicy::persistent;
+}
+
+std::string_view context_policy_name(ContextPolicy policy) noexcept {
+    switch (policy) {
+    case ContextPolicy::per_engine: return "low-memory";
+    case ContextPolicy::shared_workspace_persistent: return "shared-workspace";
+    case ContextPolicy::persistent: return "performance";
+    }
+    return "unknown";
 }
 
 
 Result<nvinfer1::IExecutionContext*> acquire_context(EngineInstance& instance) {
     if (!instance.low_memory_mode) {
         if (!instance.context) {
-            instance.context.reset(instance.engine->createExecutionContext());
+            const auto strategy = instance.shared_context_memory != nullptr ?
+                nvinfer1::ExecutionContextAllocationStrategy::kUSER_MANAGED :
+                nvinfer1::ExecutionContextAllocationStrategy::kSTATIC;
+            instance.context.reset(instance.engine->createExecutionContext(strategy));
             if (!instance.context) {
                 return Error(
                     ErrorCode::backend_error,
                     "failed to create execution context: " + instance.path.string(),
                     std::string(subsystem));
+            }
+            if (instance.shared_context_memory != nullptr) {
+                instance.context->setDeviceMemoryV2(
+                    instance.shared_context_memory, instance.shared_context_memory_bytes);
             }
         }
         return instance.context.get();
@@ -320,6 +378,16 @@ Result<std::string> read_json_string(std::string_view text, std::string_view key
     return backend_error("engine_manifest.json has unterminated key '" + std::string(key) + "'");
 }
 
+Result<std::optional<std::string>> read_optional_json_string(
+    std::string_view text, std::string_view key) {
+    if (text.find('"' + std::string(key) + '"') == std::string_view::npos) {
+        return std::optional<std::string>{};
+    }
+    auto value = read_json_string(text, key);
+    if (!value) return value.error();
+    return std::optional<std::string>(std::move(value.value()));
+}
+
 Result<std::int64_t> read_json_integer(std::string_view text, std::string_view key) {
     auto value = find_json_value(text, key);
     if (!value) return value.error();
@@ -352,6 +420,7 @@ struct EngineManifest final {
     std::string target_profile_sha256;
     std::string precision;
     std::string optimization_point;
+    std::string shape_profile{"dynamic"};
     std::string device_name;
     std::string checksum_manifest;
     std::string checksum_manifest_sha256;
@@ -406,6 +475,7 @@ Result<EngineManifest> load_engine_manifest(const fs::path& root) {
     auto target_profile_sha256 = read_json_string(text.value(), "target_profile_sha256");
     auto precision = read_json_string(text.value(), "precision");
     auto profile = read_json_string(text.value(), "optimization_point");
+    auto shape_profile = read_optional_json_string(text.value(), "shape_profile");
     auto device_name = read_json_string(text.value(), "device_name");
     auto checksum_manifest = read_json_string(text.value(), "checksum_manifest");
     auto checksum_manifest_sha256 =
@@ -429,6 +499,7 @@ Result<EngineManifest> load_engine_manifest(const fs::path& root) {
     if (!target_profile_sha256) return target_profile_sha256.error();
     if (!precision) return precision.error();
     if (!profile) return profile.error();
+    if (!shape_profile) return shape_profile.error();
     if (!device_name) return device_name.error();
     if (!checksum_manifest) return checksum_manifest.error();
     if (!checksum_manifest_sha256) return checksum_manifest_sha256.error();
@@ -451,6 +522,9 @@ Result<EngineManifest> load_engine_manifest(const fs::path& root) {
     manifest.target_profile_sha256 = std::move(target_profile_sha256.value());
     manifest.precision = std::move(precision.value());
     manifest.optimization_point = std::move(profile.value());
+    if (shape_profile.value().has_value()) {
+        manifest.shape_profile = std::move(shape_profile.value().value());
+    }
     manifest.device_name = std::move(device_name.value());
     manifest.checksum_manifest = std::move(checksum_manifest.value());
     manifest.checksum_manifest_sha256 = std::move(checksum_manifest_sha256.value());
@@ -548,7 +622,7 @@ Result<void> validate_bundle_hashes(const fs::path& root, const EngineManifest& 
     return {};
 }
 
-Result<void> validate_engine_manifest(
+Result<EngineManifest> validate_engine_manifest(
     const fs::path& root,
     std::int32_t device_id,
     std::string_view expected_model_profile) {
@@ -567,6 +641,10 @@ Result<void> validate_engine_manifest(
         return backend_error(
             "engine_manifest.json precision is not supported by v1: " +
             manifest.value().precision);
+    }
+    if (manifest.value().shape_profile != "dynamic" &&
+        manifest.value().shape_profile != "fixed") {
+        return backend_error("engine_manifest.json has an invalid shape_profile");
     }
     if (!valid_profile_id(manifest.value().model_profile_id) ||
         !valid_profile_id(manifest.value().target_profile_id) ||
@@ -622,7 +700,7 @@ Result<void> validate_engine_manifest(
             std::to_string(properties.multiProcessorCount) +
             " multiprocessors); rebuild the engine directory on the selected device");
     }
-    return {};
+    return std::move(manifest.value());
 }
 
 std::string dimensions_string(const nvinfer1::Dims& dimensions) {
@@ -636,7 +714,8 @@ std::string dimensions_string(const nvinfer1::Dims& dimensions) {
 
 Result<void> validate_engine(
     const nvinfer1::ICudaEngine& engine,
-    const EngineSpec& specification) {
+    const EngineSpec& specification,
+    bool fixed_shape_profile) {
     if (engine.getNbIOTensors() != static_cast<std::int32_t>(specification.tensors.size())) {
         return backend_error(
             std::string(specification.filename) + " has " +
@@ -662,7 +741,16 @@ Result<void> validate_engine(
                 "' has rank " + std::to_string(actual.nbDims) + "; expected rank 4");
         }
         for (std::size_t index = 0; index < tensor.dimensions.size(); ++index) {
-            if (actual.d[index] != tensor.dimensions[index]) {
+            const auto expected = tensor.dimensions[index];
+            const auto observed = actual.d[index];
+            // Preserve the existing dynamic contract exactly. A bundle that
+            // opts into fixed shapes must instead resolve every variable axis
+            // to a positive concrete dimension. This rejects partial/hybrid
+            // bundles rather than allowing them to masquerade as fixed.
+            const bool matches = expected == -1
+                ? (fixed_shape_profile ? observed > 0 : observed == -1)
+                : observed == expected;
+            if (!matches) {
                 return backend_error(
                     std::string(specification.filename) + " tensor '" + name +
                     "' has shape " + dimensions_string(actual) + "; contract mismatch");
@@ -675,7 +763,8 @@ Result<void> validate_engine(
 Result<EngineInstance> load_engine(
     nvinfer1::IRuntime& runtime,
     const fs::path& root,
-    const EngineSpec& specification) {
+    const EngineSpec& specification,
+    bool fixed_shape_profile) {
     const auto path = root / specification.filename;
     auto bytes = read_binary(path);
     if (!bytes) return bytes.error();
@@ -685,10 +774,10 @@ Result<EngineInstance> load_engine(
     if (!engine) {
         return backend_error("failed to deserialize file: " + path.string());
     }
-    auto valid = validate_engine(*engine, specification);
+    auto valid = validate_engine(*engine, specification, fixed_shape_profile);
     if (!valid) return valid.error();
 
-    return EngineInstance{path, std::move(engine), nullptr};
+    return EngineInstance{path, std::move(engine), nullptr, {}};
 }
 
 struct ProfileStage final {
@@ -822,17 +911,22 @@ private:
 
 thread_local cudaStream_t allocation_stream = nullptr;
 thread_local BackendProfiler* active_profiler = nullptr;
+thread_local bool cuda_graphs_allowed = false;
 class DeviceScratchArena;
 thread_local DeviceScratchArena* active_scratch_arena = nullptr;
 
 class CpuProfileScope final {
 public:
-    explicit CpuProfileScope(std::string name)
+    explicit CpuProfileScope(std::string_view name)
         : profiler_(active_profiler),
-          name_(std::move(name)),
-          start_(std::chrono::steady_clock::now()) {}
+          enabled_(profiler_ != nullptr && profiler_->enabled()) {
+        if (enabled_) {
+            name_ = name;
+            start_ = std::chrono::steady_clock::now();
+        }
+    }
     ~CpuProfileScope() {
-        if (profiler_ == nullptr || !profiler_->enabled()) return;
+        if (!enabled_) return;
         const auto elapsed = std::chrono::steady_clock::now() - start_;
         profiler_->record_cpu_stage(
             std::move(name_), std::chrono::duration<double, std::milli>(elapsed).count());
@@ -843,19 +937,25 @@ public:
 private:
     BackendProfiler* profiler_{};
     std::string name_;
+    bool enabled_{};
     std::chrono::steady_clock::time_point start_;
 };
 
 class CudaAllocationScope final {
 public:
-    CudaAllocationScope(cudaStream_t stream, BackendProfiler* profiler, DeviceScratchArena* arena)
+    CudaAllocationScope(
+        cudaStream_t stream, BackendProfiler* profiler, DeviceScratchArena* arena,
+        bool allow_cuda_graphs = false)
         : previous_stream_(std::exchange(allocation_stream, stream)),
           previous_profiler_(std::exchange(active_profiler, profiler)),
-          previous_arena_(std::exchange(active_scratch_arena, arena)) {}
+          previous_arena_(std::exchange(active_scratch_arena, arena)),
+          previous_cuda_graphs_allowed_(
+              std::exchange(cuda_graphs_allowed, allow_cuda_graphs)) {}
     ~CudaAllocationScope() {
         allocation_stream = previous_stream_;
         active_profiler = previous_profiler_;
         active_scratch_arena = previous_arena_;
+        cuda_graphs_allowed = previous_cuda_graphs_allowed_;
     }
     CudaAllocationScope(const CudaAllocationScope&) = delete;
     CudaAllocationScope& operator=(const CudaAllocationScope&) = delete;
@@ -864,6 +964,7 @@ private:
     cudaStream_t previous_stream_{};
     BackendProfiler* previous_profiler_{};
     DeviceScratchArena* previous_arena_{};
+    bool previous_cuda_graphs_allowed_{};
 };
 
 void release_cuda(void* pointer, cudaStream_t stream) noexcept {
@@ -913,12 +1014,14 @@ public:
     DeviceScratchArena(DeviceScratchArena&& other) noexcept
         : data_(std::exchange(other.data_, nullptr)),
           capacity_(std::exchange(other.capacity_, 0)),
+          reserved_(std::exchange(other.reserved_, 0)),
           offset_(std::exchange(other.offset_, 0)) {}
     DeviceScratchArena& operator=(DeviceScratchArena&& other) noexcept {
         if (this != &other) {
             if (data_ != nullptr) static_cast<void>(cudaFree(data_));
             data_ = std::exchange(other.data_, nullptr);
             capacity_ = std::exchange(other.capacity_, 0);
+            reserved_ = std::exchange(other.reserved_, 0);
             offset_ = std::exchange(other.offset_, 0);
         }
         return *this;
@@ -933,11 +1036,26 @@ public:
         if (status != cudaSuccess) return cuda_error("cudaMalloc device scratch arena", status);
         data_ = static_cast<std::byte*>(pointer);
         capacity_ = byte_count;
+        reserved_ = 0;
         offset_ = 0;
         return {};
     }
 
-    void reset() noexcept { offset_ = 0; }
+    Result<void*> reserve(std::size_t bytes) noexcept {
+        constexpr std::size_t alignment = 256;
+        const auto aligned_bytes = (bytes + alignment - 1) & ~(alignment - 1);
+        if (data_ == nullptr || aligned_bytes > capacity_) {
+            return Error(
+                ErrorCode::resource_exhausted,
+                "device scratch arena cannot reserve TensorRT context workspace",
+                std::string(subsystem));
+        }
+        reserved_ = aligned_bytes;
+        offset_ = reserved_;
+        return data_;
+    }
+
+    void reset() noexcept { offset_ = reserved_; }
 
     Result<CudaAllocation> allocate(std::size_t bytes) noexcept {
         constexpr std::size_t alignment = 256;
@@ -957,6 +1075,7 @@ public:
 private:
     std::byte* data_{};
     std::size_t capacity_{};
+    std::size_t reserved_{};
     std::size_t offset_{};
 };
 
@@ -1037,6 +1156,32 @@ struct ImageDecodeStaging final {
     std::array<PinnedHostBuffer<std::uint8_t>, 4> indexes;
     std::array<PinnedHostBuffer<std::int8_t>, 4> symbols;
     std::array<CudaEvent, 4> indexes_ready;
+};
+
+struct VideoDecodeStaging final {
+    Result<void> ensure(std::size_t z_count, std::size_t reduced_count) {
+        auto ready = z_symbols.ensure(z_count, "video_decode_z_symbols");
+        if (!ready) return ready.error();
+        for (std::size_t stage = 0; stage < indexes.size(); ++stage) {
+            ready = indexes[stage].ensure(reduced_count, "video_decode_indexes");
+            if (!ready) return ready.error();
+            ready = symbols[stage].ensure(reduced_count, "video_decode_symbols");
+            if (!ready) return ready.error();
+            if (indexes_ready[stage].data == nullptr) {
+                const auto status = cudaEventCreateWithFlags(
+                    &indexes_ready[stage].data, cudaEventDisableTiming);
+                if (status != cudaSuccess) {
+                    return cuda_error("cudaEventCreateWithFlags P decode indexes", status);
+                }
+            }
+        }
+        return {};
+    }
+
+    PinnedHostBuffer<std::int8_t> z_symbols;
+    std::array<PinnedHostBuffer<std::uint8_t>, 2> indexes;
+    std::array<PinnedHostBuffer<std::int8_t>, 2> symbols;
+    std::array<CudaEvent, 2> indexes_ready;
 };
 
 Result<CudaAllocation> allocate_cuda(std::size_t bytes) {
@@ -1141,23 +1286,28 @@ Result<std::size_t> tensor_bytes(const nvinfer1::Dims& shape) {
 
 nvinfer1::Dims warmup_shape(
     std::string_view filename, std::string_view name, nvinfer1::Dims shape) {
+    const auto select_dynamic_dimension = [&shape](std::int32_t index, std::int64_t value) {
+        if (shape.d[index] == -1) shape.d[index] = value;
+    };
     if (name == "frame" || name == "reference_frame") {
-        shape.d[2] = filename.starts_with("p_") ? 192 : 144;
-        shape.d[3] = filename.starts_with("p_") ? 192 : 176;
+        select_dynamic_dimension(2, filename.starts_with("p_") ? 192 : 144);
+        select_dynamic_dimension(3, filename.starts_with("p_") ? 192 : 176);
     } else if (name == "reference_feature" || name == "temporal_context") {
-        shape.d[2] = 24;
-        shape.d[3] = 24;
+        select_dynamic_dimension(2, 24);
+        select_dynamic_dimension(3, 24);
     } else if (name == "y_padded" || name == "y_hat") {
-        shape.d[2] = 12;
-        shape.d[3] = 12;
+        select_dynamic_dimension(2, 12);
+        select_dynamic_dimension(3, 12);
     } else if (name == "z_hat") {
-        shape.d[2] = 3;
-        shape.d[3] = 3;
+        select_dynamic_dimension(2, 3);
+        select_dynamic_dimension(3, 3);
     } else if (name == "context") {
-        shape.d[2] = filename == "p_spatial_prior.plan" ? 12 :
-            (filename.starts_with("p_") ? 24 : 9);
-        shape.d[3] = filename == "p_spatial_prior.plan" ? 12 :
-            (filename.starts_with("p_") ? 24 : 11);
+        select_dynamic_dimension(
+            2, filename == "p_spatial_prior.plan" ? 12 :
+                (filename.starts_with("p_") ? 24 : 9));
+        select_dynamic_dimension(
+            3, filename == "p_spatial_prior.plan" ? 12 :
+                (filename.starts_with("p_") ? 24 : 11));
     }
     return shape;
 }
@@ -1384,16 +1534,90 @@ Result<void> populate_video_quant_cache(
     return {};
 }
 
+void append_graph_tensor_signature(
+    std::vector<std::uintptr_t>& signature, const DeviceTensor& tensor) {
+    signature.push_back(reinterpret_cast<std::uintptr_t>(tensor.storage.data));
+    signature.push_back(static_cast<std::uintptr_t>(tensor.shape.nbDims));
+    for (std::int32_t index = 0; index < tensor.shape.nbDims; ++index) {
+        signature.push_back(static_cast<std::uintptr_t>(tensor.shape.d[index]));
+    }
+}
+
+Result<void> enqueue_engine(
+    EngineInstance& instance, nvinfer1::IExecutionContext& context,
+    cudaStream_t stream, std::vector<std::uintptr_t> signature) {
+    if (!instance.use_cuda_graphs || !cuda_graphs_allowed) {
+        if (!context.enqueueV3(stream)) {
+            return backend_error(instance.path.filename().string() + " enqueueV3 failed");
+        }
+        return {};
+    }
+
+    for (const auto& invocation : instance.graph_invocations) {
+        if (invocation.signature != signature) continue;
+        const auto launched = cudaGraphLaunch(invocation.executable, stream);
+        if (launched != cudaSuccess) return cuda_error("cudaGraphLaunch TensorRT engine", launched);
+        ++instance.graph_hits;
+        return {};
+    }
+
+    // Bound address/shape variants prevent an unbounded graph cache if an
+    // application alternates many buffers or resolutions in one session.
+    constexpr std::size_t max_graph_invocations = 16;
+    if (instance.graph_invocations.size() >= max_graph_invocations) {
+        if (!context.enqueueV3(stream)) {
+            return backend_error(instance.path.filename().string() + " enqueueV3 failed");
+        }
+        return {};
+    }
+
+    auto capture_status = cudaStreamBeginCapture(stream, cudaStreamCaptureModeThreadLocal);
+    if (capture_status != cudaSuccess) {
+        return cuda_error("cudaStreamBeginCapture TensorRT engine", capture_status);
+    }
+    if (!context.enqueueV3(stream)) {
+        cudaGraph_t discarded{};
+        static_cast<void>(cudaStreamEndCapture(stream, &discarded));
+        if (discarded != nullptr) static_cast<void>(cudaGraphDestroy(discarded));
+        return backend_error(instance.path.filename().string() + " captured enqueueV3 failed");
+    }
+    cudaGraph_t graph{};
+    capture_status = cudaStreamEndCapture(stream, &graph);
+    if (capture_status != cudaSuccess) {
+        if (graph != nullptr) static_cast<void>(cudaGraphDestroy(graph));
+        return cuda_error("cudaStreamEndCapture TensorRT engine", capture_status);
+    }
+    cudaGraphExec_t executable{};
+    const auto instantiated = cudaGraphInstantiate(&executable, graph, 0);
+    if (instantiated != cudaSuccess) {
+        static_cast<void>(cudaGraphDestroy(graph));
+        return cuda_error("cudaGraphInstantiate TensorRT engine", instantiated);
+    }
+    CudaGraphInvocation invocation;
+    invocation.signature = std::move(signature);
+    invocation.graph = graph;
+    invocation.executable = executable;
+    const auto launched = cudaGraphLaunch(invocation.executable, stream);
+    if (launched != cudaSuccess) return cuda_error("cudaGraphLaunch captured TensorRT engine", launched);
+    instance.graph_invocations.push_back(std::move(invocation));
+    ++instance.graph_captures;
+    return {};
+}
+
 Result<std::vector<DeviceTensor>> run_device_engine(
     EngineInstance& instance,
     const EngineSpec& specification,
     std::span<const DeviceTensor* const> inputs,
     cudaStream_t stream,
     EngineOutputStorage output_storage = EngineOutputStorage::owned) {
+    // Context creation is deliberately inside this interval. In low-memory
+    // mode it happens for every invocation and can dominate TensorRT execution,
+    // especially on integrated devices. Keeping it outside the profiler made
+    // that policy cost invisible in --profile output.
+    const auto cpu_start = std::chrono::steady_clock::now();
     auto context_result = acquire_context(instance);
     if (!context_result) return context_result.error();
     auto* context = context_result.value();
-    const auto cpu_start = std::chrono::steady_clock::now();
     for (const auto& tensor : specification.tensors) {
         if (tensor.mode != nvinfer1::TensorIOMode::kINPUT) continue;
         const auto* input = find_device_tensor(inputs, tensor.name);
@@ -1408,6 +1632,8 @@ Result<std::vector<DeviceTensor>> run_device_engine(
         }
     }
 
+    std::vector<std::uintptr_t> graph_signature;
+    graph_signature.reserve(specification.tensors.size() * 6);
     std::vector<DeviceTensor> outputs;
     outputs.reserve(specification.tensors.size());
     for (const auto& tensor : specification.tensors) {
@@ -1418,6 +1644,7 @@ Result<std::vector<DeviceTensor>> run_device_engine(
                 return backend_error(std::string(specification.filename) +
                                      " rejected device address for " + name);
             }
+            append_graph_tensor_signature(graph_signature, *input);
             continue;
         }
         const auto shape = context->getTensorShape(name.c_str());
@@ -1428,6 +1655,7 @@ Result<std::vector<DeviceTensor>> run_device_engine(
             return backend_error(std::string(specification.filename) +
                                  " rejected device output address for " + name);
         }
+        append_graph_tensor_signature(graph_signature, output.value());
         outputs.push_back(std::move(output.value()));
     }
     std::pair<cudaEvent_t, cudaEvent_t> events{};
@@ -1443,12 +1671,13 @@ Result<std::vector<DeviceTensor>> run_device_engine(
             return recorded.error();
         }
     }
-    if (!context->enqueueV3(stream)) {
+    auto enqueued = enqueue_engine(instance, *context, stream, std::move(graph_signature));
+    if (!enqueued) {
         if (profile_cuda) {
             static_cast<void>(cudaEventDestroy(events.first));
             static_cast<void>(cudaEventDestroy(events.second));
         }
-        return backend_error(std::string(specification.filename) + " enqueueV3 failed");
+        return enqueued.error();
     }
     if (profile_cuda) {
         auto recorded = record_cuda_event(events.second, stream, "cudaEventRecord engine stop");
@@ -2345,6 +2574,21 @@ Result<CodecEncodeResult> encode_intra(
     status = cudaEventRecord(entropy_ready.data, stream);
     if (status != cudaSuccess) return cuda_error("cudaEventRecord I entropy", status);
 
+    // Reconstruction depends on y_hat and q_dec, but not on the CPU rANS
+    // output. Queue it behind the entropy D2H copies so that, once those
+    // copies complete, CPU entropy coding can overlap I-frame synthesis just
+    // as it already does in the predicted-frame path.
+    auto& q_dec_opt = image_quant_cache.q_dec[qp];
+    if (!q_dec_opt.has_value()) return backend_error("missing cached image q_dec tensor");
+    auto* q_dec = &q_dec_opt.value();
+    std::array<DeviceTensor*, 2> synthesis_inputs{&*y_hat_device, q_dec};
+    auto synthesis_outputs = run_device_engine(
+        engines[6], engine_specs[6], synthesis_inputs, stream);
+    if (!synthesis_outputs) return synthesis_outputs.error();
+    auto frame_device_result = take_device_tensor(synthesis_outputs.value(), "frame_hat");
+    if (!frame_device_result) return frame_device_result.error();
+    auto frame_device = std::move(frame_device_result.value());
+
     status = cudaEventSynchronize(entropy_ready.data);
     if (status != cudaSuccess) return cuda_error("cudaEventSynchronize I entropy", status);
 
@@ -2354,28 +2598,21 @@ Result<CodecEncodeResult> encode_intra(
     auto mode = rans.set_use_two_coders(two_coders);
     if (!mode) return mode.error();
     const auto per_channel = static_cast<std::size_t>(z_device.shape.d[2] * z_device.shape.d[3]);
-    auto encoded_z = rans.encode_z(
-        z_symbols, assets.image_z_group, static_cast<std::size_t>(qp) * 128, per_channel);
-    if (!encoded_z) return encoded_z.error();
-    for (std::size_t stage_index = 0; stage_index < 4; ++stage_index) {
-        std::span<std::int16_t> indexes(index_buffers[stage_index]->data, reduced_count);
-        auto encoded_y = rans.encode_y(indexes, assets.gaussian_y_group);
-        if (!encoded_y) return encoded_y.error();
-    }
-    auto stream_bytes = rans.finish_encode();
+    auto stream_bytes = [&]() -> Result<std::vector<std::byte>> {
+        CpuProfileScope entropy_scope("i_entropy_encode");
+        auto encoded_z = rans.encode_z(
+            z_symbols, assets.image_z_group, static_cast<std::size_t>(qp) * 128, per_channel);
+        if (!encoded_z) return encoded_z.error();
+        for (std::size_t stage_index = 0; stage_index < 4; ++stage_index) {
+            std::span<std::int16_t> indexes(index_buffers[stage_index]->data, reduced_count);
+            auto encoded_y = rans.encode_y(indexes, assets.gaussian_y_group);
+            if (!encoded_y) return encoded_y.error();
+        }
+        return rans.finish_encode();
+    }();
     if (!stream_bytes) return stream_bytes.error();
     auto payload = make_intra_payload(
         frame.width(), frame.height(), qp, two_coders, stream_bytes.value());
-
-    auto& q_dec_opt = image_quant_cache.q_dec[qp];
-    if (!q_dec_opt.has_value()) return backend_error("missing cached image q_dec tensor");
-    auto* q_dec = &q_dec_opt.value();
-    std::array<DeviceTensor*, 2> synthesis_inputs{&*y_hat_device, q_dec};
-    auto synthesis_outputs = run_device_engine(engines[6], engine_specs[6], synthesis_inputs, stream);
-    if (!synthesis_outputs) return synthesis_outputs.error();
-    auto frame_device_result = take_device_tensor(synthesis_outputs.value(), "frame_hat");
-    if (!frame_device_result) return frame_device_result.error();
-    auto frame_device = std::move(frame_device_result.value());
 
     std::array<const DeviceTensor*, 1> tensors{&frame_device};
     auto downloaded = download_tensors(tensors, stream);
@@ -2433,9 +2670,12 @@ Result<CodecDecodeResult> decode_intra(
     auto stream_set = rans.set_stream(info.rans);
     if (!stream_set) return stream_set.error();
     const auto per_channel = static_cast<std::size_t>(z_height * z_width);
-    auto z_values = rans.decode_z(
-        128 * per_channel, assets.image_z_group,
-        static_cast<std::size_t>(info.qp) * 128, per_channel);
+    auto z_values = [&]() -> Result<std::vector<std::int8_t>> {
+        CpuProfileScope entropy_scope("i_entropy_decode_z");
+        return rans.decode_z(
+            128 * per_channel, assets.image_z_group,
+            static_cast<std::size_t>(info.qp) * 128, per_channel);
+    }();
     if (!z_values) return z_values.error();
     const auto staging_reduced_count =
         static_cast<std::size_t>(64) * y_height * y_width;
@@ -2528,9 +2768,12 @@ Result<CodecDecodeResult> decode_intra(
             "cudaEventSynchronize I decode indexes");
         if (!synchronized) return synchronized.error();
 
-        auto decoded = rans.decode_y(
-            std::span<const std::uint8_t>(indexes.data, reduced_count),
-            assets.gaussian_y_group);
+        auto decoded = [&]() -> Result<std::vector<std::int8_t>> {
+            CpuProfileScope entropy_scope("i_entropy_decode_y");
+            return rans.decode_y(
+                std::span<const std::uint8_t>(indexes.data, reduced_count),
+                assets.gaussian_y_group);
+        }();
         if (!decoded) return decoded.error();
         auto& symbols = image_decode_staging.symbols[stage_slot];
         std::copy(decoded.value().begin(), decoded.value().end(), symbols.data);
@@ -2952,6 +3195,7 @@ Result<CodecDecodeResult> decode_predicted(
     DeviceDpb& device_dpb,
     std::vector<EngineInstance>& engines, RansCodec& rans,
     const RuntimeAssets& assets, VideoQuantDeviceCache& quant_cache,
+    VideoDecodeStaging& decode_staging,
     PinnedHostBuffer<std::byte>& output_frame_buffer,
     cudaStream_t stream) {
     auto parsed = parse_predicted_payload(payload);
@@ -2999,14 +3243,21 @@ Result<CodecDecodeResult> decode_predicted(
     auto stream_set = rans.set_stream(info.rans);
     if (!stream_set) return stream_set.error();
     const auto per_channel = static_cast<std::size_t>(z_height * z_width);
-    auto z_values = rans.decode_z(128 * per_channel, assets.video_z_group,
-        static_cast<std::size_t>(info.qp) * 128, per_channel);
+    auto z_values = [&]() -> Result<std::vector<std::int8_t>> {
+        CpuProfileScope entropy_scope("p_entropy_decode_z");
+        return rans.decode_z(128 * per_channel, assets.video_z_group,
+            static_cast<std::size_t>(info.qp) * 128, per_channel);
+    }();
     if (!z_values) return z_values.error();
-    HostTensor z_host{"z_hat", make_dims(128, z_height, z_width),
-                      std::vector<__half>(z_values.value().size())};
-    std::transform(z_values.value().begin(), z_values.value().end(), z_host.values.begin(),
-                   [](std::int8_t value) { return to_half(static_cast<float>(value)); });
-    auto z_device = upload_tensor(z_host, "z_hat", stream);
+    const auto reduced_count = static_cast<std::size_t>(64) * y_height * y_width;
+    auto staging_ready = decode_staging.ensure(z_values.value().size(), reduced_count);
+    if (!staging_ready) return staging_ready.error();
+    std::copy(
+        z_values.value().begin(), z_values.value().end(), decode_staging.z_symbols.data);
+    auto z_device = upload_int8_tensor_scratch(
+        std::span<const std::int8_t>(
+            decode_staging.z_symbols.data, z_values.value().size()),
+        make_dims(128, z_height, z_width), "z_hat", stream);
     if (!z_device) return z_device.error();
     std::array<DeviceTensor*, 2> prior_inputs{&z_device.value(), &temporal_context};
     auto prior_outputs = run_device_engine(
@@ -3017,7 +3268,6 @@ Result<CodecDecodeResult> decode_predicted(
     auto params_device = std::move(params_device_result.value());
     const cuda_ops::Shape4D prior_shape{1, 128, y_height, y_width};
     const auto prior_count = static_cast<std::size_t>(128) * y_height * y_width;
-    const auto reduced_count = prior_count / 2;
     const auto reduced_shape = make_dims(64, y_height, y_width);
     auto* params_values = static_cast<__half*>(params_device.storage.data);
     auto* q_dec_values = params_values;
@@ -3042,21 +3292,29 @@ Result<CodecDecodeResult> decode_predicted(
         scales0.value().storage.data, static_cast<std::uint8_t*>(indexes0_device.value().data),
         reduced_count, 0.0F, stream);
     if (status != cudaSuccess) return cuda_error("cuda_ops::build_decode_indexes", status);
-    std::vector<std::uint8_t> indexes0(reduced_count);
+    auto& indexes0 = decode_staging.indexes[0];
     auto copied = copy_async(
-        indexes0.data(), indexes0_device.value().data, reduced_count,
+        indexes0.data, indexes0_device.value().data, reduced_count,
         cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync indexes0");
     if (!copied) return copied.error();
-    auto synchronized = synchronize_stream(stream, "cudaStreamSynchronize indexes0");
+    auto recorded = record_cuda_event(
+        decode_staging.indexes_ready[0].data, stream, "cudaEventRecord indexes0");
+    if (!recorded) return recorded.error();
+    auto synchronized = synchronize_event(
+        decode_staging.indexes_ready[0].data, "cudaEventSynchronize indexes0");
     if (!synchronized) return synchronized.error();
-    auto decoded0 = rans.decode_y(indexes0, assets.video_gaussian_y_group);
+    auto decoded0 = [&]() -> Result<std::vector<std::int8_t>> {
+        CpuProfileScope entropy_scope("p_entropy_decode_y0");
+        return rans.decode_y(
+            std::span<const std::uint8_t>(indexes0.data, reduced_count),
+            assets.video_gaussian_y_group);
+    }();
     if (!decoded0) return decoded0.error();
-    HostTensor symbols0_host{"symbols0", reduced_shape,
-                             std::vector<__half>(decoded0.value().size())};
-    std::transform(decoded0.value().begin(), decoded0.value().end(),
-                   symbols0_host.values.begin(),
-                   [](std::int8_t value) { return to_half(static_cast<float>(value)); });
-    auto symbols0 = upload_tensor(symbols0_host, "symbols0", stream);
+    auto& symbols0_host = decode_staging.symbols[0];
+    std::copy(decoded0.value().begin(), decoded0.value().end(), symbols0_host.data);
+    auto symbols0 = upload_int8_tensor_scratch(
+        std::span<const std::int8_t>(symbols0_host.data, decoded0.value().size()),
+        reduced_shape, "symbols0", stream);
     if (!symbols0) return symbols0.error();
     auto y_hat_device = allocate_device_tensor_scratch("y_hat", make_dims(128, y_height, y_width));
     if (!y_hat_device) return y_hat_device.error();
@@ -3104,21 +3362,29 @@ Result<CodecDecodeResult> decode_predicted(
         scales1.value().storage.data, static_cast<std::uint8_t*>(indexes1_device.value().data),
         reduced_count, 0.0F, stream);
     if (status != cudaSuccess) return cuda_error("cuda_ops::build_decode_indexes", status);
-    std::vector<std::uint8_t> indexes1(reduced_count);
+    auto& indexes1 = decode_staging.indexes[1];
     copied = copy_async(
-        indexes1.data(), indexes1_device.value().data, reduced_count,
+        indexes1.data, indexes1_device.value().data, reduced_count,
         cudaMemcpyDeviceToHost, stream, "cudaMemcpyAsync indexes1");
     if (!copied) return copied.error();
-    synchronized = synchronize_stream(stream, "cudaStreamSynchronize indexes1");
+    recorded = record_cuda_event(
+        decode_staging.indexes_ready[1].data, stream, "cudaEventRecord indexes1");
+    if (!recorded) return recorded.error();
+    synchronized = synchronize_event(
+        decode_staging.indexes_ready[1].data, "cudaEventSynchronize indexes1");
     if (!synchronized) return synchronized.error();
-    auto decoded1 = rans.decode_y(indexes1, assets.video_gaussian_y_group);
+    auto decoded1 = [&]() -> Result<std::vector<std::int8_t>> {
+        CpuProfileScope entropy_scope("p_entropy_decode_y1");
+        return rans.decode_y(
+            std::span<const std::uint8_t>(indexes1.data, reduced_count),
+            assets.video_gaussian_y_group);
+    }();
     if (!decoded1) return decoded1.error();
-    HostTensor symbols1_host{"symbols1", reduced_shape,
-                             std::vector<__half>(decoded1.value().size())};
-    std::transform(decoded1.value().begin(), decoded1.value().end(),
-                   symbols1_host.values.begin(),
-                   [](std::int8_t value) { return to_half(static_cast<float>(value)); });
-    auto symbols1 = upload_tensor(symbols1_host, "symbols1", stream);
+    auto& symbols1_host = decode_staging.symbols[1];
+    std::copy(decoded1.value().begin(), decoded1.value().end(), symbols1_host.data);
+    auto symbols1 = upload_int8_tensor_scratch(
+        std::span<const std::int8_t>(symbols1_host.data, decoded1.value().size()),
+        reduced_shape, "symbols1", stream);
     if (!symbols1) return symbols1.error();
     auto reconstructed1 = allocate_device_tensor_scratch(
         "reconstructed1", make_dims(128, y_height, y_width));
@@ -3172,6 +3438,16 @@ public:
             static_cast<void>(cudaStreamDestroy(stream_));
             stream_ = nullptr;
         }
+        std::size_t graph_captures = 0;
+        std::size_t graph_hits = 0;
+        for (const auto& engine : engines_) {
+            graph_captures += engine.graph_captures;
+            graph_hits += engine.graph_hits;
+        }
+        if (graph_captures != 0 || graph_hits != 0) {
+            std::clog << "[nvcr.dcvcrt] [info] CUDA Graph TensorRT captures="
+                      << graph_captures << " hits=" << graph_hits << '\n';
+        }
     }
 
     Result<void> initialize(const RuntimeConfiguration& configuration) override {
@@ -3203,11 +3479,13 @@ public:
 
         const auto device_status = cudaSetDevice(configuration.device_id);
         if (device_status != cudaSuccess) return cuda_error("cudaSetDevice", device_status);
-        auto low_memory_mode = determine_low_memory_mode(configuration);
-        if (!low_memory_mode) return low_memory_mode.error();
+        auto context_policy = determine_context_policy(configuration);
+        if (!context_policy) return context_policy.error();
         auto manifest = validate_engine_manifest(
             configuration.intra_engine_path, configuration.device_id, configuration.model_id);
         if (!manifest) return manifest.error();
+        const bool fixed_shape_profile = manifest.value().shape_profile == "fixed";
+        auto selected_context_policy = context_policy.value();
 
         try {
             std::unique_ptr<nvinfer1::IRuntime> runtime(nvinfer1::createInferRuntime(logger_));
@@ -3221,7 +3499,8 @@ public:
             engines.reserve(engine_specs.size());
             for (const auto& specification : engine_specs) {
                 auto loaded = load_engine(
-                    *runtime, configuration.intra_engine_path, specification);
+                    *runtime, configuration.intra_engine_path, specification,
+                    fixed_shape_profile);
                 if (!loaded) return loaded.error();
                 engines.push_back(std::move(loaded.value()));
             }
@@ -3237,6 +3516,29 @@ public:
                 static_cast<void>(cudaStreamDestroy(stream));
                 return scratch_ready.error();
             }
+            if (selected_context_policy == ContextPolicy::shared_workspace_persistent) {
+                std::int64_t workspace_bytes = 0;
+                for (const auto& engine : engines) {
+                    workspace_bytes = std::max(
+                        workspace_bytes, engine.engine->getDeviceMemorySizeV2());
+                }
+                if (workspace_bytes < 0 ||
+                    static_cast<std::uint64_t>(workspace_bytes) >
+                        std::numeric_limits<std::size_t>::max()) {
+                    static_cast<void>(cudaStreamDestroy(stream));
+                    return backend_error("invalid TensorRT context workspace size");
+                }
+                auto workspace = scratch_arena.reserve(
+                    static_cast<std::size_t>(workspace_bytes));
+                if (!workspace) {
+                    static_cast<void>(cudaStreamDestroy(stream));
+                    return workspace.error();
+                }
+                for (auto& engine : engines) {
+                    engine.shared_context_memory = workspace.value();
+                    engine.shared_context_memory_bytes = workspace_bytes;
+                }
+            }
             ImageQuantDeviceCache image_quant_cache;
             auto image_quant_cache_loaded = populate_image_quant_cache(
                 assets.value(), image_quant_cache, stream);
@@ -3251,12 +3553,20 @@ public:
                 return quant_cache_loaded.error();
             }
             for (std::size_t index = 0; index < engines.size(); ++index) {
-                engines[index].low_memory_mode = low_memory_mode.value();
+                engines[index].low_memory_mode =
+                    selected_context_policy == ContextPolicy::per_engine;
                 auto warmed = warm_up_engine(engines[index], engine_specs[index], stream);
                 if (!warmed) {
                     static_cast<void>(cudaStreamDestroy(stream));
                     return warmed.error();
                 }
+            }
+            // Keep CUDA Graph policy target-scoped until the persistent-context
+            // path has direct discrete-GPU evidence. Integrated shared-workspace
+            // contexts remain alive across frames; low-memory mode destroys its
+            // context after every call and cannot replay captured graphs.
+            if (selected_context_policy == ContextPolicy::shared_workspace_persistent) {
+                for (auto& engine : engines) engine.use_cuda_graphs = true;
             }
 
             runtime_ = std::move(runtime);
@@ -3270,10 +3580,10 @@ public:
             intra_qp_ = configuration.intra_qp;
             profiling_enabled_ = configuration.enable_profiling;
             verify_encoder_reconstruction_ = configuration.verify_encoder_reconstruction;
-            low_memory_mode_ = low_memory_mode.value();
+            context_policy_ = selected_context_policy;
             if (configuration.log_level <= LogLevel::info) {
                 std::clog << "[nvcr.dcvcrt] [info] TensorRT mode: "
-                          << (low_memory_mode_ ? "low-memory" : "performance")
+                          << context_policy_name(context_policy_)
                           << '\n';
             }
             initialized_ = true;
@@ -3300,7 +3610,13 @@ public:
             BackendProfiler profiler(profiling_enabled_);
             profiler.begin("encode", frame_type, state.frame_index);
             scratch_arena_.reset();
-            CudaAllocationScope allocation_scope(stream_, &profiler, &scratch_arena_);
+            // Same area cap as decode: a broad probe found no captured-graph benefit
+            // above 640x360 (docs/performance.md, 2026-08-01 CUDA Graph note).
+            constexpr std::uint64_t graph_area_limit = 640ULL * 360ULL;
+            const bool allow_cuda_graphs =
+                static_cast<std::uint64_t>(frame.width()) * frame.height() <= graph_area_limit;
+            CudaAllocationScope allocation_scope(
+                stream_, &profiler, &scratch_arena_, allow_cuda_graphs);
             if (frame_type == FrameType::intra) {
                 auto result = encode_intra(
                     frame, intra_qp_, state, encoder_dpb_, engines_, rans_, assets_,
@@ -3340,7 +3656,17 @@ public:
             BackendProfiler profiler(profiling_enabled_);
             profiler.begin("decode", frame_type, state.frame_index);
             scratch_arena_.reset();
-            CudaAllocationScope allocation_scope(stream_, &profiler, &scratch_arena_);
+            bool allow_cuda_graphs = false;
+            if (frame_type == FrameType::predicted) {
+                auto predicted_info = parse_predicted_payload(payload);
+                if (!predicted_info) return predicted_info.error();
+                constexpr std::uint64_t graph_area_limit = 640ULL * 360ULL;
+                allow_cuda_graphs =
+                    static_cast<std::uint64_t>(predicted_info.value().width) *
+                        predicted_info.value().height <= graph_area_limit;
+            }
+            CudaAllocationScope allocation_scope(
+                stream_, &profiler, &scratch_arena_, allow_cuda_graphs);
             if (frame_type == FrameType::intra) {
                 auto result = decode_intra(
                     payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_, image_quant_cache_, image_decode_staging_, stream_);
@@ -3349,7 +3675,7 @@ public:
             }
             auto result = decode_predicted(
                 payload, timestamp, state, decoder_dpb_, engines_, rans_, assets_,
-                video_quant_cache_, decoded_frame_buffer_, stream_);
+                video_quant_cache_, video_decode_staging_, decoded_frame_buffer_, stream_);
             profiler.finish();
             return result;
         } catch (const std::exception& exception) {
@@ -3388,6 +3714,7 @@ private:
     RuntimeAssets assets_;
     ImageQuantDeviceCache image_quant_cache_;
     ImageDecodeStaging image_decode_staging_;
+    VideoDecodeStaging video_decode_staging_;
     VideoQuantDeviceCache video_quant_cache_;
     DeviceScratchArena scratch_arena_;
     PinnedHostBuffer<std::int8_t> z_symbols_buffer_;
@@ -3405,7 +3732,7 @@ private:
     std::uint32_t intra_qp_{};
     bool profiling_enabled_{false};
     bool verify_encoder_reconstruction_{false};
-    bool low_memory_mode_{true};
+    ContextPolicy context_policy_{ContextPolicy::per_engine};
     bool initialized_{false};
 };
 

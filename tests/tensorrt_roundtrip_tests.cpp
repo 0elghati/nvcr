@@ -54,26 +54,12 @@ int main(int argc, char* argv[]) {
         return 2;
     }
 
-    auto backend = nvcr::dcvcrt::make_tensorrt_backend();
-    if (!backend) {
-        std::cerr << backend.error().describe() << '\n';
-        return 1;
-    }
-
     nvcr::RuntimeConfiguration configuration;
     configuration.intra_engine_path = std::filesystem::path(argv[1]);
     configuration.device_id = 0;
     configuration.intra_qp = 32;
     configuration.verify_encoder_reconstruction = true;
     configuration.gop_size = 2;
-
-    nvcr::codec::Components components;
-    components.codec = std::move(backend.value());
-    auto runtime = nvcr::Runtime::create(configuration, std::move(components));
-    if (!runtime) {
-        std::cerr << runtime.error().describe() << '\n';
-        return 1;
-    }
 
     constexpr nvcr::Timestamp timestamp{41'667};
     auto frame = nvcr::Frame::create(
@@ -141,6 +127,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "P-frame encoder and decoder reconstructions differ\n";
         return 1;
     }
+    verification_backend.value().reset();
 
     nvcr::RuntimeConfiguration high_qp_configuration = configuration;
     high_qp_configuration.intra_qp = 63;
@@ -187,6 +174,20 @@ int main(int argc, char* argv[]) {
             high_qp_predicted.value().reconstructed_frame.data(),
             high_qp_predicted_decoded.value().frame.data())) {
         std::cerr << "high-QP P-frame round trip failed\n";
+        return 1;
+    }
+    high_qp_backend.value().reset();
+
+    auto backend = nvcr::dcvcrt::make_tensorrt_backend();
+    if (!backend) {
+        std::cerr << backend.error().describe() << '\n';
+        return 1;
+    }
+    nvcr::codec::Components components;
+    components.codec = std::move(backend.value());
+    auto runtime = nvcr::Runtime::create(configuration, std::move(components));
+    if (!runtime) {
+        std::cerr << runtime.error().describe() << '\n';
         return 1;
     }
 

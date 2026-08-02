@@ -1,0 +1,183 @@
+{
+  "schema": "nvcr.performance-candidate.v1",
+  "date": "2026-08-02",
+  "base_commit": "108f926060ee335e6c6ee1ae671d4c4a4e54af61",
+  "worktree_state": "uncommitted candidate changes on perf/orin-edge-backend",
+  "device": "NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super",
+  "power_mode": "MAXN_SUPER (mode 2)",
+  "build_type": "Release",
+  "execution_mode": "automatic",
+  "clock_note": "Post-reboot balanced A-B-B-A-A-B diagnostic. GPU DVFS remained unlocked at 306-1020 MHz, so these are candidate results rather than locked-clock release numbers.",
+  "benchmark": {
+    "sequence_family": "BasketballDrive",
+    "framerate": 50,
+    "frames": 97,
+    "gop": 97,
+    "qp": 32,
+    "baseline_engine_profile": "720p-fp16",
+    "candidate_builder_optimization_level": 4,
+    "candidate_workspace_mib": 1024,
+    "acceptance_threshold_percent": 3.0,
+    "run_order": [
+      "baseline",
+      "candidate",
+      "candidate",
+      "baseline",
+      "baseline",
+      "candidate"
+    ]
+  },
+  "candidate_composition": {
+    "description": "Conservative hybrid bundles: 13 engines use fixed min=opt=max shapes for the visible resolution; p_synthesis.plan is the validated dynamic plan from the 720p bundle.",
+    "reason": "The host model directory contained a stale p_synthesis.onnx whose SHA-256 did not match the pinned v2 model manifest. Static p_synthesis plans were quarantined and excluded rather than reporting untraceable results.",
+    "validated_dynamic_p_synthesis_sha256": "2f473e405165f08fa677a5e59321b70e73fa5a7e608090e1399ddbe7cbdd840b",
+    "stale_p_synthesis_onnx_sha256": "598c8fe9808e315cd41ab6c95067dc50c066262da9336300eb8ebb0266b026eb",
+    "expected_p_synthesis_onnx_sha256": "1fe6e37ca8a01372e972dd9701f133ed47bf6873a7520e1e1b1a502a86252f1d",
+    "quarantined_static_plan_sha256": {
+      "360p": "d9e1b6ec2a84e34810e28dc4521fbd55336460f95c63ea8cc5dcff0e397d9c04",
+      "540p": "dd4dbadce3c3f9addaeff00033f0d9469e0608418eaae24138c1a8e6b59a114e"
+    }
+  },
+  "runtime_change": {
+    "description": "Allow TensorRT axes declared runtime-variable by NVCR to be either dynamic (-1) or a valid positive fixed dimension, and preserve fixed input dimensions during load-time warm-up.",
+    "compatibility": "Dynamic profiles retain their previous -1 validation and warm-up shapes; fixed batch/channel axes remain exact. No CUDA architecture branch, model, weight, entropy, or bitstream-format change was introduced."
+  },
+  "post_measurement_stabilization": {
+    "artifact_status": "The measured 13-fixed-plus-1-dynamic bundles are historical diagnostic evidence only. The final validator and runtime reject them as incomplete fixed bundles.",
+    "shape_contract": "Legacy and declared-dynamic bundles require -1 on runtime-variable axes. Declared-fixed bundles require positive concrete dimensions on every runtime-variable axis in all 14 plans.",
+    "profile_contract": "Manifest identity, visible dimensions, workspace, builder level, and shape mode are derived from and checked against the selected versioned engine profile.",
+    "dynamic_roundtrip": {
+      "profile": "720p-fp16",
+      "input_resolution": "640x360",
+      "frames": 9,
+      "gop": 9,
+      "payload_bytes": 9490,
+      "psnr_yuv_db": 36.118170,
+      "bitstream_sha256": "945bfbc71d09f00bc041d1c5925a3dd37bfa0b71e009905b2f375ca2738466d2",
+      "reconstruction_sha256": "4afb63347f12aad3b821b23a4d5cda342380c9ad71f109b72084f274817edb63"
+    }
+  },
+  "profiles": {
+    "360p": {
+      "resolution": "640x360",
+      "padded_resolution": "640x368",
+      "sequence": "BasketballDrive_640x360_50.yuv",
+      "engine_manifest_sha256": "f2549f7fd1cf944c92b6acab1d4e0716f66f9617fe6316d3841d6736964fb6a3",
+      "artifact_validation": "passed nvcr.engine-bundle.v2",
+      "encode": {
+        "baseline_fps_runs": [
+          39.328,
+          38.736,
+          38.536
+        ],
+        "candidate_fps_runs": [
+          42.259,
+          41.671,
+          41.690
+        ],
+        "baseline_fps_mean": 38.8667,
+        "candidate_fps_mean": 41.8733,
+        "change_percent": 7.74,
+        "decision": "accepted candidate"
+      },
+      "decode": {
+        "baseline_fps_runs": [
+          38.562,
+          39.567,
+          40.094
+        ],
+        "candidate_fps_runs": [
+          41.258,
+          41.149,
+          40.128
+        ],
+        "baseline_fps_mean": 39.4077,
+        "candidate_fps_mean": 40.8450,
+        "change_percent": 3.65,
+        "cuda_graph_captures_per_run": 9,
+        "cuda_graph_hits_per_run": 375,
+        "decision": "accepted candidate"
+      },
+      "correctness": {
+        "baseline_payload_bytes": 79552,
+        "candidate_payload_bytes": 79289,
+        "baseline_bitstream_sha256": "5e1d61a28a274338ae497c0d2b79d1119d6ac6ac72695d10acb8cce09ba3aad2",
+        "candidate_bitstream_sha256": "34a20991074455277d0fcffc8578b56ebb07bc8417859547fd10b15a408bbcfa",
+        "baseline_reconstruction_sha256": "e15135ffac42cd14fc3e616bb2217a32b84f6a70e3f99c6e3450025487e574d0",
+        "candidate_reconstruction_sha256": "72da3c5b7ec9c59933cc1ee7b4ac3db9158efe14b2bbdad69de1499aa64b3809",
+        "baseline_psnr_y_db": 33.182059,
+        "candidate_psnr_y_db": 33.194216,
+        "baseline_psnr_yuv_db": 34.892588,
+        "candidate_psnr_yuv_db": 34.900579,
+        "note": "Different TensorRT tactics produce deterministic but non-bit-exact FP16 streams. Candidate quality is not lower."
+      }
+    },
+    "540p": {
+      "resolution": "960x540",
+      "padded_resolution": "960x544",
+      "sequence": "BasketballDrive_960x540_50.yuv",
+      "engine_manifest_sha256": "cb5112e8da11b5977ea07fd5958a71dd34c358c5da9e2453fb0aed77357939cc",
+      "artifact_validation": "passed nvcr.engine-bundle.v2",
+      "encode": {
+        "baseline_fps_runs": [
+          17.893,
+          17.987,
+          17.927
+        ],
+        "candidate_fps_runs": [
+          18.792,
+          18.974,
+          18.830
+        ],
+        "baseline_fps_mean": 17.9357,
+        "candidate_fps_mean": 18.8653,
+        "change_percent": 5.18,
+        "decision": "accepted candidate"
+      },
+      "decode": {
+        "baseline_fps_runs": [
+          19.830,
+          19.886,
+          20.002
+        ],
+        "candidate_fps_runs": [
+          20.440,
+          20.308,
+          20.375
+        ],
+        "baseline_fps_mean": 19.9060,
+        "candidate_fps_mean": 20.3743,
+        "change_percent": 2.35,
+        "cuda_graph_captures_per_run": 0,
+        "cuda_graph_hits_per_run": 0,
+        "decision": "diagnostic improvement; below acceptance threshold"
+      },
+      "correctness": {
+        "baseline_payload_bytes": 133316,
+        "candidate_payload_bytes": 133733,
+        "baseline_bitstream_sha256": "0385abab2d28b1de21165aaf96ba7e19e18cd6bac4695267938a8ba7ba0e3fd0",
+        "candidate_bitstream_sha256": "9465569a12d18b0efa190652d00543c12b6dd0abc1366dea9827963701c0712e",
+        "baseline_reconstruction_sha256": "ac81d3546e54633427bfd8b73b07549ecc563aa1e09c75652816eccb2f6e0b8c",
+        "candidate_reconstruction_sha256": "3f0ad3f5e30da517a52e8a889b72933c1312c2e4ea9de9cbcbeaaf7df6ad8142",
+        "baseline_psnr_y_db": 34.199466,
+        "candidate_psnr_y_db": 34.208961,
+        "baseline_psnr_yuv_db": 35.900343,
+        "candidate_psnr_yuv_db": 35.912742,
+        "note": "Different TensorRT tactics produce deterministic but non-bit-exact FP16 streams. Candidate quality is not lower."
+      }
+    }
+  },
+  "verification": {
+    "release_build": "passed",
+    "artifact_profile_tests": "passed",
+    "non_cuda_ctest": "5/5 passed",
+    "direct_device_cuda_test": "nvcr_cuda_ops passed",
+    "model_build_guard": "rejected the invalid local export before producing a TensorRT plan",
+    "dynamic_profile_regression": "the 720p-fp16 bundle completed every baseline encode/decode run and the final hardened-runtime roundtrip",
+    "hybrid_rejection": "the measured 360p hybrid fails artifact validation and runtime initialization under the final contract",
+    "portable_build": "TensorRT-disabled clean build passed 4/4 registered tests",
+    "clean_package_probe": "Orin SM 8.7 Release build/install/package passed and contained both edge profiles plus hardened artifact helpers"
+  },
+  "decision": "Keep both versioned profile definitions and fixed-profile runtime support. The 360p and 540p measurements are useful performance signals, but no hybrid engine bundle is accepted for distribution. Treat 540p decode as experimental until a fully fixed, locked-clock repetition clears the threshold.",
+  "next_action": "Restore the pinned PyTorch/ONNX exporter environment, regenerate the canonical p_synthesis.onnx bundle, rebuild fully fixed 360p/540p plans, and repeat under locked clocks."
+}

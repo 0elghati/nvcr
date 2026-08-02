@@ -1,0 +1,57 @@
+{
+  "schema": "nvcr.performance-investigation.v1",
+  "date": "2026-08-02",
+  "status": "rejected",
+  "target": {
+    "device": "Jetson Orin Nano",
+    "compute_capability": "8.7",
+    "tensorrt": "10.3.0"
+  },
+  "workload": {
+    "sequence": "BasketballDrive_640x360_50.yuv",
+    "dimensions": [640, 360],
+    "frames": 97,
+    "gop_size": 97,
+    "qp": 32,
+    "payload_bytes": 79552
+  },
+  "reference": {
+    "precision": "fp16",
+    "psnr_yuv_db": 34.892588,
+    "alternating_decode_fps": [37.820, 39.566],
+    "alternating_decode_fps_mean": 38.693
+  },
+  "candidates": [
+    {
+      "name": "full-p-synthesis-w8a8-ptq",
+      "quantized_conv_nodes": 40,
+      "decode_fps": 55.356,
+      "reference_decode_fps": 45.872,
+      "relative_gain_percent": 20.7,
+      "psnr_yuv_db": 16.657292,
+      "decision": "rejected",
+      "reason": "Quantizing the decoder and reconstruction graph corrupts recurrent feature state and visible output."
+    },
+    {
+      "name": "reconstruction-only-w8a8-ptq",
+      "quantized_conv_nodes": 22,
+      "modelopt_quantized_nodes": 30,
+      "calibration": "Entropy calibration from 12 real 360p QP-32 frame pairs across BasketballDrive, HoneyBee, and Jockey.",
+      "alternating_decode_fps": [46.050, 45.955],
+      "alternating_decode_fps_mean": 46.0025,
+      "relative_gain_percent": 18.89,
+      "psnr_yuv_db": 16.289966,
+      "psnr_loss_db": 18.602622,
+      "decision": "rejected",
+      "reason": "Keeping the recurrent feature output FP16 prevents temporal-state poisoning, but W8A8 PTQ still destroys reconstruction quality."
+    }
+  ],
+  "implementation_notes": [
+    "NVIDIA ModelOpt 0.45 explicit Q/DQ quantization was used.",
+    "TensorRT 10.3 on Jetson required Q/DQ scale initializers to be converted from FP16 to FP32.",
+    "TensorRT selected real INT8 tactics; the observed speedup establishes an Orin INT8 opportunity.",
+    "The disposable benchmark bundle was stamped as FP16 only because the current runtime rejects any precision string other than fp16; it is not a production artifact.",
+    "The reconstruction engine was bounded to the padded 640x384 workload after larger tactic searches exceeded fragmented unified-memory headroom."
+  ],
+  "conclusion": "Do not ship either PTQ engine. Continue with quantization-aware training or sensitivity-guided mixed precision with explicit quality gates."
+}

@@ -4,7 +4,7 @@ This is the source of truth for the scoped neural video codec runtime
 architecture described in `docs/scope-and-support.md`. DCVC-RT is the first and
 currently only supported codec backend.
 
-Last reviewed: 2026-07-30
+Last reviewed: 2026-08-02
 
 ## Objective
 
@@ -49,28 +49,47 @@ criteria.
 
 Current milestones: **M1–M4**, ordered by the 0.3/v1 release gates.
 
+Orin INT8 PTQ investigation, 2026-08-02: explicit-Q/DQ W8A8 TensorRT
+engines confirmed a material Orin hardware opportunity but failed the codec
+quality gate. Full P-synthesis quantization improved 360p decode from 45.872 to
+55.356 fps (+20.7%) while reducing PSNR-YUV from 34.892588 to 16.657292 dB.
+Keeping the recurrent decoder/feature path FP16 and quantizing only the 22
+reconstruction convolutions produced an alternating-run mean of 46.003 fps
+versus 38.693 fps FP16 (+18.9%), but PSNR-YUV still fell to 16.289966 dB.
+Both candidates are rejected and preserved in
+`docs/evidence/orin-int8-ptq-2026-08-02.json`. Do not expose experimental INT8
+artifacts through the runtime until quantization-aware training or a
+sensitivity-guided mixed-precision search meets explicit rate/distortion and
+cross-runtime gates.
+
 Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: with P-frame visible-output conversion accepted on RTX
-4070, profile the remaining GOP-97 decode boundaries separately: CPU rANS
-decode, pageable P-frame index downloads, TensorRT execution, and the remaining
-`cudaMallocAsync`/`cudaFree` churn. Do not start a GPU entropy-coder rewrite
-until those smaller boundaries are measured. Cross-runtime I/P golden vectors,
+Current next action: integrate exact-resolution selection for the accepted
+canonical fixed 360p/540p Orin bundles, retaining the dynamic bundle as fallback,
+then stage the preserved v0.6.0 assets and build/measure separate target-local
+profiles on RTX/x86.
+The current Orin FP16 runtime-only FPS wave is closed at its measured ceiling;
+do not resume speculative backend tuning without a newly profiled candidate
+capable of clearing the 3% whole-codec gate. Cross-runtime I/P golden vectors,
 drain/flush semantics, and target support remain pending.
 
-Deployment next action: reproduce the v2 `nvcr-artifacts` workflow and full
-registered suite on Orin Nano, then record its clean target, correctness,
-performance, memory, rate/distortion, and energy matrix. Engine-cache reuse must
+Deployment next action: stage the locally validated v0.6.0 Orin 360p and 540p
+engine assets and run the exact-tag upload workflow. Before publishing an
+all-profile v0.6.0 release, repackage QCIF, CIF, 720p, and 1080p under the same
+version; do not mix the retained v0.5.0 filenames into a v0.6.0 upload. Then run
+the full registered suite and record the clean target, correctness, performance,
+memory, rate/distortion, and energy matrix. Engine-cache reuse must
 be keyed by model, target, TensorRT/CUDA, precision, and shape profile. The
 release installer now downloads every selected-backend engine profile by default
 and uses backend/profile aliases plus a backend-neutral default engine slot under
 `$XDG_DATA_HOME/nvcr/engines`; exact-tag installer smoke remains pending until
 the next published package/engine assets exist. The CLI now warns when
 multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
-Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and leaves
-integrated/Jetson-class devices on the conservative low-memory path. I-frame
+Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and uses
+persistent contexts backed by one shared activation workspace on integrated/
+Jetson-class devices. I-frame
 encode and decode now keep TensorRT transforms, image-prior processing,
 quarter reduction/restore, and synthesis on GPU. Image quantization tensors are
 cached once per QP, intermediate TensorRT outputs use the bounded per-session
@@ -79,6 +98,176 @@ been removed. CPU rANS staging and the public decoded-frame download remain the
 intentional host boundaries. I-decode now reuses pinned buffers at those entropy
 boundaries and uploads packed int8 symbols before converting them to FP16 on the
 GPU.
+
+Release tooling note, 2026-08-01: `release_engine_assets.sh --latest-draft`
+now resolves tags through `gh api` rather than the newer
+`gh release list --json` interface, retaining compatibility with the packaged
+GitHub CLI 2.4.0 used by the release host. It prefers the newest draft and falls
+back to the newest published release when no draft exists. Shell syntax and
+focused mocked resolution were verified locally; live staging/upload remains
+the deployment next action.
+
+Orin benchmark automation note, 2026-08-01: `benchmark_orin_release.py` now
+orchestrates target preparation, artifact validation, Release build/tests,
+independent four-resolution GOP cases, and GOP-97 energy capture into one
+AI-ready JSON report. Independent cases preserve 720p/1080p failure evidence
+without allowing an earlier OOM to hide later resolutions. A partial report is
+explicitly non-gating and instructs documentation consumers to use only passed
+aggregate rows while preserving failures.
+The initial headless invocation exposed Python timeout output arriving as bytes
+from `tegrastats`; the sampler now normalizes partial timeout stdout/stderr to
+UTF-8 before parsing and JSON serialization.
+
+Orin performance investigation note, 2026-08-01: the complete report explicitly
+forced TensorRT low-memory mode. That mode creates and destroys an execution
+context and synchronizes the CUDA stream after every engine invocation, which
+breaks device-stage overlap and scales especially poorly at 720p/1080p. The
+existing CPU stage timer began after context acquisition, hiding part of this
+cost; `--profile` now includes context acquisition in the per-engine `setup`
+measurement. The next target action is a short, locked-clock low-memory versus
+performance-mode A/B at 720p, recording profile stages and peak unified memory,
+before changing the Jetson default or accepting the full performance matrix.
+The profiler instrumentation change built successfully in the local Release
+tree. Five of six registered tests passed; `nvcr_cuda_ops` could not create a
+CUDA stream because this execution environment has no NVMap/GPU access
+(`NvRmMemInitNvmap failed`). This is an environment-limited verification result,
+not a codec test failure, and target-side CUDA verification remains required.
+Target-side A/B attempt, 2026-08-01: the Orin was in `MAXN_SUPER` but clocks
+could not be locked because `sudo` required an interactive password. Before the
+runs, `tegrastats` reported 2,164/7,620 MiB RAM used but only `lfb 1x4MB`.
+The bounded 720p low-memory profile failed allocating the device scratch arena;
+the matching performance-mode profile reached `i_spatial_prior_2.plan` and then
+failed creating its execution context when TensorRT requested 29,491,200 bytes.
+Both failures were NVMap/CUDA out-of-memory errors. No timing comparison is valid
+from this attempt; reboot/contiguous-memory recovery and locked clocks are now
+hard prerequisites for the A/B.
+After the failed processes exited, NVMap headroom recovered to `lfb 10x4MB` and
+the bounded 720p A/B succeeded. Sysfs reported GPU min/current/max all at
+1,020 MHz and CPU0 min/current/max all at 1,728 MHz, so clocks were effectively
+fixed despite the unavailable privileged `jetson_clocks --show`. For nine-frame
+GOP-9 encode, low-memory mode produced 7.168 fps with six forced synchronizations
+per P-frame; performance mode produced 9.029 fps with zero such P-frame
+synchronizations, a 26.0% improvement with identical 26,242-byte payloads.
+Representative warmed P-frame TensorRT setup totals fell from about 116 ms to
+about 4 ms, while the CUDA enqueue total remained about 92–97 ms. This confirms
+context churn as a material policy regression but also shows that Orin TensorRT
+kernel execution is now the dominant 720p floor.
+A sequential 97-frame CIF GOP-97 check showed the same direction without profile
+overhead: encode improved from 56.243 to 94.510 fps (+68.0%) and decode from
+65.504 to 96.182 fps (+46.8%), with identical 155,655-byte payloads. These are
+diagnostic single runs, not replacement release evidence.
+Accepted Orin policy candidate, 2026-08-01: automatic execution now uses
+frame-type-scoped context persistence on integrated targets through 720p. It
+warms engines without retaining every context, synchronizes and releases the old
+family once at an I/P transition, and keeps the active family resident across
+consecutive frames. Explicit low-memory/performance modes and discrete-GPU
+automatic behavior are unchanged. A single 720p GOP-97 automatic-mode run
+encoded at 10.552 fps and decoded at 12.016 fps versus the report's low-memory
+6.339/7.861 fps (+66.5%/+52.9%), with the same 86,301-byte payload. Release build
+and the direct-GPU registered suite passed 6/6.
+Full 1080p family persistence failed on a 133,693,440-byte
+`p_reference_feature` context allocation, so automatic 1080p remains per-engine
+low-memory. A subsequent safe-mode retry also failed under worsened NVMap
+fragmentation on a 167,116,800-byte `p_synthesis` context allocation; 1080p
+correctness/performance verification therefore still requires a reboot with
+healthy contiguous-memory headroom. The Orin release harness now defaults to
+automatic mode so future evidence measures the target policy rather than forcing
+the superseded all-resolution low-memory diagnostic.
+
+Accepted shared-workspace successor, 2026-08-01: TensorRT 10.3 user-managed
+context memory removes the remaining 1080p residency conflict. On integrated
+automatic mode, every engine keeps persistent context metadata but points at one
+activation workspace sized to the largest engine and reserved from the existing
+512 MiB session arena. All engines enqueue on the same stream, so workspace use
+is serialized; codec scratch starts after the reserved prefix. Explicit modes
+and discrete-GPU automatic allocation are unchanged.
+The direct-GPU Release suite passed 6/6. A full BasketballDrive 1080p GOP-97 run
+completed without OOM at 5.995 encode fps and 6.356 decode fps with the expected
+343,910-byte payload, improving the low-memory report's 3.698/4.930 fps by
+62.1%/28.9%. A full FourPeople 720p GOP-97 regression run produced 10.535 encode
+fps and 11.976 decode fps with 86,301 payload bytes. Its complete stream SHA-256
+was `6aad23fa041e22d2741ef73ba894311e2ecf75c39ad426219a32e68e804d3274`,
+byte-identical to the prior frame-type-persistent candidate. Post-run
+`tegrastats` reported 3,001/7,620 MiB RAM and `lfb 24x4MB`; no context allocation
+failed. These are single diagnostic runs without same-session warm-up discard,
+so the formal repeated release matrix remains pending.
+
+Small-resolution and MLVC comparison diagnostic, 2026-08-01: with automatic
+shared-workspace execution, single 97-frame GOP-97 Orin runs measured QCIF at
+212.493 encode / 223.697 decode fps with 11,174 payload bytes and CIF at 95.275 /
+100.265 fps with 155,655 payload bytes. Relative to the forced-low-memory report,
+these are QCIF +105.3%/+72.0% and CIF +66.0%/+46.5%. A temporary area-scaled
+FourPeople 640x360 source exercised the dynamic `720p-fp16` bundle at 41.406
+encode / 44.256 decode fps with 44,073 payload bytes. This is the appropriate
+current resolution comparison to MLVC's roughly 100 fps 360p NPU claim; QCIF or
+CIF numbers are not comparable substitutes. Short profiles put warmed P-frame
+TensorRT enqueue totals near 4.6 ms at QCIF and 10.3 ms at CIF, while CPU entropy
+was only about 0.13 and 0.5 ms respectively, so neural execution—not rANS—is the
+small-resolution limiter.
+The expected local `/home/oelghati/mlvc` clone was absent during inspection.
+Primary public MLVC sources show a materially different 18.3M-parameter model
+(and 5.4M MLVC-S), fixed-size NPU exports, transmitted deterministic scale
+indices, gated memory/ReGLU architecture, and NPU-specific CoreML/OpenVINO/QNN
+paths. Adopting those model/bitstream ideas would constitute a new backend or
+model generation outside the pinned DCVC-RT v1 contract; the in-scope next probe
+is a dedicated 640x360 TensorRT optimization profile followed by same-source,
+same-quality stage and throughput comparison. Engine fusion and lower-resolution
+propagated features require separate conformance and retraining decisions.
+The follow-up native-resolution BasketballDrive 640x360 source confirmed that
+the temporary FourPeople resize was representative. After a separate warm-up,
+three sequential 97-frame GOP-97, QP-32 Release runs using the dynamic
+`720p-fp16` Orin bundle encoded at 41.642, 41.280, and 41.641 fps (41.521 fps
+mean) and decoded at 44.049, 43.740, and 43.972 fps (43.920 fps mean). Every
+trial produced the same 79,552-byte payload and decoded PSNR-YUV of 34.892588
+dB. At the source's 50 fps this is approximately 328.0 kbit/s and 0.02848 bits
+per pixel. The narrow run-to-run spread and agreement with the earlier
+41.406/44.256 fps FourPeople probe show that content and the resize were not the
+cause of the roughly 2.3x gap to MLVC's published aggregate NPU throughput.
+Edge-resolution dataset preparation, 2026-08-01: the five available 1920x1080
+YUV420P masters (BasketballDrive, HoneyBee, Jockey, Kimono, and ReadySteadyGo)
+were Lanczos-scaled with FFmpeg into complete 640x360 and 960x540 sets under
+`/home/oelghati/datasets/360p` and `/home/oelghati/datasets/540p`. Source frame
+rates and all frames were preserved: 500 BasketballDrive frames, 600 each for
+HoneyBee/Jockey/ReadySteadyGo, and 240 Kimono frames. Exact raw-frame-size
+validation passed for all ten outputs with zero trailing-byte remainder; the
+pre-existing BasketballDrive 360p output was preserved.
+Locked-clock Orin edge matrix, 2026-08-01: evidence
+`docs/evidence/orin-edge-360p-540p-2026-08-01.json` records five-sequence
+GOP-97/QP-32 Release measurements with GPU fixed at 1.02 GHz and CPU at
+1.728 GHz. The dynamic `720p-fp16` bundle averaged 41.633 encode / 44.027 decode
+fps at 640x360 and 18.524 / 20.504 fps at 960x540. Per-sequence throughput was
+tightly clustered despite materially different payloads and PSNR, confirming
+that TensorRT execution shape is the dominant performance variable. TensorRT
+warned that the plan was being used across different device models, and the
+bundle is optimized at 1280x720 rather than either measured shape, so this is a
+current-backend edge baseline rather than a dedicated-profile claim. An initial
+post-reboot matrix with unlocked 306 MHz GPU minimum clock is retained only as
+superseded diagnostic history and is excluded from the evidence file.
+Accepted P-decode entropy staging, 2026-08-01: the predicted-frame decoder now
+reuses pinned host buffers for both scale-index stages and z symbols, uploads
+decoded symbols as packed int8, and performs int8-to-FP16 conversion on CUDA.
+This removes per-frame pageable index vectors, CPU half conversion, and FP16
+symbol uploads while preserving the two entropy dependency waits. On the exact
+locked-clock BasketballDrive baseline streams, three-run decode means improved
+from 44.035 to 44.991 fps at 640x360 (+2.17%) and from 20.578 to 20.849 fps at
+960x540 (+1.32%). Reconstruction SHA-256 and PSNR-YUV were identical at both
+resolutions, and the direct-GPU Release suite passed 6/6. Evidence is in
+`docs/evidence/orin-p-decode-staging-2026-08-01.json`. A TensorRT input-shape
+cache probe did not reduce warmed setup time or provide repeatable throughput
+gain and was removed rather than retained speculatively.
+Accepted launch-bound CUDA Graph policy, 2026-08-01: integrated automatic-mode
+predicted-frame decode now caches up to 16 TensorRT CUDA Graph binding variants
+per engine at visible areas through 640x360. Capture is decode-only and excludes
+I-frames; encode, discrete GPUs, explicit TensorRT modes, and larger resolutions
+retain ordinary `enqueueV3`. At 360p, stable graph hits reduced warmed per-engine
+CPU setup from roughly 0.5--0.7 ms to 0.03--0.06 ms. Three-run BasketballDrive
+decode improved from the accepted pinned-staging mean of 44.991 to 45.872 fps
+(+1.96%), or +4.17% cumulatively over the original 44.035 fps edge baseline,
+with nine captures and 375 hits per run. Graphs were disabled at 540p after a
+broad probe showed no benefit; the final non-graph 540p control averaged 20.826
+fps versus 20.849 fps (-0.11%, normal variance). Reconstruction hashes and PSNR
+were unchanged and the direct-GPU Release suite passed 6/6. Evidence is in
+`docs/evidence/orin-cuda-graphs-2026-08-01.json`.
 
 ## M0 — Baseline and entropy
 
@@ -111,7 +300,8 @@ Device execution:
 - [x] Add owned `DeviceTensor` storage.
 - [x] Add a bounded per-session CUDA arena.
 - [x] Default automatic TensorRT execution mode to persistent contexts on
-  discrete GPUs while keeping integrated devices conservative.
+  discrete GPUs and persistent metadata with a shared user-managed activation
+  workspace on integrated devices.
 - [x] Replace `run_host_engine` with reusable device-address binding for all
   active TensorRT stages and remove the obsolete host-engine implementation.
 - [ ] Bind TensorRT outputs directly to downstream inputs where possible.
@@ -321,6 +511,50 @@ Exit criteria:
 - [ ] Performance, conformance, ABI, packaging, and security gates pass.
 
 ## Evidence log
+
+### 2026-08-01 — Orin Nano four-resolution v0.5.0 engine assets
+
+- On the recorded Jetson Orin Nano / L4T 36.4.7 target, exported a fresh FP16
+  `nvcr.model-manifest.v2` bundle from pinned DCVC-RT commit
+  `48ab0ac5e5199d78fffb944bfbafafb2b6142f7b` and the pinned CVPR 2025 I/P
+  checkpoints. The portable model bundle passed `nvcr-artifacts validate`.
+- Built all 14 TensorRT 10.3.0 plans for each of `qcif-fp16`, `cif-fp16`,
+  `720p-fp16`, and `1080p-fp16` using the `orin-nano-l4t3647` target profile.
+  Per-plan TensorRT smoke inference passed during every build, and all four
+  resulting `nvcr.engine-bundle.v2` directories passed hash and profile
+  validation.
+- Packaged four deterministic v0.5.0 reviewer assets under `dist/orin`; all
+  four sidecar SHA-256 checks passed. Archive digests: QCIF
+  `5a3e98b6e1495deb73b39f51c06a3b4a151d723a7c3ec409b9f809a8307b24cc`,
+  CIF `48efbb971f67d09086266c62c21a4dc771c3267f74cba9ef61e6df0eff5e2828`,
+  720p `4bb95d3c9e35fb19ba613694e0b5fa867e63c8ca994adda456f423d6474844fc`,
+  and 1080p
+  `4d150d1fd1488a43dac68f1676dd5570fb73b647697cd31aba93f16bdbee1a4f`.
+- Not performed in this step: pushing assets, invoking the GitHub upload
+  workflow, the full registered CTest suite, or correctness/performance/energy
+  matrices. Those gates remain open.
+
+### 2026-08-01 — Orin Nano partial performance diagnostic
+
+- Rebuilt commit `41a458fc53b54d329fcf813205d0e546b7eed057` in Release
+  mode from a dirty worktree and passed the registered suite 6/6 with direct
+  Jetson GPU/NVMap access.
+- Recorded three-run warmed encode/decode means for QCIF and CIF at GOP 1 and
+  GOP 97, QP 32, 97 frames. Raw evidence is
+  `docs/evidence/2026-08-01-orin-nano-resolution-matrix.jsonl`; the summarized
+  throughput, payload, PSNR-YUV, platform, and protocol are in
+  `docs/performance.md`.
+- QCIF GOP 1 encode/decode was 31.005/34.913 fps; QCIF GOP 97 was
+  40.752/48.817 fps. CIF GOP 1 was 16.074/17.793 fps; CIF GOP 97 was
+  23.727/24.219 fps.
+- The full matrix remains failed/incomplete: the first 720p warm-up and an
+  isolated retry both failed when TensorRT requested a 60 MiB execution-context
+  allocation from fragmented NVMap memory. At inspection the host reported
+  4.3 GiB available and no active GPU process, matching the previously recorded
+  contiguous-memory failure class.
+- No 720p/1080p, peak-memory, energy, or matching pinned-Python evidence was
+  produced. Do not advance the Orin gate; restore contiguous NVMap headroom and
+  rerun the identical matrix plus the `tegrastats` energy protocol.
 
 ### 2026-07-29 — RTX 4070 720p TensorRT bundle
 
@@ -1128,3 +1362,295 @@ Architectural decisions:
 Current next action: branch from this profile checkpoint for decode optimization,
 profile the GOP-97 decode path, fix the dominant resolution-scaled bottleneck,
 and rerun the identical four-resolution matrix against the baseline above.
+
+### 2026-08-02 — Reject reference/prior TensorRT graph fusion on Orin
+
+The bitstream-preserving P-frame decode experiment combined reference feature
+extraction and the temporal prior into two larger TensorRT plans (frame-reference
+and feature-reference variants). The reconstructed 640x360 BasketballDrive
+output remained bit-exact, but three locked-clock runs averaged 46.377 FPS versus
+the accepted 45.872 FPS baseline: only +1.10%. The experiment is preserved in
+`docs/evidence/orin-reference-prior-fusion-rejected-2026-08-02.json` and the
+implementation was removed because it missed the 10% material-gain gate while
+adding two large plans and a decode-only bundle path.
+
+Current next action: stop pursuing engine-boundary and launch-overhead changes;
+prototype precision or network-compute reduction in the dominant reference and
+synthesis networks, with cross-runtime quality/bitstream gates and an explicit
+10% Orin throughput threshold before integration.
+
+### 2026-08-02 — Fixed edge TensorRT profiles and Orin candidate evidence
+
+- Added architecture-neutral fixed-shape `360p-fp16` and `540p-fp16` engine
+  profiles, build/prepare/package/benchmark routing, and runtime acceptance of
+  positive dimensions for axes whose codec contract is runtime-variable.
+  Dynamic plans retain `-1` validation and their existing warm-up shapes; fixed
+  batch/channel axes remain exact. No CUDA-architecture branch, model, entropy,
+  or bitstream-format change was introduced, so the implementation remains
+  available to x86/RTX while plans remain target-local.
+- The local export directory was not a valid pinned v2 bundle: its I-frame
+  manifest was legacy and `p_synthesis.onnx` did not match the canonical v2
+  hash. The builder now validates the complete model bundle before producing
+  the first plan. Untraceable static synthesis plans were quarantined rather
+  than accepted.
+- Conservative Orin candidates used fixed min=opt=max shapes for 13 engines and
+  the validated dynamic 720p `p_synthesis.plan`. Both restamped bundles passed
+  the validator available during measurement and complete 97-frame native
+  encode/decode. They are explicitly hybrid evidence, not publishable fully
+  fixed bundles.
+- In balanced A-B-B-A-A-B BasketballDrive runs at GOP 97/QP 32, 360p encode
+  improved from 38.8667 to 41.8733 fps (+7.74%) and decode from 39.4077 to
+  40.8450 fps (+3.65%). At 540p, encode improved from 17.9357 to 18.8653 fps
+  (+5.18%) and decode from 19.9060 to 20.3743 fps (+2.35%). Candidate PSNR-YUV
+  was slightly higher at both resolutions. The 360p candidate and 540p encode
+  clear the 3% gate; 540p decode remains diagnostic.
+- GPU DVFS was unlocked at 306--1020 MHz after reboot, so these measurements do
+  not replace locked-clock release evidence. Full run order, plan and output
+  hashes, payloads, quality, and provenance are in
+  `docs/evidence/orin-fixed-edge-profiles-2026-08-02.json`.
+- The direct-device `nvcr_cuda_ops` test passed on Orin; the other five release
+  tests and the artifact/profile tests passed. The same dynamic 720p bundle was
+  exercised as the baseline throughout, providing a runtime regression check.
+- A stabilization pass closed the hybrid-bundle contract gap before commit.
+  Engine manifests now derive identity, visible dimensions, builder settings,
+  and `shape_profile` from the selected versioned profile. Legacy manifests
+  remain dynamic; dynamic bundles must retain `-1` runtime axes, while fixed
+  bundles must resolve every variable axis in all 14 engines. The measured
+  13+1 hybrids now fail both artifact validation and runtime initialization.
+- Final compatibility verification passed the direct-device Release suite 6/6
+  and a native nine-frame I/P roundtrip using the existing dynamic 720p bundle
+  (bitstream SHA-256
+  `945bfbc71d09f00bc041d1c5925a3dd37bfa0b71e009905b2f375ca2738466d2`).
+  A clean TensorRT-disabled portable build passed 4/4 tests, and a clean Orin
+  SM 8.7 Release build, install, and package probe included both new profile
+  definitions and the hardened artifact helpers. No codec, model, entropy, or
+  bitstream rollback was required.
+
+Rejected in the same wave: a checkerboard two-way CUDA compaction kernel
+regressed repeated 360p encode by 0.61% and decode by 0.20% with bit-exact
+outputs. It was removed; the negative result is preserved in
+`docs/evidence/orin-two-way-compaction-rejected-2026-08-02.json`.
+
+Current next action: restore the pinned exporter environment, regenerate the
+canonical synthesis graph, build all 14 engines fixed per resolution, and
+repeat under locked clocks. Investigate 540p decode independently if it remains
+below the 3% gate; do not publish the current hybrid bundles as fixed profiles.
+
+### 2026-08-02 — Accept I-frame entropy/synthesis overlap on Orin
+
+- Filled the remaining CPU rANS entropy timing gaps under `--profile`: I-frame
+  encode (`i_entropy_encode`), I-frame decode (`i_entropy_decode_z`,
+  `i_entropy_decode_y`), and P-frame decode (`p_entropy_decode_z`,
+  `p_entropy_decode_y0`, `p_entropy_decode_y1`). `p_entropy_encode` was already
+  instrumented before this change. No entropy algorithm, bitstream, or model
+  change was made. The profiling scope is inactive and avoids clock/allocation
+  work unless `--profile` is enabled.
+- On `orin-nano-l4t3647` with the `720p-fp16` bundle and 3 all-intra FourPeople
+  frames (interactive `--profile`, unlocked clocks — not a locked-clock
+  benchmark), `i_entropy_encode` cost 8.1-9.7 ms/frame and the four
+  `i_entropy_decode_y` stages plus `i_entropy_decode_z` cost 11.6-12.3 ms/frame
+  combined, versus 88-126 ms/frame for the `i_synthesis.plan` TensorRT enqueue
+  alone (and more again for `i_analysis` and the hyper/prior plans). I-frame
+  time on this device is GPU-compute-bound, not entropy-bound.
+- I-frame encode now queues synthesis immediately after the entropy D2H copies
+  and their readiness event, then runs CPU rANS after synchronizing only that
+  event. CPU entropy therefore overlaps GPU synthesis; final reconstruction
+  download still synchronizes the stream. At 540p, where CUDA Graphs are
+  excluded by the area cap, balanced A-B-B-A-A-B GOP-1 encode improved from
+  8.7120 to 9.0873 fps (+4.31%). GOP-97 improved from 17.9170 to 18.2497 fps
+  (+1.86%, below the standalone 3% gate because only one frame benefits).
+- This does not confirm or refute the RTX 4070-derived entropy hypothesis in
+  `docs/performance.md`; no RTX 4070 hardware was available in this session to
+  re-measure there. Do not generalize the Orin finding to discrete-GPU targets
+  without re-measuring on one.
+- Every 540p baseline/candidate stream was bit-exact. Balanced decode checks
+  remained within variance: -0.66% at GOP-1 and -0.31% at GOP-97. Verification
+  passed the direct Release suite 6/6 and portable TensorRT-disabled suite 4/4.
+  Evidence is in
+  `docs/evidence/orin-entropy-instrumentation-2026-08-02.json`.
+
+Current next action: re-run this same entropy-vs-compute breakdown on
+`rtx4070-ubuntu2404` (or another discrete GPU) before treating entropy as a
+solved non-issue project-wide; the compute-bound result above is Orin-specific
+evidence only.
+
+### 2026-08-02 — Accept integrated-Orin encode CUDA Graph replay
+
+- Extended the existing launch-bound CUDA Graph policy (2026-08-01, integrated
+  predicted-frame decode only, area-capped at 640x360) to encode on the same
+  integrated `shared_workspace_persistent` policy. It reuses the bounded,
+  signature-keyed per-engine cache; discrete-GPU `persistent`, low-memory, and
+  all resolutions above 640x360 retain ordinary `enqueueV3`.
+- Balanced 360p A-B-B-A-A-B runs against commit `c3fc4d7e` measured GOP-1
+  encode at 17.8223 versus 19.1120 fps (+7.24%) and GOP-97 at 38.7803 versus
+  40.1893 fps (+3.63%). The candidate includes the accepted I-frame overlap
+  above. Final decode remained flat: -0.42% at GOP-1 and +0.07% at GOP-97.
+- All six streams per 360p GOP case were bit-exact. Baseline/candidate
+  reconstruction SHA-256 was
+  `e15135ffac42cd14fc3e616bb2217a32b84f6a70e3f99c6e3450025487e574d0`
+  with identical 34.892588 dB PSNR-YUV. A nine-frame encode recorded 19 graph
+  captures and 36 hits. A 720p sanity run emitted no graph log, confirming the
+  area cap.
+- The initial I-frame decode graph extension regressed the first balanced probe
+  and was removed. The untested discrete-GPU extension was also removed rather
+  than reasoning about RTX compatibility without hardware. Desktop policy is
+  unchanged. Evidence is in
+  `docs/evidence/orin-cuda-graph-extension-2026-08-02.json`.
+- GPU/CPU clocks remained unlocked, so repeat under locked clocks before using
+  these as release headline numbers. The balanced direction, bit-exact output,
+  direct Release suite 6/6, native QCIF I/P roundtrip, and portable suite 4/4
+  are sufficient to retain the scoped candidate.
+
+Current next action: repeat the accepted combined encode candidate under locked
+clocks and on RTX before considering any discrete-GPU graph expansion. Restore
+the pinned exporter separately for fully fixed 360p/540p engine work.
+
+### 2026-08-02 — Builder optimization level bump rejected without a run
+
+- Investigated bumping `builder_optimization_level` (Tier-1 item 3 from the
+  session's optimization plan) toward TensorRT's maximum (5). Found each
+  profile under `configs/engine-profiles/` already declares its own
+  deliberately tuned level (qcif/cif=1, 1080p/720p=2, 360p/540p=4) per the
+  2026-07-08 decision made specifically to avoid Orin TensorRT build-time OOM
+  at higher levels; `scripts/backends/dcvcrt/build_tensorrt.sh`'s flat default
+  of 3 is effectively unused because every shipped profile overrides it.
+- A scoped test (bumping the qcif profile to level 3 and rebuilding) failed
+  before producing any timing data: `prepare_artifacts.sh --skip-export`
+  rejected `build/models/dcvcrt-v2` with a `p_synthesis.onnx` SHA-256 mismatch
+  against the manifest-recorded hash. This is a pre-existing, unrelated
+  model-bundle integrity problem, not caused by this session's changes, and
+  fixing it requires an out-of-scope ONNX re-export from the pinned exporter
+  environment.
+- Decision: stop pursuing this item now rather than chase a speculative,
+  already-scoped-down builder setting change by first fixing an unrelated
+  model-export problem. No profile, script, or engine change was made.
+
+Current next action: when the pinned exporter environment is restored for the
+360p/540p fixed-profile work already tracked above, re-attempt a
+locked-clock builder-optimization-level probe on one profile as a small
+follow-up, gated at the standard 3% material-gain threshold.
+
+### 2026-08-02 — Investigate the next Orin optimization waves
+
+- The pinned exporter was restored after the earlier builder investigation.
+  The canonical `p_synthesis.onnx` now matches the expected SHA-256, and both
+  360p and 540p bundles contain all 14 fixed-shape plans. Both bundles pass the
+  `nvcr.engine-bundle.v2` validator. They remain local, target-specific build
+  outputs and have not been accepted for distribution.
+- An unlocked-clock balanced A-B-B-A-A-B BasketballDrive diagnostic at GOP 97,
+  QP 32 compared the dynamic `720p-fp16` bundle against these fully fixed
+  canonical bundles. At 360p, encode improved from 40.2840 to 48.4787 fps
+  (+20.34%) and decode from 31.8423 to 34.3093 fps (+7.75%). At 540p, encode
+  improved from 18.2370 to 21.0583 fps (+15.47%) and decode from 20.0080 to
+  21.6657 fps (+8.29%). PSNR-YUV changed by -0.0074 dB and +0.0044 dB,
+  respectively. Each bundle was deterministic, although target-local FP16
+  TensorRT tactics produced different streams.
+- These numbers are diagnostic, not release evidence: GPU DVFS remained
+  unlocked at 306--1020 MHz, short profiles showed thermal/DVFS variance, and
+  only one sequence/GOP was measured. The first wave is therefore a locked-clock
+  acceptance matrix covering GOP 1 and 97, at least five sequences, three
+  repetitions, quality, payload, memory, energy, and cross-runtime correctness.
+- Warmed 360p profiling shows why fixed plans help. Relative to the dynamic
+  bundle, fixed plans reduced `p_reference_feature` from about 6.7 to 5.7 ms,
+  `p_analysis` from 3.7 to 3.2 ms, and `p_synthesis` from about 11.0 to 8.7 ms.
+  CPU P-frame entropy remains about 1.1 ms. Direct `trtexec` layer profiling
+  found real compute distributed across decoder/reconstruction depth-convolution
+  and FFN blocks; no copy or reformat dominated. Persistent L2 cache probing was
+  neutral and is rejected.
+- The local MLVC implementation and the 2026 MLVC paper were audited. Fixed
+  deployment shapes are directly applicable. Its scale-sending decoder gain,
+  reduced feature width, NPU-friendly activations, memory/LTR changes, and
+  5.4M-parameter MLVC-S variant are trained codec/model changes. The repository
+  also derives published encoder/decoder FPS from model-inference timers around
+  `predict`/`infer`; `FrameLoopTotal` is separate. Those Apple/Intel/Qualcomm NPU
+  results are not directly comparable with NVCR complete-codec wall time on an
+  Orin Nano.
+- Ranked follow-up after fixed-profile acceptance: (1) target-local TensorRT
+  tactic search on the four hot engines, using controlled builder/workspace/
+  auxiliary-stream settings and timing caches; (2) caller-bound ping-pong DPB
+  outputs to remove two allocations and 3.297 MB of allocation churn per P
+  frame; (3) only if a further >25% step is required, sensitivity-guided mixed
+  precision with QAT under a new artifact/model identity. INT8 PTQ, broad
+  multi-streaming, persistent L2 cache, more runtime-only fusion/compaction,
+  DLA, and FP8 are not current paths.
+- Full measurements, hashes, profiles, research links, and compatibility gates
+  are preserved in
+  `docs/evidence/orin-next-optimization-investigation-2026-08-02.json`.
+
+Current next action: run the locked-clock fixed-profile acceptance matrix first.
+If the diagnostic gains hold, add exact-resolution selection with the dynamic
+bundle as fallback, package separate Orin plans, and build/measure separate RTX
+plans. Do not share TensorRT `.plan` files across GPU targets.
+
+### 2026-08-02 — Accept fixed-profile performance and close Orin FP16 runtime tuning
+
+- With `MAXN_SUPER` selected and `jetson_clocks` fixing GPU at 1.02 GHz and CPU
+  at 1.728 GHz, the canonical fully fixed bundles completed the requested
+  GOP-1/GOP-97 three-repetition matrix. On BasketballDrive GOP 97, the matching
+  current dynamic control measured 41.756/45.731 encode/decode fps at 360p and
+  18.356/20.925 fps at 540p. Fixed profiles reached 51.071/55.304 fps
+  (+22.31%/+20.93%) and 21.022/23.856 fps (+14.52%/+14.00%), respectively.
+- The locked-clock fixed GOP-97 result was extended to BasketballDrive,
+  HoneyBee, Jockey, Kimono, and ReadySteadyGo with three repetitions each.
+  Five-sequence means were 51.100 encode / 55.326 decode fps at 360p and 21.033
+  / 23.905 fps at 540p. Scene-to-scene throughput spread remained below about
+  1%, confirming that fixed network shape and device compute set the ceiling.
+- Fixed all-intra GOP-1 throughput was 20.871/26.432 fps at 360p and
+  9.550/11.655 fps at 540p. These values are I-frame attribution only, not the
+  normal-video headline.
+- Every three-run Basketball case was deterministic within its engine bundle.
+  Target-local FP16 tactic differences changed GOP-97 PSNR-YUV by only
+  -0.007352 dB at 360p and +0.004398 dB at 540p. Both fixed bundles passed the
+  v2 validator and the direct-device Release suite passed 6/6.
+- A final bounded tactic search did not find another candidate. Builder level 5
+  regressed `p_synthesis` latency by 4.91%, `p_reference_feature` by 3.49%, and
+  `p_analysis` by 13.46%; `p_prior` was neutral. Under locked clocks, forcing
+  zero auxiliary streams regressed `p_synthesis` by 8.78%. These candidates are
+  rejected without building a publishable bundle or changing runtime code.
+- VDD_IN energy with a 10-second idle baseline measured idle-adjusted
+  0.273/0.213 J per 360p encode/decode frame and 0.686/0.541 J at 540p. The
+  board remained near 64 C after the matrix and fixed clocks were verified
+  before and after measurement.
+- Decision: accept the fixed-profile performance candidate and stop the current
+  Orin FP16 runtime-only FPS wave. The remaining hot path is distributed neural
+  TensorRT compute; no tested tactic/configuration clears the 3% whole-codec
+  gate. Small buffer-management work may still be justified for memory
+  reliability, but not as a speed project. Materially higher FPS requires a new
+  trained artifact/model path with separate rate-distortion and compatibility
+  gates.
+- Complete run arrays, hashes, clocks, energy, negative results, and stopping
+  rule are in
+  `docs/evidence/orin-fixed-profile-ceiling-2026-08-02.json`.
+
+Current next action: add exact-resolution selection and packaging for the
+accepted Orin 360p/540p bundles with dynamic fallback, then perform separate RTX
+builds and measurements. Do not share Orin `.plan` files with RTX/x86 targets.
+
+### 2026-08-02 — Preserve fixed 360p/540p Orin release assets
+
+- Packaged the accepted canonical fixed bundles as deterministic v0.6.0
+  reviewer-convenience engine assets under `dist/`, following the existing
+  v0.5.0 repository tag. The requested "530p" asset maps to the registered and
+  measured `540p-fp16` profile at 960x540; no 530p profile exists. The initial
+  v0.5.0 local copies and sidecars remain preserved as history.
+- `360p-fp16`: archive size 155,615,114 bytes, SHA-256
+  `a30384e03a163f8629ed604200b257832d474b63284d5e8a84ccaa180b26cb7f`.
+  `540p-fp16`: archive size 155,081,625 bytes, SHA-256
+  `7c445030b20c61742ad487a03fc683b5a50ecd4776a7586112209621a7603578`.
+- Both source bundles and both extracted archive bundles passed
+  `nvcr.engine-bundle.v2` validation. Archive sidecars and every entry in each
+  `ENGINE-ASSET-MANIFEST.sha256` passed. Each archive contains the final 14
+  TensorRT plans plus runtime entropy/quant assets and manifests; ONNX,
+  checkpoint, and transient timing-cache files are excluded.
+- The existing `dist/nvcr-engine-assets.txt` was deliberately left unchanged.
+  Its rows and presigned URLs describe the earlier v0.5.0 QCIF/CIF/720p/1080p
+  staging set. Generate new URLs and a fresh workflow manifest only when the
+  upload is requested, and keep every asset filename aligned with the exact
+  v0.6.0 release tag.
+- Machine-readable preservation evidence is in
+  `docs/evidence/orin-fixed-engine-packages-2026-08-02.json`.
+
+Current next action: integrate runtime selection with dynamic fallback. For a
+later upload, stage the two v0.6.0 fixed-profile archives, regenerate
+`dist/nvcr-engine-assets.txt`, and run the exact-tag upload workflow. Repackage
+the other four profiles as v0.6.0 first if they are included in that release.

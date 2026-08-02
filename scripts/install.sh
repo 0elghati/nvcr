@@ -183,7 +183,7 @@ select_default_profile() {
         return
     fi
     if ((non_interactive)) || [[ ! -t 0 ]] || [[ "${#profiles_ref[@]}" -eq 1 ]]; then
-        for candidate in 1080p-fp16 720p-fp16 cif-fp16 qcif-fp16; do
+        for candidate in 1080p-fp16 720p-fp16 540p-fp16 360p-fp16 cif-fp16 qcif-fp16; do
             for profile in "${profiles_ref[@]}"; do
                 if [[ "$profile" == "$candidate" ]]; then
                     printf '%s\n' "$profile"

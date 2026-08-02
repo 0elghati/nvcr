@@ -185,3 +185,54 @@ scripts/benchmark_resolution_matrix.sh \
 PSNR calculation is deliberately outside codec timing. Keep the emitted JSONL
 with the corresponding performance documentation so per-run variance is not
 lost behind aggregate FPS values.
+
+## Complete Orin release benchmark
+
+Use `benchmark_orin_release.py` after rebooting the Jetson when `tegrastats`
+reports healthy contiguous `lfb` headroom. It validates all selected engine
+bundles, builds Release, runs the registered tests, executes every
+resolution/GOP as an independent case, collects GOP-97 encode/decode energy,
+and writes one self-contained JSON report suitable for an AI documentation
+handoff. A failed resolution does not prevent later resolutions from being
+attempted.
+
+```bash
+sudo nvpmodel -m 2
+sudo jetson_clocks
+
+./scripts/benchmark_orin_release.py \
+  --execution-mode automatic \
+  --output docs/evidence/orin-release-$(date +%F).json
+```
+
+For performance diagnosis, compare the same short case in both execution modes
+before running the full matrix. `--profile` now includes TensorRT execution-
+context acquisition in each engine's CPU `setup` stage; in low-memory mode it
+also includes the forced per-engine synchronization and context destruction.
+
+```bash
+NVCR_TENSORRT_LOW_MEMORY_MODE=1 build-release/cli/nvcr encode \
+  -i /home/oelghati/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/nvcr-orin-low-memory.nvcr -s 1280x720 -r 30 --frames 9 \
+  --gop-size 9 --qp 32 --engine-dir build/engines/dcvcrt-cvpr2025/orin-nano-l4t3647/720p-fp16 \
+  --profile
+
+NVCR_TENSORRT_LOW_MEMORY_MODE=0 build-release/cli/nvcr encode \
+  -i /home/oelghati/datasets/720p/FourPeople_1280x720_60.yuv \
+  -o /tmp/nvcr-orin-performance.nvcr -s 1280x720 -r 30 --frames 9 \
+  --gop-size 9 --qp 32 --engine-dir build/engines/dcvcrt-cvpr2025/orin-nano-l4t3647/720p-fp16 \
+  --profile
+```
+
+Automatic mode keeps persistent context metadata on integrated GPUs while all
+engines reuse one user-managed activation workspace reserved from the session
+CUDA arena. Run performance mode only as a diagnostic: it asks TensorRT to give
+every context a separate workspace and can exhaust fragmented unified memory.
+The existing low-memory release result is not representative of the automatic
+device-chained throughput target.
+
+Use `--prepare-system` to have the script invoke the two `sudo` preparation
+commands interactively. Use `--skip-energy` only for a diagnostic run; such a
+report does not satisfy the Orin release evidence protocol. The final JSON
+contains commands, stdout/stderr, platform and clock metadata, input and bundle
+hashes, all per-run rows, aggregates, energy records, and explicit failures.

@@ -172,13 +172,59 @@ def require_string(metadata: dict[str, object], key: str) -> None:
         raise SystemExit(f"could not determine required TensorRT engine metadata: {key}")
 
 
+def load_profile(path: Path, schema: str) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise SystemExit(f"cannot read profile {path}: {error}") from error
+    if not isinstance(value, dict) or value.get("schema") != schema:
+        raise SystemExit(f"{path} must use schema {schema}")
+    if not isinstance(value.get("id"), str) or not value["id"]:
+        raise SystemExit(f"{path} requires a non-empty profile id")
+    return value
+
+
+def validated_visible_dimensions(profile: dict[str, object], path: Path) -> tuple[dict[str, list[int]], str]:
+    dimensions = profile.get("visible_dimensions")
+    if not isinstance(dimensions, dict):
+        raise SystemExit(f"{path} requires visible_dimensions")
+    normalized: dict[str, list[int]] = {}
+    for label in ("minimum", "optimum", "maximum"):
+        value = dimensions.get(label)
+        if (
+            not isinstance(value, list)
+            or len(value) != 2
+            or any(not isinstance(item, int) or isinstance(item, bool) or item <= 0 for item in value)
+        ):
+            raise SystemExit(
+                f"{path} visible_dimensions.{label} must contain two positive integers"
+            )
+        normalized[label] = value
+    for axis in range(2):
+        if not (
+            normalized["minimum"][axis]
+            <= normalized["optimum"][axis]
+            <= normalized["maximum"][axis]
+        ):
+            raise SystemExit(f"{path} visible dimensions are not ordered")
+    shape_profile = (
+        "fixed"
+        if normalized["minimum"] == normalized["optimum"] == normalized["maximum"]
+        else "dynamic"
+    )
+    return normalized, shape_profile
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--engines", required=True, type=Path)
     parser.add_argument("--trtexec", required=True, type=Path)
     parser.add_argument("--device-id", type=int, default=0)
     parser.add_argument(
-        "--optimization-point", required=True, choices=("qcif", "cif", "720p", "1080p"))
+        "--optimization-point",
+        required=True,
+        choices=("qcif", "cif", "360p", "540p", "720p", "1080p"),
+    )
     parser.add_argument("--workspace-mib", required=True, type=int)
     parser.add_argument("--builder-optimization-level", required=True, type=int)
     parser.add_argument("--model-profile-id", default="dcvcrt-cvpr2025")
@@ -194,6 +240,31 @@ def main() -> None:
         help="fail if TensorRT reports a cross-device warning while inspecting an existing plan",
     )
     args = parser.parse_args()
+
+    model_profile = load_profile(args.model_profile_path, "nvcr.model-profile.v1")
+    engine_profile = load_profile(args.engine_profile_path, "nvcr.engine-profile.v1")
+    target_profile = load_profile(args.target_profile_path, "nvcr.target-profile.v1")
+    if model_profile["id"] != args.model_profile_id:
+        raise SystemExit("model profile id does not match --model-profile-id")
+    expected_engine_id = f"{args.optimization_point}-fp16"
+    if (
+        engine_profile["id"] != expected_engine_id
+        or engine_profile.get("optimization_point") != args.optimization_point
+        or engine_profile.get("precision") != "fp16"
+    ):
+        raise SystemExit("engine profile identity, optimization point, or precision does not match")
+    if (
+        engine_profile.get("workspace_mib") != args.workspace_mib
+        or engine_profile.get("builder_optimization_level")
+        != args.builder_optimization_level
+    ):
+        raise SystemExit("TensorRT builder settings do not match the selected engine profile")
+    target_profile_id = target_profile["id"]
+    if args.target_profile_id not in ("local-auto", target_profile_id):
+        raise SystemExit("target profile id does not match --target-profile-id")
+    visible_dimensions, shape_profile = validated_visible_dimensions(
+        engine_profile, args.engine_profile_path
+    )
 
     required_files = (
         "i_analysis.plan",
@@ -266,12 +337,6 @@ def main() -> None:
         except (AttributeError, OSError):
             pass
 
-    visible_profiles = {
-        "qcif": {"minimum": [64, 64], "optimum": [176, 144], "maximum": [176, 144]},
-        "cif": {"minimum": [64, 64], "optimum": [352, 288], "maximum": [352, 288]},
-        "720p": {"minimum": [64, 64], "optimum": [1280, 720], "maximum": [1280, 720]},
-        "1080p": {"minimum": [64, 64], "optimum": [1920, 1080], "maximum": [1920, 1080]},
-    }
     major, minor, patch = infer_tensorrt_version()
     metadata: dict[str, object] = {
         "format": 2,
@@ -279,11 +344,12 @@ def main() -> None:
         "kind": "nvcr-tensorrt-engine-bundle",
         "model_profile_id": args.model_profile_id,
         **profile_hashes,
-        "target_profile_id": args.target_profile_id,
-        "engine_profile_id": f"{args.optimization_point}-fp16",
+        "target_profile_id": target_profile_id,
+        "engine_profile_id": expected_engine_id,
         "precision": "int8_fp16" if args.enable_int8 else "fp16",
         "optimization_point": args.optimization_point,
-        "visible_dimensions": visible_profiles[args.optimization_point],
+        "visible_dimensions": visible_dimensions,
+        "shape_profile": shape_profile,
         "workspace_mib": args.workspace_mib,
         "builder_optimization_level": args.builder_optimization_level,
         "cuda_runtime_version": cuda_runtime_version,

@@ -1,0 +1,67 @@
+{
+  "schema": "nvcr.performance-candidate.v1",
+  "date": "2026-08-02",
+  "base_commit": "c3fc4d7e66dccd70c5a7e560b27596c91a6c6219",
+  "target": "orin-nano-l4t3647",
+  "purpose": "Measure the remaining CPU rANS stages and overlap I-frame CPU entropy coding with GPU synthesis without changing the codec or bitstream.",
+  "instrumentation": {
+    "new_stage_names": [
+      "i_entropy_encode",
+      "i_entropy_decode_z",
+      "i_entropy_decode_y",
+      "p_entropy_decode_z",
+      "p_entropy_decode_y0",
+      "p_entropy_decode_y1"
+    ],
+    "pre_existing_stage": "p_entropy_encode",
+    "disabled_cost": "The scope avoids clock reads and string allocation unless --profile is enabled."
+  },
+  "profile_diagnostic": {
+    "engine_bundle": "720p-fp16 dynamic",
+    "sequence": "FourPeople_1280x720_60.yuv",
+    "frames": 3,
+    "gop": 1,
+    "clock_note": "interactive unlocked-clock diagnostic, not release evidence",
+    "encode_cpu_ms_i_entropy_encode": [8.474, 8.114, 9.699],
+    "encode_cuda_ms_i_analysis_plan_enqueue": [78.252, 55.996, 46.409],
+    "encode_cuda_ms_i_synthesis_plan_enqueue": [111.505, 99.899, 88.675],
+    "decode_cpu_ms_i_entropy_total_per_frame": [12.279, 11.556, 11.588],
+    "decode_cuda_ms_i_synthesis_plan_enqueue": [126.321, 114.064, 93.171],
+    "conclusion": "Orin I-frame execution is GPU-compute-bound. CPU entropy is still large enough to hide behind synthesis for a measurable encode gain. This result must not be generalized to RTX without measurement."
+  },
+  "scheduling_change": "After entropy D2H copies and their readiness event are queued, enqueue I-frame synthesis on the same CUDA stream. Synchronize only the readiness event, perform CPU rANS while synthesis executes, then let reconstruction download synchronize final completion.",
+  "isolated_540p_results": {
+    "protocol": "BasketballDrive, 97 frames, QP32, dynamic 720p bundle, A-B-B-A-A-B, unlocked clocks; CUDA Graphs excluded by area cap",
+    "gop1": {
+      "baseline_encode_fps": [8.718, 8.708, 8.710],
+      "candidate_encode_fps": [9.128, 9.046, 9.088],
+      "baseline_encode_mean": 8.712000,
+      "candidate_encode_mean": 9.087333,
+      "encode_change_percent": 4.308,
+      "baseline_decode_mean": 10.923333,
+      "candidate_decode_mean": 10.851667,
+      "decode_change_percent": -0.656,
+      "bitstream_sha256": "836b0b7430b5cac5570f23478687261688a0408a8d26fda2fc5ac43add4f594f",
+      "decision": "accept overlap candidate"
+    },
+    "gop97": {
+      "baseline_encode_fps": [17.819, 17.962, 17.970],
+      "candidate_encode_fps": [18.272, 18.264, 18.213],
+      "baseline_encode_mean": 17.917000,
+      "candidate_encode_mean": 18.249667,
+      "encode_change_percent": 1.857,
+      "baseline_decode_mean": 20.038333,
+      "candidate_decode_mean": 19.976000,
+      "decode_change_percent": -0.311,
+      "bitstream_sha256": "0385abab2d28b1de21165aaf96ba7e19e18cd6bac4695267938a8ba7ba0e3fd0",
+      "decision": "no regression; expected diluted gain because only the I-frame overlaps"
+    }
+  },
+  "verification": {
+    "all_540p_streams_bit_exact": true,
+    "release_ctest": "6/6 passed",
+    "portable_tensorrt_disabled_ctest": "4/4 passed",
+    "native_qcif_i_p_roundtrip": "passed"
+  },
+  "decision": "Retain entropy instrumentation and I-frame CPU/GPU overlap. Repeat under locked clocks and measure separately on RTX before changing any desktop-specific policy."
+}

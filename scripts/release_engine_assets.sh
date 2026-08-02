@@ -30,7 +30,8 @@ Options:
   --s3-prefix URI       Base S3 prefix; resolved tag is appended automatically
   --s3-uri URI          Exact S3 staging prefix; may contain {tag}
   --tag vX.Y.Z          Override the version.txt-derived Release Please tag
-  --latest-draft        Resolve the newest draft GitHub Release tag instead
+  --latest-draft        Resolve the newest draft GitHub Release tag, falling
+                        back to the newest published release when none is draft
   --aws-region REGION   AWS region for S3 upload/presign commands
   --repo OWNER/REPO     GitHub repository for workflow dispatch
   --workflow-ref REF    Ref containing upload-engine-assets.yml (default: main)
@@ -125,9 +126,13 @@ if ((dry_run == 0)) && ! command -v aws >/dev/null; then
 fi
 
 if ((latest_draft)); then
-    tag="$(gh release list --repo "$repo" --limit 100 --json tagName,isDraft,createdAt --jq 'map(select(.isDraft)) | sort_by(.createdAt) | last | .tagName // ""')"
+    # Use the REST endpoint instead of `gh release list --json`: structured
+    # output for that command is unavailable in older packaged gh releases.
+    # GitHub returns releases newest-first. Prefer the first draft, then fall
+    # back to the newest published release when no draft exists.
+    tag="$(gh api "repos/$repo/releases?per_page=100" --jq '. as $releases | (($releases | map(select(.draft)) | first) // ($releases | first)) | .tag_name // ""')"
     if [[ -z "$tag" ]]; then
-        echo "no draft GitHub Release found for $repo" >&2
+        echo "no GitHub Release found for $repo" >&2
         exit 1
     fi
 else

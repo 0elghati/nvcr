@@ -116,6 +116,36 @@ def require_string(document: dict[str, Any], key: str, source: Path) -> str:
     return value
 
 
+def validate_visible_dimensions(document: dict[str, Any], source: Path) -> str:
+    dimensions = document.get("visible_dimensions")
+    if not isinstance(dimensions, dict):
+        raise ValidationError(f"{source} requires object 'visible_dimensions'")
+    normalized: dict[str, tuple[int, int]] = {}
+    for label in ("minimum", "optimum", "maximum"):
+        value = dimensions.get(label)
+        if (
+            not isinstance(value, list)
+            or len(value) != 2
+            or any(not isinstance(item, int) or isinstance(item, bool) or item <= 0 for item in value)
+        ):
+            raise ValidationError(
+                f"{source} visible_dimensions.{label} must contain two positive integers"
+            )
+        normalized[label] = (value[0], value[1])
+    for axis in range(2):
+        if not (
+            normalized["minimum"][axis]
+            <= normalized["optimum"][axis]
+            <= normalized["maximum"][axis]
+        ):
+            raise ValidationError(f"{source} visible dimensions are not ordered")
+    return (
+        "fixed"
+        if normalized["minimum"] == normalized["optimum"] == normalized["maximum"]
+        else "dynamic"
+    )
+
+
 def safe_bundle_name(value: str, source: Path) -> str:
     candidate = Path(value)
     if (candidate.is_absolute() or candidate.name != value or value in (".", "..")
@@ -268,6 +298,16 @@ def validate_engine_bundle(root: Path) -> dict[str, Any]:
         raise ValidationError("engine workspace or builder level is invalid")
     if manifest["engine_profile_id"] != f"{manifest['optimization_point']}-fp16":
         raise ValidationError("engine profile and optimization point do not match")
+    expected_shape_profile = validate_visible_dimensions(manifest, manifest_path)
+    shape_profile = manifest.get("shape_profile")
+    if shape_profile is None:
+        # Existing v2 release bundles predate this field and are all dynamic.
+        # A fixed-range bundle must opt in so a hybrid cannot be mislabeled.
+        if expected_shape_profile == "fixed":
+            raise ValidationError("fixed engine bundle requires shape_profile='fixed'")
+        shape_profile = "dynamic"
+    if shape_profile not in ("dynamic", "fixed") or shape_profile != expected_shape_profile:
+        raise ValidationError("engine shape profile does not match visible dimensions")
 
     checksum_name = safe_bundle_name(str(manifest["checksum_manifest"]), manifest_path)
     checksum_path = root / checksum_name
@@ -336,7 +376,22 @@ def load_profile(path: Path, expected_schema: str) -> dict[str, Any]:
         raise ValidationError(f"{path} must use schema {expected_schema}")
     if profile.get("precision") != "fp16":
         raise ValidationError(f"{path} must select FP16")
-    require_string(profile, "id", path)
+    profile_id = require_string(profile, "id", path)
+    if expected_schema == "nvcr.engine-profile.v1":
+        optimization_point = require_string(profile, "optimization_point", path)
+        if profile_id != f"{optimization_point}-fp16":
+            raise ValidationError(f"{path} engine profile id and optimization point differ")
+        validate_visible_dimensions(profile, path)
+        workspace = profile.get("workspace_mib")
+        builder_level = profile.get("builder_optimization_level")
+        if not isinstance(workspace, int) or isinstance(workspace, bool) or workspace <= 0:
+            raise ValidationError(f"{path} requires a positive workspace_mib")
+        if (
+            not isinstance(builder_level, int)
+            or isinstance(builder_level, bool)
+            or not 0 <= builder_level <= 5
+        ):
+            raise ValidationError(f"{path} builder_optimization_level must be in [0, 5]")
     return profile
 
 

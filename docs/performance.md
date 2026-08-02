@@ -66,8 +66,14 @@ encoded sizes and upstream golden streams remain unchanged.
 
 The TensorRT backend now defaults to persistent execution contexts on discrete
 GPUs, avoiding per-frame context recreation in the normal RTX performance path.
-Integrated and Jetson-class devices keep the conservative low-memory mode unless
-`NVCR_TENSORRT_LOW_MEMORY_MODE=0` explicitly overrides it.
+Integrated and Jetson-class devices use persistent context metadata with one
+user-managed TensorRT activation workspace shared by every engine. The workspace
+is reserved once from the session CUDA arena at the largest engine requirement;
+normal scratch allocation begins after it. All inference uses one CUDA stream,
+so workspace lifetimes remain serialized without per-engine synchronization.
+Explicit execution-mode configuration or `NVCR_TENSORRT_LOW_MEMORY_MODE` still
+overrides automatic selection. Discrete-GPU automatic behavior remains fully
+persistent with TensorRT-managed context memory.
 
 P-frame encode already chains reference, analysis, hyper-analysis, prior, spatial
 prior, synthesis, and feature-DPB updates through `DeviceTensor` buffers on one
@@ -107,6 +113,144 @@ The next performance milestone is to tighten the unavoidable entropy boundaries:
 3. Profile direct rANS decode-into staging to remove the remaining vector copy.
 4. Bind TensorRT outputs directly to downstream inputs where lifetimes permit.
 5. Add an automated post-warmup comparison gate.
+
+### 2026-08-01 Orin Nano partial four-resolution diagnostic
+
+Commit `41a458fc53b54d329fcf813205d0e546b7eed057` was rebuilt in Release mode
+from a dirty worktree on the Jetson Orin Nano / L4T 36.4.7 target. The registered
+Release suite passed 6/6 with direct NVMap/GPU access. The target was in
+`MAXN_SUPER` power mode; locked clocks could not be confirmed without root.
+The build used GCC 11.4.0, CUDA 12.6, and TensorRT 10.3.0.30.
+
+The matrix used the target-local `orin-nano-l4t3647` FP16 engine bundles, QP 32,
+97 frames, a separate 10-frame warm-up invocation, and three measured encode and
+decode runs per point. Codec initialization is excluded from the CLI codec time;
+PSNR-YUV is measured outside codec timing. Results are three-run arithmetic
+means:
+
+| Resolution | GOP | Payload | Encode | Decode | PSNR-YUV |
+|---|---:|---:|---:|---:|---:|
+| QCIF | 1 | 64,073 bytes | 31.005 fps | 34.913 fps | 35.782034 dB |
+| QCIF | 97 | 11,174 bytes | 40.752 fps | 48.817 fps | 38.363105 dB |
+| CIF | 1 | 1,311,815 bytes | 16.074 fps | 17.793 fps | 28.045308 dB |
+| CIF | 97 | 155,655 bytes | 23.727 fps | 24.219 fps | 25.976164 dB |
+
+Raw per-run and aggregate records are in
+[`evidence/2026-08-01-orin-nano-resolution-matrix.jsonl`](evidence/2026-08-01-orin-nano-resolution-matrix.jsonl).
+The QCIF and CIF input SHA-256 digests are respectively
+`e1efee0e95c6d27aefe2294a727768334db8466e67bf4a49cf8f5b2fb8b49108` and
+`44cfb867081f04b6d9c78c907faa48859fa1e6bb6f25dca31434c7846fe5ccab`.
+
+This is incomplete diagnostic evidence, not a passed Orin gate. Both the original
+matrix and an isolated retry failed before the 720p warm-up when TensorRT could
+not allocate a 60 MiB execution-context block through NVMap, despite 4.3 GiB of
+available system memory and no active GPU process. Consequently no 720p or 1080p
+rows, peak-memory data, energy measurements, or matching pinned-Python results
+were recorded. The next run requires restored contiguous NVMap headroom, followed
+by the identical matrix and `tegrastats` energy protocol.
+
+### 2026-08-01 Orin Nano 360p/540p edge baseline
+
+Five 1920x1080 YUV420P masters were Lanczos-scaled to 640x360 and 960x540,
+preserving their source frame rates. The Release CLI encoded and decoded the
+first 97 frames at QP 32 and GOP 97 in automatic shared-workspace mode. The
+Orin Nano Super was in `MAXN_SUPER`; GPU and CPU clocks were fixed at 1.02 GHz
+and 1.728 GHz. Codec timing excludes file I/O and quality calculation.
+
+| Resolution | Sequence | Payload | Encode | Decode | PSNR-YUV |
+|---|---|---:|---:|---:|---:|
+| 640x360 | BasketballDrive | 79,552 bytes | 41.812 fps | 44.035 fps | 34.892588 dB |
+| 640x360 | HoneyBee | 45,857 bytes | 41.889 fps | 43.896 fps | 38.706839 dB |
+| 640x360 | Jockey | 52,527 bytes | 41.652 fps | 43.704 fps | 36.494136 dB |
+| 640x360 | Kimono | 89,207 bytes | 41.449 fps | 44.238 fps | 34.379865 dB |
+| 640x360 | ReadySteadyGo | 88,158 bytes | 41.362 fps | 44.264 fps | 34.306563 dB |
+| **640x360 mean** | **5 sequences** | — | **41.633 fps** | **44.027 fps** | — |
+| 960x540 | BasketballDrive | 133,316 bytes | 18.611 fps | 20.578 fps | 35.900343 dB |
+| 960x540 | HoneyBee | 63,631 bytes | 18.472 fps | 20.559 fps | 40.273909 dB |
+| 960x540 | Jockey | 83,171 bytes | 18.622 fps | 20.519 fps | 37.704142 dB |
+| 960x540 | Kimono | 151,744 bytes | 18.468 fps | 20.426 fps | 35.713721 dB |
+| 960x540 | ReadySteadyGo | 147,619 bytes | 18.448 fps | 20.438 fps | 35.595863 dB |
+| **960x540 mean** | **5 sequences** | — | **18.524 fps** | **20.504 fps** | — |
+
+Machine-readable results, bpp, source-rate bitrate, exact clock state, and the
+superseded unlocked-clock attempt are recorded in
+[`evidence/orin-edge-360p-540p-2026-08-01.json`](evidence/orin-edge-360p-540p-2026-08-01.json).
+The measurements use the dynamic `720p-fp16` bundle, whose TensorRT optimization
+point is 1280x720. TensorRT also emitted its cross-device-model plan warning.
+Accordingly, this is the present backend's edge baseline, not a claim for
+dedicated 360p/540p plans or a directly matched MLVC protocol.
+
+The subsequent P-frame decode staging pass reused pinned index/symbol buffers,
+uploaded entropy symbols as int8 instead of FP16, and converted them on CUDA.
+Against the exact BasketballDrive streams above, three-run means improved from
+44.035 to 44.991 fps at 360p (+2.17%) and from 20.578 to 20.849 fps at 540p
+(+1.32%). Decoded output hashes and PSNR were unchanged. Candidate evidence is
+in [`evidence/orin-p-decode-staging-2026-08-01.json`](evidence/orin-p-decode-staging-2026-08-01.json).
+
+An adaptive CUDA Graph pass then cached stable TensorRT binding variants only
+for integrated automatic-mode predicted-frame decode through 640x360. At 360p,
+three-run mean decode rose again from 44.991 to 45.872 fps (+1.96%), a cumulative
++4.17% over the original 44.035 fps baseline. Each run recorded nine captures
+and 375 hits, and warmed per-engine setup fell to approximately 0.03--0.06 ms.
+A broad graph probe did not help encode or 540p, so those paths deliberately
+retain ordinary TensorRT enqueue. The final 540p control was neutral at 20.826
+fps versus 20.849 fps. Evidence is in
+[`evidence/orin-cuda-graphs-2026-08-01.json`](evidence/orin-cuda-graphs-2026-08-01.json).
+
+### 2026-08-02 Orin Nano fixed-profile FP16 ceiling
+
+Canonical fully fixed 360p and 540p FP16 bundles were measured in
+`MAXN_SUPER` with GPU, CPU, and platform clocks locked by `jetson_clocks`.
+The Release CLI used 97 frames, QP 32, GOP 97, a 10-frame process warm-up, and
+three complete measured encode/decode repetitions per sequence. Codec timing
+excludes initialization, file I/O, and quality calculation.
+
+| Resolution | Sequence | Payload | Encode | Decode | PSNR-YUV |
+|---|---|---:|---:|---:|---:|
+| 640x360 | BasketballDrive | 79,139 bytes | 51.071 fps | 55.304 fps | 34.885236 dB |
+| 640x360 | HoneyBee | 45,645 bytes | 51.158 fps | 55.442 fps | 38.702308 dB |
+| 640x360 | Jockey | 52,527 bytes | 51.124 fps | 55.385 fps | 36.518683 dB |
+| 640x360 | Kimono | 89,419 bytes | 51.223 fps | 55.168 fps | 34.377924 dB |
+| 640x360 | ReadySteadyGo | 87,892 bytes | 50.924 fps | 55.333 fps | 34.299725 dB |
+| **640x360 mean** | **5 sequences** | — | **51.100 fps** | **55.326 fps** | — |
+| 960x540 | BasketballDrive | 133,583 bytes | 21.022 fps | 23.856 fps | 35.904741 dB |
+| 960x540 | HoneyBee | 63,391 bytes | 21.063 fps | 24.047 fps | 40.299633 dB |
+| 960x540 | Jockey | 83,242 bytes | 21.049 fps | 23.994 fps | 37.712359 dB |
+| 960x540 | Kimono | 151,573 bytes | 21.027 fps | 23.769 fps | 35.713170 dB |
+| 960x540 | ReadySteadyGo | 147,100 bytes | 21.003 fps | 23.860 fps | 35.581912 dB |
+| **960x540 mean** | **5 sequences** | — | **21.033 fps** | **23.905 fps** | — |
+
+The matching locked-clock Basketball dynamic-bundle control measured 41.756 /
+45.731 encode/decode fps at 360p and 18.356 / 20.925 fps at 540p. Fully fixed
+profiles therefore improved normal-GOP encode/decode by +22.31%/+20.93% at
+360p and +14.52%/+14.00% at 540p. Basketball PSNR-YUV changed by only
+-0.0074 dB and +0.0044 dB, respectively. Every repetition was deterministic
+within its bundle.
+
+All-intra GOP-1 fixed-profile throughput was 20.871/26.432 fps at 360p and
+9.550/11.655 fps at 540p. This is recorded for I-frame attribution only and
+must not be compared with normal I/P video throughput.
+
+The final tactic search found no further FP16 runtime gain. Builder level 5
+regressed the four hot 360p engines (`p_synthesis` +4.91% latency,
+`p_reference_feature` +3.49%, `p_analysis` +13.46%, and `p_prior` neutral).
+Forcing zero auxiliary streams regressed locked-clock `p_synthesis` latency by
+8.78%. Together with the compute-dominant layer profile and earlier rejected
+fusion/cache/compaction experiments, this closes the current runtime-only FPS
+wave at the standard 3% promotion gate.
+
+VDD_IN energy measurements used a 10-second idle baseline and 100 ms samples.
+Idle-adjusted energy was 0.273 J/frame encode and 0.213 J/frame decode at 360p,
+and 0.686/0.541 J/frame at 540p. The energy wrapper includes process start and
+file I/O; its embedded CLI codec measurements remained at 51.658/56.755 fps
+and 21.234/24.209 fps.
+
+The complete protocol, run arrays, input/artifact/bitstream hashes, energy,
+clock and thermal state, negative tactic results, and verification are in
+[`evidence/orin-fixed-profile-ceiling-2026-08-02.json`](evidence/orin-fixed-profile-ceiling-2026-08-02.json).
+This is the measured ceiling for the current DCVC-RT FP16 TensorRT model on the
+recorded Orin Nano. Materially higher FPS now requires a separately identified
+trained artifact path rather than more NVCR runtime tuning.
 
 
 ### 2026-07-30 RTX 4070 warmed encode and decode diagnostic

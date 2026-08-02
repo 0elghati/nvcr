@@ -110,6 +110,44 @@ if [[ -n "$target_profile_path" && ! -f "$target_profile_path" ]]; then
     exit 1
 fi
 
+read -r declared_engine_id declared_optimization_point declared_precision \
+    declared_workspace_mib declared_builder_level < <(
+    "$python_bin" - "$engine_profile_path" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    profile = json.load(stream)
+print(
+    profile.get("id", ""),
+    profile.get("optimization_point", ""),
+    profile.get("precision", ""),
+    profile.get("workspace_mib", ""),
+    profile.get("builder_optimization_level", ""),
+)
+PY
+)
+if [[ "$declared_engine_id" != "$optimization_point-fp16" ||
+      "$declared_optimization_point" != "$optimization_point" ||
+      "$declared_precision" != fp16 ||
+      "$declared_workspace_mib" != "$workspace_mib" ||
+      "$declared_builder_level" != "$builder_optimization_level" ]]; then
+    echo "TensorRT build arguments do not match engine profile: $engine_profile_path" >&2
+    exit 1
+fi
+
+i_frame_min=1x3x64x64
+i_y_min=1x256x4x4
+i_z_min=1x128x1x1
+i_spatial_min=1x512x4x4
+i_synthesis_min=1x256x4x4
+p_frame_min=1x3x64x64
+p_feature_min=1x256x8x8
+p_y_min=1x128x4x4
+p_y_padded_min=1x128x4x4
+p_z_min=1x128x1x1
+p_spatial_min=1x512x4x4
+
 case "$optimization_point" in
 qcif)
     i_frame_opt=1x3x144x176
@@ -120,6 +158,7 @@ qcif)
     p_frame_opt=1x3x192x192
     p_feature_opt=1x256x24x24
     p_y_opt=1x128x12x12
+    p_y_padded_opt="$p_y_opt"
     p_z_opt=1x128x3x3
     p_spatial_opt=1x512x12x12
     i_frame_max=1x3x192x192
@@ -130,6 +169,7 @@ qcif)
     p_frame_max="$p_frame_opt"
     p_feature_max="$p_feature_opt"
     p_y_max="$p_y_opt"
+    p_y_padded_max="$p_y_padded_opt"
     p_z_max="$p_z_opt"
     p_spatial_max="$p_spatial_opt"
     ;;
@@ -142,6 +182,7 @@ cif)
     p_frame_opt=1x3x320x384
     p_feature_opt=1x256x40x48
     p_y_opt=1x128x20x24
+    p_y_padded_opt="$p_y_opt"
     p_z_opt=1x128x5x6
     p_spatial_opt=1x512x20x24
     i_frame_max="$i_frame_opt"
@@ -152,6 +193,77 @@ cif)
     p_frame_max="$p_frame_opt"
     p_feature_max="$p_feature_opt"
     p_y_max="$p_y_opt"
+    p_y_padded_max="$p_y_padded_opt"
+    p_z_max="$p_z_opt"
+    p_spatial_max="$p_spatial_opt"
+    ;;
+360p)
+    i_frame_opt=1x3x368x640
+    i_y_opt=1x256x24x40
+    i_z_opt=1x128x6x10
+    i_spatial_opt=1x512x23x40
+    i_synthesis_opt=1x256x23x40
+    p_frame_opt=1x3x368x640
+    p_feature_opt=1x256x46x80
+    p_y_opt=1x128x23x40
+    p_y_padded_opt=1x128x24x40
+    p_z_opt=1x128x6x10
+    p_spatial_opt=1x512x23x40
+    i_frame_min="$i_frame_opt"
+    i_y_min="$i_y_opt"
+    i_z_min="$i_z_opt"
+    i_spatial_min="$i_spatial_opt"
+    i_synthesis_min="$i_synthesis_opt"
+    p_frame_min="$p_frame_opt"
+    p_feature_min="$p_feature_opt"
+    p_y_min="$p_y_opt"
+    p_y_padded_min="$p_y_padded_opt"
+    p_z_min="$p_z_opt"
+    p_spatial_min="$p_spatial_opt"
+    i_frame_max="$i_frame_opt"
+    i_y_max="$i_y_opt"
+    i_z_max="$i_z_opt"
+    i_spatial_max="$i_spatial_opt"
+    i_synthesis_max="$i_synthesis_opt"
+    p_frame_max="$p_frame_opt"
+    p_feature_max="$p_feature_opt"
+    p_y_max="$p_y_opt"
+    p_y_padded_max="$p_y_padded_opt"
+    p_z_max="$p_z_opt"
+    p_spatial_max="$p_spatial_opt"
+    ;;
+540p)
+    i_frame_opt=1x3x544x960
+    i_y_opt=1x256x36x60
+    i_z_opt=1x128x9x15
+    i_spatial_opt=1x512x34x60
+    i_synthesis_opt=1x256x34x60
+    p_frame_opt=1x3x544x960
+    p_feature_opt=1x256x68x120
+    p_y_opt=1x128x34x60
+    p_y_padded_opt=1x128x36x60
+    p_z_opt=1x128x9x15
+    p_spatial_opt=1x512x34x60
+    i_frame_min="$i_frame_opt"
+    i_y_min="$i_y_opt"
+    i_z_min="$i_z_opt"
+    i_spatial_min="$i_spatial_opt"
+    i_synthesis_min="$i_synthesis_opt"
+    p_frame_min="$p_frame_opt"
+    p_feature_min="$p_feature_opt"
+    p_y_min="$p_y_opt"
+    p_y_padded_min="$p_y_padded_opt"
+    p_z_min="$p_z_opt"
+    p_spatial_min="$p_spatial_opt"
+    i_frame_max="$i_frame_opt"
+    i_y_max="$i_y_opt"
+    i_z_max="$i_z_opt"
+    i_spatial_max="$i_spatial_opt"
+    i_synthesis_max="$i_synthesis_opt"
+    p_frame_max="$p_frame_opt"
+    p_feature_max="$p_feature_opt"
+    p_y_max="$p_y_opt"
+    p_y_padded_max="$p_y_padded_opt"
     p_z_max="$p_z_opt"
     p_spatial_max="$p_spatial_opt"
     ;;
@@ -164,6 +276,7 @@ cif)
     p_frame_opt=1x3x768x1280
     p_feature_opt=1x256x96x160
     p_y_opt=1x128x48x80
+    p_y_padded_opt="$p_y_opt"
     p_z_opt=1x128x12x20
     p_spatial_opt=1x512x48x80
     i_frame_max="$i_frame_opt"
@@ -174,6 +287,7 @@ cif)
     p_frame_max="$p_frame_opt"
     p_feature_max="$p_feature_opt"
     p_y_max="$p_y_opt"
+    p_y_padded_max="$p_y_padded_opt"
     p_z_max="$p_z_opt"
     p_spatial_max="$p_spatial_opt"
     ;;
@@ -186,6 +300,7 @@ cif)
     p_frame_opt=1x3x1088x1920
     p_feature_opt=1x256x136x240
     p_y_opt=1x128x68x120
+    p_y_padded_opt="$p_y_opt"
     p_z_opt=1x128x17x30
     p_spatial_opt=1x512x68x120
     i_frame_max="$i_frame_opt"
@@ -196,11 +311,12 @@ cif)
     p_frame_max="$p_frame_opt"
     p_feature_max="$p_feature_opt"
     p_y_max="$p_y_opt"
+    p_y_padded_max="$p_y_padded_opt"
     p_z_max="$p_z_opt"
     p_spatial_max="$p_spatial_opt"
     ;;
 *)
-    echo "unsupported optimization point: $optimization_point (expected qcif, cif, 720p, or 1080p)" >&2
+    echo "unsupported optimization point: $optimization_point (expected qcif, cif, 360p, 540p, 720p, or 1080p)" >&2
     exit 2
     ;;
 esac
@@ -218,6 +334,11 @@ fi
 
 mkdir -p "$engine_dir"
 if ((stamp_only == 0)); then
+    if ! "$python_bin" "$repo_root/scripts/nvcr_artifacts.py" \
+        validate "$model_dir" >/dev/null; then
+        echo "refusing to build TensorRT plans from an invalid or stale model bundle: $model_dir" >&2
+        exit 1
+    fi
     for asset in i_entropy.bin i_quant.bin i_frame_manifest.json \
         p_entropy.bin p_quant.bin p_frame_manifest.json; do
         if [[ ! -f "$model_dir/$asset" ]]; then
@@ -256,36 +377,36 @@ build_engine() {
 
 if ((stamp_only == 0)); then
     build_engine i_analysis \
-        frame:1x3x64x64 "frame:$i_frame_opt" "frame:$i_frame_max"
+        "frame:$i_frame_min" "frame:$i_frame_opt" "frame:$i_frame_max"
     build_engine i_hyper_analysis \
-        y_padded:1x256x4x4 "y_padded:$i_y_opt" "y_padded:$i_y_max"
+        "y_padded:$i_y_min" "y_padded:$i_y_opt" "y_padded:$i_y_max"
     build_engine i_hyper_synthesis \
-        z_hat:1x128x1x1 "z_hat:$i_z_opt" "z_hat:$i_z_max"
+        "z_hat:$i_z_min" "z_hat:$i_z_opt" "z_hat:$i_z_max"
     for stage in 1 2 3; do
         build_engine "i_spatial_prior_$stage" \
-            context:1x512x4x4 "context:$i_spatial_opt" "context:$i_spatial_max"
+            "context:$i_spatial_min" "context:$i_spatial_opt" "context:$i_spatial_max"
     done
     build_engine i_synthesis \
-        y_hat:1x256x4x4 "y_hat:$i_synthesis_opt" "y_hat:$i_synthesis_max"
+        "y_hat:$i_synthesis_min" "y_hat:$i_synthesis_opt" "y_hat:$i_synthesis_max"
 
     build_engine p_reference_frame \
-        reference_frame:1x3x64x64 "reference_frame:$p_frame_opt" "reference_frame:$p_frame_max"
+        "reference_frame:$p_frame_min" "reference_frame:$p_frame_opt" "reference_frame:$p_frame_max"
     build_engine p_reference_feature \
-        reference_feature:1x256x8x8 "reference_feature:$p_feature_opt" "reference_feature:$p_feature_max"
+        "reference_feature:$p_feature_min" "reference_feature:$p_feature_opt" "reference_feature:$p_feature_max"
     build_engine p_analysis \
-        frame:1x3x64x64,context:1x256x8x8 \
+        "frame:$p_frame_min,context:$p_feature_min" \
         "frame:$p_frame_opt,context:$p_feature_opt" \
         "frame:$p_frame_max,context:$p_feature_max"
     build_engine p_hyper_analysis \
-        y_padded:1x128x4x4 "y_padded:$p_y_opt" "y_padded:$p_y_max"
+        "y_padded:$p_y_padded_min" "y_padded:$p_y_padded_opt" "y_padded:$p_y_padded_max"
     build_engine p_prior \
-        z_hat:1x128x1x1,temporal_context:1x256x8x8 \
+        "z_hat:$p_z_min,temporal_context:$p_feature_min" \
         "z_hat:$p_z_opt,temporal_context:$p_feature_opt" \
         "z_hat:$p_z_max,temporal_context:$p_feature_max"
     build_engine p_spatial_prior \
-        context:1x512x4x4 "context:$p_spatial_opt" "context:$p_spatial_max"
+        "context:$p_spatial_min" "context:$p_spatial_opt" "context:$p_spatial_max"
     build_engine p_synthesis \
-        y_hat:1x128x4x4,context:1x256x8x8 \
+        "y_hat:$p_y_min,context:$p_feature_min" \
         "y_hat:$p_y_opt,context:$p_feature_opt" \
         "y_hat:$p_y_max,context:$p_feature_max"
 fi
@@ -315,7 +436,7 @@ if ((run_smoke && stamp_only == 0)); then
     smoke_engine p_reference_frame "reference_frame:$p_frame_opt"
     smoke_engine p_reference_feature "reference_feature:$p_feature_opt"
     smoke_engine p_analysis "frame:$p_frame_opt,context:$p_feature_opt"
-    smoke_engine p_hyper_analysis "y_padded:$p_y_opt"
+    smoke_engine p_hyper_analysis "y_padded:$p_y_padded_opt"
     smoke_engine p_prior "z_hat:$p_z_opt,temporal_context:$p_feature_opt"
     smoke_engine p_spatial_prior "context:$p_spatial_opt"
     smoke_engine p_synthesis "y_hat:$p_y_opt,context:$p_feature_opt"

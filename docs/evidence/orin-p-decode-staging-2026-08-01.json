@@ -1,0 +1,38 @@
+{
+  "schema": "nvcr.performance-candidate.v1",
+  "date": "2026-08-01",
+  "device": "NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super",
+  "power_mode": "MAXN_SUPER",
+  "clocks": {"gpu_hz":1020000000,"cpu0_hz":1728000000,"locked":true},
+  "build_type": "Release",
+  "frames": 97,
+  "gop": 97,
+  "qp": 32,
+  "change": "Reuse pinned P-decode entropy staging, upload packed int8 symbols, and convert symbols to FP16 on CUDA.",
+  "baseline_source": "docs/evidence/orin-edge-360p-540p-2026-08-01.json",
+  "results": [
+    {
+      "resolution": "640x360",
+      "sequence": "BasketballDrive",
+      "baseline_decode_fps": 44.035,
+      "candidate_decode_fps_runs": [45.048, 44.983, 44.943],
+      "candidate_decode_fps_mean": 44.9913,
+      "change_percent": 2.17,
+      "baseline_reconstruction_sha256": "e15135ffac42cd14fc3e616bb2217a32b84f6a70e3f99c6e3450025487e574d0",
+      "candidate_reconstruction_sha256": "e15135ffac42cd14fc3e616bb2217a32b84f6a70e3f99c6e3450025487e574d0",
+      "psnr_yuv_db": 34.892588
+    },
+    {
+      "resolution": "960x540",
+      "sequence": "BasketballDrive",
+      "baseline_decode_fps": 20.578,
+      "candidate_decode_fps_runs": [20.867, 20.823, 20.857],
+      "candidate_decode_fps_mean": 20.8490,
+      "change_percent": 1.32,
+      "baseline_reconstruction_sha256": "ac81d3546e54633427bfd8b73b07549ecc563aa1e09c75652816eccb2f6e0b8c",
+      "candidate_reconstruction_sha256": "ac81d3546e54633427bfd8b73b07549ecc563aa1e09c75652816eccb2f6e0b8c",
+      "psnr_yuv_db": 35.900343
+    }
+  ],
+  "rejected_probe": "Caching TensorRT input shapes did not reduce warmed setup time or produce a repeatable throughput gain and was removed."
+}

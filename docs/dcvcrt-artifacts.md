@@ -89,6 +89,9 @@ The declared FP16 profiles are:
 | Profile | Visible dimensions | Workspace | Builder level | Purpose |
 |---|---|---:|---:|---|
 | `qcif-fp16` | 64×64 to 176×144 | 512 MiB | 1 | Small correctness/development bundle |
+| `cif-fp16` | 64×64 to 352×288 | 512 MiB | 1 | CIF correctness/development bundle |
+| `360p-fp16` | fixed 640×360 | 1024 MiB | 4 | Edge latency specialization |
+| `540p-fp16` | fixed 960×540 | 1024 MiB | 4 | Edge latency specialization |
 | `720p-fp16` | 64×64 to 1280×720 | 1024 MiB | 2 | 720p target validation |
 | `1080p-fp16` | 64×64 to 1920×1080 | 1024 MiB | 2 | Reference target validation |
 
@@ -114,6 +117,10 @@ there, selecting that target's profile:
   --trtexec /usr/src/tensorrt/bin/trtexec \
   --device-id 0
 ```
+
+The TensorRT builder validates the complete model bundle before creating the
+first plan. Legacy manifests, missing graphs, and graph/hash mismatches are
+hard failures; do not bypass this check by mixing files from separate exports.
 
 Never copy an RTX plan to Orin, or an engine across a different GPU model,
 CUDA/TensorRT runtime, or model export. Rebuild on the final target.
@@ -167,6 +174,8 @@ digest.
 - model, target, and engine-profile identities;
 - SHA-256 digests of the exact model, target, and engine profile JSON files;
 - optimization point, visible dimensions, FP16, workspace, and builder level;
+- whether runtime-variable TensorRT axes use a `dynamic` or fully `fixed`
+  shape profile;
 - CUDA runtime, TensorRT version, GPU name, compute capability, and SM count;
 - I/P model-manifest digests;
 - every generated plan/runtime-asset hash;
@@ -174,7 +183,10 @@ digest.
 
 A complete runtime bundle contains 14 plans and six copied runtime assets. Both
 `nvcr-artifacts validate` and runtime initialization reject missing, extra,
-modified, stale, cross-model, or incompatible bundles.
+modified, stale, cross-model, or incompatible bundles. Legacy v2 bundles are
+treated as dynamic for compatibility. A fixed bundle must declare
+`shape_profile: fixed`, and every runtime-variable axis in all 14 plans must be
+concrete; partial fixed/dynamic hybrids are rejected.
 
 ```bash
 ./scripts/nvcr_artifacts.py inspect build/engines/dcvcrt --json
@@ -215,6 +227,23 @@ also include the runtime padding required by the codec.
 | `cif-fp16` | 352x288 | Contract plus native I/P roundtrip |
 | `720p-fp16` | 1280x720 | Contract plus native I/P roundtrip |
 | `1080p-fp16` | 1920x1080 | Contract plus native I/P roundtrip |
+
+The fixed-shape `360p-fp16` and `540p-fp16` profiles are edge-performance
+candidates. On Orin Nano, a conservative 13-fixed-engine candidate retained the
+validated dynamic `p_synthesis.plan` while a stale source graph was
+quarantined. Repeated BasketballDrive measurements improved 360p encode/decode
+by 7.74%/3.65% and 540p encode/decode by 5.18%/2.35%. The 360p candidate and
+540p encode clear the 3% candidate gate; 540p decode does not. See
+`evidence/orin-fixed-edge-profiles-2026-08-02.json` for run order, hashes,
+quality, and artifact provenance. This hybrid is retained as historical
+performance evidence only: the hardened validator and runtime now reject it as
+an incomplete fixed bundle. Fully fixed bundles remain pending a clean export
+and locked-clock repetition.
+
+The profile definitions and runtime support are architecture-neutral. Their
+generated TensorRT plans remain target-specific, so Orin and desktop RTX use
+separate builds of the same profile. Existing dynamic profiles remain valid and
+retain their previous runtime behavior.
 
 Configure `NVCR_TENSORRT_ENGINE_DIR` for one primary bundle and provide any
 additional bundles through semicolon-separated `NVCR_TENSORRT_ENGINE_DIRS`.

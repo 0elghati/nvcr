@@ -1,0 +1,39 @@
+{
+  "schema": "nvcr.edge-performance.v1",
+  "date": "2026-08-01",
+  "device": "NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super",
+  "platform_role": "edge example",
+  "kernel": "5.15.148-tegra",
+  "power_mode": "MAXN_SUPER",
+  "clocks": {"gpu_hz":1020000000,"cpu0_hz":1728000000,"locked":true},
+  "source_commit": "41a458fc53b54d329fcf813205d0e546b7eed057",
+  "build_type": "Release",
+  "codec": "DCVC-RT CVPR 2025",
+  "pixel_format": "yuv420p8",
+  "frames": 97,
+  "gop": 97,
+  "qp": 32,
+  "tensorrt_execution_mode": "automatic shared-workspace",
+  "engine_profile": "720p-fp16",
+  "engine_optimization_point": "1280x720",
+  "engine_manifest_sha256": "86fec8e8ed769cc4fa1870a071b86cc9e3e3bb27cc2755e645c986c287dd6d11",
+  "engine_warning": "TensorRT warned that the engine plan was used across different device models; no dedicated 360p or 540p engine was used.",
+  "timing_scope": "CLI codec time; file I/O and quality metric calculation excluded",
+  "results": [
+    {"resolution":"640x360","sequence":"BasketballDrive","source_fps":50,"payload_bytes":79552,"bpp":0.02847652,"kbps":328.049,"encode_seconds":2.320,"encode_fps":41.812,"decode_seconds":2.203,"decode_fps":44.035,"psnr_yuv_db":34.892588},
+    {"resolution":"640x360","sequence":"HoneyBee","source_fps":120,"payload_bytes":45857,"bpp":0.01641502,"kbps":453.842,"encode_seconds":2.316,"encode_fps":41.889,"decode_seconds":2.210,"decode_fps":43.896,"psnr_yuv_db":38.706839},
+    {"resolution":"640x360","sequence":"Jockey","source_fps":120,"payload_bytes":52527,"bpp":0.01880262,"kbps":519.855,"encode_seconds":2.329,"encode_fps":41.652,"decode_seconds":2.219,"decode_fps":43.704,"psnr_yuv_db":36.494136},
+    {"resolution":"640x360","sequence":"Kimono","source_fps":24,"payload_bytes":89207,"bpp":0.03193263,"kbps":176.575,"encode_seconds":2.340,"encode_fps":41.449,"decode_seconds":2.193,"decode_fps":44.238,"psnr_yuv_db":34.379865},
+    {"resolution":"640x360","sequence":"ReadySteadyGo","source_fps":120,"payload_bytes":88158,"bpp":0.03155713,"kbps":872.492,"encode_seconds":2.345,"encode_fps":41.362,"decode_seconds":2.191,"decode_fps":44.264,"psnr_yuv_db":34.306563},
+    {"resolution":"960x540","sequence":"BasketballDrive","source_fps":50,"payload_bytes":133316,"bpp":0.02120975,"kbps":549.757,"encode_seconds":5.212,"encode_fps":18.611,"decode_seconds":4.714,"decode_fps":20.578,"psnr_yuv_db":35.900343},
+    {"resolution":"960x540","sequence":"HoneyBee","source_fps":120,"payload_bytes":63631,"bpp":0.01012330,"kbps":629.750,"encode_seconds":5.251,"encode_fps":18.472,"decode_seconds":4.718,"decode_fps":20.559,"psnr_yuv_db":40.273909},
+    {"resolution":"960x540","sequence":"Jockey","source_fps":120,"payload_bytes":83171,"bpp":0.01323199,"kbps":823.136,"encode_seconds":5.209,"encode_fps":18.622,"decode_seconds":4.727,"decode_fps":20.519,"psnr_yuv_db":37.704142},
+    {"resolution":"960x540","sequence":"Kimono","source_fps":24,"payload_bytes":151744,"bpp":0.02414153,"kbps":300.359,"encode_seconds":5.252,"encode_fps":18.468,"decode_seconds":4.749,"decode_fps":20.426,"psnr_yuv_db":35.713721},
+    {"resolution":"960x540","sequence":"ReadySteadyGo","source_fps":120,"payload_bytes":147619,"bpp":0.02348527,"kbps":1460.972,"encode_seconds":5.258,"encode_fps":18.448,"decode_seconds":4.746,"decode_fps":20.438,"psnr_yuv_db":35.595863}
+  ],
+  "aggregates": [
+    {"resolution":"640x360","sequence_count":5,"encode_fps_mean":41.6328,"decode_fps_mean":44.0274},
+    {"resolution":"960x540","sequence_count":5,"encode_fps_mean":18.5242,"decode_fps_mean":20.5040}
+  ],
+  "superseded_attempt": {"reason":"Post-reboot clocks were initially unlocked (GPU minimum 306 MHz); those measurements are diagnostic only and are not included above."}
+}
