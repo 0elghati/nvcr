@@ -13,8 +13,8 @@ engines_dir="build/engines/dcvcrt-1080p"
 trtexec_bin="${TRTEXEC:-}"
 python_bin="${PYTHON:-python3}"
 optimization_point="1080p"
-# Sentinels: empty means "not explicitly set by the caller", so auto-tuning
-# (see --auto-tune below) is free to fill these in from detect_platform.sh.
+# Sentinels: empty means "not explicitly set by the caller"; the selected
+# versioned engine profile supplies reproducible defaults below.
 workspace_mib=""
 builder_optimization_level=""
 device_id=""
@@ -60,15 +60,17 @@ Options:
   --engines DIR            TensorRT engine output (default: $engines_dir)
   --trtexec PATH           TensorRT trtexec path
   --python PATH            Python used for ONNX export (default: $python_bin)
-  --optimization-point X   TensorRT profile point: qcif, cif, 720p, or 1080p
+  --optimization-point X   TensorRT profile point: qcif, cif, 360p, 540p, 720p, or 1080p
                            (default: $optimization_point)
-  --workspace-mib N        TensorRT workspace memory pool in MiB (default: auto-tuned)
+  --workspace-mib N        TensorRT workspace memory pool in MiB
+                           (must match the selected engine profile)
   --builder-optimization-level N
-                           TensorRT builder optimization level 0-5 (default: auto-tuned)
+                           TensorRT builder optimization level 0-5
+                           (must match the selected engine profile)
   --device-id N            CUDA device used for TensorRT engine building (default: auto-selected)
-  --no-auto-tune           Disable auto-tuning; use fixed defaults
-                           (workspace 2048 MiB, level 3, device 0) unless
-                           overridden above
+  --no-auto-tune           Disable platform/tool/device auto-detection; use
+                           device 0 unless overridden. Build settings still
+                           come from the selected engine profile.
   --skip-clone             Do not clone/fetch the upstream repo
   --skip-export            Reuse existing --models directory
   --skip-engine            Stop after ONNX/runtime assets are ready
@@ -203,6 +205,25 @@ fi
 if [[ ! -f "$target_profile_path" ]]; then
     echo "missing target profile: $target_profile_path" >&2
     exit 1
+fi
+
+# The versioned engine profile is the reproducible source of truth for tactic
+# search depth and workspace. CLI values are checked against that profile by
+# the manifest writer; experiments must select a separate versioned profile.
+if [[ -z "$workspace_mib" || -z "$builder_optimization_level" ]]; then
+    read -r profile_workspace_mib profile_builder_level < <(
+        "$python_bin" - "$engine_profile_path" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    profile = json.load(stream)
+print(profile["workspace_mib"], profile["builder_optimization_level"])
+PY
+    )
+    [[ -z "$workspace_mib" ]] && workspace_mib="$profile_workspace_mib"
+    [[ -z "$builder_optimization_level" ]] && \
+        builder_optimization_level="$profile_builder_level"
 fi
 
 if ((auto_tune)); then

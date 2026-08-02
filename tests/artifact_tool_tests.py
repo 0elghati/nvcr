@@ -75,6 +75,14 @@ def main() -> int:
         "nvcr.engine-profile.v1",
     )
     artifacts.load_profile(
+        REPOSITORY_ROOT / "configs/engine-profiles/360p-fp16.json",
+        "nvcr.engine-profile.v1",
+    )
+    artifacts.load_profile(
+        REPOSITORY_ROOT / "configs/engine-profiles/540p-fp16.json",
+        "nvcr.engine-profile.v1",
+    )
+    artifacts.load_profile(
         REPOSITORY_ROOT / "configs/engine-profiles/720p-fp16.json",
         "nvcr.engine-profile.v1",
     )
@@ -159,6 +167,11 @@ def main() -> int:
             "target_profile_sha256": "0" * 64,
             "precision": "fp16",
             "optimization_point": "qcif",
+            "visible_dimensions": {
+                "minimum": [64, 64],
+                "optimum": [176, 144],
+                "maximum": [176, 144],
+            },
             "workspace_mib": 512,
             "builder_optimization_level": 1,
             "cuda_runtime_version": 12060,
@@ -187,6 +200,25 @@ def main() -> int:
             lambda: artifacts.validate_engine_bundle(root),
             "invalid profile digest was accepted",
         )
+        write_json(root / "engine_manifest.json", engine_manifest)
+
+        fixed_without_contract = dict(engine_manifest)
+        fixed_without_contract["engine_profile_id"] = "360p-fp16"
+        fixed_without_contract["optimization_point"] = "360p"
+        fixed_without_contract["visible_dimensions"] = {
+            "minimum": [640, 360],
+            "optimum": [640, 360],
+            "maximum": [640, 360],
+        }
+        write_json(root / "engine_manifest.json", fixed_without_contract)
+        expect_invalid(
+            lambda: artifacts.validate_engine_bundle(root),
+            "fixed bundle without an explicit fixed-shape contract was accepted",
+        )
+        fixed_contract = dict(fixed_without_contract)
+        fixed_contract["shape_profile"] = "fixed"
+        write_json(root / "engine_manifest.json", fixed_contract)
+        assert artifacts.validate_engine_bundle(root)["shape_profile"] == "fixed"
         write_json(root / "engine_manifest.json", engine_manifest)
 
         write_bytes(root / artifacts.REQUIRED_PLANS[0], b"modified")

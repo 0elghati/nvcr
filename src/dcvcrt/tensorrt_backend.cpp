@@ -378,6 +378,16 @@ Result<std::string> read_json_string(std::string_view text, std::string_view key
     return backend_error("engine_manifest.json has unterminated key '" + std::string(key) + "'");
 }
 
+Result<std::optional<std::string>> read_optional_json_string(
+    std::string_view text, std::string_view key) {
+    if (text.find('"' + std::string(key) + '"') == std::string_view::npos) {
+        return std::optional<std::string>{};
+    }
+    auto value = read_json_string(text, key);
+    if (!value) return value.error();
+    return std::optional<std::string>(std::move(value.value()));
+}
+
 Result<std::int64_t> read_json_integer(std::string_view text, std::string_view key) {
     auto value = find_json_value(text, key);
     if (!value) return value.error();
@@ -410,6 +420,7 @@ struct EngineManifest final {
     std::string target_profile_sha256;
     std::string precision;
     std::string optimization_point;
+    std::string shape_profile{"dynamic"};
     std::string device_name;
     std::string checksum_manifest;
     std::string checksum_manifest_sha256;
@@ -464,6 +475,7 @@ Result<EngineManifest> load_engine_manifest(const fs::path& root) {
     auto target_profile_sha256 = read_json_string(text.value(), "target_profile_sha256");
     auto precision = read_json_string(text.value(), "precision");
     auto profile = read_json_string(text.value(), "optimization_point");
+    auto shape_profile = read_optional_json_string(text.value(), "shape_profile");
     auto device_name = read_json_string(text.value(), "device_name");
     auto checksum_manifest = read_json_string(text.value(), "checksum_manifest");
     auto checksum_manifest_sha256 =
@@ -487,6 +499,7 @@ Result<EngineManifest> load_engine_manifest(const fs::path& root) {
     if (!target_profile_sha256) return target_profile_sha256.error();
     if (!precision) return precision.error();
     if (!profile) return profile.error();
+    if (!shape_profile) return shape_profile.error();
     if (!device_name) return device_name.error();
     if (!checksum_manifest) return checksum_manifest.error();
     if (!checksum_manifest_sha256) return checksum_manifest_sha256.error();
@@ -509,6 +522,9 @@ Result<EngineManifest> load_engine_manifest(const fs::path& root) {
     manifest.target_profile_sha256 = std::move(target_profile_sha256.value());
     manifest.precision = std::move(precision.value());
     manifest.optimization_point = std::move(profile.value());
+    if (shape_profile.value().has_value()) {
+        manifest.shape_profile = std::move(shape_profile.value().value());
+    }
     manifest.device_name = std::move(device_name.value());
     manifest.checksum_manifest = std::move(checksum_manifest.value());
     manifest.checksum_manifest_sha256 = std::move(checksum_manifest_sha256.value());
@@ -606,7 +622,7 @@ Result<void> validate_bundle_hashes(const fs::path& root, const EngineManifest& 
     return {};
 }
 
-Result<void> validate_engine_manifest(
+Result<EngineManifest> validate_engine_manifest(
     const fs::path& root,
     std::int32_t device_id,
     std::string_view expected_model_profile) {
@@ -625,6 +641,10 @@ Result<void> validate_engine_manifest(
         return backend_error(
             "engine_manifest.json precision is not supported by v1: " +
             manifest.value().precision);
+    }
+    if (manifest.value().shape_profile != "dynamic" &&
+        manifest.value().shape_profile != "fixed") {
+        return backend_error("engine_manifest.json has an invalid shape_profile");
     }
     if (!valid_profile_id(manifest.value().model_profile_id) ||
         !valid_profile_id(manifest.value().target_profile_id) ||
@@ -680,7 +700,7 @@ Result<void> validate_engine_manifest(
             std::to_string(properties.multiProcessorCount) +
             " multiprocessors); rebuild the engine directory on the selected device");
     }
-    return {};
+    return std::move(manifest.value());
 }
 
 std::string dimensions_string(const nvinfer1::Dims& dimensions) {
@@ -694,7 +714,8 @@ std::string dimensions_string(const nvinfer1::Dims& dimensions) {
 
 Result<void> validate_engine(
     const nvinfer1::ICudaEngine& engine,
-    const EngineSpec& specification) {
+    const EngineSpec& specification,
+    bool fixed_shape_profile) {
     if (engine.getNbIOTensors() != static_cast<std::int32_t>(specification.tensors.size())) {
         return backend_error(
             std::string(specification.filename) + " has " +
@@ -720,7 +741,16 @@ Result<void> validate_engine(
                 "' has rank " + std::to_string(actual.nbDims) + "; expected rank 4");
         }
         for (std::size_t index = 0; index < tensor.dimensions.size(); ++index) {
-            if (actual.d[index] != tensor.dimensions[index]) {
+            const auto expected = tensor.dimensions[index];
+            const auto observed = actual.d[index];
+            // Preserve the existing dynamic contract exactly. A bundle that
+            // opts into fixed shapes must instead resolve every variable axis
+            // to a positive concrete dimension. This rejects partial/hybrid
+            // bundles rather than allowing them to masquerade as fixed.
+            const bool matches = expected == -1
+                ? (fixed_shape_profile ? observed > 0 : observed == -1)
+                : observed == expected;
+            if (!matches) {
                 return backend_error(
                     std::string(specification.filename) + " tensor '" + name +
                     "' has shape " + dimensions_string(actual) + "; contract mismatch");
@@ -733,7 +763,8 @@ Result<void> validate_engine(
 Result<EngineInstance> load_engine(
     nvinfer1::IRuntime& runtime,
     const fs::path& root,
-    const EngineSpec& specification) {
+    const EngineSpec& specification,
+    bool fixed_shape_profile) {
     const auto path = root / specification.filename;
     auto bytes = read_binary(path);
     if (!bytes) return bytes.error();
@@ -743,7 +774,7 @@ Result<EngineInstance> load_engine(
     if (!engine) {
         return backend_error("failed to deserialize file: " + path.string());
     }
-    auto valid = validate_engine(*engine, specification);
+    auto valid = validate_engine(*engine, specification, fixed_shape_profile);
     if (!valid) return valid.error();
 
     return EngineInstance{path, std::move(engine), nullptr, {}};
@@ -1250,23 +1281,28 @@ Result<std::size_t> tensor_bytes(const nvinfer1::Dims& shape) {
 
 nvinfer1::Dims warmup_shape(
     std::string_view filename, std::string_view name, nvinfer1::Dims shape) {
+    const auto select_dynamic_dimension = [&shape](std::int32_t index, std::int64_t value) {
+        if (shape.d[index] == -1) shape.d[index] = value;
+    };
     if (name == "frame" || name == "reference_frame") {
-        shape.d[2] = filename.starts_with("p_") ? 192 : 144;
-        shape.d[3] = filename.starts_with("p_") ? 192 : 176;
+        select_dynamic_dimension(2, filename.starts_with("p_") ? 192 : 144);
+        select_dynamic_dimension(3, filename.starts_with("p_") ? 192 : 176);
     } else if (name == "reference_feature" || name == "temporal_context") {
-        shape.d[2] = 24;
-        shape.d[3] = 24;
+        select_dynamic_dimension(2, 24);
+        select_dynamic_dimension(3, 24);
     } else if (name == "y_padded" || name == "y_hat") {
-        shape.d[2] = 12;
-        shape.d[3] = 12;
+        select_dynamic_dimension(2, 12);
+        select_dynamic_dimension(3, 12);
     } else if (name == "z_hat") {
-        shape.d[2] = 3;
-        shape.d[3] = 3;
+        select_dynamic_dimension(2, 3);
+        select_dynamic_dimension(3, 3);
     } else if (name == "context") {
-        shape.d[2] = filename == "p_spatial_prior.plan" ? 12 :
-            (filename.starts_with("p_") ? 24 : 9);
-        shape.d[3] = filename == "p_spatial_prior.plan" ? 12 :
-            (filename.starts_with("p_") ? 24 : 11);
+        select_dynamic_dimension(
+            2, filename == "p_spatial_prior.plan" ? 12 :
+                (filename.starts_with("p_") ? 24 : 9));
+        select_dynamic_dimension(
+            3, filename == "p_spatial_prior.plan" ? 12 :
+                (filename.starts_with("p_") ? 24 : 11));
     }
     return shape;
 }
@@ -3420,6 +3456,7 @@ public:
         auto manifest = validate_engine_manifest(
             configuration.intra_engine_path, configuration.device_id, configuration.model_id);
         if (!manifest) return manifest.error();
+        const bool fixed_shape_profile = manifest.value().shape_profile == "fixed";
         auto selected_context_policy = context_policy.value();
 
         try {
@@ -3434,7 +3471,8 @@ public:
             engines.reserve(engine_specs.size());
             for (const auto& specification : engine_specs) {
                 auto loaded = load_engine(
-                    *runtime, configuration.intra_engine_path, specification);
+                    *runtime, configuration.intra_engine_path, specification,
+                    fixed_shape_profile);
                 if (!loaded) return loaded.error();
                 engines.push_back(std::move(loaded.value()));
             }

@@ -81,6 +81,8 @@ required_files=(
     share/nvcr/configs/models/dcvcrt-cvpr2025.json
     share/nvcr/configs/engine-profiles/qcif-fp16.json
     share/nvcr/configs/engine-profiles/cif-fp16.json
+    share/nvcr/configs/engine-profiles/360p-fp16.json
+    share/nvcr/configs/engine-profiles/540p-fp16.json
     share/nvcr/configs/engine-profiles/720p-fp16.json
     share/nvcr/configs/engine-profiles/1080p-fp16.json
     "share/nvcr/configs/targets/$target_profile"

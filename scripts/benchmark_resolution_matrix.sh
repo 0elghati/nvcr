@@ -14,10 +14,14 @@ jsonl=""
 
 input_qcif="${NVCR_BENCH_QCIF_INPUT:-/home/oelghati/DCVC/datasets/qcif/akiyo_qcif.yuv}"
 input_cif="${NVCR_BENCH_CIF_INPUT:-/home/oelghati/DCVC/datasets/cif/paris_cif.yuv}"
+input_360="${NVCR_BENCH_360P_INPUT:-/home/oelghati/datasets/360p/BasketballDrive_640x360_50.yuv}"
+input_540="${NVCR_BENCH_540P_INPUT:-/home/oelghati/datasets/540p/BasketballDrive_960x540_50.yuv}"
 input_720="${NVCR_BENCH_720P_INPUT:-/home/oelghati/DCVC/datasets/720p/FourPeople_1280x720_60.yuv}"
 input_1080="${NVCR_BENCH_1080P_INPUT:-/home/oelghati/DCVC/datasets/misc/BQTerrace_1920x1080_60.yuv}"
 engine_qcif="${NVCR_BENCH_QCIF_ENGINE_DIR:-}"
 engine_cif="${NVCR_BENCH_CIF_ENGINE_DIR:-}"
+engine_360="${NVCR_BENCH_360P_ENGINE_DIR:-}"
+engine_540="${NVCR_BENCH_540P_ENGINE_DIR:-}"
 engine_720="${NVCR_BENCH_720P_ENGINE_DIR:-}"
 engine_1080="${NVCR_BENCH_1080P_ENGINE_DIR:-}"
 engine_args=()
@@ -26,7 +30,7 @@ usage() {
     cat <<'USAGE'
 Usage: benchmark_resolution_matrix.sh [options]
 
-Runs warmed encode and decode measurements at QCIF, CIF, 720p, and 1080p.
+Runs warmed encode and decode measurements at QCIF, CIF, 360p, 540p, 720p, and 1080p.
 Decode measurements report weighted YUV PSNR against the source outside codec
 timing. Every measured point is appended to JSONL when --jsonl is supplied.
 
@@ -40,10 +44,14 @@ Options:
   --warmup-frames N         Encode/decode warm-up frames (default: 10)
   --qcif-input FILE         176x144 YUV420P8 input
   --cif-input FILE          352x288 YUV420P8 input
+  --360p-input FILE         640x360 YUV420P8 input
+  --540p-input FILE         960x540 YUV420P8 input
   --720p-input FILE         1280x720 YUV420P8 input
   --1080p-input FILE        1920x1080 YUV420P8 input
   --qcif-engine-dir DIR     Use a local QCIF bundle instead of --engine-profile
   --cif-engine-dir DIR      Use a local CIF bundle instead of --engine-profile
+  --360p-engine-dir DIR     Use a local 360p bundle instead of --engine-profile
+  --540p-engine-dir DIR     Use a local 540p bundle instead of --engine-profile
   --720p-engine-dir DIR     Use a local 720p bundle instead of --engine-profile
   --1080p-engine-dir DIR    Use a local 1080p bundle instead of --engine-profile
   --output-dir DIR          Encoded output directory (default: /tmp)
@@ -63,10 +71,14 @@ while (($#)); do
         --warmup-frames) warmup_frames="$2"; shift 2 ;;
         --qcif-input) input_qcif="$2"; shift 2 ;;
         --cif-input) input_cif="$2"; shift 2 ;;
+        --360p-input) input_360="$2"; shift 2 ;;
+        --540p-input) input_540="$2"; shift 2 ;;
         --720p-input) input_720="$2"; shift 2 ;;
         --1080p-input) input_1080="$2"; shift 2 ;;
         --qcif-engine-dir) engine_qcif="$2"; shift 2 ;;
         --cif-engine-dir) engine_cif="$2"; shift 2 ;;
+        --360p-engine-dir) engine_360="$2"; shift 2 ;;
+        --540p-engine-dir) engine_540="$2"; shift 2 ;;
         --720p-engine-dir) engine_720="$2"; shift 2 ;;
         --1080p-engine-dir) engine_1080="$2"; shift 2 ;;
         --output-dir) output_dir="$2"; shift 2 ;;
@@ -108,6 +120,8 @@ select_engine() {
     case "$label" in
         qcif) directory="$engine_qcif" ;;
         cif) directory="$engine_cif" ;;
+        360p) directory="$engine_360" ;;
+        540p) directory="$engine_540" ;;
         720p) directory="$engine_720" ;;
         1080p) directory="$engine_1080" ;;
     esac
@@ -199,6 +213,8 @@ run_resolution() {
     case "$label" in
         qcif) run_case qcif 176x144 30 qcif-fp16 "$input_qcif" "$gop" ;;
         cif) run_case cif 352x288 30 cif-fp16 "$input_cif" "$gop" ;;
+        360p) run_case 360p 640x360 50 360p-fp16 "$input_360" "$gop" ;;
+        540p) run_case 540p 960x540 50 540p-fp16 "$input_540" "$gop" ;;
         720p) run_case 720p 1280x720 30 720p-fp16 "$input_720" "$gop" ;;
         1080p) run_case 1080p 1920x1080 60 1080p-fp16 "$input_1080" "$gop" ;;
         *) echo "unsupported resolution label: $label" >&2; return 2 ;;
