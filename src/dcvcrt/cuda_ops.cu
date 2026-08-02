@@ -184,6 +184,58 @@ __global__ void yuv420p8_to_ycbcr_padded_kernel(
     output[2 * plane + offset] = __float2half_rn(cr);
 }
 
+__device__ std::uint8_t quantize_luma(float value) {
+    return static_cast<std::uint8_t>(roundf(fminf(1.0F, fmaxf(0.0F, value)) * 255.0F));
+}
+
+__device__ std::uint8_t quantize_chroma(float value) {
+    return static_cast<std::uint8_t>(fminf(255.0F, fmaxf(0.0F, value * 255.0F)));
+}
+
+__global__ void ycbcr_luma_to_yuv420p8_kernel(
+    const __half* input,
+    Shape4D input_shape,
+    std::int32_t visible_width,
+    std::uint8_t* output,
+    std::size_t count) {
+    const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (index >= count) return;
+    const auto x = static_cast<std::int32_t>(index % static_cast<std::size_t>(visible_width));
+    const auto y = static_cast<std::int32_t>(index / static_cast<std::size_t>(visible_width));
+    const auto source = static_cast<std::size_t>(y) * input_shape.width + x;
+    output[index] = quantize_luma(load_half(input, source));
+}
+
+__global__ void ycbcr_chroma_to_yuv420p8_kernel(
+    const __half* input,
+    Shape4D input_shape,
+    std::int32_t visible_width,
+    std::int32_t visible_height,
+    std::uint8_t* output,
+    std::size_t count) {
+    const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (index >= count) return;
+    const auto uv_width = visible_width / 2;
+    const auto uv_x = static_cast<std::int32_t>(index % static_cast<std::size_t>(uv_width));
+    const auto uv_y = static_cast<std::int32_t>(index / static_cast<std::size_t>(uv_width));
+    const auto source_x = uv_x * 2;
+    const auto source_y = uv_y * 2;
+    const auto plane = static_cast<std::size_t>(input_shape.height) * input_shape.width;
+    float cb_sum = 0.0F;
+    float cr_sum = 0.0F;
+    for (std::int32_t dy = 0; dy < 2; ++dy) {
+        for (std::int32_t dx = 0; dx < 2; ++dx) {
+            const auto spatial = static_cast<std::size_t>(source_y + dy) * input_shape.width +
+                source_x + dx;
+            cb_sum += load_half(input, plane + spatial);
+            cr_sum += load_half(input, 2 * plane + spatial);
+        }
+    }
+    const auto y_size = static_cast<std::size_t>(visible_width) * visible_height;
+    output[y_size + index] = quantize_chroma(cb_sum * 0.25F);
+    output[y_size + count + index] = quantize_chroma(cr_sum * 0.25F);
+}
+
 __global__ void make_four_way_mask_kernel(
     __half* mask, Shape4D shape, std::int32_t stage, std::size_t count) {
     const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
@@ -522,6 +574,29 @@ cudaError_t yuv420p8_to_ycbcr_padded(
     yuv420p8_to_ycbcr_padded_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
         static_cast<const std::uint8_t*>(input), source_width, source_height,
         static_cast<__half*>(output), padded_height, padded_width, count);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t ycbcr_padded_to_yuv420p8(
+    const void* input,
+    Shape4D input_shape,
+    std::int32_t visible_width,
+    std::int32_t visible_height,
+    std::uint8_t* output,
+    cudaStream_t stream) noexcept {
+    if (input == nullptr || output == nullptr || invalid_shape(input_shape) ||
+        input_shape.batch != 1 || input_shape.channels != 3 || visible_width <= 0 ||
+        visible_height <= 0 || (visible_width & 1) != 0 || (visible_height & 1) != 0 ||
+        visible_width > input_shape.width || visible_height > input_shape.height) {
+        return cudaErrorInvalidValue;
+    }
+    const auto y_count = static_cast<std::size_t>(visible_width) * visible_height;
+    const auto uv_count = y_count / 4;
+    ycbcr_luma_to_yuv420p8_kernel<<<blocks(y_count), threads_per_block, 0, stream>>>(
+        static_cast<const __half*>(input), input_shape, visible_width, output, y_count);
+    ycbcr_chroma_to_yuv420p8_kernel<<<blocks(uv_count), threads_per_block, 0, stream>>>(
+        static_cast<const __half*>(input), input_shape, visible_width, visible_height,
+        output, uv_count);
     return cudaPeekAtLastError();
 }
 

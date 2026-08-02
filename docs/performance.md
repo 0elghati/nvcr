@@ -534,6 +534,47 @@ resolution-scaled decode execution the next optimization target. These values
 are the before measurements; any decode change must rerun the same matrix and
 report both FPS and PSNR-YUV.
 
+## Device-side decoded-output conversion (2026-07-30)
+
+This candidate moves the visible P-frame `frame_hat` conversion from a full FP16
+three-plane host download plus scalar CPU YUV420P8 conversion to CUDA kernels
+that emit only visible Y, U, and V bytes. The decoder keeps the FP16
+`frame_hat` and feature tensors on device for the DPB, writes compact output
+bytes into device scratch, downloads those bytes through a reusable pinned host
+buffer, and preserves the existing CPU conversion for reference paths and
+I-frame latent-state serialization.
+
+Validation used the same release-build matrix protocol as the baseline above.
+Machine-readable evidence is in
+`docs/evidence/dcvcrt-resolution-matrix-device-yuv420-2026-07-30.jsonl`.
+
+| Resolution | GOP | Payload bytes | Encode FPS | Decode FPS | Decode change | PSNR-YUV (dB) |
+|---|---:|---:|---:|---:|---:|---:|
+| QCIF (176x144) | 1 | 64,153 | 481.796 | 577.907 | -0.14% | 35.784883 |
+| CIF (352x288) | 1 | 1,311,398 | 224.134 | 247.797 | +0.12% | 28.044318 |
+| 720p (1280x720) | 1 | 1,104,333 | 35.026 | 42.174 | +0.03% | 38.648032 |
+| 1080p (1920x1080) | 1 | 4,421,239 | 15.074 | 17.717 | -0.07% | 34.701453 |
+| QCIF (176x144) | 97 | 11,124 | 860.563 | 944.322 | +16.87% | 38.355843 |
+| CIF (352x288) | 97 | 155,448 | 542.374 | 519.126 | +37.51% | 25.965082 |
+| 720p (1280x720) | 97 | 86,297 | 94.997 | 90.416 | +58.31% | 40.711093 |
+| 1080p (1920x1080) | 97 | 396,285 | 44.379 | 41.843 | +60.56% | 35.242946 |
+
+All payload byte counts and PSNR-YUV values match the baseline matrix. GOP-97
+decode clears the +10% acceptance target at both 720p and 1080p, with encode
+throughput within normal run variance.
+
+A short 720p GOP-97 Nsight Systems decode trace is retained as
+`docs/evidence/dcvcrt-device-yuv420-720p-gop97-decode-2026-07-30.nsys-rep`;
+text summaries are in
+`docs/evidence/dcvcrt-device-yuv420-720p-gop97-decode-2026-07-30-nsys-stats.txt`
+and memcpy byte totals are in
+`docs/evidence/dcvcrt-device-yuv420-720p-gop97-decode-2026-07-30-memcpy.csv`.
+Under tracing, decode measured 89.157 fps. D2H traffic fell from the baseline
+~581.5 MB to 183,398,400 bytes while H2D remained 260,481,152 bytes and D2D
+remained 364,985,344 bytes. `cudaMemcpyAsync` host API time fell from the
+baseline ~711 ms to 367.728 ms. Total GPU kernel time was 811.426 ms, and the
+new visible-output kernels accounted for about 1.018 ms across the 96 P frames.
+
 ### Superseded build and validation attempts
 
 The following failures are retained as diagnostic history and are not release

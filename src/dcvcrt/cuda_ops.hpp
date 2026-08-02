@@ -60,6 +60,14 @@ cudaError_t yuv420p8_to_ycbcr_padded(
     std::int32_t padded_width,
     cudaStream_t stream) noexcept;
 
+cudaError_t ycbcr_padded_to_yuv420p8(
+    const void* input,
+    Shape4D input_shape,
+    std::int32_t visible_width,
+    std::int32_t visible_height,
+    std::uint8_t* output,
+    cudaStream_t stream) noexcept;
+
 cudaError_t make_four_way_mask(
     void* mask,
     Shape4D shape,
