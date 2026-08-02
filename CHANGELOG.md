@@ -6,6 +6,7 @@
 ### Features
 
 * **bench:** add warmed repeated resolution runs ([#35](https://github.com/0elghati/nvcr/issues/35)) ([e9f8a1e](https://github.com/0elghati/nvcr/commit/e9f8a1e55a11f1551b13ee02f9f26f3e5e82b8b5))
+* **dcvcrt:** add four-resolution TensorRT profiles ([#42](https://github.com/0elghati/nvcr/issues/42)) ([200f31c](https://github.com/0elghati/nvcr/commit/200f31cc78a686cf2b0df0d37d8a1efd3cc9c95a))
 * enhance dcvcrt device i decode performance ([#32](https://github.com/0elghati/nvcr/issues/32)) ([8b9f613](https://github.com/0elghati/nvcr/commit/8b9f613e6892e16b8e14b1e7c1866e39bb017e8c))
 
 
