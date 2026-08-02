@@ -4,7 +4,7 @@ This is the source of truth for the scoped neural video codec runtime
 architecture described in `docs/scope-and-support.md`. DCVC-RT is the first and
 currently only supported codec backend.
 
-Last reviewed: 2026-07-30
+Last reviewed: 2026-08-02
 
 ## Objective
 
@@ -66,12 +66,11 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: with P-frame visible-output conversion accepted on RTX
-4070, profile the remaining GOP-97 decode boundaries separately: CPU rANS
-decode, pageable P-frame index downloads, TensorRT execution, and the remaining
-`cudaMallocAsync`/`cudaFree` churn. Do not start a GPU entropy-coder rewrite
-until those smaller boundaries are measured. Cross-runtime I/P golden vectors,
-drain/flush semantics, and target support remain pending.
+Current next action: restore the pinned PyTorch/ONNX exporter, regenerate a
+traceable `p_synthesis.onnx`, and build fully fixed 360p/540p Orin bundles.
+Repeat the balanced A/B under locked clocks, then profile the 540p decode path
+because its current +2.35% result misses the 3% candidate gate. Cross-runtime
+I/P golden vectors, drain/flush semantics, and target support remain pending.
 
 Deployment next action: upload the locally validated v0.5.0 Orin QCIF, CIF,
 720p, and 1080p engine assets to staging, run the exact-tag upload workflow,
@@ -1374,3 +1373,60 @@ Current next action: stop pursuing engine-boundary and launch-overhead changes;
 prototype precision or network-compute reduction in the dominant reference and
 synthesis networks, with cross-runtime quality/bitstream gates and an explicit
 10% Orin throughput threshold before integration.
+
+### 2026-08-02 — Fixed edge TensorRT profiles and Orin candidate evidence
+
+- Added architecture-neutral fixed-shape `360p-fp16` and `540p-fp16` engine
+  profiles, build/prepare/package/benchmark routing, and runtime acceptance of
+  positive dimensions for axes whose codec contract is runtime-variable.
+  Dynamic plans retain `-1` validation and their existing warm-up shapes; fixed
+  batch/channel axes remain exact. No CUDA-architecture branch, model, entropy,
+  or bitstream-format change was introduced, so the implementation remains
+  available to x86/RTX while plans remain target-local.
+- The local export directory was not a valid pinned v2 bundle: its I-frame
+  manifest was legacy and `p_synthesis.onnx` did not match the canonical v2
+  hash. The builder now validates the complete model bundle before producing
+  the first plan. Untraceable static synthesis plans were quarantined rather
+  than accepted.
+- Conservative Orin candidates used fixed min=opt=max shapes for 13 engines and
+  the validated dynamic 720p `p_synthesis.plan`. Both restamped bundles passed
+  the validator available during measurement and complete 97-frame native
+  encode/decode. They are explicitly hybrid evidence, not publishable fully
+  fixed bundles.
+- In balanced A-B-B-A-A-B BasketballDrive runs at GOP 97/QP 32, 360p encode
+  improved from 38.8667 to 41.8733 fps (+7.74%) and decode from 39.4077 to
+  40.8450 fps (+3.65%). At 540p, encode improved from 17.9357 to 18.8653 fps
+  (+5.18%) and decode from 19.9060 to 20.3743 fps (+2.35%). Candidate PSNR-YUV
+  was slightly higher at both resolutions. The 360p candidate and 540p encode
+  clear the 3% gate; 540p decode remains diagnostic.
+- GPU DVFS was unlocked at 306--1020 MHz after reboot, so these measurements do
+  not replace locked-clock release evidence. Full run order, plan and output
+  hashes, payloads, quality, and provenance are in
+  `docs/evidence/orin-fixed-edge-profiles-2026-08-02.json`.
+- The direct-device `nvcr_cuda_ops` test passed on Orin; the other five release
+  tests and the artifact/profile tests passed. The same dynamic 720p bundle was
+  exercised as the baseline throughout, providing a runtime regression check.
+- A stabilization pass closed the hybrid-bundle contract gap before commit.
+  Engine manifests now derive identity, visible dimensions, builder settings,
+  and `shape_profile` from the selected versioned profile. Legacy manifests
+  remain dynamic; dynamic bundles must retain `-1` runtime axes, while fixed
+  bundles must resolve every variable axis in all 14 engines. The measured
+  13+1 hybrids now fail both artifact validation and runtime initialization.
+- Final compatibility verification passed the direct-device Release suite 6/6
+  and a native nine-frame I/P roundtrip using the existing dynamic 720p bundle
+  (bitstream SHA-256
+  `945bfbc71d09f00bc041d1c5925a3dd37bfa0b71e009905b2f375ca2738466d2`).
+  A clean TensorRT-disabled portable build passed 4/4 tests, and a clean Orin
+  SM 8.7 Release build, install, and package probe included both new profile
+  definitions and the hardened artifact helpers. No codec, model, entropy, or
+  bitstream rollback was required.
+
+Rejected in the same wave: a checkerboard two-way CUDA compaction kernel
+regressed repeated 360p encode by 0.61% and decode by 0.20% with bit-exact
+outputs. It was removed; the negative result is preserved in
+`docs/evidence/orin-two-way-compaction-rejected-2026-08-02.json`.
+
+Current next action: restore the pinned exporter environment, regenerate the
+canonical synthesis graph, build all 14 engines fixed per resolution, and
+repeat under locked clocks. Investigate 540p decode independently if it remains
+below the 3% gate; do not publish the current hybrid bundles as fixed profiles.

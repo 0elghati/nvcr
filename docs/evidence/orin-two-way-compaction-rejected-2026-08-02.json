@@ -1,0 +1,41 @@
+{
+  "schema": "nvcr.performance-candidate.v1",
+  "date": "2026-08-02",
+  "base_commit": "108f926060ee335e6c6ee1ae671d4c4a4e54af61",
+  "device": "NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super",
+  "build_type": "Release",
+  "execution_mode": "automatic shared-workspace",
+  "resolution": "640x360",
+  "sequence": "BasketballDrive_640x360_50.yuv",
+  "frames": 97,
+  "gop": 97,
+  "qp": 32,
+  "engine_profile": "720p-fp16",
+  "clock_note": "Post-reboot alternating A/B diagnostic; GPU range was 306-1020 MHz and CPU range was 729.6-1728 MHz, so this is candidate evidence rather than a locked-clock release result.",
+  "change": "Replace each P-frame checkerboard mask/process/reduce/index chain with a maskless compact kernel using paired stores when width and alignment permit and a scalar fallback otherwise.",
+  "correctness": {
+    "cuda_unit_test": "passed on target for paired and odd-width scalar paths against the original masked operators",
+    "payload_bytes": 79552,
+    "bitstream_sha256": "5e1d61a28a274338ae497c0d2b79d1119d6ac6ac72695d10acb8cce09ba3aad2",
+    "reconstruction_sha256": "e15135ffac42cd14fc3e616bb2217a32b84f6a70e3f99c6e3450025487e574d0",
+    "bit_exact": true
+  },
+  "encode": {
+    "baseline_fps_runs": [38.861, 38.785, 39.484],
+    "candidate_fps_runs": [38.827, 38.664, 38.919],
+    "baseline_fps_mean": 39.0433,
+    "candidate_fps_mean": 38.8033,
+    "change_percent": -0.61
+  },
+  "decode": {
+    "baseline_fps_runs": [40.637, 40.058, 39.962],
+    "candidate_fps_runs": [40.084, 39.982, 40.347],
+    "baseline_fps_mean": 40.2190,
+    "candidate_fps_mean": 40.1377,
+    "change_percent": -0.20,
+    "cuda_graph_captures_per_run": 9,
+    "cuda_graph_hits_per_run": 375
+  },
+  "decision": "rejected",
+  "reason": "The candidate was bit-exact but did not meet the repeated performance acceptance threshold on either encode or decode. The implementation was removed rather than retaining neutral complexity."
+}
