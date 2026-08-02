@@ -66,18 +66,21 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: integrate and package exact-resolution selection for the
-accepted canonical fixed 360p/540p Orin bundles, retaining the dynamic bundle as
-fallback, then build and measure separate target-local profiles on RTX/x86.
+Current next action: integrate exact-resolution selection for the accepted
+canonical fixed 360p/540p Orin bundles, retaining the dynamic bundle as fallback,
+then stage the preserved v0.6.0 assets and build/measure separate target-local
+profiles on RTX/x86.
 The current Orin FP16 runtime-only FPS wave is closed at its measured ceiling;
 do not resume speculative backend tuning without a newly profiled candidate
 capable of clearing the 3% whole-codec gate. Cross-runtime I/P golden vectors,
 drain/flush semantics, and target support remain pending.
 
-Deployment next action: upload the locally validated v0.5.0 Orin QCIF, CIF,
-720p, and 1080p engine assets to staging, run the exact-tag upload workflow,
-and then run the full registered suite and record the clean target, correctness,
-performance, memory, rate/distortion, and energy matrix. Engine-cache reuse must
+Deployment next action: stage the locally validated v0.6.0 Orin 360p and 540p
+engine assets and run the exact-tag upload workflow. Before publishing an
+all-profile v0.6.0 release, repackage QCIF, CIF, 720p, and 1080p under the same
+version; do not mix the retained v0.5.0 filenames into a v0.6.0 upload. Then run
+the full registered suite and record the clean target, correctness, performance,
+memory, rate/distortion, and energy matrix. Engine-cache reuse must
 be keyed by model, target, TensorRT/CUDA, precision, and shape profile. The
 release installer now downloads every selected-backend engine profile by default
 and uses backend/profile aliases plus a backend-neutral default engine slot under
@@ -1622,3 +1625,32 @@ plans. Do not share TensorRT `.plan` files across GPU targets.
 Current next action: add exact-resolution selection and packaging for the
 accepted Orin 360p/540p bundles with dynamic fallback, then perform separate RTX
 builds and measurements. Do not share Orin `.plan` files with RTX/x86 targets.
+
+### 2026-08-02 — Preserve fixed 360p/540p Orin release assets
+
+- Packaged the accepted canonical fixed bundles as deterministic v0.6.0
+  reviewer-convenience engine assets under `dist/`, following the existing
+  v0.5.0 repository tag. The requested "530p" asset maps to the registered and
+  measured `540p-fp16` profile at 960x540; no 530p profile exists. The initial
+  v0.5.0 local copies and sidecars remain preserved as history.
+- `360p-fp16`: archive size 155,615,114 bytes, SHA-256
+  `a30384e03a163f8629ed604200b257832d474b63284d5e8a84ccaa180b26cb7f`.
+  `540p-fp16`: archive size 155,081,625 bytes, SHA-256
+  `7c445030b20c61742ad487a03fc683b5a50ecd4776a7586112209621a7603578`.
+- Both source bundles and both extracted archive bundles passed
+  `nvcr.engine-bundle.v2` validation. Archive sidecars and every entry in each
+  `ENGINE-ASSET-MANIFEST.sha256` passed. Each archive contains the final 14
+  TensorRT plans plus runtime entropy/quant assets and manifests; ONNX,
+  checkpoint, and transient timing-cache files are excluded.
+- The existing `dist/nvcr-engine-assets.txt` was deliberately left unchanged.
+  Its rows and presigned URLs describe the earlier v0.5.0 QCIF/CIF/720p/1080p
+  staging set. Generate new URLs and a fresh workflow manifest only when the
+  upload is requested, and keep every asset filename aligned with the exact
+  v0.6.0 release tag.
+- Machine-readable preservation evidence is in
+  `docs/evidence/orin-fixed-engine-packages-2026-08-02.json`.
+
+Current next action: integrate runtime selection with dynamic fallback. For a
+later upload, stage the two v0.6.0 fixed-profile archives, regenerate
+`dist/nvcr-engine-assets.txt`, and run the exact-tag upload workflow. Repackage
+the other four profiles as v0.6.0 first if they are included in that release.
