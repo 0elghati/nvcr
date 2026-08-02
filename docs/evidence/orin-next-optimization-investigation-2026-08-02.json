@@ -1,0 +1,243 @@
+{
+  "schema": "nvcr.orin-optimization-investigation.v1",
+  "date": "2026-08-02",
+  "commit": "31a9b1ebce553684e157961c715a983f7658e5cd",
+  "branch": "perf/orin-overlap-graphs",
+  "device": "NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super",
+  "power_mode": "MAXN_SUPER (mode 2)",
+  "build_type": "Release",
+  "clock_note": "Diagnostic only. GPU DVFS was unlocked at 306-1020 MHz and CPU clocks were also unlocked. Results must be repeated under locked clocks before release acceptance.",
+  "objective": "Identify the next material Orin optimizations without changing the DCVC-RT codec generation and without regressing x86 Linux or desktop RTX support.",
+  "artifact_discovery": {
+    "canonical_model_bundle": "build/models/dcvcrt-canonical-reexport-20260802",
+    "p_synthesis_onnx_sha256": "1fe6e37ca8a01372e972dd9701f133ed47bf6873a7520e1e1b1a502a86252f1d",
+    "expected_p_synthesis_onnx_sha256": "1fe6e37ca8a01372e972dd9701f133ed47bf6873a7520e1e1b1a502a86252f1d",
+    "fixed_bundles": {
+      "360p": {
+        "path": "build/engines/dcvcrt-cvpr2025/orin-nano-l4t3647/360p-fixed-canonical-fp16",
+        "engine_manifest_sha256": "8464290d6c61ddd6acd08fc642206b008a26ca1268c00a242f72b0e2a5e48594",
+        "shape_profile": "fixed",
+        "all_14_plans_fixed": true,
+        "artifact_validation": "passed nvcr.engine-bundle.v2"
+      },
+      "540p": {
+        "path": "build/engines/dcvcrt-cvpr2025/orin-nano-l4t3647/540p-fixed-canonical-fp16",
+        "engine_manifest_sha256": "cb8b6533df1e6594c2c1712151b804e729b847e8efa82c13c10a13bb9655587e",
+        "shape_profile": "fixed",
+        "all_14_plans_fixed": true,
+        "artifact_validation": "passed nvcr.engine-bundle.v2"
+      }
+    }
+  },
+  "balanced_abbaaa_benchmark": {
+    "description": "Balanced A-B-B-A-A-B diagnostic comparing A=dynamic 720p-fp16 bundle and B=fully fixed canonical bundle. Each encode was followed by matching decode and quality measurement.",
+    "sequence_family": "BasketballDrive",
+    "framerate": 50,
+    "frames": 97,
+    "gop": 97,
+    "qp": 32,
+    "run_order": [
+      "dynamic",
+      "fixed",
+      "fixed",
+      "dynamic",
+      "dynamic",
+      "fixed"
+    ],
+    "dynamic_bundle": "build/engines/dcvcrt-cvpr2025/orin-nano-l4t3647/720p-fp16",
+    "dynamic_engine_manifest_sha256": "86fec8e8ed769cc4fa1870a071b86cc9e3e3bb27cc2755e645c986c287dd6d11",
+    "profiles": {
+      "360p": {
+        "resolution": "640x360",
+        "sequence": "BasketballDrive_640x360_50.yuv",
+        "encode": {
+          "dynamic_fps_runs": [39.980, 40.231, 40.641],
+          "fixed_fps_runs": [48.544, 48.574, 48.318],
+          "dynamic_fps_mean": 40.284,
+          "fixed_fps_mean": 48.478667,
+          "change_percent": 20.342
+        },
+        "decode": {
+          "dynamic_fps_runs": [31.673, 31.988, 31.866],
+          "fixed_fps_runs": [34.467, 33.288, 35.173],
+          "dynamic_fps_mean": 31.842333,
+          "fixed_fps_mean": 34.309333,
+          "change_percent": 7.748
+        },
+        "correctness": {
+          "dynamic_payload_bytes": 79552,
+          "fixed_payload_bytes": 79139,
+          "dynamic_psnr_yuv_db": 34.892588,
+          "fixed_psnr_yuv_db": 34.885236,
+          "psnr_yuv_change_db": -0.007352,
+          "dynamic_bitstream_sha256": "5e1d61a28a274338ae497c0d2b79d1119d6ac6ac72695d10acb8cce09ba3aad2",
+          "fixed_bitstream_sha256": "c7ab22cca6628c694303ced3d20ac1488bcee514e230a1b158514ba76152950b",
+          "fixed_reconstruction_sha256": "539dd0d09d055c1171da97815eca74e6f5ca5ad67d9e564406d020ce86ef1547",
+          "deterministic_within_each_bundle": true,
+          "note": "Different target-local TensorRT FP16 tactics produced a different deterministic stream with negligible quality change. This is not a cross-runtime compatibility claim."
+        },
+        "cuda_graphs": {
+          "encode_captures_per_run": 20,
+          "encode_hits_per_run": 563,
+          "decode_captures_per_run": 9,
+          "decode_hits_per_run": 375
+        }
+      },
+      "540p": {
+        "resolution": "960x540",
+        "sequence": "BasketballDrive_960x540_50.yuv",
+        "encode": {
+          "dynamic_fps_runs": [18.227, 18.125, 18.359],
+          "fixed_fps_runs": [21.287, 20.921, 20.967],
+          "dynamic_fps_mean": 18.237,
+          "fixed_fps_mean": 21.058333,
+          "change_percent": 15.470
+        },
+        "decode": {
+          "dynamic_fps_runs": [20.117, 19.955, 19.952],
+          "fixed_fps_runs": [22.158, 22.217, 20.622],
+          "dynamic_fps_mean": 20.008,
+          "fixed_fps_mean": 21.665667,
+          "change_percent": 8.285
+        },
+        "correctness": {
+          "dynamic_payload_bytes": 133316,
+          "fixed_payload_bytes": 133583,
+          "dynamic_psnr_yuv_db": 35.900343,
+          "fixed_psnr_yuv_db": 35.904741,
+          "psnr_yuv_change_db": 0.004398,
+          "dynamic_bitstream_sha256": "0385abab2d28b1de21165aaf96ba7e19e18cd6bac4695267938a8ba7ba0e3fd0",
+          "fixed_bitstream_sha256": "11dcd722c05d15c89f302339856d473ef767f89cd2da68ce69e84331ba1491a1",
+          "fixed_reconstruction_sha256": "a6f9842005574c3e3f0da655d7c7edb7936fe12170c1ef36297e162ebdc655c6",
+          "deterministic_within_each_bundle": true,
+          "note": "Different target-local TensorRT FP16 tactics produced a different deterministic stream with negligible quality change. This is not a cross-runtime compatibility claim."
+        },
+        "cuda_graphs": {
+          "encode_captures_per_run": 0,
+          "encode_hits_per_run": 0,
+          "decode_captures_per_run": 0,
+          "decode_hits_per_run": 0,
+          "note": "540p is above the accepted integrated-device graph area cap."
+        }
+      }
+    },
+    "decision": "Promote fully fixed, target-local TensorRT profiles to the first acceptance wave. Do not package them until locked-clock, multi-sequence, GOP-1/GOP-97, correctness, memory, and energy gates pass."
+  },
+  "hot_path_profile": {
+    "workload": "640x360 BasketballDrive, 9 frames, GOP 9, QP 32, warmed P frames",
+    "dynamic_720p_bundle_ms_ranges": {
+      "p_reference_feature": [6.71, 6.77],
+      "p_analysis": [3.71, 3.74],
+      "p_hyper_analysis": [0.27, 0.28],
+      "p_prior": [2.24, 2.26],
+      "p_spatial_prior": [1.04, 1.06],
+      "p_synthesis": [11.00, 11.07],
+      "p_entropy_encode_cpu": [1.08, 1.10]
+    },
+    "fixed_360p_bundle_ms_ranges": {
+      "p_reference_feature": [5.71, 5.75],
+      "p_analysis": [3.21, 3.24],
+      "p_hyper_analysis": [0.227, 0.231],
+      "p_prior": [2.084, 2.102],
+      "p_spatial_prior": [0.947, 0.962],
+      "p_synthesis": [8.70, 8.78],
+      "p_entropy_encode_cpu": [1.09, 1.11]
+    },
+    "per_p_frame_runtime_activity": {
+      "owned_allocations": 2,
+      "owned_allocation_bytes": 3297280,
+      "host_to_device_bytes": 345600,
+      "device_to_host_bytes": 243200,
+      "device_to_device_bytes": 942080,
+      "encode_causal_synchronizations": 0,
+      "decode_causal_synchronizations": 3
+    },
+    "diagnosis": "Steady-state Orin throughput is dominated by sequential TensorRT neural compute, especially p_synthesis, p_reference_feature, and p_analysis. CPU entropy, enqueue setup after CUDA Graph warm-up, allocations, and copies are secondary."
+  },
+  "tensorrt_microbenchmarks": {
+    "engine": "dynamic 720p-fp16 p_synthesis.plan at fixed 360p input shapes",
+    "trtexec_warmed_latency_mean_ms": 10.378,
+    "trtexec_enqueue_mean_ms_without_cuda_graph": 0.547,
+    "layer_profile_total_ms": 10.459,
+    "layer_profile_diagnosis": "Work is distributed across decoder and reconstruction depth-convolution/FFN blocks; no single reformat or copy node dominates.",
+    "persistent_l2_cache": {
+      "baseline_mean_ms": 10.3783,
+      "ratio_0_5_mean_ms": 10.3794,
+      "ratio_1_0_mean_ms": 10.4039,
+      "device_limit_bytes": 393216,
+      "decision": "rejected; no positive signal"
+    }
+  },
+  "mlvc_audit": {
+    "repository": "/home/oelghati/mlvc",
+    "commit": "e9f0114",
+    "useful_runtime_lesson": "MLVC explicitly exports fixed-resolution NPU models. This aligns with the measured benefit of fixed TensorRT profiles.",
+    "benchmark_semantics": "The local MLVC benchmark derives encoder/decoder FPS from MLVC model inference timers. ModelWrapper.inference_time surrounds model.predict/infer only, while FrameLoopTotal separately contains the full loop and supporting work. NVCR complete codec wall-time FPS is therefore not directly comparable to MLVC's reported model FPS.",
+    "non_drop_in_changes": [
+      "Scale sending changes entropy parameters and the bitstream, allowing one arithmetic decode pass instead of interleaving entropy and neural calls.",
+      "The recurrent feature width is reduced from 256 to 128.",
+      "MLVC-S is a substantially smaller 5.4M-parameter codec.",
+      "NPU-friendly activations, memory, unified I/P handling, long-term reference recovery, and the published rate-distortion results require training/model changes."
+    ],
+    "paper_360p_fps": {
+      "mlvc_average_encode": 103,
+      "mlvc_average_decode": 99,
+      "mlvc_s_average_encode": 252,
+      "mlvc_s_average_decode": 241
+    },
+    "paper_540p_fps": {
+      "mlvc_average_encode": 49,
+      "mlvc_average_decode": 48,
+      "mlvc_s_average_encode": 121,
+      "mlvc_s_average_decode": 114
+    },
+    "comparison_note": "Published MLVC numbers use Apple, Intel, and Qualcomm NPUs and a different codec/model/timing scope. They are architectural evidence, not an Orin Nano DCVC-RT target."
+  },
+  "ranked_next_waves": [
+    {
+      "rank": 1,
+      "name": "Accept and package canonical fully fixed 360p/540p profiles",
+      "expected_gain_signal": "Observed +20.342%/+7.748% encode/decode at 360p and +15.470%/+8.285% at 540p in unlocked-clock diagnostics.",
+      "gate": "Locked clocks and thermal logging; A-B-B-A-A-B; GOP 1 and 97; at least five sequences; three measured repetitions; exact payload/PSNR/reconstruction evidence; peak memory and energy; release tests and cross-runtime golden checks.",
+      "compatibility": "Resolution selection chooses a target-local plan only when model, target, TensorRT/CUDA, precision, and exact shape match. Dynamic plans remain the fallback. Orin plans are never loaded on RTX/x86."
+    },
+    {
+      "rank": 2,
+      "name": "Search TensorRT tactics on fixed hot engines",
+      "expected_gain_signal": "Potential additional single-digit gain; fixed-shape tactic selection already produced the largest runtime-only improvement.",
+      "scope": "Probe p_synthesis, p_reference_feature, p_analysis, and p_prior independently using locked clocks, builder optimization level 4/5 where memory permits, controlled workspace sizes, zero/one auxiliary stream, detailed profiling, and target-specific timing caches. Promote only whole-codec gains above 3% with unchanged correctness.",
+      "compatibility": "Build and cache tactics independently per GPU target. No codec, public API, or x86 code-path change."
+    },
+    {
+      "rank": 3,
+      "name": "Preallocate and bind ping-pong DPB outputs",
+      "expected_gain_signal": "Likely below 3% throughput but removes two allocations and 3.297 MB of allocation churn per P frame, stabilizes addresses for CUDA Graph replay, and reduces integrated-memory fragmentation risk.",
+      "scope": "Allow caller-provided output buffers in run_device_engine and retain two frame/feature DPB slots. Measure throughput, peak memory, and long-GOP stability.",
+      "compatibility": "Backend-local buffer-management change using existing CUDA semantics; retain the existing allocation fallback and test both integrated and discrete GPU policies."
+    },
+    {
+      "rank": 4,
+      "name": "Accuracy-aware mixed precision only if more than 25% additional speed is required",
+      "expected_gain_signal": "Potentially material, but requires new trained artifacts. Prior PTQ delivered about 19-21% speed while catastrophically reducing PSNR to about 16 dB.",
+      "scope": "Sensitivity-guided Q/DQ and quantization-aware training focused first on hot reconstruction/reference FFN convolutions, with entropy-parameter networks retained in FP16 until proven safe. Consider structured 2:4 sparsity only with fine-tuning and rate-distortion validation.",
+      "compatibility": "Use a new model/artifact identity and explicit bitstream compatibility gate; retain the FP16 backend and desktop fallback."
+    }
+  ],
+  "deprioritized_or_rejected": [
+    "Persistent L2 cache: neutral in the direct p_synthesis probe.",
+    "Broad multi-stream execution: the codec stages are mostly causally sequential, TensorRT adds synchronization events, and extra streams increase memory pressure.",
+    "More CUDA Graph work at 540p: graph launch overhead is small relative to neural compute and the current accepted policy intentionally caps integrated-device graphs at 360p.",
+    "More runtime-only fusion/compaction: prior reference/prior fusion gained only 1.10% and the two-way compaction kernel regressed.",
+    "INT8 PTQ: rejected for catastrophic rate-distortion failure.",
+    "DLA: Jetson Orin Nano has no DLA.",
+    "FP8: Orin Nano's Ampere GPU does not provide the newer FP8 Tensor Core path."
+  ],
+  "sources": [
+    "https://arxiv.org/html/2606.28027v2",
+    "https://arxiv.org/abs/2502.20762",
+    "https://docs.nvidia.com/deeplearning/tensorrt/latest/performance/optimization.html",
+    "https://docs.nvidia.com/deeplearning/tensorrt/latest/architecture/how-trt-works.html",
+    "https://developer.nvidia.com/blog/?p=95089"
+  ],
+  "decision": "The next implementation should begin with acceptance and resolution-aware use of the canonical fixed 360p/540p bundles. Follow with a hot-engine TensorRT tactic search. Buffer preallocation is worthwhile for robustness but is not expected to be the drastic throughput change. MLVC-style scale sending or smaller models belong to a separate codec/model generation, not this NVCR/DCVC-RT runtime optimization wave."
+}

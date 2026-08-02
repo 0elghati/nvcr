@@ -197,6 +197,61 @@ retain ordinary TensorRT enqueue. The final 540p control was neutral at 20.826
 fps versus 20.849 fps. Evidence is in
 [`evidence/orin-cuda-graphs-2026-08-01.json`](evidence/orin-cuda-graphs-2026-08-01.json).
 
+### 2026-08-02 Orin Nano fixed-profile FP16 ceiling
+
+Canonical fully fixed 360p and 540p FP16 bundles were measured in
+`MAXN_SUPER` with GPU, CPU, and platform clocks locked by `jetson_clocks`.
+The Release CLI used 97 frames, QP 32, GOP 97, a 10-frame process warm-up, and
+three complete measured encode/decode repetitions per sequence. Codec timing
+excludes initialization, file I/O, and quality calculation.
+
+| Resolution | Sequence | Payload | Encode | Decode | PSNR-YUV |
+|---|---|---:|---:|---:|---:|
+| 640x360 | BasketballDrive | 79,139 bytes | 51.071 fps | 55.304 fps | 34.885236 dB |
+| 640x360 | HoneyBee | 45,645 bytes | 51.158 fps | 55.442 fps | 38.702308 dB |
+| 640x360 | Jockey | 52,527 bytes | 51.124 fps | 55.385 fps | 36.518683 dB |
+| 640x360 | Kimono | 89,419 bytes | 51.223 fps | 55.168 fps | 34.377924 dB |
+| 640x360 | ReadySteadyGo | 87,892 bytes | 50.924 fps | 55.333 fps | 34.299725 dB |
+| **640x360 mean** | **5 sequences** | — | **51.100 fps** | **55.326 fps** | — |
+| 960x540 | BasketballDrive | 133,583 bytes | 21.022 fps | 23.856 fps | 35.904741 dB |
+| 960x540 | HoneyBee | 63,391 bytes | 21.063 fps | 24.047 fps | 40.299633 dB |
+| 960x540 | Jockey | 83,242 bytes | 21.049 fps | 23.994 fps | 37.712359 dB |
+| 960x540 | Kimono | 151,573 bytes | 21.027 fps | 23.769 fps | 35.713170 dB |
+| 960x540 | ReadySteadyGo | 147,100 bytes | 21.003 fps | 23.860 fps | 35.581912 dB |
+| **960x540 mean** | **5 sequences** | — | **21.033 fps** | **23.905 fps** | — |
+
+The matching locked-clock Basketball dynamic-bundle control measured 41.756 /
+45.731 encode/decode fps at 360p and 18.356 / 20.925 fps at 540p. Fully fixed
+profiles therefore improved normal-GOP encode/decode by +22.31%/+20.93% at
+360p and +14.52%/+14.00% at 540p. Basketball PSNR-YUV changed by only
+-0.0074 dB and +0.0044 dB, respectively. Every repetition was deterministic
+within its bundle.
+
+All-intra GOP-1 fixed-profile throughput was 20.871/26.432 fps at 360p and
+9.550/11.655 fps at 540p. This is recorded for I-frame attribution only and
+must not be compared with normal I/P video throughput.
+
+The final tactic search found no further FP16 runtime gain. Builder level 5
+regressed the four hot 360p engines (`p_synthesis` +4.91% latency,
+`p_reference_feature` +3.49%, `p_analysis` +13.46%, and `p_prior` neutral).
+Forcing zero auxiliary streams regressed locked-clock `p_synthesis` latency by
+8.78%. Together with the compute-dominant layer profile and earlier rejected
+fusion/cache/compaction experiments, this closes the current runtime-only FPS
+wave at the standard 3% promotion gate.
+
+VDD_IN energy measurements used a 10-second idle baseline and 100 ms samples.
+Idle-adjusted energy was 0.273 J/frame encode and 0.213 J/frame decode at 360p,
+and 0.686/0.541 J/frame at 540p. The energy wrapper includes process start and
+file I/O; its embedded CLI codec measurements remained at 51.658/56.755 fps
+and 21.234/24.209 fps.
+
+The complete protocol, run arrays, input/artifact/bitstream hashes, energy,
+clock and thermal state, negative tactic results, and verification are in
+[`evidence/orin-fixed-profile-ceiling-2026-08-02.json`](evidence/orin-fixed-profile-ceiling-2026-08-02.json).
+This is the measured ceiling for the current DCVC-RT FP16 TensorRT model on the
+recorded Orin Nano. Materially higher FPS now requires a separately identified
+trained artifact path rather than more NVCR runtime tuning.
+
 
 ### 2026-07-30 RTX 4070 warmed encode and decode diagnostic
 

@@ -66,12 +66,13 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: repeat the accepted I-frame entropy/synthesis overlap and
-integrated encode CUDA Graph candidate under locked clocks, then measure the
-unchanged desktop policy on RTX. In parallel, restore the pinned PyTorch/ONNX
-exporter, regenerate a traceable `p_synthesis.onnx`, and build fully fixed
-360p/540p Orin bundles. Cross-runtime I/P golden vectors, drain/flush semantics,
-and target support remain pending.
+Current next action: integrate and package exact-resolution selection for the
+accepted canonical fixed 360p/540p Orin bundles, retaining the dynamic bundle as
+fallback, then build and measure separate target-local profiles on RTX/x86.
+The current Orin FP16 runtime-only FPS wave is closed at its measured ceiling;
+do not resume speculative backend tuning without a newly profiled candidate
+capable of clearing the 3% whole-codec gate. Cross-runtime I/P golden vectors,
+drain/flush semantics, and target support remain pending.
 
 Deployment next action: upload the locally validated v0.5.0 Orin QCIF, CIF,
 720p, and 1080p engine assets to staging, run the exact-tag upload workflow,
@@ -1525,3 +1526,99 @@ Current next action: when the pinned exporter environment is restored for the
 360p/540p fixed-profile work already tracked above, re-attempt a
 locked-clock builder-optimization-level probe on one profile as a small
 follow-up, gated at the standard 3% material-gain threshold.
+
+### 2026-08-02 — Investigate the next Orin optimization waves
+
+- The pinned exporter was restored after the earlier builder investigation.
+  The canonical `p_synthesis.onnx` now matches the expected SHA-256, and both
+  360p and 540p bundles contain all 14 fixed-shape plans. Both bundles pass the
+  `nvcr.engine-bundle.v2` validator. They remain local, target-specific build
+  outputs and have not been accepted for distribution.
+- An unlocked-clock balanced A-B-B-A-A-B BasketballDrive diagnostic at GOP 97,
+  QP 32 compared the dynamic `720p-fp16` bundle against these fully fixed
+  canonical bundles. At 360p, encode improved from 40.2840 to 48.4787 fps
+  (+20.34%) and decode from 31.8423 to 34.3093 fps (+7.75%). At 540p, encode
+  improved from 18.2370 to 21.0583 fps (+15.47%) and decode from 20.0080 to
+  21.6657 fps (+8.29%). PSNR-YUV changed by -0.0074 dB and +0.0044 dB,
+  respectively. Each bundle was deterministic, although target-local FP16
+  TensorRT tactics produced different streams.
+- These numbers are diagnostic, not release evidence: GPU DVFS remained
+  unlocked at 306--1020 MHz, short profiles showed thermal/DVFS variance, and
+  only one sequence/GOP was measured. The first wave is therefore a locked-clock
+  acceptance matrix covering GOP 1 and 97, at least five sequences, three
+  repetitions, quality, payload, memory, energy, and cross-runtime correctness.
+- Warmed 360p profiling shows why fixed plans help. Relative to the dynamic
+  bundle, fixed plans reduced `p_reference_feature` from about 6.7 to 5.7 ms,
+  `p_analysis` from 3.7 to 3.2 ms, and `p_synthesis` from about 11.0 to 8.7 ms.
+  CPU P-frame entropy remains about 1.1 ms. Direct `trtexec` layer profiling
+  found real compute distributed across decoder/reconstruction depth-convolution
+  and FFN blocks; no copy or reformat dominated. Persistent L2 cache probing was
+  neutral and is rejected.
+- The local MLVC implementation and the 2026 MLVC paper were audited. Fixed
+  deployment shapes are directly applicable. Its scale-sending decoder gain,
+  reduced feature width, NPU-friendly activations, memory/LTR changes, and
+  5.4M-parameter MLVC-S variant are trained codec/model changes. The repository
+  also derives published encoder/decoder FPS from model-inference timers around
+  `predict`/`infer`; `FrameLoopTotal` is separate. Those Apple/Intel/Qualcomm NPU
+  results are not directly comparable with NVCR complete-codec wall time on an
+  Orin Nano.
+- Ranked follow-up after fixed-profile acceptance: (1) target-local TensorRT
+  tactic search on the four hot engines, using controlled builder/workspace/
+  auxiliary-stream settings and timing caches; (2) caller-bound ping-pong DPB
+  outputs to remove two allocations and 3.297 MB of allocation churn per P
+  frame; (3) only if a further >25% step is required, sensitivity-guided mixed
+  precision with QAT under a new artifact/model identity. INT8 PTQ, broad
+  multi-streaming, persistent L2 cache, more runtime-only fusion/compaction,
+  DLA, and FP8 are not current paths.
+- Full measurements, hashes, profiles, research links, and compatibility gates
+  are preserved in
+  `docs/evidence/orin-next-optimization-investigation-2026-08-02.json`.
+
+Current next action: run the locked-clock fixed-profile acceptance matrix first.
+If the diagnostic gains hold, add exact-resolution selection with the dynamic
+bundle as fallback, package separate Orin plans, and build/measure separate RTX
+plans. Do not share TensorRT `.plan` files across GPU targets.
+
+### 2026-08-02 — Accept fixed-profile performance and close Orin FP16 runtime tuning
+
+- With `MAXN_SUPER` selected and `jetson_clocks` fixing GPU at 1.02 GHz and CPU
+  at 1.728 GHz, the canonical fully fixed bundles completed the requested
+  GOP-1/GOP-97 three-repetition matrix. On BasketballDrive GOP 97, the matching
+  current dynamic control measured 41.756/45.731 encode/decode fps at 360p and
+  18.356/20.925 fps at 540p. Fixed profiles reached 51.071/55.304 fps
+  (+22.31%/+20.93%) and 21.022/23.856 fps (+14.52%/+14.00%), respectively.
+- The locked-clock fixed GOP-97 result was extended to BasketballDrive,
+  HoneyBee, Jockey, Kimono, and ReadySteadyGo with three repetitions each.
+  Five-sequence means were 51.100 encode / 55.326 decode fps at 360p and 21.033
+  / 23.905 fps at 540p. Scene-to-scene throughput spread remained below about
+  1%, confirming that fixed network shape and device compute set the ceiling.
+- Fixed all-intra GOP-1 throughput was 20.871/26.432 fps at 360p and
+  9.550/11.655 fps at 540p. These values are I-frame attribution only, not the
+  normal-video headline.
+- Every three-run Basketball case was deterministic within its engine bundle.
+  Target-local FP16 tactic differences changed GOP-97 PSNR-YUV by only
+  -0.007352 dB at 360p and +0.004398 dB at 540p. Both fixed bundles passed the
+  v2 validator and the direct-device Release suite passed 6/6.
+- A final bounded tactic search did not find another candidate. Builder level 5
+  regressed `p_synthesis` latency by 4.91%, `p_reference_feature` by 3.49%, and
+  `p_analysis` by 13.46%; `p_prior` was neutral. Under locked clocks, forcing
+  zero auxiliary streams regressed `p_synthesis` by 8.78%. These candidates are
+  rejected without building a publishable bundle or changing runtime code.
+- VDD_IN energy with a 10-second idle baseline measured idle-adjusted
+  0.273/0.213 J per 360p encode/decode frame and 0.686/0.541 J at 540p. The
+  board remained near 64 C after the matrix and fixed clocks were verified
+  before and after measurement.
+- Decision: accept the fixed-profile performance candidate and stop the current
+  Orin FP16 runtime-only FPS wave. The remaining hot path is distributed neural
+  TensorRT compute; no tested tactic/configuration clears the 3% whole-codec
+  gate. Small buffer-management work may still be justified for memory
+  reliability, but not as a speed project. Materially higher FPS requires a new
+  trained artifact/model path with separate rate-distortion and compatibility
+  gates.
+- Complete run arrays, hashes, clocks, energy, negative results, and stopping
+  rule are in
+  `docs/evidence/orin-fixed-profile-ceiling-2026-08-02.json`.
+
+Current next action: add exact-resolution selection and packaging for the
+accepted Orin 360p/540p bundles with dynamic fallback, then perform separate RTX
+builds and measurements. Do not share Orin `.plan` files with RTX/x86 targets.
