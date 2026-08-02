@@ -49,6 +49,19 @@ criteria.
 
 Current milestones: **M1–M4**, ordered by the 0.3/v1 release gates.
 
+Orin INT8 PTQ investigation, 2026-08-02: explicit-Q/DQ W8A8 TensorRT
+engines confirmed a material Orin hardware opportunity but failed the codec
+quality gate. Full P-synthesis quantization improved 360p decode from 45.872 to
+55.356 fps (+20.7%) while reducing PSNR-YUV from 34.892588 to 16.657292 dB.
+Keeping the recurrent decoder/feature path FP16 and quantizing only the 22
+reconstruction convolutions produced an alternating-run mean of 46.003 fps
+versus 38.693 fps FP16 (+18.9%), but PSNR-YUV still fell to 16.289966 dB.
+Both candidates are rejected and preserved in
+`docs/evidence/orin-int8-ptq-2026-08-02.json`. Do not expose experimental INT8
+artifacts through the runtime until quantization-aware training or a
+sensitivity-guided mixed-precision search meets explicit rate/distortion and
+cross-runtime gates.
+
 Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
