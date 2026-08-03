@@ -1,0 +1,128 @@
+# syntax=docker/dockerfile:1.7
+
+# This image family is intentionally tied to the RTX 4070 reference target:
+# linux/amd64, CUDA 12.6, TensorRT 10.7, and CUDA SM 8.9. TensorRT plans are
+# target-local and must be mounted at execution time.
+ARG CUDA_DEVEL_IMAGE=nvidia/cuda:12.6.3-devel-ubuntu24.04@sha256:392c0df7b577ecae17a17f6ba7f2009c217bb4422f8431c053ae9af61a8c148a
+ARG CUDA_RUNTIME_IMAGE=nvidia/cuda:12.6.3-runtime-ubuntu24.04@sha256:92906d87596d638d35015c6353053121bd299d25943b875763321653884ba924
+
+FROM ${CUDA_DEVEL_IMAGE} AS toolchain
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG TENSORRT_PACKAGE_VERSION=10.7.0.23-1+cuda12.6
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        cmake \
+        curl \
+        gdb \
+        git \
+        ninja-build \
+        pkg-config \
+        python3 \
+        python3-pip \
+        python3-venv \
+        shellcheck \
+        sudo \
+    && apt-get install -y --no-install-recommends \
+        "libnvinfer-headers-dev=${TENSORRT_PACKAGE_VERSION}" \
+        "libnvinfer10=${TENSORRT_PACKAGE_VERSION}" \
+    && tensorrt_soname="$(find /usr/lib/x86_64-linux-gnu -maxdepth 1 -name 'libnvinfer.so.*' -print | sort -V | tail -n1)" \
+    && test -n "${tensorrt_soname}" \
+    && ln -sf "${tensorrt_soname}" /usr/local/lib/libnvinfer.so \
+    && ldconfig \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CUDA_HOME=/usr/local/cuda \
+    PATH=/usr/local/cuda/bin:${PATH} \
+    NVCR_CONTAINER_ARCH=x86_64 \
+    NVCR_TARGET_PROFILE=rtx4070-ubuntu2404
+
+FROM toolchain AS development
+
+ARG USERNAME=nvcr
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN set -eux; \
+    existing_group="$(getent group "${USER_GID}" | cut -d: -f1 || true)"; \
+    if [ -n "${existing_group}" ] && [ "${existing_group}" != "${USERNAME}" ]; then \
+        groupmod --new-name "${USERNAME}" "${existing_group}"; \
+    elif [ -z "${existing_group}" ]; then \
+        groupadd --gid "${USER_GID}" "${USERNAME}"; \
+    fi; \
+    existing_user="$(getent passwd "${USER_UID}" | cut -d: -f1 || true)"; \
+    if [ -n "${existing_user}" ] && [ "${existing_user}" != "${USERNAME}" ]; then \
+        usermod --login "${USERNAME}" --home "/home/${USERNAME}" --move-home "${existing_user}"; \
+    elif [ -z "${existing_user}" ]; then \
+        useradd --uid "${USER_UID}" --gid "${USERNAME}" --create-home --shell /bin/bash "${USERNAME}"; \
+    fi; \
+    usermod --gid "${USERNAME}" --append --groups sudo "${USERNAME}"; \
+    echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}"; \
+    chmod 0440 "/etc/sudoers.d/${USERNAME}"; \
+    mkdir -p /workspace/nvcr; \
+    chown "${USERNAME}:${USERNAME}" /workspace/nvcr
+
+USER ${USERNAME}
+WORKDIR /workspace/nvcr
+CMD ["/bin/bash"]
+
+FROM toolchain AS test
+
+COPY . /workspace/nvcr
+COPY --chmod=0755 docker/test.sh /usr/local/bin/nvcr-test
+
+ENV NVCR_CUDA_ARCHITECTURES=89
+
+WORKDIR /workspace/nvcr
+ENTRYPOINT ["/usr/local/bin/nvcr-test"]
+CMD ["gpu"]
+
+FROM toolchain AS build
+
+COPY . /src
+
+RUN cmake -S /src -B /tmp/nvcr-build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CUDA_ARCHITECTURES=89 \
+        -DCMAKE_INSTALL_PREFIX=/opt/nvcr \
+        -DNVCR_BUILD_TESTS=OFF \
+        -DNVCR_ENABLE_TENSORRT=ON \
+    && cmake --build /tmp/nvcr-build --parallel \
+    && cmake --install /tmp/nvcr-build
+
+FROM ${CUDA_RUNTIME_IMAGE} AS runtime
+
+ARG NVCR_VERSION=0.5.1
+ARG NVCR_REVISION=unknown
+ARG NVCR_SOURCE=https://github.com/0elghati/nvcr
+ARG NVCR_CREATED=1970-01-01T00:00:00Z
+
+COPY --from=build /opt/nvcr /opt/nvcr
+COPY --from=toolchain /usr/lib/x86_64-linux-gnu/libnvinfer.so.10* /usr/lib/x86_64-linux-gnu/
+
+RUN ldconfig
+
+LABEL org.opencontainers.image.title="NVCR RTX execution image" \
+      org.opencontainers.image.description="NVCR runtime for linux/amd64 NVIDIA discrete GPUs; default reference is RTX 4070 SM 8.9" \
+      org.opencontainers.image.version="${NVCR_VERSION}" \
+      org.opencontainers.image.revision="${NVCR_REVISION}" \
+      org.opencontainers.image.source="${NVCR_SOURCE}" \
+      org.opencontainers.image.created="${NVCR_CREATED}" \
+      org.opencontainers.image.licenses="MIT" \
+      io.nvcr.target-profile="rtx4070-ubuntu2404" \
+      io.nvcr.cuda-version="12.6" \
+      io.nvcr.tensorrt-version="10.7" \
+      io.nvcr.cuda-architectures="89"
+
+ENV PATH=/opt/nvcr/bin:${PATH} \
+    NVCR_CONTAINER_ARCH=x86_64 \
+    NVCR_TARGET_PROFILE=rtx4070-ubuntu2404 \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    NVIDIA_VISIBLE_DEVICES=all
+
+WORKDIR /work
+ENTRYPOINT ["/opt/nvcr/bin/nvcr"]
+CMD ["--help"]

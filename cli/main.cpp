@@ -71,7 +71,7 @@ void usage(std::ostream& out) {
         << "      --height N            Raw input height (encode only)\n"
         << "      --backend NAME        Installed backend selector (default: NVCR_BACKEND or default)\n"
         << "      --engine-profile NAME Installed engine profile, for example 720p-fp16\n"
-        << "                            (default: NVCR_ENGINE_PROFILE or active default)\n"
+        << "                            (default: inferred from encoded dimensions)\n"
         << "      --engine-dir DIR      Custom TensorRT engine and entropy asset directory\n"
         << "                            (overrides backend/profile selection)\n"
         << "      --frames N            Frames to process; 0 means all (default: 0)\n"
@@ -83,7 +83,9 @@ void usage(std::ostream& out) {
         << "      --profile             Print TensorRT/CUDA per-frame profiling counters\n"
         << "      --quality-metrics FILE  Report decoded Y/U/V and weighted PSNR against FILE\n"
         << "  -v, --verbose             Print per-frame CLI progress and info logs\n"
-        << "  -h, --help                Show this help\n";
+        << "  -h, --help                Show this help\n\n"
+        << "Without an explicit engine override, encode selects a profile from -s and\n"
+        << "decode selects it from dimensions embedded in the first access unit.\n";
 }
 
 template <class T>
@@ -114,6 +116,9 @@ bool parse_fps(std::string_view text, std::int64_t& period_us) {
 }
 
 fs::path default_engine_root() {
+    if (const char* engine_root = std::getenv("NVCR_ENGINE_ROOT")) {
+        if (*engine_root != '\0') return fs::path(engine_root);
+    }
     if (const char* xdg_data_home = std::getenv("XDG_DATA_HOME")) {
         if (*xdg_data_home != '\0') return fs::path(xdg_data_home) / "nvcr" / "engines";
     }
@@ -128,17 +133,51 @@ std::string normalize_backend(std::string backend) {
     return backend;
 }
 
-fs::path resolve_engine_dir(const Options& options) {
+std::string engine_profile_for_dimensions(std::uint32_t width, std::uint32_t height) {
+    if (width == 640U && height == 360U) return "360p-fp16";
+    if (width == 960U && height == 540U) return "540p-fp16";
+    if (width <= 176U && height <= 144U) return "qcif-fp16";
+    if (width <= 352U && height <= 288U) return "cif-fp16";
+    if (width <= 1280U && height <= 720U) return "720p-fp16";
+    if (width <= 1920U && height <= 1080U) return "1080p-fp16";
+    return {};
+}
+
+bool engine_bundle_exists(const fs::path& path) {
+    std::error_code error;
+    return fs::is_regular_file(path / "engine_manifest.json", error);
+}
+
+fs::path engine_profile_dir(
+    const fs::path& root, std::string_view backend, std::string_view profile) {
+    const auto installed = root / "profiles" / backend / profile;
+    if (engine_bundle_exists(installed)) return installed;
+
+    constexpr std::string_view precision_suffix = "-fp16";
+    std::string optimization_point(profile);
+    if (optimization_point.ends_with(precision_suffix)) {
+        optimization_point.resize(optimization_point.size() - precision_suffix.size());
+    }
+    const auto build_tree = root / (std::string(backend) + "-" + optimization_point);
+    if (engine_bundle_exists(build_tree)) return build_tree;
+
+    return installed;
+}
+
+fs::path resolve_engine_dir(
+    const Options& options, std::uint32_t width, std::uint32_t height) {
     if (!options.engine_dir.empty()) return options.engine_dir;
     if (const char* engine_dir = std::getenv("NVCR_ENGINE_DIR")) {
         if (*engine_dir != '\0') return fs::path(engine_dir);
     }
 
-    auto root = default_engine_root();
-    if (!options.engine_profile.empty()) {
-        return root / "profiles" / options.backend / options.engine_profile;
-    }
-    return root / options.backend;
+    const auto root = default_engine_root();
+    const std::string backend = options.backend == "default" ? "dcvcrt" : options.backend;
+    const std::string profile = options.engine_profile.empty()
+        ? engine_profile_for_dimensions(width, height)
+        : options.engine_profile;
+    if (profile.empty()) return {};
+    return engine_profile_dir(root, backend, profile);
 }
 
 bool parse_options(int argc, char* argv[], Options& options) {
@@ -264,7 +303,6 @@ bool parse_options(int argc, char* argv[], Options& options) {
         if (*profile != '\0' && options.engine_profile.empty()) options.engine_profile = profile;
     }
     options.backend = normalize_backend(std::move(options.backend));
-    options.engine_dir = resolve_engine_dir(options);
     if (options.input.empty() || options.output.empty()) {
         std::cerr << "nvcr: --input and --output are required\n";
         return false;
@@ -429,11 +467,24 @@ RecordRead read_record(std::istream& input, std::vector<std::byte>& bytes) {
     return input ? RecordRead::record : RecordRead::error;
 }
 
-nvcr::Result<nvcr::Runtime> create_runtime(const Options& options) {
+nvcr::Result<nvcr::Runtime> create_runtime(
+    const Options& options, std::uint32_t width, std::uint32_t height) {
+    const auto engine_dir = resolve_engine_dir(options, width, height);
+    if (engine_dir.empty()) {
+        return nvcr::Error(
+            nvcr::ErrorCode::invalid_argument,
+            "no automatic TensorRT engine profile covers " + std::to_string(width) + "x" +
+                std::to_string(height) +
+                "; use --engine-profile or --engine-dir for a custom bundle",
+            "cli");
+    }
+    if (options.verbose) {
+        std::cout << "Using TensorRT engine bundle: " << engine_dir << '\n';
+    }
     auto backend = nvcr::dcvcrt::make_tensorrt_backend();
     if (!backend) return backend.error();
     nvcr::RuntimeConfiguration configuration;
-    configuration.intra_engine_path = options.engine_dir;
+    configuration.intra_engine_path = engine_dir;
     configuration.device_id = options.device_id;
     configuration.intra_qp = options.qp;
     configuration.gop_size = options.gop_size;
@@ -460,7 +511,7 @@ int encode(const Options& options) {
         std::cerr << "nvcr: warning: --gop-size 1 encodes every frame as an I-frame; "
                   << "do not compare this development path with warmed I/P GOP throughput\n";
     }
-    auto runtime = create_runtime(options);
+    auto runtime = create_runtime(options, options.width, options.height);
     if (!runtime) {
         std::cerr << "nvcr: " << runtime.error().describe() << '\n';
         return 1;
@@ -552,7 +603,30 @@ int decode(const Options& options) {
         std::cerr << "nvcr: invalid or unsupported NVCR sequence header\n";
         return 1;
     }
-    auto runtime = create_runtime(options);
+
+    std::vector<std::byte> wire;
+    const auto first_status = read_record(input, wire);
+    if (first_status != RecordRead::record) {
+        std::cerr << "nvcr: NVCR sequence contains no complete packet records\n";
+        return 1;
+    }
+    auto first_packet = nvcr::PacketIO::deserialize(wire);
+    if (!first_packet) {
+        std::cerr << "nvcr: " << first_packet.error().describe() << '\n';
+        return 1;
+    }
+    std::uint32_t encoded_width = 0;
+    std::uint32_t encoded_height = 0;
+    if (nvcr::AccessUnitIO::has_magic(first_packet.value().data())) {
+        auto access_unit = nvcr::AccessUnitIO::deserialize(first_packet.value().data());
+        if (!access_unit) {
+            std::cerr << "nvcr: " << access_unit.error().describe() << '\n';
+            return 1;
+        }
+        encoded_width = access_unit.value().width;
+        encoded_height = access_unit.value().height;
+    }
+    auto runtime = create_runtime(options, encoded_width, encoded_height);
     if (!runtime) {
         std::cerr << "nvcr: " << runtime.error().describe() << '\n';
         return 1;
@@ -572,25 +646,28 @@ int decode(const Options& options) {
         return 1;
     }
 
-    std::vector<std::byte> wire;
     std::size_t frame_index = 0;
     std::uint32_t sequence_width = 0;
     std::uint32_t sequence_height = 0;
     std::chrono::nanoseconds codec_time{};
     QualityAccumulator quality;
     std::vector<std::byte> reference_yuv;
+    bool have_record = true;
     while (options.frames == 0 || frame_index < options.frames) {
-        const auto status = read_record(input, wire);
-        if (status == RecordRead::end) {
-            if (options.frames == 0) break;
-            std::cerr << "nvcr: bitstream ended after " << frame_index << " frame(s); requested "
-                      << options.frames << '\n';
-            return 1;
+        if (!have_record) {
+            const auto status = read_record(input, wire);
+            if (status == RecordRead::end) {
+                if (options.frames == 0) break;
+                std::cerr << "nvcr: bitstream ended after " << frame_index
+                          << " frame(s); requested " << options.frames << '\n';
+                return 1;
+            }
+            if (status == RecordRead::error) {
+                std::cerr << "nvcr: malformed or truncated packet record " << frame_index << '\n';
+                return 1;
+            }
         }
-        if (status == RecordRead::error) {
-            std::cerr << "nvcr: malformed or truncated packet record " << frame_index << '\n';
-            return 1;
-        }
+        have_record = false;
         auto packet = nvcr::PacketIO::deserialize(wire);
         if (!packet) {
             std::cerr << "nvcr: " << packet.error().describe() << '\n';

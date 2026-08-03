@@ -134,9 +134,7 @@ cmake --build build-release --parallel
 ```
 
 For published releases, the convenience installer fetches the latest matching
-Linux package and every available engine profile for the selected backend. If
-more than one profile is available, it asks which backend/profile should become
-the active CLI default:
+Linux package and every available engine profile for the selected backend:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
@@ -148,6 +146,20 @@ private staging repositories can pass `--repo OWNER/REPO` to `scripts/install.sh
 ```bash
 ./scripts/install_from_source.sh --run-tests
 ```
+
+Architecture-specific Docker test, execution, and Dev Container environments
+are available for RTX/x86_64 and Jetson/aarch64. For example, the x86_64 GPU
+suite is one command once a compatible target-local engine bundle exists:
+
+```bash
+NVCR_ENGINE_DIR="$PWD/build/engines/dcvcrt" \
+docker compose -f docker/compose.x86_64.yaml run --rm --build test gpu
+```
+
+See [Docker execution and development](docs/docker.md) for the CPU-only test
+mode, runtime CLI images, Jetson command, prerequisites, and compatibility
+boundary. This is application deployment tooling; the separately roadmapped
+"container integration" work refers to media muxing/FFmpeg.
 
 Other NVIDIA Linux configurations are experimental until they have equivalent
 recorded evidence. A multi-architecture CUDA binary does not make TensorRT plans
@@ -220,8 +232,9 @@ coverage; it runs only the tests available to that configuration.
   -i output.nvcr -o reconstructed.yuv
 ```
 
-By default the CLI uses the active installed engine profile. Switch profiles
-without passing an engine path:
+By default the CLI selects an installed profile from the encoded dimensions and
+the decoder selects the matching profile from the bitstream. Force a profile
+without passing an engine path when needed:
 
 ```bash
 ./build-release/cli/nvcr encode ... --engine-profile 720p-fp16

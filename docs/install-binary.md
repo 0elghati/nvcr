@@ -13,8 +13,7 @@ or TensorRT engines.
 
 A future validated archive and matching backend engine bundles can be installed
 with the convenience installer. Without `--engine-profile`, it downloads every
-available profile for the selected backend and asks which one should become the
-active CLI default:
+available profile for the selected backend:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
@@ -23,9 +22,10 @@ curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.
 By default it installs NVCR under `$HOME/.local/nvcr`, validates downloaded
 checksums, extracts engine bundles under `$XDG_DATA_HOME/nvcr/engines/releases/`,
 and creates profile aliases under
-`$XDG_DATA_HOME/nvcr/engines/profiles/<backend>/<profile>`. The active selection
-is also available through `$XDG_DATA_HOME/nvcr/engines/default`, so normal
-encode/decode commands do not need `--engine-dir`.
+`$XDG_DATA_HOME/nvcr/engines/profiles/<backend>/<profile>`. Encode selects the
+profile from its raw input dimensions; decode selects it from the first access
+unit. Normal commands therefore do not need `--engine-profile` or
+`--engine-dir`.
 
 Select a profile at runtime without passing a path:
 
