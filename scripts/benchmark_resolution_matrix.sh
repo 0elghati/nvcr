@@ -155,6 +155,10 @@ run_once() {
     parsed="$(printf '%s\n' "$encode_log" | sed -n 's/^Encoded \([0-9][0-9]*\) frame(s), \([0-9][0-9]*\) payload bytes, codec time \([0-9.][0-9.]*\) s (\([0-9.][0-9.]*\) fps)$/\1 \2 \3 \4/p')"
     [[ -n "$parsed" ]] || { echo "could not parse encode summary" >&2; return 1; }
     read -r frames_done payload encode_seconds encode_fps <<<"$parsed"
+    if [[ "$frames_done" != "$frames" ]]; then
+        echo "encoded frame count mismatch: expected $frames, got $frames_done" >&2
+        return 1
+    fi
     decode_log="$("$nvcr_bin" decode -i "$stream" -o /dev/null --frames "$frames" \
         --quality-metrics "$input" "${engine_args[@]}")"
     parsed="$(printf '%s\n' "$decode_log" | sed -n 's/^Decoded [0-9][0-9]* frame(s), codec time \([0-9.][0-9.]*\) s (\([0-9.][0-9.]*\) fps)$/\1 \2/p')"
