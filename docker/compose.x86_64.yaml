@@ -1,0 +1,39 @@
+name: nvcr-x86-64
+
+services:
+  test:
+    image: nvcr-test:rtx4070
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.x86_64
+      target: test
+    gpus: all
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      NVIDIA_VISIBLE_DEVICES: all
+    volumes:
+      - ${NVCR_ENGINE_DIR:-../build/engines/dcvcrt}:/opt/nvcr/engines:ro
+      - test-build:/test-build
+
+  nvcr:
+    image: ${NVCR_X86_64_IMAGE:-nvcr:rtx4070}
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.x86_64
+      target: runtime
+    gpus: all
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      NVIDIA_VISIBLE_DEVICES: all
+      NVCR_ENGINE_ROOT: /opt/nvcr/engines
+    user: ${NVCR_HOST_UID:-1000}:${NVCR_HOST_GID:-1000}
+    working_dir: /output
+    volumes:
+      - ${NVCR_ENGINE_ROOT:-../build/engines}:/opt/nvcr/engines:ro
+      - ${NVCR_INPUT_DIR:-..}:/input:ro
+      - ${NVCR_OUTPUT_DIR:-..}:/output
+
+volumes:
+  test-build:

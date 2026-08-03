@@ -129,17 +129,22 @@ On Jetson, tests require access to `/dev/nvmap` and `/dev/nvhost-*`. A container
 that hides those devices can compile successfully but cannot provide GPU test
 evidence.
 
+Architecture-specific Docker execution images and named RTX/Jetson Dev
+Container configurations are documented in [Docker execution and
+development](docker.md). They preserve the same target-local engine rule as a
+native build; containerization does not make TensorRT plans portable.
+
 ## Encode and decode raw YUV420P8
 
 ```bash
+export NVCR_ENGINE_ROOT="$PWD/build/engines"
+
 ./build-release/cli/nvcr encode \
   -i input.yuv -o output.nvcr \
-  -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32 \
-  --engine-dir build/engines/dcvcrt
+  -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32
 
 ./build-release/cli/nvcr decode \
-  -i output.nvcr -o reconstructed.yuv \
-  --engine-dir build/engines/dcvcrt
+  -i output.nvcr -o reconstructed.yuv
 ```
 
 The CLI format is a development sequence format, not MP4/Matroska, FFmpeg, or a

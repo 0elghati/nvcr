@@ -130,6 +130,8 @@ if ((latest_draft)); then
     # output for that command is unavailable in older packaged gh releases.
     # GitHub returns releases newest-first. Prefer the first draft, then fall
     # back to the newest published release when no draft exists.
+    # The $releases references are jq variables, not shell parameters.
+    # shellcheck disable=SC2016
     tag="$(gh api "repos/$repo/releases?per_page=100" --jq '. as $releases | (($releases | map(select(.draft)) | first) // ($releases | first)) | .tag_name // ""')"
     if [[ -z "$tag" ]]; then
         echo "no GitHub Release found for $repo" >&2

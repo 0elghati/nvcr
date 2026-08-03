@@ -1,0 +1,29 @@
+{
+  "name": "NVCR — Jetson Orin / aarch64",
+  "build": {
+    "context": "../..",
+    "dockerfile": "../../docker/Dockerfile.jetson",
+    "target": "development"
+  },
+  "runArgs": ["--runtime=nvidia", "--network=host"],
+  "containerEnv": {
+    "NVIDIA_DRIVER_CAPABILITIES": "compute,utility",
+    "NVIDIA_VISIBLE_DEVICES": "all"
+  },
+  "remoteUser": "nvcr",
+  "updateRemoteUserUID": true,
+  "workspaceFolder": "/workspace/nvcr",
+  "mounts": [
+    "source=nvcr-jetson-build,target=/workspace/nvcr/build-devcontainer,type=volume"
+  ],
+  "postCreateCommand": "sudo chown -R nvcr:nvcr build-devcontainer && cmake -S . -B build-devcontainer -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=87 -DNVCR_ENABLE_TENSORRT=ON",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cmake-tools",
+        "ms-vscode.cpptools",
+        "nvidia.nsight-vscode-edition"
+      ]
+    }
+  }
+}

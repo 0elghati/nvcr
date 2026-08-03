@@ -19,7 +19,8 @@ before treating an implemented path as supported.
 10. [DCVC-RT integration](dcvcrt-integration.md)
 11. [Performance protocol and historical results](performance.md)
 12. [Release gates](releasing.md)
-13. [Roadmap and evidence](../ROADMAP.md)
+13. [Docker execution and development](docker.md)
+14. [Roadmap and evidence](../ROADMAP.md)
 
 ## Policy shortcuts
 

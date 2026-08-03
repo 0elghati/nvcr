@@ -10,6 +10,8 @@ offline pinned-model preparation, release packaging, and focused measurement.
   backend artifact bundles and versioned profiles. The current implementation
   supports the DCVC-RT backend.
 - `package_release.sh`: package an installed tree; refuses model/engine assets.
+- `../docker/publish.sh`: build or publish one architecture-qualified Docker
+  Hub runtime image from an exact release tag.
 - `package_engine_bundle.sh`: package one already validated engine bundle as a
   separate package-family GitHub Release asset.
 - `stage_engine_release_asset.sh`: package an engine bundle, optionally upload

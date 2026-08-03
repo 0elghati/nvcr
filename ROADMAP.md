@@ -99,6 +99,12 @@ intentional host boundaries. I-decode now reuses pinned buffers at those entropy
 boundaries and uploads packed int8 symbols before converting them to FP16 on the
 GPU.
 
+Container next action: run the architecture-specific `test gpu` flow with an
+RTX-local engine bundle, then build and run the Jetson definition natively on
+the recorded Orin target. Static Docker checks, x86_64 builds, the CPU suite,
+and automatic 360p/540p runtime GPU smokes are complete; they do not substitute
+for the full target GPU suite.
+
 Release tooling note, 2026-08-01: `release_engine_assets.sh --latest-draft`
 now resolves tags through `gh api` rather than the newer
 `gh release list --json` interface, retaining compatibility with the packaged
@@ -433,6 +439,9 @@ State: **Active**
   backend-selected engine bundles into profile aliases and a backend-neutral
   default engine slot.
 - [x] Adopt a local-build/no-redistribution policy pending an explicit rights review.
+- [x] Provide architecture-scoped Docker test/runtime images and Dev Container
+  definitions for x86_64/SM 8.9 and Jetson aarch64/SM 8.7 without embedding
+  checkpoints, model assets, or target-local TensorRT plans.
 
 Exit criteria:
 
@@ -1654,3 +1663,63 @@ Current next action: integrate runtime selection with dynamic fallback. For a
 later upload, stage the two v0.6.0 fixed-profile archives, regenerate
 `dist/nvcr-engine-assets.txt`, and run the exact-tag upload workflow. Repackage
 the other four profiles as v0.6.0 first if they are included in that release.
+
+### 2026-08-03 — Add architecture-scoped Docker execution and development
+
+- Added separate x86_64/RTX and aarch64/Jetson Docker definitions instead of a
+  multi-platform image that could imply binary or TensorRT-plan portability.
+  The x86_64 definition pins CUDA 12.6.3, TensorRT 10.7.0.23, and SM 8.9; the
+  Jetson definition pins the official L4T JetPack r36.4.0 userspace and SM 8.7.
+- Each architecture exposes neutral `test`, `development`, and `runtime`
+  targets. The test command validates a mounted engine bundle, reconfigures so
+  CTest registers that profile, prints the registered test set, then builds and
+  runs it. CPU mode remains available and explicitly exposes its reduced test
+  coverage. Runtime images install the Release CLI; model and engine artifacts
+  remain external read-only mounts.
+- Added architecture-specific Compose files and named Dev Container
+  configurations. The development target uses a non-root user and a named CMake
+  build volume. Docker contexts exclude local virtual environments, build
+  trees, generated video, plans, and package outputs; the corrected build
+  context was 3.15 MB rather than the initial accidental 7.40 GB.
+- Verification on the x86_64 RTX host: both Dockerfiles passed `docker buildx
+  build --check` with no warnings; both Compose files normalized successfully;
+  both Dev Container JSON files parsed; `docker/test.sh` passed `bash -n`; and
+  `git diff --check` passed. The x86_64 test, runtime, and development targets
+  built successfully. CPU container testing registered and passed 4/4 tests.
+  The installed runtime CLI passed `nvcr --help`; the development image ran as
+  uid/gid 1000 `nvcr` with CMake 3.28.3, CUDA 12.6, and Python 3.12.3.
+- Runtime Compose services now expose separate read-only `/input` and writable
+  `/output` directory mounts through `NVCR_INPUT_DIR` and `NVCR_OUTPUT_DIR`.
+  They run as configurable `NVCR_HOST_UID`/`NVCR_HOST_GID` so generated files
+  remain host-owned. Both architecture configurations normalized with these
+  permissions; an x86_64 runtime smoke kept the input mount read-only and
+  created encoded and reconstructed output files owned by uid/gid 1000.
+- Runtime Compose now mounts the complete target-local engine collection.
+  Without an explicit override, encode maps its raw dimensions to the matching
+  fixed/profile bundle and decode derives the same selection from the first
+  access unit. A rebuilt x86_64 runtime image automatically selected
+  `dcvcrt-540p` for both directions and passed a one-frame 960x540 GPU
+  encode/decode smoke; the encoded and reconstructed files were host-owned.
+- The Docker daemon initially lacked NVIDIA runtime/CDI configuration, and the
+  actionable missing-GPU diagnostic was verified. GPU injection is now working,
+  but the complete registered RTX container suite has not yet been run. The
+  Jetson image remains metadata/static-checked only and still requires a native
+  Orin build plus GPU suite.
+- Prepared architecture-qualified Docker Hub publication without a shared
+  `latest` tag. Runtime images now carry OCI source/version/revision/license
+  metadata, pinned base-image digests, and target CUDA/TensorRT/L4T labels.
+  `docker/publish.sh` emits immutable and runtime-family tags and refuses a
+  dirty or non-exact-tag push. The manual publication workflow builds x86_64 on
+  a hosted runner and reserves Jetson publication for a labeled native aarch64
+  runner. Compose accepts the corresponding published image variables.
+- Publication verification loaded
+  `0elghati/nvcr:0.5.1-x86_64-cuda12.6-trt10.7` locally, confirmed its amd64
+  architecture and OCI labels, and passed a one-frame 360p GPU encode through
+  the published-image Compose path with automatic engine selection. Both
+  Dockerfiles passed `buildx --check`; no registry push was performed. Jetson
+  publication remains blocked on the native target build and validation gate.
+
+Current next action: run the complete registered x86_64 container `test gpu`
+suite against an RTX-local bundle. Then build and validate the aarch64 image on
+the recorded Orin host. Publish each runtime family from a clean exact release
+tag only after its target-local gate passes.

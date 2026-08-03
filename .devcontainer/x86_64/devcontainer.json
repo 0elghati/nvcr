@@ -1,0 +1,29 @@
+{
+  "name": "NVCR — RTX / x86_64",
+  "build": {
+    "context": "../..",
+    "dockerfile": "../../docker/Dockerfile.x86_64",
+    "target": "development"
+  },
+  "runArgs": ["--gpus=all"],
+  "containerEnv": {
+    "NVIDIA_DRIVER_CAPABILITIES": "compute,utility",
+    "NVIDIA_VISIBLE_DEVICES": "all"
+  },
+  "remoteUser": "nvcr",
+  "updateRemoteUserUID": true,
+  "workspaceFolder": "/workspace/nvcr",
+  "mounts": [
+    "source=nvcr-x86-build,target=/workspace/nvcr/build-devcontainer,type=volume"
+  ],
+  "postCreateCommand": "sudo chown -R nvcr:nvcr build-devcontainer && cmake -S . -B build-devcontainer -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=89 -DNVCR_ENABLE_TENSORRT=ON",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cmake-tools",
+        "ms-vscode.cpptools",
+        "nvidia.nsight-vscode-edition"
+      ]
+    }
+  }
+}
