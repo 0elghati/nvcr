@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/0elghati/nvcr/compare/v0.5.1...v0.6.0) (2026-08-03)
+
+
+### Features
+
+* add architecture-aware container runtime ([#47](https://github.com/0elghati/nvcr/issues/47)) ([8ccb6e3](https://github.com/0elghati/nvcr/commit/8ccb6e3c1709a33e77fcdd08beb41a1d200b451d))
+
 ## [0.5.1](https://github.com/0elghati/nvcr/compare/v0.5.0...v0.5.1) (2026-08-02)
 
 
