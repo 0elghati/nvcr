@@ -116,6 +116,10 @@ rights are reviewed and recorded in the roadmap.
   application framing, not a stable codec elementary-stream contract.
 - New codec payloads use the versioned access-unit contract documented in
   `docs/bitstream.md`.
+- The intended multi-codec direction is a common NVCR access-unit envelope with
+  codec-specific payload sections, documented in
+  `docs/neural-bitstream-envelope.md`. This is an architecture direction, not a
+  current multi-codec support claim.
 - Reading older development payloads may remain temporarily when inexpensive,
   but no pre-v1 bitstream compatibility promise is made.
 - NVCR v1 does not promise upstream DCVC-RT byte or payload interchangeability.

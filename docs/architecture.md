@@ -115,6 +115,11 @@ The CLI wraps access units in the older `NVCR` packet and `NVCS` sequence record
 for timestamps and file streaming. Those outer formats are development formats,
 not a v1 container or an upstream compatibility claim. See [Bitstream](bitstream.md).
 
+The longer-term bitstream direction is a backend-neutral access-unit envelope:
+NVCR core owns framing, identity, dependency metadata, bounds checks, and
+container-facing semantics, while each codec backend owns its versioned learned
+payload sections. See [Unified neural codec bitstream envelope](neural-bitstream-envelope.md).
+
 ## Public API status
 
 The current C++ API uses owned `Frame`/`Packet` values, `RuntimeConfiguration`,
@@ -140,5 +145,6 @@ boundaries without rewriting working behavior.
 - [Scope and support](scope-and-support.md)
 - [Compatibility](compatibility.md)
 - [Bitstream](bitstream.md)
+- [Unified neural codec bitstream envelope](neural-bitstream-envelope.md)
 - [Model and engine preparation](dcvcrt-artifacts.md)
 - [Performance](performance.md)

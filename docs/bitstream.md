@@ -3,6 +3,12 @@
 NVCR v1 separates the codec access unit from application/container metadata.
 All integers below are little-endian.
 
+The current access unit is the DCVC-RT-shaped first version of a broader NVCR
+direction: a common neural codec access-unit envelope with codec-specific
+payload sections. The design direction is documented in
+[Unified neural codec bitstream envelope](neural-bitstream-envelope.md). This
+page remains the normative description of the implemented `NVAU` v1 syntax.
+
 ## Codec access unit: `NVAU` version 1
 
 | Field | Size | Meaning |
