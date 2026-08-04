@@ -66,22 +66,21 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: finish clean rolling-catalog install gates on both reference
-targets. Rebuild the six canonical resolution bundles on RTX rather than reusing
-Orin plans, package complete target-local sets for RTX and Orin, publish them to
-the mutable `engine-assets` release, and exercise automatic encode/decode
-selection at every registered resolution.
+Current next action: finish the remaining rolling-catalog gates on Orin and the
+wrong-GPU/wrong-TensorRT negative matrix on both reference targets. The complete
+six-profile RTX set is published on the mutable `engine-assets` release; a clean
+container installed it and passed automatic encode/decode selection at every
+registered RTX resolution.
 The current Orin FP16 runtime-only FPS wave is closed at its measured ceiling;
 do not resume speculative backend tuning without a newly profiled candidate
 capable of clearing the 3% whole-codec gate. Cross-runtime I/P golden vectors,
 drain/flush semantics, and target support remain pending.
 
-Deployment next action: publish complete six-profile sets to the rolling
-`engine-assets` release only after each archive and its catalog identity have
-been validated on the target that built it. Upload stable, non-semver engine
-archive names and the merged `nvcr-engine-catalog.json` last. Then run clean
-`nvcr-artifacts install` checks for all profiles, wrong-GPU and wrong-TensorRT
-negative cases, and runtime resolution selection on RTX and Orin. Binary
+Deployment next action: package a complete target-local Orin set and merge it
+into the rolling `engine-assets` release only after each archive and catalog
+identity pass on the Orin that built it. Then run clean `nvcr-artifacts install`
+checks plus wrong-GPU and wrong-TensorRT negative cases on RTX and Orin, and the
+six-resolution runtime selection matrix on Orin. Binary
 packages stay semver'd, architecture-specific, and engine-free. The CLI now warns when
 multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
 Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and uses
@@ -96,11 +95,10 @@ intentional host boundaries. I-decode now reuses pinned buffers at those entropy
 boundaries and uploads packed int8 symbols before converting them to FP16 on the
 GPU.
 
-Container next action: run the architecture-specific `test gpu` flow with an
-RTX-local engine bundle, then build and run the Jetson definition natively on
-the recorded Orin target. Static Docker checks, x86_64 builds, the CPU suite,
-and automatic 360p/540p runtime GPU smokes are complete; they do not substitute
-for the full target GPU suite.
+Container next action: build and run the Jetson definition natively on the
+recorded Orin target. The x86_64 `test gpu` suite, private rolling-catalog
+download into a clean volume, and all-six-profile runtime selection matrix are
+complete; static Jetson checks do not substitute for its native GPU suite.
 
 Superseded release tooling note, 2026-08-01: `release_engine_assets.sh --latest-draft`
 now resolves tags through `gh api` rather than the newer
@@ -524,6 +522,109 @@ Exit criteria:
 
 ## Evidence log
 
+### 2026-08-04 — Align RTX containers and packages with rolling engine assets
+
+- Added architecture-specific Compose `engine-install` services that run the
+  installed `nvcr-artifacts install` client, write exact-compatible catalog
+  bundles to a persistent named volume, and expose that collection read-only to
+  runtime and test services. Runtime images remain engine-free and now include
+  only the Python and CA-certificate prerequisites needed by the catalog client.
+  The test wrapper selects `dcvcrt-<canonical-profile>` from a collection via
+  `NVCR_TEST_ENGINE_PROFILE`, while a host collection override remains
+  available through `NVCR_ENGINE_ROOT`.
+- Both Dockerfiles passed `docker buildx build --check` with no warnings; both
+  Compose files normalized successfully; `docker/test.sh` passed ShellCheck
+  inside the test image; the artifact/profile suite passed; and the 12-case
+  rolling-catalog suite passed. After the authenticated private-release case was
+  added, the focused catalog suite passed 13 cases. The x86_64 runtime image
+  built successfully and its installed `nvcr-artifacts install --help` executed
+  with Python/TLS dependencies present.
+- Packaged all six validated RTX bundles under `dist/rtx-rolling` using stable
+  target/model/profile names with no application version or public precision
+  suffix. All sidecar checks passed. QCIF is 157,441,811 bytes,
+  SHA-256 `aa9428d574eb9ba87d52c2e7af177dcf1c3529cdf749771d0e8a04a1e6d19984`;
+  CIF is 160,190,326 bytes,
+  `cc713a54d96b0bb0c0d08d09c6942e2d423e767ee8c7c96d623382d709c0a5eb`;
+  360p is 158,348,064 bytes,
+  `94ac48687f59384acf506e89855a50b36fecac5da75af289635387340a745fea`;
+  540p is 157,769,327 bytes,
+  `89400aa714bff0b294c85011a864fb2230247a862cb2d2c301eba4473bd29922`;
+  720p is 159,985,760 bytes,
+  `6cef74fd326b7a98d7c31385272fb65bd1264d5415be3460ab51fbd9b324f11b`;
+  and 1080p is 160,336,070 bytes,
+  `b41297a35a3e7c6b43c1b9569f1c851cfb9d55c357b0872970a92c9ed9a6bebc`.
+- The first container GPU run correctly resolved and validated the canonical
+  QCIF bundle, registered nine tests, and passed six CPU/catalog tests, but CUDA
+  stream creation and both TensorRT tests failed with `unknown error` at
+  `cudaSetDevice`. The failure reproduced outside Compose. A privileged
+  diagnostic passed; targeted probing showed that this Docker/toolkit combination
+  exposed the UVM nodes but omitted their device-cgroup access. Explicitly
+  mapping only `/dev/nvidia-uvm` and `/dev/nvidia-uvm-tools` restored CUDA
+  without privileged mode or relaxed security profiles. The corrected full
+  x86_64 container suite passed 9/9, including CUDA operators, TensorRT engine
+  contracts, and native QCIF I/P roundtrip. The initial failure remains preserved
+  as resolved diagnostic history.
+- After explicit approval, staged all six stable archives and sidecars to the
+  release bucket and dispatched GitHub Actions run `30902320767`. The run passed
+  validation, stable archive/checksum upload, and catalog-last publication in
+  19m36s. The non-draft, non-prerelease `engine-assets` release now contains
+  exactly those six RTX archives, six checksum sidecars, and
+  `nvcr-engine-catalog.json`; the catalog is schema `nvcr.engine-catalog.v1`
+  with six `rtx4070-ubuntu2404` entries and no application-version suffixes.
+- A clean Compose project initially proved that anonymous discovery cannot read
+  the private repository. Both architecture installers now forward `GH_TOKEN`,
+  and authenticated downloads use the release-asset API while removing the
+  credential before following the signed storage redirect. A focused regression
+  covers API-asset selection. The rebuilt x86_64 runtime installed all six
+  profiles into a fresh named volume and verified canonical/content-addressed
+  aliases with the published archive digests.
+- Runtime probing found that this host's NVIDIA capability-device permissions
+  reject CUDA initialization as forced UID 1000 (`cudaGetDeviceCount` error
+  999), while root succeeds with the same explicit UVM mappings. RTX and Jetson
+  Compose runtime services therefore default to UID/GID 0 while retaining
+  `NVCR_HOST_UID`/`NVCR_HOST_GID` as an opt-in override where device permissions
+  allow it. From the clean downloaded volume, a two-frame QCIF I/P encode/decode
+  passed, followed by one-frame automatic encode/decode selection at QCIF, CIF,
+  360p, 540p, 720p, and 1080p. All six decoded YUV byte counts matched their
+  registered dimensions.
+
+### 2026-08-04 — Rebuild all six canonical RTX engine profiles
+
+- Resolved the pinned exporter inputs to `/home/oelghati/DCVC-RT` at commit
+  `48ab0ac5e5199d78fffb944bfbafafb2b6142f7b`, with both CVPR 2025 checkpoint
+  hashes matching the model profile, Python 3.12 environment
+  `/home/oelghati/DCVC-RT/src/venv/bin/python` (PyTorch 2.9.1+cu126, ONNX 1.22.0,
+  ONNXScript 0.7.1), and TensorRT 10.7.0 `trtexec` at
+  `/usr/src/tensorrt/bin/trtexec`. The build target was the recorded RTX 4070,
+  SM 8.9, 46-SM device.
+- The first `nvcr-artifacts prepare --all` attempt is preserved as failed
+  history. A local DCVC-RT change had made `SUPPRESS_CUSTOM_KERNEL_WARNING`
+  silence warnings without disabling custom CUDA inference; the export traced
+  that path, produced an `i_hyper_synthesis.onnx` with no `z_hat` input, and
+  TensorRT stopped on the third QCIF plan. No malformed bundle was accepted.
+- Re-ran the same command with the checkout's explicit export fallback,
+  `DCVC_DISABLE_CUSTOM_CUDA_INFERENCE=1`. The portable model export completed,
+  all 84 TensorRT plans (14 each for `qcif`, `cif`, `360p`, `540p`, `720p`, and
+  `1080p`) built with their registered workspace/builder settings, and every
+  per-plan TensorRT smoke execution passed. Independent `nvcr-artifacts
+  validate --json` checks passed for the model bundle and all six
+  `nvcr.engine-bundle.v2` directories.
+- Model manifest SHA-256 digests are I-frame
+  `84c003eac0e42e248cd6fff9e9809014efc00dc35488881e99cc2e737df25d66` and
+  P-frame `4c06546bab5c406434dd5b5b6f711e88be01ae9f3bcf7442f1042efc799abd5b`.
+  Engine-manifest digests for QCIF, CIF, 360p, 540p, 720p, and 1080p are,
+  respectively, `4e404306edea98d64ba693b3d35b420c944816f64ad08373f781a03a692d0223`,
+  `c3efd4105ecceeae0680f814c2adc66e5a57bb77b69ba13d0d505ae0eb39f8fe`,
+  `68bc706dc0aed398e3681190d07bb6705ce0a2365a785b55525f9c58aa47e5bb`,
+  `02375dd54eab151265f4692e78e3e9cec52c5433e6de1a599213ba26fe224383`,
+  `2bbb82a94ee99853b373b3c0b6de2f64802ac0fcecb5e93186d79fd178a50db9`,
+  and `0e395f5cc6f34d9ef359ac590293c1f63c3fca98acd6fe9a29b8be5676040465`.
+- At this build checkpoint these were validated local target-bound outputs. The
+  later RTX container/package entry records their rolling publication, clean
+  installation, and six-resolution runtime matrix. M4 remains active for Orin
+  publication/install/runtime coverage and both targets' negative compatibility
+  gates.
+
 ### 2026-08-04 — Rolling engine catalog and canonical resolution façade
 
 - Replaced application-tag-coupled engine publication with the fixed
@@ -557,11 +658,11 @@ Exit criteria:
   digest, and atomically created canonical, transition, and backend aliases.
   Offline runtime failure emitted the exact canonical install command, and a
   legacy `720p-fp16` override emitted its deprecation warning.
-- M4 remains active. No public `engine-assets` catalog has been published in
-  this change, the current x86_64 binary workflow has not run, the missing
-  target-local RTX profiles have not been built, and clean published installs
-  plus six-resolution runtime selection/negative gates are still required on
-  both RTX and Orin. Unit negative tests do not replace those target gates.
+- This implementation checkpoint did not publish external assets. The later
+  2026-08-04 RTX container/package entry records the complete RTX build,
+  rolling publication, clean install, and six-resolution runtime matrix. M4
+  remains active for Orin and the target-local negative gates; unit negative
+  tests do not replace those target gates.
 
 ### 2026-08-01 — Orin Nano four-resolution v0.5.0 engine assets
 

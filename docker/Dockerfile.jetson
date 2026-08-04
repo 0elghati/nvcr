@@ -93,6 +93,13 @@ ARG NVCR_VERSION=0.5.1
 ARG NVCR_REVISION=unknown
 ARG NVCR_SOURCE=https://github.com/0elghati/nvcr
 ARG NVCR_CREATED=1970-01-01T00:00:00Z
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        python3 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /opt/nvcr /opt/nvcr
 

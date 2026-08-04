@@ -65,9 +65,23 @@ docker compose -f docker/compose.x86_64.yaml pull nvcr
 docker compose -f docker/compose.x86_64.yaml run --rm nvcr --help
 ```
 
-Use `NVCR_JETSON_IMAGE` with `docker/compose.jetson.yaml` on Jetson. Engine
-collections remain target-local read-only mounts and are never included in the
-Docker Hub image.
+Use `NVCR_JETSON_IMAGE` with `docker/compose.jetson.yaml` on Jetson. The
+images remain engine-free. Each Compose file provides a one-shot
+`engine-install` service that runs the installed `nvcr-artifacts install`
+client against the rolling `engine-assets` catalog and stores every
+exact-compatible profile in a persistent named volume. For a private catalog
+repository, export `GH_TOKEN` with repository read access before running Compose;
+the `engine-install` service forwards it to the catalog client:
+
+```bash
+docker compose -f docker/compose.x86_64.yaml run --rm --build engine-install
+```
+
+Run the equivalent command with `docker/compose.jetson.yaml` on Jetson. The
+`nvcr` and `test` services mount that volume read-only. Re-running
+`engine-install` refreshes the collection from the authoritative catalog.
+Set `NVCR_ENGINE_ROOT` to an absolute host collection path to use locally
+built bundles instead of the Compose-managed volume.
 
 ## Test quick start
 
@@ -76,19 +90,27 @@ engine bundle, configures the matching CUDA architecture, builds the Release
 library/CLI/tests, prints the tests that were actually registered, and runs them
 with failure output enabled.
 
-On the RTX/discrete-GPU host:
+On the RTX/discrete-GPU host, install the exact-compatible rolling assets
+and select one canonical profile for the registered integration suite:
 
 ```bash
-NVCR_ENGINE_DIR="$PWD/build/engines/dcvcrt" \
+docker compose -f docker/compose.x86_64.yaml run --rm --build engine-install
+NVCR_TEST_ENGINE_PROFILE=qcif \
 docker compose -f docker/compose.x86_64.yaml run --rm --build test gpu
 ```
 
 On the Jetson host:
 
 ```bash
-NVCR_ENGINE_DIR="$PWD/build/engines/dcvcrt" \
+docker compose -f docker/compose.jetson.yaml run --rm --build engine-install
+NVCR_TEST_ENGINE_PROFILE=qcif \
 docker compose -f docker/compose.jetson.yaml run --rm --build test gpu
 ```
+
+To test a locally built collection instead, skip `engine-install` and set
+`NVCR_ENGINE_ROOT="$PWD/build/engines"`. The test wrapper resolves
+`dcvcrt-$NVCR_TEST_ENGINE_PROFILE` inside either collection. It still accepts
+a directly mounted single bundle through `NVCR_ENGINE_DIR` outside Compose.
 
 The Compose-managed build volume makes later test runs incremental. A developer
 without a compatible local engine bundle can still compile the library and run
@@ -107,6 +129,10 @@ difference visible.
 ## Host prerequisites
 
 The x86_64 host needs the NVIDIA driver, Docker, and NVIDIA Container Toolkit.
+The x86_64 Compose services also map `/dev/nvidia-uvm` and
+`/dev/nvidia-uvm-tools` explicitly. This preserves CUDA access on Docker/toolkit
+combinations that expose those nodes through `--gpus all` but omit their
+device-cgroup rules.
 The Jetson needs the matching JetPack/L4T installation, Docker, and the NVIDIA
 runtime installed by JetPack. Check GPU injection before debugging NVCR:
 
@@ -131,12 +157,14 @@ docker build \
 ```
 
 Run with read-only input and engine directories plus a writable output
-directory. Running with the host UID/GID keeps generated files owned by the
-calling user:
+directory. GPU runtime containers default to root because NVIDIA capability
+devices are root-only on some supported hosts. Set `NVCR_HOST_UID` and
+`NVCR_HOST_GID` for Compose, or add `--user "$(id -u):$(id -g)"` to a direct
+Docker command, only when that user can initialize CUDA on the host:
 
 ```bash
 docker run --rm --gpus all \
-  --user "$(id -u):$(id -g)" \
+  --device /dev/nvidia-uvm --device /dev/nvidia-uvm-tools \
   -e NVCR_ENGINE_ROOT=/opt/nvcr/engines \
   -v "$PWD/build/engines:/opt/nvcr/engines:ro" \
   -v "/path/to/yuv-input:/input:ro" \
@@ -146,15 +174,16 @@ docker run --rm --gpus all \
     -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32
 ```
 
-With Compose, set only the input and output directories. The runtime service
-mounts `build/engines` by default. Encoding selects the matching bundle from
-`-s`; decoding reads the dimensions embedded in the first access unit and
-selects the same bundle automatically:
+With Compose, run `engine-install` once to populate the persistent rolling
+catalog volume, then set only the input and output directories. Encoding selects
+the matching bundle from `-s`; decoding reads the dimensions embedded in the
+first access unit and selects the same bundle automatically:
 
 ```bash
 export NVCR_INPUT_DIR="/path/to/yuv-input"
 export NVCR_OUTPUT_DIR="/path/to/nvcr-output"
 
+docker compose -f docker/compose.x86_64.yaml run --rm --build engine-install
 docker compose -f docker/compose.x86_64.yaml run --rm --build nvcr encode \
   -i /input/input.yuv -o /output/output.nvcr \
   -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32
@@ -165,7 +194,9 @@ docker compose -f docker/compose.x86_64.yaml run --rm nvcr decode \
 
 Mount directories rather than individual output files. Docker can then create
 both outputs; an individual bind-mounted output file would have to exist on the
-host before container startup. If the engine collection is elsewhere, set
+host before container startup. Root-default runs may create root-owned output;
+change ownership afterward or use the UID/GID override when device permissions
+allow it. If the engine collection is elsewhere, set
 `NVCR_ENGINE_ROOT` to its host directory. `NVCR_ENGINE_DIR` and
 `--engine-dir` remain explicit single-bundle overrides.
 
@@ -193,12 +224,13 @@ docker run --rm --runtime=nvidia --network=host \
     -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32
 ```
 
-Compose uses the same NVIDIA runtime:
+Compose uses the same NVIDIA runtime and rolling-catalog installer:
 
 ```bash
 export NVCR_INPUT_DIR="/path/to/yuv-input"
 export NVCR_OUTPUT_DIR="/path/to/nvcr-output"
 
+docker compose -f docker/compose.jetson.yaml run --rm --build engine-install
 docker compose -f docker/compose.jetson.yaml run --rm --build nvcr --help
 ```
 
@@ -218,9 +250,12 @@ The repository exposes two named configurations:
 
 Choose the configuration matching the machine where Docker runs. Both use a
 non-root `nvcr` user, keep the source bind-mounted by the editor, store the CMake
-tree in a named volume, and configure a Debug GPU build after creation. The
-container definitions do not download the pinned DCVC-RT checkpoints or create
-engines. Mount or prepare those target-local artifacts separately.
+tree in a named volume, and configure a Debug GPU build after creation. The runtime images do not contain checkpoints, ONNX graphs, or TensorRT plans.
+The Compose `engine-install` service downloads only exact-compatible published
+engine bundles through the rolling catalog; it never downloads checkpoints or
+creates engines. Dev Containers do not run that networked installation
+automatically. Use the source-tree `nvcr-artifacts install` command with a
+mounted engine volume, or mount a locally prepared target collection.
 
 For CPU-only parser/rANS development, the same source tree can still use the
 native CPU build documented in [Getting started](getting-started.md); these GPU
