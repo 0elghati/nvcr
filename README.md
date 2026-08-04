@@ -150,11 +150,14 @@ private staging repositories can pass `--repo OWNER/REPO` to `scripts/install.sh
 ```
 
 Architecture-specific Docker test, execution, and Dev Container environments
-are available for RTX/x86_64 and Jetson/aarch64. For example, the x86_64 GPU
-suite is one command once a compatible target-local engine bundle exists:
+are available for RTX/x86_64 and Jetson/aarch64. The Compose installer downloads
+all exact-compatible engines from the rolling catalog into a persistent volume;
+the GPU suite selects one canonical profile from that collection. Set `GH_TOKEN`
+to a token with repository read access when the catalog repository is private:
 
 ```bash
-NVCR_ENGINE_DIR="$PWD/build/engines/dcvcrt" \
+docker compose -f docker/compose.x86_64.yaml run --rm --build engine-install
+NVCR_TEST_ENGINE_PROFILE=qcif \
 docker compose -f docker/compose.x86_64.yaml run --rm --build test gpu
 ```
 
