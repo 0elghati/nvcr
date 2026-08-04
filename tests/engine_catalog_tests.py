@@ -101,6 +101,43 @@ class DeviceTests(unittest.TestCase):
 
 
 class CatalogTests(unittest.TestCase):
+    def test_private_release_download_uses_asset_api(self) -> None:
+        release = {
+            "assets": [
+                {
+                    "name": artifacts.CATALOG_FILENAME,
+                    "url": "https://api.github.com/repos/example/private/releases/assets/1",
+                    "browser_download_url": (
+                        "https://github.com/example/private/releases/download/"
+                        "engine-assets/catalog"
+                    ),
+                }
+            ]
+        }
+        catalog = {"schema": artifacts.CATALOG_SCHEMA, "assets": []}
+
+        def fake_download(url: str, path: Path, token: str | None) -> None:
+            self.assertEqual(
+                url,
+                "https://api.github.com/repos/example/private/releases/assets/1",
+            )
+            self.assertEqual(token, "secret")
+            path.write_text(json.dumps(catalog), encoding="utf-8")
+
+        with mock.patch.dict(
+            artifacts.os.environ, {"GH_TOKEN": "secret"}, clear=False
+        ), mock.patch.object(
+            artifacts, "github_request_json", return_value=release
+        ), mock.patch.object(
+            artifacts, "download_file", side_effect=fake_download
+        ), mock.patch.object(
+            artifacts, "detect_device_identity", return_value=identity()
+        ), mock.patch.object(
+            artifacts, "install_catalog_assets", return_value=[]
+        ):
+            result = artifacts.install_command(["--repo", "example/private"])
+        self.assertEqual(result, 0)
+
     def test_catalog_schema_and_exact_match(self) -> None:
         document = {"schema": artifacts.CATALOG_SCHEMA, "assets": [entry("720p")]}
         validated = artifacts.validate_catalog(document)

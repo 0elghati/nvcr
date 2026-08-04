@@ -17,7 +17,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.parse import urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 SOURCE_ROOT = SCRIPT_DIRECTORY.parent
@@ -574,12 +575,36 @@ def github_request_json(url: str, token: str | None = None) -> dict[str, Any]:
     return document
 
 
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        request: Request,
+        file_pointer: Any,
+        code: int,
+        message: str,
+        headers: Any,
+        new_url: str,
+    ) -> None:
+        return None
+
+
 def download_file(url: str, destination: Path, token: str | None = None) -> None:
-    headers = {"User-Agent": "nvcr-artifacts"}
+    headers = {"Accept": "application/octet-stream", "User-Agent": "nvcr-artifacts"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     try:
-        with urlopen(Request(url, headers=headers), timeout=1800) as response:
+        request = Request(url, headers=headers)
+        if token and urlparse(url).hostname == "api.github.com":
+            try:
+                response = build_opener(_NoRedirectHandler).open(request, timeout=1800)
+            except HTTPError as error:
+                location = error.headers.get("Location")
+                if error.code in (301, 302, 303, 307, 308) and location:
+                    return download_file(location, destination)
+                raise
+        else:
+            response = urlopen(request, timeout=1800)
+        with response:
             with destination.open("wb") as output:
                 shutil.copyfileobj(response, output, length=1024 * 1024)
     except (HTTPError, URLError, OSError) as error:
@@ -806,12 +831,13 @@ def install_command(arguments: list[str]) -> int:
     release_assets = release.get("assets")
     if not isinstance(release_assets, list):
         raise ValidationError("GitHub engine release has no asset list")
+    download_url_field = "url" if token else "browser_download_url"
     asset_urls = {
-        item["name"]: item["browser_download_url"]
+        item["name"]: item[download_url_field]
         for item in release_assets
         if isinstance(item, dict)
         and isinstance(item.get("name"), str)
-        and isinstance(item.get("browser_download_url"), str)
+        and isinstance(item.get(download_url_field), str)
     }
     catalog_url = asset_urls.get(CATALOG_FILENAME)
     if not catalog_url:
