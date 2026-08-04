@@ -69,11 +69,9 @@ described as a DCVC-RT video encoder.
 
 Current next action: finish the remaining rolling-catalog gates on Orin and the
 wrong-GPU/wrong-TensorRT negative matrix on both reference targets, while
-turning the documented unified neural codec bitstream envelope into the next
-concrete access-unit design step. Draft `NVAU` v2 around a common header plus
-typed, bounded sections; keep DCVC-RT payload internals codec-private; and add
-parser/writer/conformance gates before treating the format as a stable
-multi-codec boundary.
+continuing M2 by moving DCVC-RT runtime serialization onto structured
+access-unit descriptors, adding canonical `NVAU` v2 byte fixtures, and keeping
+public bitstream identity separate from backend checkpoint/profile provenance.
 The current Orin FP16 runtime-only FPS wave is closed at its measured ceiling;
 do not resume speculative backend tuning without a newly profiled candidate
 capable of clearing the 3% whole-codec gate. Cross-runtime I/P golden vectors,
@@ -387,6 +385,11 @@ State: **Active**
   reference conformance contract.
 - [x] Separate codec access units from `NVCR`/`NVCS` envelopes.
 - [x] Define a versioned access unit with model identity, dimensions, and features.
+- [x] Separate public bitstream model identity from backend model/profile
+  identity. Verification, 2026-08-04: a two-frame QCIF CLI encode produced an
+  `NVCS` stream containing two `NVCR` packet records and two `NVAU` v1 access
+  units with `model_id=dcvcrt`; raw byte inspection found no `cvpr2025` or
+  `dcvcrt-cvpr2025` strings, and decode of that same file passed.
 - [x] Define syntax for frame type, effective QP, reset state, and payload lengths.
 - [x] Define bounds/version behavior and add parser/writer plus deterministic fuzz tests.
 - [x] Separate the generic codec backend/session boundary from the DCVC-RT TensorRT implementation.
@@ -554,6 +557,25 @@ Exit criteria:
 - [ ] Performance, conformance, ABI, packaging, and security gates pass.
 
 ## Evidence log
+
+### 2026-08-04 — Keep research profile IDs out of emitted access units
+
+- Added an explicit `RuntimeConfiguration::bitstream_model_id`, defaulting to
+  `dcvcrt`, and kept `RuntimeConfiguration::model_id` as the backend
+  artifact/profile selector. Runtime encode writes only the bitstream model ID
+  into `NVAU`; runtime decode validates against that same public stream ID.
+- CPU build passed; CPU `ctest --test-dir build --output-on-failure` passed
+  6/6; Release build passed; and
+  `ctest --test-dir build-release --output-on-failure -E nvcr_dcvcrt_i_frame_golden`
+  passed 16/16 expected tests.
+- CLI evidence: encoded `/tmp/nvcr-qcif-2f.yuv` with
+  `./build-release/cli/nvcr encode ... --frames 2 --gop-size 2 --qp 32
+  --engine-dir build/engines/dcvcrt-qcif`, producing
+  `/tmp/nvcr-bitstream-check.nvcr`. Byte inspection reported
+  `contains_cvpr2025=False`, `contains_dcvcrt_cvpr2025=False`, `NVCS`
+  version 1, two `NVCR` packet records, `NVAU` v1 I/P access units with
+  `model_id=dcvcrt`, and inner payload magics `NVI1` then `NVP1`. Decoding that
+  stream back to YUV420P8 passed for both frames.
 
 ### 2026-08-04 — Align RTX containers and packages with rolling engine assets
 
@@ -1386,6 +1408,23 @@ Append evidence; never silently replace historical results.
 ## Decision log
 
 Append decisions with date, rationale, and consequences.
+
+### 2026-08-04 — Keep bitstream identity public and profile identity internal
+
+Decision: `model_id` remains the backend artifact/profile identity, while
+`bitstream_model_id` is the only model identity written into or accepted from
+NVCR access units. The DCVC-RT integration defaults the public stream identity
+to `dcvcrt`.
+
+Rationale: access-unit bytes are part of the codec interchange boundary and
+should identify the public decoder contract. Research, checkpoint, publication,
+and engine-build labels are provenance for artifact selection and evidence, not
+portable stream syntax.
+
+Consequence: future codec integrations must choose an explicit public
+bitstream-facing identity instead of leaking training/checkpoint provenance into
+`NVAU`. Compatibility checks compare access units against the configured
+bitstream identity, not against backend artifact IDs.
 
 ### 2026-07-29 — Make NVCR a codec-runtime architecture with one supported backend
 

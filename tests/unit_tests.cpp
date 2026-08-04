@@ -5,7 +5,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <string>
+#include <system_error>
 
 TEST(Frame, ComputesYuv420Storage) {
     auto frame = nvcr::Frame::create(16, 8, nvcr::PixelFormat::yuv420p8);
@@ -60,9 +63,28 @@ TEST(PacketIO, RoundTripsPacket) {
     EXPECT_FALSE(nvcr::PacketIO::deserialize(malformed_metadata.take()));
 }
 
+TEST(ConfigurationLoader, KeepsBitstreamModelIdSeparate) {
+    const auto path = std::filesystem::temp_directory_path() /
+        "nvcr-unit-config-bitstream-model-id.cfg";
+    {
+        std::ofstream output(path);
+        ASSERT_TRUE(output);
+        output << "model_id=internal-profile\n"
+               << "bitstream_model_id=public-stream\n";
+    }
+
+    auto configuration = nvcr::ConfigurationLoader::from_file(path);
+    std::error_code cleanup_error;
+    std::filesystem::remove(path, cleanup_error);
+
+    ASSERT_TRUE(configuration) << configuration.error().describe();
+    EXPECT_EQ(configuration.value().model_id, "internal-profile");
+    EXPECT_EQ(configuration.value().bitstream_model_id, "public-stream");
+}
+
 TEST(AccessUnitIO, RoundTripsAndRejectsUnsafeInputs) {
     nvcr::AccessUnit original{
-        "dcvcrt-cvpr2025", 176, 144, 32, nvcr::FrameType::intra, true,
+        "dcvcrt", 176, 144, 32, nvcr::FrameType::intra, true,
         {std::byte{1}, std::byte{2}, std::byte{3}}};
     auto wire = nvcr::AccessUnitIO::serialize(original);
     ASSERT_TRUE(wire);
@@ -116,10 +138,10 @@ TEST(AccessUnitIO, RoundTripsAndRejectsUnsafeInputs) {
     EXPECT_FALSE(nvcr::AccessUnitIO::serialize(original));
 
     nvcr::AccessUnit sectioned{
-        "dcvcrt-cvpr2025", 176, 144, 71, nvcr::FrameType::predicted, false,
+        "dcvcrt", 176, 144, 71, nvcr::FrameType::predicted, false,
         {std::byte{1}, std::byte{2}, std::byte{3}}};
     sectioned.codec_id = "dcvcrt";
-    sectioned.codec_profile_id = "dcvcrt-cvpr2025";
+    sectioned.codec_profile_id = "dcvcrt";
     sectioned.decode_order_index = 5;
     sectioned.presentation_order_index = 7;
     sectioned.dependencies = {4};
@@ -132,7 +154,7 @@ TEST(AccessUnitIO, RoundTripsAndRejectsUnsafeInputs) {
     auto sectioned_decoded = nvcr::AccessUnitIO::deserialize(sectioned_wire.value());
     ASSERT_TRUE(sectioned_decoded);
     EXPECT_EQ(sectioned_decoded.value().codec_id, "dcvcrt");
-    EXPECT_EQ(sectioned_decoded.value().codec_profile_id, "dcvcrt-cvpr2025");
+    EXPECT_EQ(sectioned_decoded.value().codec_profile_id, "dcvcrt");
     EXPECT_EQ(sectioned_decoded.value().decode_order_index, 5U);
     EXPECT_EQ(sectioned_decoded.value().presentation_order_index, 7U);
     ASSERT_EQ(sectioned_decoded.value().dependencies.size(), 1U);

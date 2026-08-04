@@ -52,7 +52,7 @@ Result<Packet> Runtime::encode(const Frame& frame) {
         frame, frame_type.value(), encoder_state_.view());
     if (!encoded) return encoded.error();
     AccessUnit access_unit{
-        configuration_.model_id,
+        configuration_.bitstream_model_id,
         frame.width(),
         frame.height(),
         encoded.value().effective_qp,
@@ -92,7 +92,7 @@ Result<Frame> Runtime::decode(const Packet& packet) {
     if (AccessUnitIO::has_magic(packet.data())) {
         auto parsed = AccessUnitIO::deserialize(packet.data(), configuration_.max_packet_bytes);
         if (!parsed) return parsed.error();
-        if (parsed.value().model_id != configuration_.model_id) {
+        if (parsed.value().model_id != configuration_.bitstream_model_id) {
             return Error(
                 ErrorCode::malformed_bitstream,
                 "access-unit model identity does not match the configured bundle",

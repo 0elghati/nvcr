@@ -32,10 +32,12 @@ to 16,384 per axis and 256 Mi pixels, rejects odd YUV420 dimensions, validates
 model-ID characters, and rejects unknown flags, invalid QP/frame/reset
 combinations, zero/truncated/oversized payloads, and trailing data.
 
-Every encoded access unit carries `dcvcrt-cvpr2025`; runtime decode compares it
-with the configured session model before backend execution. An I-frame marks a
-state reset. Timestamps, time bases, packet side data, and container metadata are
-not part of `NVAU`.
+Every encoded access unit carries the configured public bitstream model ID. The
+DCVC-RT integration defaults this value to `dcvcrt`; internal research,
+checkpoint, and engine-profile identifiers are not written into `NVAU`. Runtime
+decode compares the access-unit model ID with the configured bitstream model ID
+before backend execution. An I-frame marks a state reset. Timestamps, time bases,
+packet side data, and container metadata are not part of `NVAU`.
 
 The TensorRT backend currently encapsulates entropy data in isolated internal
 `NVI1` and `NVP1` payload layouts. They are NVCR implementation formats, not
@@ -80,7 +82,9 @@ Fixed header, 64 bytes:
 
 The fixed header is followed by codec ID, codec profile ID, model ID, dependency
 indexes, section table entries, and then section payloads in table order. IDs use
-the same portable ASCII character set as v1 model IDs.
+the same portable ASCII character set as v1 model IDs. These are stream-facing
+identities: they describe the codec family and public decoder contract, not the
+private checkpoint or publication label used to build TensorRT artifacts.
 
 Each section table entry is 16 bytes:
 

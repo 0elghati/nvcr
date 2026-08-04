@@ -90,7 +90,7 @@ void packet_test() {
 
 void access_unit_test() {
     nvcr::AccessUnit original{
-        "dcvcrt-cvpr2025", 176, 144, 32, nvcr::FrameType::intra, true,
+        "dcvcrt", 176, 144, 32, nvcr::FrameType::intra, true,
         {std::byte{1}, std::byte{2}, std::byte{3}}};
     auto wire = nvcr::AccessUnitIO::serialize(original);
     expect(wire.has_value(), "access unit serializes");
@@ -159,10 +159,10 @@ void access_unit_test() {
            "odd YUV420 access-unit dimensions are rejected");
 
     nvcr::AccessUnit sectioned{
-        "dcvcrt-cvpr2025", 176, 144, 71, nvcr::FrameType::predicted, false,
+        "dcvcrt", 176, 144, 71, nvcr::FrameType::predicted, false,
         {std::byte{1}, std::byte{2}, std::byte{3}}};
     sectioned.codec_id = "dcvcrt";
-    sectioned.codec_profile_id = "dcvcrt-cvpr2025";
+    sectioned.codec_profile_id = "dcvcrt";
     sectioned.decode_order_index = 5;
     sectioned.presentation_order_index = 7;
     sectioned.dependencies = {4};
@@ -174,7 +174,7 @@ void access_unit_test() {
     expect(sectioned_wire.has_value(), "sectioned access-unit serializes");
     auto sectioned_decoded = nvcr::AccessUnitIO::deserialize(sectioned_wire.value());
     expect(sectioned_decoded && sectioned_decoded.value().codec_id == "dcvcrt" &&
-               sectioned_decoded.value().codec_profile_id == "dcvcrt-cvpr2025" &&
+               sectioned_decoded.value().codec_profile_id == "dcvcrt" &&
                sectioned_decoded.value().decode_order_index == 5 &&
                sectioned_decoded.value().presentation_order_index == 7 &&
                sectioned_decoded.value().dependencies.size() == 1 &&
