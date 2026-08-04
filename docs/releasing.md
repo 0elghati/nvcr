@@ -47,20 +47,29 @@ full GPU tests, performance, memory, quality, or energy gates.
 ## Rolling engine assets
 
 Validated engines are published under one non-semver GitHub release/tag:
-`engine-assets`. Stable filenames contain the exact target, model, and canonical
-resolution, but no application version or `fp16` suffix:
+`engine-assets`. Stable filenames contain the portability class, model, and
+canonical resolution, but no application version or `fp16` suffix. Exact
+bundles keep their registered target ID; compatibility-mode desktop bundles use
+generalized names:
 
 ```text
 nvcr-engines-rtx4070-ubuntu2404-dcvcrt-cvpr2025-720p.tar.gz
 nvcr-engines-orin-nano-l4t3647-dcvcrt-cvpr2025-540p.tar.gz
+nvcr-engines-linux-amd64-sm89-dcvcrt-cvpr2025-720p.tar.gz
+nvcr-engines-linux-amd64-ampere-plus-dcvcrt-cvpr2025-720p.tar.gz
 ```
 
 `nvcr-engine-catalog.json` uses `nvcr.engine-catalog.v1`. Every row includes the
-archive hash/size, backend/model/target/profile, Linux architecture, exact GPU
-identity, CUDA runtime, TensorRT version, and internal FP16 precision.
+archive hash/size, backend/model/target/profile, Linux architecture, hardware
+compatibility class, GPU identity recorded at build time, CUDA runtime,
+TensorRT version, and internal FP16 precision. Catalog installation selects the
+best published match per profile: exact device first, then
+`same_compute_capability`, then `ampere_plus`. CUDA and TensorRT matching remain
+exact, and NVCR never builds a missing engine automatically during install.
 
 From each target machine, stage a complete six-profile set for a new target or
-selected replacements for a target already present in the catalog:
+selected replacements for a target already present in the catalog. Treat each
+hardware-compatibility class as its own six-profile set:
 
 ```bash
 ./scripts/release_engine_assets.sh \
@@ -82,8 +91,8 @@ workflow:
 2. downloads and verifies every staged archive;
 3. rejects unsafe paths and forbidden source assets;
 4. validates the v2 engine bundle and registered target-profile digest;
-5. merges entries while preserving other targets;
-6. requires all six registered profiles for a new target;
+5. merges entries while preserving other targets and compatibility classes;
+6. requires all six registered profiles for each new target/class combination;
 7. uploads stable archives/checksums with replacement semantics;
 8. uploads the merged catalog last.
 

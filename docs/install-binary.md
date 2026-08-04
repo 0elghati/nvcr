@@ -18,9 +18,11 @@ engine installation to the GPU-aware rolling catalog:
 curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
 ```
 
-With no profile option, every catalog entry matching the selected device's exact
-GPU name, compute capability, SM count, CUDA runtime, and TensorRT version is
-installed. To install a subset or no engines:
+With no profile option, the installer selects the best published compatible
+bundle for each canonical profile independently: exact device first, then
+same-compute-capability desktop bundles, then Ampere-plus desktop bundles.
+CUDA runtime and TensorRT version remain exact in every class. To install a
+subset or no engines:
 
 ```bash
 ./scripts/install.sh --profile 720p
@@ -73,7 +75,8 @@ tar -xzf "$NVCR_ARCHIVE" -C "$NVCR_PREFIX" --strip-components=1
 export PATH="$NVCR_PREFIX/bin:$PATH"
 ```
 
-If no catalog target matches, the installer fails rather than downloading a
-cross-GPU plan. Build locally using [Model and engine preparation](dcvcrt-artifacts.md).
-See [Compatibility](compatibility.md) for the exact target contract and
+If no compatible catalog bundle matches, the installer fails rather than
+starting a background TensorRT build or downloading an unsupported plan. Build
+locally using [Model and engine preparation](dcvcrt-artifacts.md). See
+[Compatibility](compatibility.md) for the target and compatibility contract and
 [Releasing](releasing.md) for publication gates.

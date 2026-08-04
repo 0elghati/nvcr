@@ -20,6 +20,7 @@ model_profile_path="$repo_root/configs/models/dcvcrt-cvpr2025.json"
 engine_profile_path="$repo_root/configs/engine-profiles/1080p.json"
 target_profile_path=""
 engine_profile_explicit=0
+hardware_compatibility=exact
 
 while (($#)); do
     case "$1" in
@@ -68,6 +69,10 @@ while (($#)); do
         builder_optimization_level="$2"
         shift 2
         ;;
+    --hardware-compatibility)
+        hardware_compatibility="$2"
+        shift 2
+        ;;
     --device-id)
         device_id="$2"
         shift 2
@@ -95,6 +100,14 @@ while (($#)); do
     esac
 done
 
+case "$hardware_compatibility" in
+exact|same_compute_capability|ampere_plus) ;;
+*)
+    echo "--hardware-compatibility must be exact, same_compute_capability, or ampere_plus" >&2
+    exit 2
+    ;;
+esac
+
 if ((engine_profile_explicit == 0)); then
     engine_profile_path="$repo_root/configs/engine-profiles/${optimization_point}.json"
 fi
@@ -108,6 +121,23 @@ done
 if [[ -n "$target_profile_path" && ! -f "$target_profile_path" ]]; then
     echo "missing target profile: $target_profile_path" >&2
     exit 1
+fi
+if [[ "$hardware_compatibility" != exact ]]; then
+    if [[ -z "$target_profile_path" ]]; then
+        echo "hardware-compatible builds require --target-profile-path" >&2
+        exit 2
+    fi
+    target_architecture="$("$python_bin" - "$target_profile_path" <<'PY'
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as stream:
+    print(json.load(stream).get("host", {}).get("architecture", ""))
+PY
+)"
+    if [[ "$target_architecture" != x86_64 ]]; then
+        echo "hardware-compatible TensorRT plans are supported only on desktop x86_64; Jetson remains exact" >&2
+        exit 2
+    fi
 fi
 
 read -r declared_engine_id declared_optimization_point declared_precision \
@@ -358,6 +388,14 @@ common_build=(
     "--timingCacheFile=$timing_cache"
     --skipInference
 )
+case "$hardware_compatibility" in
+same_compute_capability)
+    common_build+=(--hardwareCompatibilityLevel=sameComputeCapability)
+    ;;
+ampere_plus)
+    common_build+=(--hardwareCompatibilityLevel=ampere+)
+    ;;
+esac
 if ((enable_int8)); then
     common_build+=(--int8)
 fi
@@ -461,6 +499,7 @@ manifest_args=(
     --optimization-point "$optimization_point"
     --workspace-mib "$workspace_mib"
     --builder-optimization-level "$builder_optimization_level"
+    --hardware-compatibility "$hardware_compatibility"
     --model-profile-id "$model_profile_id"
     --target-profile-id "$target_profile_id"
     --model-profile-path "$model_profile_path"

@@ -77,7 +77,13 @@ archive_name="$(python3 - "$engine_dir/engine_manifest.json" <<'PY_NAME'
 import json, sys
 manifest = json.load(open(sys.argv[1], encoding="utf-8"))
 profile = manifest["engine_profile_id"].removesuffix("-fp16")
-print(f"nvcr-engines-{manifest['target_profile_id']}-{manifest['model_profile_id']}-{profile}.tar.gz")
+compatibility = manifest.get("hardware_compatibility", "exact")
+target = manifest["target_profile_id"]
+if compatibility == "same_compute_capability":
+    target = f"linux-amd64-sm{manifest['compute_capability_major']}{manifest['compute_capability_minor']}"
+elif compatibility == "ampere_plus":
+    target = "linux-amd64-ampere-plus"
+print(f"nvcr-engines-{target}-{manifest['model_profile_id']}-{profile}.tar.gz")
 PY_NAME
 )"
 archive="$output_dir/$archive_name"
