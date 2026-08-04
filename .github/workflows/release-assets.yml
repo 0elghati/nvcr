@@ -44,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           cmake --build build-release-hosted --parallel
-          ctest --test-dir build-release-hosted --output-on-failure -R 'nvcr_(artifact_profiles|smoke_tests|parser_fuzz_boundaries|rans_conformance)'
+          ctest --test-dir build-release-hosted --output-on-failure -R 'nvcr_(artifact_profiles|engine_catalog|smoke_tests|parser_fuzz_boundaries|rans_conformance)'
 
       - name: Install, package, and verify the generic x86_64 archive
         run: |

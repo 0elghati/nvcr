@@ -58,6 +58,7 @@ jobs:
               - 'scripts/**'
               - '.github/workflows/ci.yml'
               - '.github/workflows/release-assets.yml'
+              - '.github/workflows/upload-engine-assets.yml'
 
   lint:
     runs-on: ubuntu-latest

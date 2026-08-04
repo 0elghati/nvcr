@@ -1,229 +1,107 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-tag=""
-latest_draft=0
 repo=""
 workflow_ref="main"
+asset_release="engine-assets"
 output_dir="dist"
 asset_manifest=""
 s3_uri=""
 s3_prefix=""
 aws_region=""
 presign_expires="604800"
-publish_release=0
-publish_confirmation=""
 dry_run=0
 skip_dispatch=0
 engine_dirs=()
 
 usage() {
     cat <<EOF_USAGE
-Usage: $0 --engine-dir DIR (--s3-prefix s3://bucket/prefix | --s3-uri s3://bucket/prefix/{tag}) [options]
+Usage: $0 --engine-dir DIR (--s3-prefix URI | --s3-uri URI) [options]
 
-Stage validated TensorRT engine bundles to S3 and dispatch the GitHub workflow
-that copies them into the matching Release Please draft release. By default, the
-release tag is derived from version.txt in the current checkout.
+Stage target-local engines and dispatch the rolling engine-assets workflow.
+Application versions and Release Please tags are intentionally not involved.
 
 Options:
-  --engine-dir DIR      Validated engine bundle directory; repeat for many
-  --s3-prefix URI       Base S3 prefix; resolved tag is appended automatically
-  --s3-uri URI          Exact S3 staging prefix; may contain {tag}
-  --tag vX.Y.Z          Override the version.txt-derived Release Please tag
-  --latest-draft        Resolve the newest draft GitHub Release tag, falling
-                        back to the newest published release when none is draft
-  --aws-region REGION   AWS region for S3 upload/presign commands
-  --repo OWNER/REPO     GitHub repository for workflow dispatch
-  --workflow-ref REF    Ref containing upload-engine-assets.yml (default: main)
-  --output-dir DIR      Local archive output directory (default: dist)
-  --asset-manifest FILE Manifest file to write (default: OUTPUT_DIR/nvcr-engine-assets.txt)
-  --presign-expires SEC Presigned URL lifetime, 60..604800 (default: 604800)
-  --publish-release     Ask upload workflow to publish after upload
-  --publish-confirmation TAG
-                         Required with --publish-release; must equal resolved tag
-  --skip-dispatch       Stage assets only; do not call GitHub Actions
-  --dry-run             Validate inputs and print the workflow command only
-  -h, --help            Show this help
+  --engine-dir DIR      Validated bundle; repeat for multiple profiles
+  --s3-prefix URI       Base S3 prefix; asset-release tag is appended
+  --s3-uri URI          Exact S3 staging prefix
+  --asset-release TAG   Rolling GitHub release tag (default: engine-assets)
+  --repo OWNER/REPO     GitHub repository
+  --workflow-ref REF    Workflow ref (default: main)
+  --output-dir DIR      Local archive directory (default: dist)
+  --asset-manifest FILE Staging row file
+  --aws-region REGION   AWS region
+  --presign-expires SEC Presigned URL lifetime
+  --skip-dispatch       Stage only
+  --dry-run             Validate and print the dispatch command
 EOF_USAGE
 }
 
 while (($#)); do
     case "$1" in
-    --tag) tag="$2"; shift 2 ;;
-    --latest-draft) latest_draft=1; shift ;;
     --engine-dir) engine_dirs+=("$2"); shift 2 ;;
     --s3-uri) s3_uri="$2"; shift 2 ;;
     --s3-prefix) s3_prefix="$2"; shift 2 ;;
+    --asset-release) asset_release="$2"; shift 2 ;;
     --aws-region) aws_region="$2"; shift 2 ;;
     --repo) repo="$2"; shift 2 ;;
     --workflow-ref) workflow_ref="$2"; shift 2 ;;
     --output-dir) output_dir="$2"; shift 2 ;;
     --asset-manifest) asset_manifest="$2"; shift 2 ;;
     --presign-expires) presign_expires="$2"; shift 2 ;;
-    --publish-release) publish_release=1; shift ;;
-    --publish-confirmation) publish_confirmation="$2"; shift 2 ;;
     --skip-dispatch) skip_dispatch=1; shift ;;
     --dry-run) dry_run=1; shift ;;
     -h|--help) usage; exit 0 ;;
-    *)
-        echo "unknown argument: $1" >&2
-        usage >&2
-        exit 2
-        ;;
+    *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
 done
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-version_file="$repo_root/version.txt"
-
-if [[ "${#engine_dirs[@]}" -eq 0 ]]; then
+if [[ "${#engine_dirs[@]}" -eq 0 || ( -z "$s3_uri" && -z "$s3_prefix" ) ||
+      ( -n "$s3_uri" && -n "$s3_prefix" ) ]]; then
     usage >&2
     exit 2
 fi
-if ((latest_draft)) && [[ -n "$tag" ]]; then
-    echo "use either --latest-draft or --tag, not both" >&2
-    exit 2
-fi
-if [[ -n "$s3_uri" && -n "$s3_prefix" ]]; then
-    echo "use either --s3-uri or --s3-prefix, not both" >&2
-    exit 2
-fi
-if [[ -z "$s3_uri" && -z "$s3_prefix" ]]; then
-    usage >&2
-    exit 2
-fi
-if [[ -n "$s3_uri" && "$s3_uri" != s3://* ]]; then
-    echo "--s3-uri must start with s3://: $s3_uri" >&2
-    exit 2
-fi
-if [[ -n "$s3_prefix" && "$s3_prefix" != s3://* ]]; then
-    echo "--s3-prefix must start with s3://: $s3_prefix" >&2
-    exit 2
-fi
-if [[ ! "$presign_expires" =~ ^[0-9]+$ || "$presign_expires" -lt 60 || "$presign_expires" -gt 604800 ]]; then
-    echo "--presign-expires must be an integer between 60 and 604800 seconds" >&2
-    exit 2
-fi
-
 if [[ -z "$repo" ]]; then
-    if git -C "$repo_root" config --get remote.origin.url >/dev/null; then
-        origin_url="$(git -C "$repo_root" config --get remote.origin.url)"
-        repo="$(printf '%s\n' "$origin_url" | sed -E 's#^git@github.com:##; s#^https://github.com/##; s#[.]git$##')"
-    fi
+    origin_url="$(git -C "$repo_root" config --get remote.origin.url 2>/dev/null || true)"
+    repo="$(printf '%s\n' "$origin_url" | sed -E 's#^git@github.com:##; s#^https://github.com/##; s#[.]git$##')"
 fi
-if ((latest_draft || skip_dispatch == 0)) && [[ -z "$repo" ]]; then
-    echo "could not infer GitHub repo; pass --repo OWNER/REPO" >&2
-    exit 2
-fi
-if ((latest_draft || (skip_dispatch == 0 && dry_run == 0))) && ! command -v gh >/dev/null; then
-    echo "gh CLI is required to resolve or dispatch GitHub releases" >&2
-    exit 1
-fi
-if ((dry_run == 0)) && ! command -v aws >/dev/null; then
-    echo "aws CLI is required to stage engine assets" >&2
-    exit 1
-fi
-
-if ((latest_draft)); then
-    # Use the REST endpoint instead of `gh release list --json`: structured
-    # output for that command is unavailable in older packaged gh releases.
-    # GitHub returns releases newest-first. Prefer the first draft, then fall
-    # back to the newest published release when no draft exists.
-    # The $releases references are jq variables, not shell parameters.
-    # shellcheck disable=SC2016
-    tag="$(gh api "repos/$repo/releases?per_page=100" --jq '. as $releases | (($releases | map(select(.draft)) | first) // ($releases | first)) | .tag_name // ""')"
-    if [[ -z "$tag" ]]; then
-        echo "no GitHub Release found for $repo" >&2
-        exit 1
-    fi
-else
-    if [[ -z "$tag" ]]; then
-        if [[ ! -f "$version_file" ]]; then
-            echo "missing version file: $version_file" >&2
-            exit 1
-        fi
-        version_from_file="$(tr -d '[:space:]' <"$version_file")"
-        tag="v$version_from_file"
-    fi
-fi
-
-if [[ ! "$tag" =~ ^v[0-9]+[.][0-9]+[.][0-9]+([.+-][0-9A-Za-z.+-]+)?$ ]]; then
-    echo "release tag must be Release Please style, for example vX.Y.Z: $tag" >&2
-    exit 2
-fi
-if [[ -n "$s3_prefix" ]]; then
-    s3_uri="${s3_prefix%/}/$tag"
-else
-    s3_uri="${s3_uri//\{tag\}/$tag}"
-fi
-if ((publish_release)) && [[ "$publish_confirmation" != "$tag" ]]; then
-    echo "--publish-confirmation must exactly match resolved tag when publishing: $tag" >&2
-    exit 2
-fi
-
-version="${tag#v}"
-mkdir -p "$output_dir"
-output_dir="$(cd "$output_dir" && pwd)"
-if [[ -z "$asset_manifest" ]]; then
-    asset_manifest="$output_dir/nvcr-engine-assets.txt"
-fi
+[[ "$repo" == */* ]] || { echo "pass --repo OWNER/REPO" >&2; exit 2; }
+[[ "$asset_release" =~ ^[0-9A-Za-z._-]+$ ]] || { echo "invalid asset release" >&2; exit 2; }
+if [[ -n "$s3_prefix" ]]; then s3_uri="${s3_prefix%/}/$asset_release"; fi
+[[ "$s3_uri" == s3://* ]] || { echo "S3 URI must start with s3://" >&2; exit 2; }
+if ((dry_run == 0)); then command -v aws >/dev/null || { echo "aws CLI is required" >&2; exit 1; }; fi
+if ((skip_dispatch == 0)); then command -v gh >/dev/null || { echo "gh CLI is required" >&2; exit 1; }; fi
 
 for engine_dir in "${engine_dirs[@]}"; do
-    if [[ ! -d "$engine_dir" ]]; then
-        echo "engine directory does not exist: $engine_dir" >&2
-        exit 1
-    fi
     "$script_dir/nvcr_artifacts.py" validate "$engine_dir" --json >/dev/null
 done
-
-if ((skip_dispatch == 0 && dry_run == 0)); then
-    gh release view "$tag" --repo "$repo" >/dev/null
-fi
+mkdir -p "$output_dir"
+output_dir="$(cd "$output_dir" && pwd)"
+[[ -n "$asset_manifest" ]] || asset_manifest="$output_dir/nvcr-engine-assets.txt"
 
 if ((dry_run == 0)); then
     rm -f -- "$asset_manifest"
-    append_flag=()
+    append=()
     for engine_dir in "${engine_dirs[@]}"; do
         "$script_dir/stage_engine_release_asset.sh" \
-            --version "$version" \
-            --engine-dir "$engine_dir" \
-            --output-dir "$output_dir" \
-            --s3-uri "${s3_uri%/}" \
-            --aws-region "$aws_region" \
-            --presign-expires "$presign_expires" \
-            --asset-manifest "$asset_manifest" \
-            "${append_flag[@]}"
-        append_flag=(--append)
+            --engine-dir "$engine_dir" --output-dir "$output_dir" \
+            --s3-uri "${s3_uri%/}" --aws-region "$aws_region" \
+            --presign-expires "$presign_expires" --asset-manifest "$asset_manifest" \
+            "${append[@]}"
+        append=(--append)
     done
 fi
-
 if ((skip_dispatch)); then
-    echo "Staged engine assets for $tag in $asset_manifest"
+    echo "Staged rolling engine assets in $asset_manifest"
     exit 0
 fi
-
-workflow_args=(
-    workflow run upload-engine-assets.yml
-    --repo "$repo"
-    --ref "$workflow_ref"
-    -f "tag=$tag"
-    -F "engine_assets=@$asset_manifest"
-)
-if ((publish_release)); then
-    workflow_args+=(
-        -f "publish_release=true"
-        -f "publish_confirmation=$publish_confirmation"
-    )
-fi
-
+workflow_args=(workflow run upload-engine-assets.yml --repo "$repo" --ref "$workflow_ref" \
+    -f "asset_release=$asset_release" -F "engine_assets=@$asset_manifest")
 if ((dry_run)); then
-    echo "Resolved release tag: $tag"
-    echo "Resolved S3 staging prefix: ${s3_uri%/}"
-    printf 'gh'
-    printf ' %q' "${workflow_args[@]}"
-    printf '\n'
+    printf 'gh'; printf ' %q' "${workflow_args[@]}"; printf '\n'
 else
     gh "${workflow_args[@]}"
-    echo "Dispatched upload-engine-assets.yml for $tag"
+    echo "Dispatched rolling $asset_release engine asset update"
 fi
