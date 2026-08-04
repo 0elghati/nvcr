@@ -390,6 +390,11 @@ State: **Active**
 - [x] Define syntax for frame type, effective QP, reset state, and payload lengths.
 - [x] Define bounds/version behavior and add parser/writer plus deterministic fuzz tests.
 - [x] Separate the generic codec backend/session boundary from the DCVC-RT TensorRT implementation.
+- [x] Establish the TensorRT backend implementation layout under
+  `src/dcvcrt/backend/tensorrt/`, keeping DCVC-RT payload syntax at the codec
+  level. Verification, 2026-08-04: Release build passed and
+  `ctest --test-dir build-release --output-on-failure -E nvcr_dcvcrt_i_frame_golden`
+  passed 16/16 expected tests after the move.
 - [ ] Add Python→native and native→Python I/P golden vectors. The initial
   720p two-frame probe is preserved as failed evidence: Python→native reaches
   `24.864091 dB`, native→Python reaches `25.152377 dB`, and both diverge at

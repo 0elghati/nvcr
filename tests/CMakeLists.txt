@@ -52,7 +52,7 @@ endif()
 if(NVCR_ENABLE_TENSORRT)
     add_executable(nvcr_cuda_ops_tests cuda_ops_tests.cpp)
     target_include_directories(
-        nvcr_cuda_ops_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcrt")
+        nvcr_cuda_ops_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcrt/backend/tensorrt")
     target_link_libraries(nvcr_cuda_ops_tests PRIVATE NVCR::nvcr CUDA::cudart)
     nvcr_set_project_warnings(nvcr_cuda_ops_tests)
     add_test(NAME nvcr_cuda_ops COMMAND nvcr_cuda_ops_tests)

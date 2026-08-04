@@ -1,9 +1,9 @@
 #include "nvcr/dcvcrt/tensorrt_backend.hpp"
 
-#include "../common/sha256.hpp"
+#include "../../../common/sha256.hpp"
 #include "cuda_ops.hpp"
 #include "engine_specs.hpp"
-#include "payload.hpp"
+#include "../../payload.hpp"
 
 #include "nvcr/dcvcrt/rans_codec.hpp"
 
