@@ -17,6 +17,14 @@ runtime and selected CUDA device. Every bundle must contain
 bundles built for a different GPU model, compute capability, multiprocessor
 count, or CUDA/TensorRT version or model identity.
 
+Install every exact-compatible profile explicitly through the artifact façade;
+runtime encode/decode never performs network access:
+
+```bash
+nvcr-artifacts install
+nvcr-artifacts install --profile 720p
+```
+
 The CLI currently selects the DCVC-RT TensorRT backend. That backend supports
 configured I/P GOPs through fourteen TensorRT plans. It remains
 correctness-first and performance work is still active, so use Release builds
@@ -101,7 +109,7 @@ nvcr encode \
   -o /tmp/fourpeople-i.nvcr -s 1280x720 -r 60 --frames 1
 ```
 
-Use `--engine-profile` to force an installed profile or `--engine-dir` for a
+Use `--engine-profile 720p` to force an installed profile or `--engine-dir` for a
 custom single bundle. Those are overrides; normal encode and decode commands do
 not need engine arguments.
 

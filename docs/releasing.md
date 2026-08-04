@@ -1,269 +1,113 @@
 # Release gates and packaging
 
-NVCR uses Release Please for version/changelog/tag creation, but publication still
-requires external target evidence. With the repository's default GitHub-hosted
-runner setup, GitHub Actions can build and upload the generic x86_64 package
-family. It does not automate the RTX 4070 / Jetson Orin Nano validation gates or
-the Jetson package deliverable.
+NVCR has two independent publication tracks: semver'd application binaries and
+a rolling target-local engine catalog. Separating them prevents unchanged plans
+from being duplicated or renamed for every application release.
 
-## Release tracks
+## Application binaries
 
-| Release | Required target gates before publication | Meaning |
-|---|---|---|
-| v0.3 foundation | RTX 4070 clean-room matrix recorded in the roadmap | Scoped development foundation, not v1 product support |
-| v1.0 (and later v1 patches) | RTX 4070 and Jetson Orin Nano clean-room matrices recorded in the roadmap | First supported product release |
+Release Please remains the version, changelog, and application-tag authority.
+The hosted release workflow builds the generic `linux-x86_64-nvidia` package and
+leaves the semver release in draft. The Jetson package and both reference-target
+evidence gates remain manual.
 
-A tagged GitHub release should remain a draft until the required target evidence,
-manual deliverables, and roadmap updates are complete.
-
-## Draft release workflow on standard GitHub-hosted runners
-
-[release-please.yml](../.github/workflows/release-please.yml) updates versions and
-changelog through its release PR. After that PR is merged, Release Please creates
-a tagged draft release and dispatches
-[release-assets.yml](../.github/workflows/release-assets.yml).
-
-On GitHub's standard hosted runners, that workflow currently:
-
-1. checks out the exact requested tag and verifies it matches `version.txt`;
-2. installs minimal CUDA/TensorRT compile dependencies on hosted Ubuntu 24.04 x86_64;
-3. configures a portable TensorRT-enabled Release build;
-4. runs the hosted-safe test subset (artifact/profile, smoke/access-unit,
-   parser-fuzz boundaries, and rANS);
-5. installs and packages the generic `linux-x86_64-nvidia` archive;
-6. verifies the archive checksum, manifest presence, and forbidden-asset policy;
-7. uploads the x86_64 archive and checksum to the draft release.
-
-The workflow intentionally does not publish the release. Standard hosted runners do
-not provide the reference GPU/Jetson environments needed for the target-local
-engine builds, full registered GPU suite, Jetson package build, or release-track
-support evidence.
-
-## What GitHub-hosted runners do not prove
-
-Standard hosted runners do not satisfy any of the following by themselves:
-
-- exact target-local engine generation on the recorded RTX 4070 reference target;
-- exact target-local engine generation on the recorded Jetson Orin Nano target;
-- full registered CTest with `NVCR_TENSORRT_ENGINE_DIR` on those targets;
-- the `linux-aarch64-jetson-l4t36` package build and checksum;
-- correctness, performance, memory, bitrate/distortion, or Jetson energy evidence;
-- final support/publication approval for v0.3 or v1.x.
-
-## Manual deliverables before publication
-
-Before publishing a draft release, complete and record the following:
-
-1. run the exact-tag clean-room workflow on the recorded RTX 4070 target;
-2. run the exact-tag clean-room workflow on the recorded Jetson Orin Nano target
-   when required by the release track;
-3. build and validate the Jetson archive on the validated Jetson target;
-4. upload the Jetson archive and checksum to the draft release;
-5. optionally upload package-family reviewer-convenience engine assets as
-   separate GitHub Release assets;
-6. record all required evidence in [ROADMAP.md](../ROADMAP.md);
-7. publish the draft release manually only after the release-track gates pass.
-
-## Package policy
-
-Produced archives are public package families, not hardware-support claims:
+Binary archive names remain versioned:
 
 ```text
 nvcr-vX.Y.Z-linux-x86_64-nvidia.tar.gz
-nvcr-vX.Y.Z-linux-x86_64-nvidia.tar.gz.sha256
 nvcr-vX.Y.Z-linux-aarch64-jetson-l4t36.tar.gz
-nvcr-vX.Y.Z-linux-aarch64-jetson-l4t36.tar.gz.sha256
 ```
 
-These names distinguish the public deliverable family from the exact validated
-reference targets. The current support claim still depends on the recorded RTX 4070
-and Orin Nano target profiles and their roadmap evidence.
+These are separate native ELF families. A portable CUDA architecture set does
+not make one host executable run on both x86_64 and AArch64.
 
-Every archive has a top-level versioned directory and an internal
-`PACKAGE-MANIFEST.sha256`. `scripts/package_release.sh` checks for required docs,
-profiles, license/notice, CLI, the generic artifact entry point, and backend-local
-DCVC-RT artifact helpers before packaging.
+Before publishing an application release:
 
-The package script rejects checkpoints, `.pth`/`.pth.tar`, ONNX, entropy/quant
-model assets, TensorRT plans, and engine bundles. Generated bundles are release
-test inputs, never release outputs.
+1. validate the exact tag on the RTX 4070 and required Jetson release track;
+2. run the registered GPU suites with target-local engines;
+3. record correctness/performance/resource evidence in `ROADMAP.md`;
+4. build and verify both required binary archives;
+5. confirm each archive contains `PACKAGE-MANIFEST.sha256` and no checkpoints,
+   ONNX files, runtime model assets, or TensorRT plans.
 
-## Optional engine assets
+Build the Jetson archive on the validated Jetson target:
 
-Public binary packages stay engine-free. If reviewers need prebuilt engines, ship
-them as separate package-family GitHub Release assets so downloads still come
-from the release page rather than a staging service.
+```bash
+./scripts/install_from_source.sh --build-type Release \
+  --build-dir build-release-jetson --prefix "$PWD/install-release-jetson"
+./scripts/package_release.sh --version X.Y.Z \
+  --platform linux-aarch64-jetson-l4t36 \
+  --install-prefix "$PWD/install-release-jetson" --output-dir dist
+```
 
-The preferred path after Release Please creates a draft release is one command
-from the machine where the engine bundles were built and validated:
+Hosted packaging is not reference-target evidence. Standard runners do not
+provide the RTX 4070 or Jetson runtime needed for target-local plan generation,
+full GPU tests, performance, memory, quality, or energy gates.
+
+## Rolling engine assets
+
+Validated engines are published under one non-semver GitHub release/tag:
+`engine-assets`. Stable filenames contain the exact target, model, and canonical
+resolution, but no application version or `fp16` suffix:
+
+```text
+nvcr-engines-rtx4070-ubuntu2404-dcvcrt-cvpr2025-720p.tar.gz
+nvcr-engines-orin-nano-l4t3647-dcvcrt-cvpr2025-540p.tar.gz
+```
+
+`nvcr-engine-catalog.json` uses `nvcr.engine-catalog.v1`. Every row includes the
+archive hash/size, backend/model/target/profile, Linux architecture, exact GPU
+identity, CUDA runtime, TensorRT version, and internal FP16 precision.
+
+From each target machine, stage a complete six-profile set for a new target or
+selected replacements for a target already present in the catalog:
 
 ```bash
 ./scripts/release_engine_assets.sh \
+  --engine-dir build/engines/dcvcrt-qcif \
+  --engine-dir build/engines/dcvcrt-cif \
+  --engine-dir build/engines/dcvcrt-360p \
+  --engine-dir build/engines/dcvcrt-540p \
   --engine-dir build/engines/dcvcrt-720p \
   --engine-dir build/engines/dcvcrt-1080p \
-  --s3-prefix s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases \
+  --s3-prefix s3://nvcr-release-assets-<account>-eu-west-1/releases \
   --aws-region eu-west-1
 ```
 
-The helper validates each bundle, packages it, uploads the archive and checksum
-to private S3 staging, generates presigned URLs, writes
-`dist/nvcr-engine-assets.txt`, checks that the matching GitHub draft release
-exists, and dispatches `upload-engine-assets.yml` with the generated manifest
-contents. Release Please remains the only source of version bumps and tag
-creation; do not create replacement local tags for engine uploads.
+The helper validates and deterministically packages each bundle, stages the
+archives with temporary URLs, and dispatches `upload-engine-assets.yml`. The
+workflow:
 
-The archive filename is derived from `engine_manifest.json`, but uses the generic public package family instead of the exact target profile:
+1. creates `engine-assets` if it does not exist;
+2. downloads and verifies every staged archive;
+3. rejects unsafe paths and forbidden source assets;
+4. validates the v2 engine bundle and registered target-profile digest;
+5. merges entries while preserving other targets;
+6. requires all six registered profiles for a new target;
+7. uploads stable archives/checksums with replacement semantics;
+8. uploads the merged catalog last.
 
-```text
-nvcr-vX.Y.Z-linux-x86_64-nvidia-dcvcrt-cvpr2025-720p-fp16-engines.tar.gz
-nvcr-vX.Y.Z-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
-nvcr-vX.Y.Z-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz
-```
+Uploading the catalog last makes it the authority for the completed update.
+The release is already public and rolling; there is no application draft or
+`publish_release` input in this workflow.
 
-Stage the `.tar.gz` files in the private S3 release-assets bucket and use a
-presigned URL as the temporary workflow input. The staging URL is not the
-user-facing distribution channel; it is only used by GitHub Actions before the
-asset is copied into GitHub Releases.
-
-First deploy the staging bucket from [AWS CDK release assets](../infra/aws-cdk/README.md).
-For the first account setup, bootstrap account `<aws-account-id>` in the selected
-region, for example `eu-west-1`:
+Use `--skip-dispatch` to stage only. The lower-level helper accepts a direct
+HTTPS URL, public URL base, local copy destination, or exact S3 prefix:
 
 ```bash
-cd infra/aws-cdk
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-npm install -g aws-cdk
-cdk bootstrap aws://<aws-account-id>/eu-west-1
-cdk deploy NvcrReleaseAssetsStack
-```
-
-If you only want to stage assets without dispatching GitHub Actions, pass
-`--skip-dispatch` to `release_engine_assets.sh`. The lower-level helper remains
-available for one-off staging:
-
-```bash
-release_tag="v$(cat version.txt)"
 ./scripts/stage_engine_release_asset.sh \
-  --version "${release_tag#v}" \
   --engine-dir build/engines/dcvcrt-720p \
-  --s3-uri "s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases/$release_tag" \
-  --aws-region eu-west-1 \
-  --presign-expires 604800 \
+  --s3-uri s3://bucket/releases/engine-assets \
   --asset-manifest dist/nvcr-engine-assets.txt
 ```
 
-The helper uploads both `.tar.gz` and `.tar.gz.sha256` to S3, but only the
-presigned archive URL is passed to the GitHub workflow because the workflow
-regenerates the release checksum after validation. Presigned URLs are temporary;
-if the workflow is rerun after expiry, regenerate `dist/nvcr-engine-assets.txt`.
+Preserve historical semver-coupled engine assets as labeled release history;
+do not rename or delete them to simulate the rolling layout. New installers use
+only the catalog. GitHub's 2 GiB per-asset limit remains enforced.
 
-If you do not use S3, pass `--download-url` with an HTTPS URL that works with
-`curl -fL` from a signed-out machine. Browser preview pages, login pages, and
-permission-limited links fail before anything reaches the GitHub Release.
+## CI and evidence
 
-After the workflow in this PR is merged to the default branch, upload staged
-engine assets to a draft GitHub Release with one row per asset. Do not run this
-against `main` before the PR is merged; GitHub returns 404 when the requested
-workflow file is not present on the selected/default branch.
-
-```text
-<package-family-engine-asset-file-name> <sha256> <staging-download-url>
-```
-
-For example:
-
-```bash
-cat > /tmp/nvcr-engine-assets.txt <<'EOF'
-nvcr-vX.Y.Z-linux-x86_64-nvidia-dcvcrt-cvpr2025-720p-fp16-engines.tar.gz <rtx-720p-archive-sha256> <rtx-720p-staging-https-url>
-nvcr-vX.Y.Z-linux-x86_64-nvidia-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz <rtx-1080p-archive-sha256> <rtx-1080p-staging-https-url>
-nvcr-vX.Y.Z-linux-aarch64-jetson-l4t36-dcvcrt-cvpr2025-1080p-fp16-engines.tar.gz <orin-archive-sha256> <orin-staging-https-url>
-EOF
-
-release_tag="v$(cat version.txt)"
-gh workflow run upload-engine-assets.yml \
-  --ref main \
-  -f "tag=$release_tag" \
-  -F engine_assets=@/tmp/nvcr-engine-assets.txt
-```
-
-`release_engine_assets.sh` performs this dispatch automatically. The command above is only a trigger: it sends the text file contents to GitHub as
-the `engine_assets` input. The download, SHA-256 check, bundle validation, and
-GitHub Release upload all run on the GitHub-hosted Actions runner. If you prefer
-not to use the local GitHub CLI, open **Actions → upload-engine-assets → Run
-workflow** after the PR is merged, select `main`, paste the contents of
-`dist/nvcr-engine-assets.txt` into `engine_assets`, and run it from the browser.
-
-The workflow:
-
-1. checks out the exact release tag separately from the upload automation;
-2. downloads each staged archive;
-3. verifies the supplied archive SHA-256;
-4. rejects unsafe tar paths, source checkpoints, and ONNX files;
-5. extracts the bundle and runs the tagged `nvcr-artifacts validate`;
-6. confirms the archive filename matches the engine manifest identity;
-7. uploads the archive and generated `.sha256` to the GitHub Release.
-
-To publish from the same manual workflow after evidence is recorded, set
-`publish_release=true` and set `publish_confirmation` to the exact tag. Leaving
-`publish_release` unset keeps the release in draft status.
-
-GitHub Release assets are limited to files under 2 GiB. If a package-family engine archive exceeds that limit, do not push it through Git LFS; split the
-engine profile strategy or keep the asset outside the GitHub Release and document
-that exception in the release notes.
-
-## Continuous integration before release
-
-Pull-request CI runs on GitHub-hosted standard runners only. It covers:
-
-- shell, Python, JSON, and workflow-YAML validation;
-- CPU Release CTest on hosted x86_64 and arm64 Linux runners;
-- a required hosted x86_64 CUDA/TensorRT portable build and generic package smoke
-  path for release-surface changes.
-
-This hosted CI is useful for packaging discipline and general regressions, but it is
-not a substitute for the reference-target gates recorded in the roadmap.
-
-An optional manual self-hosted helper remains in
-[gpu-main.yml](../.github/workflows/gpu-main.yml), but it is disabled by default
-and not part of the repository's standard hosted-runner contract.
-
-## Manual dispatch and manual Jetson packaging
-
-A maintainer can dispatch the hosted release-asset workflow for a tagged draft:
-
-```bash
-gh workflow run release-assets.yml --ref main -f tag=v0.3.0
-```
-
-Build and upload the Jetson package manually on the validated Jetson target:
-
-```bash
-./scripts/install_from_source.sh --build-type Release --build-dir build-release-jetson --prefix "$PWD/install-release-jetson"
-./scripts/package_release.sh --version 0.3.0 --platform linux-aarch64-jetson-l4t36 --install-prefix "$PWD/install-release-jetson" --output-dir dist
-(cd dist && sha256sum -c nvcr-v0.3.0-linux-aarch64-jetson-l4t36.tar.gz.sha256)
-gh release upload v0.3.0 dist/nvcr-v0.3.0-linux-aarch64-jetson-l4t36.tar.gz dist/nvcr-v0.3.0-linux-aarch64-jetson-l4t36.tar.gz.sha256 --clobber
-```
-
-Users and reviewers should download both generic packages and optional engine
-assets from the GitHub Release. Do not ask reviewers to use S3 presigned staging
-URLs directly.
-
-Performance, rate/distortion, memory, and Orin energy evidence are recorded in
-[ROADMAP.md](../ROADMAP.md) using [Performance](performance.md). Passing hosted
-packaging alone never completes a release milestone.
-
-## v0.4.1 small-resolution engine assets
-
-The validated RTX 4070 QCIF and CIF bundles were added to the existing v0.4.1
-release on 2026-07-30 without replacing the 720p or 1080p assets:
-
-- `nvcr-v0.4.1-linux-x86_64-nvidia-dcvcrt-cvpr2025-qcif-fp16-engines.tar.gz`
-- `nvcr-v0.4.1-linux-x86_64-nvidia-dcvcrt-cvpr2025-qcif-fp16-engines.tar.gz.sha256`
-- `nvcr-v0.4.1-linux-x86_64-nvidia-dcvcrt-cvpr2025-cif-fp16-engines.tar.gz`
-- `nvcr-v0.4.1-linux-x86_64-nvidia-dcvcrt-cvpr2025-cif-fp16-engines.tar.gz.sha256`
-
-Before uploading a new profile, run its TensorRT contract and native I/P
-roundtrip at the manifest's visible optimum. A successful `trtexec` plan build
-alone is not sufficient release evidence.
+Pull-request CI covers shell/Python/JSON/workflow validation, CPU tests on hosted
+x86_64 and arm64, and the hosted x86_64 CUDA/package smoke. Target publication
+still requires the registered GPU suites and roadmap evidence. A successful
+`trtexec` build or hosted package alone never completes M4.

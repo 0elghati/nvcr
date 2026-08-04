@@ -27,9 +27,10 @@ one production-quality codec backend rather than claiming broad codec coverage:
 NVCR v1 is not a training framework, arbitrary PyTorch/ONNX converter, universal
 GPU runtime, multi-codec release, stable upstream bitstream implementation, C
 ABI, FFmpeg codec, or container integration. INT8 is experimental and is not a
-supported/default v1 profile. Checkpoints, ONNX graphs, runtime model assets,
-and TensorRT plans are not distributed from this repository; users generate
-derived bundles locally.
+supported/default v1 profile. Checkpoints and ONNX graphs are not distributed
+in binary packages. Validated target-local TensorRT bundles may be published
+separately through the rolling `engine-assets` catalog; users can still build
+derived bundles locally on the final target.
 
 ## Current implementation
 
@@ -134,7 +135,8 @@ cmake --build build-release --parallel
 ```
 
 For published releases, the convenience installer fetches the latest matching
-Linux package and every available engine profile for the selected backend:
+Linux binary package and then installs every exact GPU/CUDA/TensorRT-compatible
+engine profile from the rolling catalog:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
@@ -176,7 +178,7 @@ single supported front end:
 ```bash
 ./scripts/nvcr_artifacts.py prepare \
   --model-profile configs/models/dcvcrt-cvpr2025.json \
-  --engine-profile configs/engine-profiles/1080p-fp16.json \
+  --profile 1080p \
   --target-profile configs/targets/rtx4070-ubuntu2404.json \
   --dcvcrt-root /path/to/DCVC-RT \
   --models build/models/dcvcrt \
@@ -189,8 +191,13 @@ The operations are:
 - `prepare`: verify the pinned checkout/checkpoints, export portable model assets,
   and, unless `--skip-engine` is used, build the selected target engines;
 - `build`: build engines from an already validated model directory;
+- `install`: download all exact-compatible rolling-catalog engines, or only
+  repeated `--profile` selections;
 - `inspect`: report bundle identity without executing it;
 - `validate`: hash and validate every required model or engine artifact.
+
+Local `prepare` and `build` require either one `--profile` or explicit `--all`;
+there is no implicit expensive TensorRT build.
 
 The backend-local shell/export scripts under `scripts/backends/dcvcrt/` are
 implementation helpers. They remain callable for development, but are not
@@ -198,7 +205,7 @@ separate supported user workflows.
 
 ```bash
 ./scripts/nvcr_artifacts.py validate build/models/dcvcrt --json
-./scripts/nvcr_artifacts.py validate build/engines/dcvcrt --json
+./scripts/nvcr_artifacts.py validate build/engines/dcvcrt-1080p --json
 ```
 
 See [Model and engine preparation](docs/dcvcrt-artifacts.md) for the exact source
@@ -237,8 +244,8 @@ the decoder selects the matching profile from the bitstream. Force a profile
 without passing an engine path when needed:
 
 ```bash
-./build-release/cli/nvcr encode ... --engine-profile 720p-fp16
-NVCR_ENGINE_PROFILE=1080p-fp16 ./build-release/cli/nvcr decode ...
+./build-release/cli/nvcr encode ... --engine-profile 720p
+NVCR_ENGINE_PROFILE=1080p ./build-release/cli/nvcr decode ...
 ```
 
 Use `--backend NAME` when multiple backends are installed; `dcvcrt`, `dcvc_rt`,
