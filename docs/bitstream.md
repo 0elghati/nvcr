@@ -7,7 +7,8 @@ The current access unit is the DCVC-RT-shaped first version of a broader NVCR
 direction: a common neural codec access-unit envelope with codec-specific
 payload sections. The design direction is documented in
 [Unified neural codec bitstream envelope](neural-bitstream-envelope.md). This
-page remains the normative description of the implemented `NVAU` v1 syntax.
+page documents the implemented `NVAU` v1 syntax and the explicit experimental
+`NVAU` v2 sectioned envelope.
 
 ## Codec access unit: `NVAU` version 1
 
@@ -31,10 +32,12 @@ to 16,384 per axis and 256 Mi pixels, rejects odd YUV420 dimensions, validates
 model-ID characters, and rejects unknown flags, invalid QP/frame/reset
 combinations, zero/truncated/oversized payloads, and trailing data.
 
-Every encoded access unit carries `dcvcrt-cvpr2025`; runtime decode compares it
-with the configured session model before backend execution. An I-frame marks a
-state reset. Timestamps, time bases, packet side data, and container metadata are
-not part of `NVAU`.
+Every encoded access unit carries the configured public bitstream model ID. The
+DCVC-RT integration defaults this value to `dcvcrt`; internal research,
+checkpoint, and engine-profile identifiers are not written into `NVAU`. Runtime
+decode compares the access-unit model ID with the configured bitstream model ID
+before backend execution. An I-frame marks a state reset. Timestamps, time bases,
+packet side data, and container metadata are not part of `NVAU`.
 
 The TensorRT backend currently encapsulates entropy data in isolated internal
 `NVI1` and `NVP1` payload layouts. They are NVCR implementation formats, not
@@ -43,6 +46,72 @@ structurally but failed reconstruction quality from the first I frame, so v1
 makes no upstream byte or payload-interchangeability promise. `NVAU` versioning
 permits replacing these inner layouts without pretending they are standardized
 DCVC-RT streams.
+
+## Sectioned codec access unit: `NVAU` version 2
+
+`NVAU` version 2 is the NVCR-side envelope intended for future NVIF/container
+mapping. It keeps codec samples independent of file/container concerns while
+adding codec identity, ordering, dependency, and typed-section metadata. The
+current runtime can parse v1 and v2 access units. `AccessUnitIO::serialize` still
+writes v1 for compatibility; `AccessUnitIO::serialize_sectioned` writes v2.
+
+Fixed header, 64 bytes:
+
+| Field | Size | Meaning |
+|---|---:|---|
+| Magic | 4 | ASCII `NVAU` |
+| Version | `u16` | `2` |
+| Header size | `u16` | `64` |
+| Flags | `u32` | bit 0 = reset state, bit 1 = random access, bit 2 = discontinuity |
+| Frame type | `u8` | `0` intra, `1` predicted |
+| Pixel format | `u8` | `1` YUV420P8 |
+| Bit depth | `u8` | `8` |
+| Reserved | `u8` | zero |
+| Width | `u32` | even visible width |
+| Height | `u32` | even visible height |
+| Effective QP | `u32` | I: 0-63; P: 0-71 |
+| Decode order index | `u64` | access-unit decode order within the elementary stream |
+| Presentation order index | `u64` | presentation order within the elementary stream |
+| Dependency count | `u16` | number of following `u64` dependency indexes, max 32 |
+| Section count | `u16` | number of section table entries, max 64 |
+| Codec ID size | `u16` | 1-128 bytes |
+| Codec profile ID size | `u16` | 1-128 bytes |
+| Model ID size | `u16` | 1-128 bytes |
+| Reserved | `u16` | zero |
+| Total size | `u64` | complete `NVAU` byte size |
+
+The fixed header is followed by codec ID, codec profile ID, model ID, dependency
+indexes, section table entries, and then section payloads in table order. IDs use
+the same portable ASCII character set as v1 model IDs. These are stream-facing
+identities: they describe the codec family and public decoder contract, not the
+private checkpoint or publication label used to build TensorRT artifacts.
+
+Each section table entry is 16 bytes:
+
+| Field | Size | Meaning |
+|---|---:|---|
+| Section type | `u16` | typed payload class |
+| Section version | `u16` | section-local syntax version |
+| Section flags | `u32` | bit 0 = required section |
+| Section size | `u64` | following section payload bytes |
+
+Known section types:
+
+| Type | Meaning |
+|---:|---|
+| `1` | codec payload, exactly one required section |
+| `2` | codec configuration |
+| `3` | dependency map |
+| `4` | quality/rate side data |
+| `5` | color metadata |
+| `6` | encoder statistics |
+| `0x8000` | private extension |
+
+Unknown required sections are rejected. Unknown optional sections are bounded and
+preserved by the parser so tools can inspect or forward them without executing a
+codec backend. v2 still does not define tracks, time bases, file indexes, edit
+lists, audio/subtitle streams, or mux metadata; those belong to a future NVIF or
+standard container mapping.
 
 ## Development packet envelope: `NVCR` version 1
 

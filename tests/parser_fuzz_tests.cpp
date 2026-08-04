@@ -37,7 +37,7 @@ int main() {
         {std::byte{1}, std::byte{2}, std::byte{3}},
         nvcr::Timestamp{42},
         nvcr::FrameType::intra,
-        {{"model", "dcvcrt-cvpr2025"}});
+        {{"model", "dcvcrt"}});
     auto packet_wire = nvcr::PacketIO::serialize(packet);
     if (!packet_wire) {
         std::cerr << packet_wire.error().describe() << '\n';
@@ -49,7 +49,7 @@ int main() {
     }
 
     nvcr::AccessUnit access_unit{
-        "dcvcrt-cvpr2025", 176, 144, 71, nvcr::FrameType::predicted, false,
+        "dcvcrt", 176, 144, 71, nvcr::FrameType::predicted, false,
         {std::byte{1}, std::byte{2}, std::byte{3}}};
     auto access_wire = nvcr::AccessUnitIO::serialize(access_unit, parser_limit);
     if (!access_wire) {

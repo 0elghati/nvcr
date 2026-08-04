@@ -29,6 +29,7 @@ struct RuntimeConfiguration final {
     std::filesystem::path predicted_engine_path;
     std::filesystem::path entropy_model_path;
     std::string model_id{"dcvcrt-cvpr2025"};
+    std::string bitstream_model_id{"dcvcrt"};
     std::int32_t device_id{0};
     std::uint32_t intra_qp{32};
     std::uint32_t gop_size{32};

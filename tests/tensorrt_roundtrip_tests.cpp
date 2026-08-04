@@ -263,7 +263,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         auto access_unit = nvcr::AccessUnitIO::deserialize(next_packet.value().data());
-        if (!access_unit || access_unit.value().model_id != "dcvcrt-cvpr2025") {
+        if (!access_unit || access_unit.value().model_id != "dcvcrt") {
             std::cerr << "runtime packet did not contain the expected access unit\n";
             return 1;
         }

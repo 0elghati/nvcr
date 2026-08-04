@@ -65,6 +65,14 @@ Result<TensorRTExecutionMode> parse_execution_mode(std::string_view value) {
     return Error(ErrorCode::invalid_argument, "invalid tensorrt_execution_mode", "configuration");
 }
 
+bool valid_identifier(std::string_view value) {
+    return !value.empty() && value.size() <= 128U &&
+        std::ranges::all_of(value, [](unsigned char character) {
+            return std::isalnum(character) != 0 || character == '.' ||
+                character == '_' || character == '-';
+        });
+}
+
 Result<void> apply_setting(
     RuntimeConfiguration& configuration,
     std::string_view key,
@@ -77,6 +85,8 @@ Result<void> apply_setting(
         configuration.entropy_model_path = value;
     } else if (key == "model_id") {
         configuration.model_id = value;
+    } else if (key == "bitstream_model_id") {
+        configuration.bitstream_model_id = value;
     } else if (key == "device_id") {
         auto parsed = parse_integer<std::int32_t>(value, key);
         if (!parsed) return parsed.error();
@@ -177,12 +187,11 @@ Result<RuntimeConfiguration> ConfigurationLoader::from_file(
 }
 
 Result<void> ConfigurationLoader::validate(const RuntimeConfiguration& configuration) {
-    if (configuration.model_id.empty() || configuration.model_id.size() > 128U ||
-        !std::ranges::all_of(configuration.model_id, [](unsigned char character) {
-            return std::isalnum(character) != 0 || character == '.' ||
-                character == '_' || character == '-';
-        })) {
+    if (!valid_identifier(configuration.model_id)) {
         return Error(ErrorCode::invalid_argument, "invalid model_id", "configuration");
+    }
+    if (!valid_identifier(configuration.bitstream_model_id)) {
+        return Error(ErrorCode::invalid_argument, "invalid bitstream_model_id", "configuration");
     }
     if (configuration.device_id < 0) {
         return Error(ErrorCode::invalid_argument, "device_id cannot be negative", "configuration");

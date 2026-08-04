@@ -90,7 +90,7 @@ void packet_test() {
 
 void access_unit_test() {
     nvcr::AccessUnit original{
-        "dcvcrt-cvpr2025", 176, 144, 32, nvcr::FrameType::intra, true,
+        "dcvcrt", 176, 144, 32, nvcr::FrameType::intra, true,
         {std::byte{1}, std::byte{2}, std::byte{3}}};
     auto wire = nvcr::AccessUnitIO::serialize(original);
     expect(wire.has_value(), "access unit serializes");
@@ -157,6 +157,34 @@ void access_unit_test() {
     original.width = 175;
     expect(!nvcr::AccessUnitIO::serialize(original),
            "odd YUV420 access-unit dimensions are rejected");
+
+    nvcr::AccessUnit sectioned{
+        "dcvcrt", 176, 144, 71, nvcr::FrameType::predicted, false,
+        {std::byte{1}, std::byte{2}, std::byte{3}}};
+    sectioned.codec_id = "dcvcrt";
+    sectioned.codec_profile_id = "dcvcrt";
+    sectioned.decode_order_index = 5;
+    sectioned.presentation_order_index = 7;
+    sectioned.dependencies = {4};
+    sectioned.sections = {
+        {static_cast<std::uint16_t>(nvcr::AccessUnitSectionType::codec_payload),
+         1, nvcr::AccessUnitIO::required_section_flag, sectioned.payload},
+        {0x7000, 1, 0, {std::byte{0xaa}}}};
+    auto sectioned_wire = nvcr::AccessUnitIO::serialize_sectioned(sectioned);
+    expect(sectioned_wire.has_value(), "sectioned access-unit serializes");
+    auto sectioned_decoded = nvcr::AccessUnitIO::deserialize(sectioned_wire.value());
+    expect(sectioned_decoded && sectioned_decoded.value().codec_id == "dcvcrt" &&
+               sectioned_decoded.value().codec_profile_id == "dcvcrt" &&
+               sectioned_decoded.value().decode_order_index == 5 &&
+               sectioned_decoded.value().presentation_order_index == 7 &&
+               sectioned_decoded.value().dependencies.size() == 1 &&
+               sectioned_decoded.value().sections.size() == 2,
+           "sectioned access-unit v2 fields round-trip");
+    sectioned.sections[1].flags = nvcr::AccessUnitIO::required_section_flag;
+    auto unknown_required = nvcr::AccessUnitIO::serialize_sectioned(sectioned);
+    expect(unknown_required.has_value(), "unknown required section can be written for rejection tests");
+    expect(!nvcr::AccessUnitIO::deserialize(unknown_required.value()),
+           "unknown required section is rejected");
 }
 
 void memory_test() {

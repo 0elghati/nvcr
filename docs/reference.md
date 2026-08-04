@@ -31,15 +31,21 @@ metadata. `PacketIO` implements the development `NVCR` envelope.
 
 ### `nvcr::AccessUnit` / `nvcr::AccessUnitIO`
 
-The versioned codec unit carries model ID, dimensions, effective QP, frame type,
-reset flag, and payload. Serialization/deserialization are bounded and validate
-all fields. See [Bitstream](bitstream.md).
+The versioned codec unit carries a public bitstream model ID, dimensions,
+effective QP, frame type, reset flag, and payload. Serialization/deserialization
+are bounded and validate all fields. `AccessUnitIO::deserialize` accepts v1 and
+the sectioned v2 envelope.
+`AccessUnitIO::serialize` writes v1 for compatibility;
+`AccessUnitIO::serialize_sectioned` writes the explicit v2 envelope with codec
+identity, ordering, dependencies, and typed sections. See [Bitstream](bitstream.md).
 
 ## Configuration
 
 `RuntimeConfiguration` includes:
 
-- `model_id` and `device_id`;
+- `model_id`, for backend artifact/profile selection;
+- `bitstream_model_id`, for the public access-unit identity written to streams;
+- `device_id`;
 - engine directory;
 - GOP size and base intra QP;
 - maximum packet bytes, host memory pool, and intended device-arena capacity;
@@ -73,4 +79,4 @@ failures do not use exceptions as cross-module control flow.
 
 Headers may change before v1. A public C ABI and FFmpeg integration are post-v1.
 Applications targeting the development tree should pin the exact NVCR revision,
-model profile, and engine-bundle schema.
+public bitstream model ID, backend model profile, and engine-bundle schema.
