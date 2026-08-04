@@ -44,6 +44,7 @@ target_sources(
         src/common/error.cpp
         src/common/sha256.cpp
         src/configuration/configuration.cpp
+        src/dcvcrt/payload.cpp
         src/dcvcrt/rans_codec.cpp
         src/logging/logger.cpp
         src/memory/memory_pool.cpp
@@ -82,6 +83,7 @@ if(NVCR_ENABLE_TENSORRT)
         nvcr
         PRIVATE
             src/dcvcrt/cuda_ops.cu
+            src/dcvcrt/engine_specs.cpp
             src/dcvcrt/tensorrt_backend.cpp)
     target_link_libraries(nvcr PRIVATE CUDA::cudart TensorRT::TensorRT)
     target_compile_definitions(nvcr PRIVATE NVCR_HAS_TENSORRT=1)
