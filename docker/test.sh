@@ -4,6 +4,7 @@ set -euo pipefail
 mode="${1:-gpu}"
 source_dir="${NVCR_TEST_SOURCE_DIR:-/workspace/nvcr}"
 engine_dir="${NVCR_ENGINE_DIR:-/opt/nvcr/engines}"
+engine_profile="${NVCR_TEST_ENGINE_PROFILE:-qcif}"
 expected_arch="${NVCR_CONTAINER_ARCH:-}"
 cuda_arch="${NVCR_CUDA_ARCHITECTURES:-}"
 
@@ -32,11 +33,17 @@ architecture-specific Compose file. Use 'cpu' for the non-GPU test suite.
 EOF
         exit 2
     fi
+    if [[ ! -f "$engine_dir/engine_manifest.json" &&
+          -f "$engine_dir/dcvcrt-$engine_profile/engine_manifest.json" ]]; then
+        engine_dir="$engine_dir/dcvcrt-$engine_profile"
+    fi
     if [[ ! -f "$engine_dir/engine_manifest.json" ]]; then
         cat >&2 <<EOF
 nvcr-test: no TensorRT engine bundle is mounted at $engine_dir
-Set NVCR_ENGINE_DIR on the host for Compose, or mount a compatible target-local
-bundle at /opt/nvcr/engines. Use 'cpu' to run the non-GPU test suite.
+Run the Compose engine-install service first, set NVCR_ENGINE_ROOT to a host
+collection, or mount a compatible target-local bundle at /opt/nvcr/engines.
+NVCR_TEST_ENGINE_PROFILE selects a canonical bundle from a collection and
+defaults to qcif. Use 'cpu' to run the non-GPU test suite.
 EOF
         exit 2
     fi

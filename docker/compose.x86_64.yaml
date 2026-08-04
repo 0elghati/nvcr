@@ -1,6 +1,26 @@
 name: nvcr-x86-64
 
 services:
+  engine-install:
+    image: ${NVCR_X86_64_IMAGE:-nvcr:rtx4070}
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.x86_64
+      target: runtime
+    gpus: all
+    devices:
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+    entrypoint: ["/opt/nvcr/bin/nvcr-artifacts"]
+    command: ["install", "--engine-root", "/opt/nvcr/engines"]
+    environment:
+      GH_TOKEN: ${GH_TOKEN:-}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      NVIDIA_VISIBLE_DEVICES: all
+    volumes:
+      - ${NVCR_ENGINE_ROOT:-engine-assets}:/opt/nvcr/engines
+
   test:
     image: nvcr-test:rtx4070
     platform: linux/amd64
@@ -9,11 +29,15 @@ services:
       dockerfile: docker/Dockerfile.x86_64
       target: test
     gpus: all
+    devices:
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
     environment:
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       NVIDIA_VISIBLE_DEVICES: all
+      NVCR_TEST_ENGINE_PROFILE: ${NVCR_TEST_ENGINE_PROFILE:-qcif}
     volumes:
-      - ${NVCR_ENGINE_DIR:-../build/engines/dcvcrt}:/opt/nvcr/engines:ro
+      - ${NVCR_ENGINE_ROOT:-engine-assets}:/opt/nvcr/engines:ro
       - test-build:/test-build
 
   nvcr:
@@ -24,16 +48,20 @@ services:
       dockerfile: docker/Dockerfile.x86_64
       target: runtime
     gpus: all
+    devices:
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
     environment:
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       NVIDIA_VISIBLE_DEVICES: all
       NVCR_ENGINE_ROOT: /opt/nvcr/engines
-    user: ${NVCR_HOST_UID:-1000}:${NVCR_HOST_GID:-1000}
+    user: ${NVCR_HOST_UID:-0}:${NVCR_HOST_GID:-0}
     working_dir: /output
     volumes:
-      - ${NVCR_ENGINE_ROOT:-../build/engines}:/opt/nvcr/engines:ro
+      - ${NVCR_ENGINE_ROOT:-engine-assets}:/opt/nvcr/engines:ro
       - ${NVCR_INPUT_DIR:-..}:/input:ro
       - ${NVCR_OUTPUT_DIR:-..}:/output
 
 volumes:
+  engine-assets:
   test-build:
