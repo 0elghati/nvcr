@@ -405,16 +405,23 @@ State: **Active**
   `docs/neural-bitstream-envelope.md`: common NVCR access-unit envelope,
   codec-specific learned payload sections, and no premature universal entropy
   syntax.
-- [ ] Draft `NVAU` v2 as a backend-neutral envelope with codec/profile/model
-  identity, visible format, frame order, dependency semantics, flags, bounded
-  section table, and extension rules.
-- [ ] Define common section classes and required/optional unknown-section
-  behavior.
+- [x] Draft and implement explicit `NVAU` v2 parser/writer support as a
+  backend-neutral envelope with codec/profile/model identity, visible format,
+  frame order, dependency semantics, flags, bounded section table, and extension
+  rules. `AccessUnitIO::serialize` remains v1-compatible;
+  `AccessUnitIO::serialize_sectioned` writes v2.
+- [x] Define common section classes and required/optional unknown-section
+  behavior for the NVCR-side envelope.
 - [ ] Update the codec backend interface so backends return structured
   access-unit descriptors instead of owning top-level stream serialization.
-- [ ] Add conformance tests for `NVAU` v2 parser/writer round trips, canonical
-  serialization, malformed input rejection, unknown required-section rejection,
-  and optional-section skipping.
+- [x] Add initial conformance coverage for `NVAU` v2 parser/writer round trips,
+  malformed input rejection through parser fuzzing, unknown required-section
+  rejection, and optional-section preservation. Verification, 2026-08-04: CPU
+  build passed, CPU `ctest --test-dir build --output-on-failure` passed 6/6,
+  Release build passed, and
+  `ctest --test-dir build-release --output-on-failure -E nvcr_dcvcrt_i_frame_golden`
+  passed 16/16 expected tests.
+- [ ] Add canonical byte fixtures for `NVAU` v2.
 - [ ] Port the DCVC-RT backend to the new envelope while preserving its
   codec-private `NVI1`/`NVP1` payload behavior.
 

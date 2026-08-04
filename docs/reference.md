@@ -33,7 +33,10 @@ metadata. `PacketIO` implements the development `NVCR` envelope.
 
 The versioned codec unit carries model ID, dimensions, effective QP, frame type,
 reset flag, and payload. Serialization/deserialization are bounded and validate
-all fields. See [Bitstream](bitstream.md).
+all fields. `AccessUnitIO::deserialize` accepts v1 and the sectioned v2 envelope.
+`AccessUnitIO::serialize` writes v1 for compatibility;
+`AccessUnitIO::serialize_sectioned` writes the explicit v2 envelope with codec
+identity, ordering, dependencies, and typed sections. See [Bitstream](bitstream.md).
 
 ## Configuration
 

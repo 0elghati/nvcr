@@ -114,6 +114,35 @@ TEST(AccessUnitIO, RoundTripsAndRejectsUnsafeInputs) {
     original.qp = 32;
     original.width = 175;
     EXPECT_FALSE(nvcr::AccessUnitIO::serialize(original));
+
+    nvcr::AccessUnit sectioned{
+        "dcvcrt-cvpr2025", 176, 144, 71, nvcr::FrameType::predicted, false,
+        {std::byte{1}, std::byte{2}, std::byte{3}}};
+    sectioned.codec_id = "dcvcrt";
+    sectioned.codec_profile_id = "dcvcrt-cvpr2025";
+    sectioned.decode_order_index = 5;
+    sectioned.presentation_order_index = 7;
+    sectioned.dependencies = {4};
+    sectioned.sections = {
+        {static_cast<std::uint16_t>(nvcr::AccessUnitSectionType::codec_payload),
+         1, nvcr::AccessUnitIO::required_section_flag, sectioned.payload},
+        {0x7000, 1, 0, {std::byte{0xaa}}}};
+    auto sectioned_wire = nvcr::AccessUnitIO::serialize_sectioned(sectioned);
+    ASSERT_TRUE(sectioned_wire);
+    auto sectioned_decoded = nvcr::AccessUnitIO::deserialize(sectioned_wire.value());
+    ASSERT_TRUE(sectioned_decoded);
+    EXPECT_EQ(sectioned_decoded.value().codec_id, "dcvcrt");
+    EXPECT_EQ(sectioned_decoded.value().codec_profile_id, "dcvcrt-cvpr2025");
+    EXPECT_EQ(sectioned_decoded.value().decode_order_index, 5U);
+    EXPECT_EQ(sectioned_decoded.value().presentation_order_index, 7U);
+    ASSERT_EQ(sectioned_decoded.value().dependencies.size(), 1U);
+    EXPECT_EQ(sectioned_decoded.value().dependencies[0], 4U);
+    EXPECT_EQ(sectioned_decoded.value().sections.size(), 2U);
+
+    sectioned.sections[1].flags = nvcr::AccessUnitIO::required_section_flag;
+    auto unknown_required = nvcr::AccessUnitIO::serialize_sectioned(sectioned);
+    ASSERT_TRUE(unknown_required);
+    EXPECT_FALSE(nvcr::AccessUnitIO::deserialize(unknown_required.value()));
 }
 
 TEST(MemoryPool, ReusesReleasedBlocks) {
