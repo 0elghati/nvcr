@@ -91,6 +91,7 @@ be called supported until the evidence rules below pass on the relevant target.
 | High P effective QP through 71 | Implemented and tested | Declared, target-gated with boundary evidence |
 | Reset/reuse and multiple GOPs | Implemented and tested on RTX | Declared, target-gated on both targets |
 | `NVAU` access unit | Implemented, versioned, bounded | Candidate v1 codec contract; cross-runtime evidence pending |
+| Unified neural codec envelope | Documented design direction | Next access-unit architecture work; not a current multi-codec support claim |
 | `NVCR` packet / `NVCS` sequence files | Implemented CLI development framing | No stable pre-v1 compatibility promise |
 | Upstream Python payload/frame compatibility | Bidirectional framing-only probe fails at the I-frame entropy boundary | Unsupported in v1; no byte-compatibility promise |
 | Reusable CUDA arena / fully device-resident state | In progress | Required performance/runtime gate |

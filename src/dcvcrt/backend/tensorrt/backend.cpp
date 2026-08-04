@@ -1,7 +1,9 @@
 #include "nvcr/dcvcrt/tensorrt_backend.hpp"
 
-#include "../common/sha256.hpp"
+#include "../../../common/sha256.hpp"
 #include "cuda_ops.hpp"
+#include "engine_specs.hpp"
+#include "../../payload.hpp"
 
 #include "nvcr/dcvcrt/rans_codec.hpp"
 
@@ -54,98 +56,6 @@ bool supported_frame_dimensions(std::uint32_t width, std::uint32_t height) {
         width <= maximum_frame_width && height <= maximum_frame_height &&
         (width & 1U) == 0U && (height & 1U) == 0U;
 }
-
-struct TensorSpec final {
-    std::string_view name;
-    nvinfer1::TensorIOMode mode;
-    std::array<std::int64_t, 4> dimensions;
-};
-
-struct EngineSpec final {
-    std::string_view filename;
-    std::span<const TensorSpec> tensors;
-};
-
-constexpr std::array<TensorSpec, 3> analysis_tensors{{
-    {"frame", nvinfer1::TensorIOMode::kINPUT, {1, 3, -1, -1}},
-    {"q_enc", nvinfer1::TensorIOMode::kINPUT, {1, 368, 1, 1}},
-    {"y", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
-}};
-constexpr std::array<TensorSpec, 2> hyper_analysis_tensors{{
-    {"y_padded", nvinfer1::TensorIOMode::kINPUT, {1, 256, -1, -1}},
-    {"z", nvinfer1::TensorIOMode::kOUTPUT, {1, 128, -1, -1}},
-}};
-constexpr std::array<TensorSpec, 3> hyper_synthesis_tensors{{
-    {"z_hat", nvinfer1::TensorIOMode::kINPUT, {1, 128, -1, -1}},
-    {"params_padded", nvinfer1::TensorIOMode::kOUTPUT, {1, 514, -1, -1}},
-    {"common_padded", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
-}};
-constexpr std::array<TensorSpec, 2> spatial_prior_tensors{{
-    {"context", nvinfer1::TensorIOMode::kINPUT, {1, 512, -1, -1}},
-    {"scales_means", nvinfer1::TensorIOMode::kOUTPUT, {1, 512, -1, -1}},
-}};
-constexpr std::array<TensorSpec, 3> synthesis_tensors{{
-    {"y_hat", nvinfer1::TensorIOMode::kINPUT, {1, 256, -1, -1}},
-    {"q_dec", nvinfer1::TensorIOMode::kINPUT, {1, 368, 1, 1}},
-    {"frame_hat", nvinfer1::TensorIOMode::kOUTPUT, {1, 3, -1, -1}},
-}};
-
-constexpr std::array<TensorSpec, 4> p_reference_frame_tensors{{
-    {"reference_frame", nvinfer1::TensorIOMode::kINPUT, {1, 3, -1, -1}},
-    {"q_feature", nvinfer1::TensorIOMode::kINPUT, {1, 256, 1, 1}},
-    {"context", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
-    {"temporal_context", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
-}};
-constexpr std::array<TensorSpec, 4> p_reference_feature_tensors{{
-    {"reference_feature", nvinfer1::TensorIOMode::kINPUT, {1, 256, -1, -1}},
-    {"q_feature", nvinfer1::TensorIOMode::kINPUT, {1, 256, 1, 1}},
-    {"context", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
-    {"temporal_context", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
-}};
-constexpr std::array<TensorSpec, 4> p_analysis_tensors{{
-    {"frame", nvinfer1::TensorIOMode::kINPUT, {1, 3, -1, -1}},
-    {"context", nvinfer1::TensorIOMode::kINPUT, {1, 256, -1, -1}},
-    {"q_encoder", nvinfer1::TensorIOMode::kINPUT, {1, 256, 1, 1}},
-    {"y", nvinfer1::TensorIOMode::kOUTPUT, {1, 128, -1, -1}},
-}};
-constexpr std::array<TensorSpec, 2> p_hyper_analysis_tensors{{
-    {"y_padded", nvinfer1::TensorIOMode::kINPUT, {1, 128, -1, -1}},
-    {"z", nvinfer1::TensorIOMode::kOUTPUT, {1, 128, -1, -1}},
-}};
-constexpr std::array<TensorSpec, 3> p_prior_tensors{{
-    {"z_hat", nvinfer1::TensorIOMode::kINPUT, {1, 128, -1, -1}},
-    {"temporal_context", nvinfer1::TensorIOMode::kINPUT, {1, 256, -1, -1}},
-    {"params", nvinfer1::TensorIOMode::kOUTPUT, {1, 384, -1, -1}},
-}};
-constexpr std::array<TensorSpec, 2> p_spatial_prior_tensors{{
-    {"context", nvinfer1::TensorIOMode::kINPUT, {1, 512, -1, -1}},
-    {"scales_means", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
-}};
-constexpr std::array<TensorSpec, 6> p_synthesis_tensors{{
-    {"y_hat", nvinfer1::TensorIOMode::kINPUT, {1, 128, -1, -1}},
-    {"context", nvinfer1::TensorIOMode::kINPUT, {1, 256, -1, -1}},
-    {"q_decoder", nvinfer1::TensorIOMode::kINPUT, {1, 256, 1, 1}},
-    {"q_recon", nvinfer1::TensorIOMode::kINPUT, {1, 320, 1, 1}},
-    {"frame_hat", nvinfer1::TensorIOMode::kOUTPUT, {1, 3, -1, -1}},
-    {"feature", nvinfer1::TensorIOMode::kOUTPUT, {1, 256, -1, -1}},
-}};
-
-const std::array<EngineSpec, 14> engine_specs{{
-    {"i_analysis.plan", analysis_tensors},
-    {"i_hyper_analysis.plan", hyper_analysis_tensors},
-    {"i_hyper_synthesis.plan", hyper_synthesis_tensors},
-    {"i_spatial_prior_1.plan", spatial_prior_tensors},
-    {"i_spatial_prior_2.plan", spatial_prior_tensors},
-    {"i_spatial_prior_3.plan", spatial_prior_tensors},
-    {"i_synthesis.plan", synthesis_tensors},
-    {"p_reference_frame.plan", p_reference_frame_tensors},
-    {"p_reference_feature.plan", p_reference_feature_tensors},
-    {"p_analysis.plan", p_analysis_tensors},
-    {"p_hyper_analysis.plan", p_hyper_analysis_tensors},
-    {"p_prior.plan", p_prior_tensors},
-    {"p_spatial_prior.plan", p_spatial_prior_tensors},
-    {"p_synthesis.plan", p_synthesis_tensors},
-}};
 
 class TensorRTLogger final : public nvinfer1::ILogger {
 public:
@@ -2171,21 +2081,6 @@ void append_u32(std::vector<std::byte>& output, std::uint32_t value) {
     }
 }
 
-Result<std::uint32_t> read_u32(
-    std::span<const std::byte> input, std::size_t& offset) {
-    if (offset > input.size() || input.size() - offset < 4) {
-        return Error(ErrorCode::malformed_bitstream, "truncated I-frame header",
-                     std::string(subsystem));
-    }
-    std::uint32_t value = 0;
-    for (std::uint32_t index = 0; index < 4; ++index) {
-        value |= static_cast<std::uint32_t>(
-            std::to_integer<unsigned char>(input[offset + index])) << (index * 8U);
-    }
-    offset += 4;
-    return value;
-}
-
 struct DpbState final {
     HostTensor frame;
     std::optional<HostTensor> feature;
@@ -2210,104 +2105,6 @@ std::vector<std::byte> serialize_dpb(
         output.insert(output.end(), feature_data, feature_data + feature_bytes);
     }
     return output;
-}
-
-struct IntraPayload final {
-    std::uint32_t width;
-    std::uint32_t height;
-    std::uint32_t qp;
-    bool two_coders;
-    std::span<const std::byte> rans;
-};
-
-std::vector<std::byte> make_intra_payload(
-    std::uint32_t width, std::uint32_t height, std::uint32_t qp,
-    bool two_coders, std::span<const std::byte> rans) {
-    std::vector<std::byte> output;
-    output.reserve(20 + rans.size());
-    output.insert(output.end(), {std::byte{0x4e}, std::byte{0x56},
-                                 std::byte{0x49}, std::byte{0x31}});
-    append_u32(output, width);
-    append_u32(output, height);
-    append_u32(output, qp);
-    append_u32(output, two_coders ? 1U : 0U);
-    output.insert(output.end(), rans.begin(), rans.end());
-    return output;
-}
-
-Result<IntraPayload> parse_intra_payload(std::span<const std::byte> payload) {
-    constexpr std::array<std::byte, 4> magic{
-        std::byte{0x4e}, std::byte{0x56}, std::byte{0x49}, std::byte{0x31}};
-    if (payload.size() < 24 || !std::equal(magic.begin(), magic.end(), payload.begin())) {
-        return Error(ErrorCode::malformed_bitstream, "invalid NVCR I-frame payload",
-                     std::string(subsystem));
-    }
-    std::size_t offset = 4;
-    auto width = read_u32(payload, offset);
-    auto height = read_u32(payload, offset);
-    auto qp = read_u32(payload, offset);
-    auto flags = read_u32(payload, offset);
-    if (!width) return width.error();
-    if (!height) return height.error();
-    if (!qp) return qp.error();
-    if (!flags) return flags.error();
-    if (!supported_frame_dimensions(width.value(), height.value()) ||
-        qp.value() >= 64 || flags.value() > 1) {
-        return Error(ErrorCode::malformed_bitstream, "invalid NVCR I-frame fields",
-                     std::string(subsystem));
-    }
-    return IntraPayload{width.value(), height.value(), qp.value(), flags.value() == 1,
-                        payload.subspan(offset)};
-}
-
-struct PredictedPayload final {
-    std::uint32_t width;
-    std::uint32_t height;
-    std::uint32_t qp;
-    bool two_coders;
-    bool use_frame_reference;
-    std::span<const std::byte> rans;
-};
-
-std::vector<std::byte> make_predicted_payload(
-    std::uint32_t width, std::uint32_t height, std::uint32_t qp,
-    bool two_coders, bool use_frame_reference, std::span<const std::byte> rans) {
-    std::vector<std::byte> output;
-    output.reserve(20 + rans.size());
-    output.insert(output.end(), {std::byte{0x4e}, std::byte{0x56},
-                                 std::byte{0x50}, std::byte{0x31}});
-    append_u32(output, width);
-    append_u32(output, height);
-    append_u32(output, qp);
-    append_u32(output, (two_coders ? 1U : 0U) | (use_frame_reference ? 2U : 0U));
-    output.insert(output.end(), rans.begin(), rans.end());
-    return output;
-}
-
-Result<PredictedPayload> parse_predicted_payload(std::span<const std::byte> payload) {
-    constexpr std::array<std::byte, 4> magic{
-        std::byte{0x4e}, std::byte{0x56}, std::byte{0x50}, std::byte{0x31}};
-    if (payload.size() < 24 || !std::equal(magic.begin(), magic.end(), payload.begin())) {
-        return Error(ErrorCode::malformed_bitstream, "invalid NVCR P-frame payload",
-                     std::string(subsystem));
-    }
-    std::size_t offset = 4;
-    auto width = read_u32(payload, offset);
-    auto height = read_u32(payload, offset);
-    auto qp = read_u32(payload, offset);
-    auto flags = read_u32(payload, offset);
-    if (!width) return width.error();
-    if (!height) return height.error();
-    if (!qp) return qp.error();
-    if (!flags) return flags.error();
-    if (!supported_frame_dimensions(width.value(), height.value()) ||
-        qp.value() >= video_qp_count || flags.value() > 3) {
-        return Error(ErrorCode::malformed_bitstream, "invalid NVCR P-frame fields",
-                     std::string(subsystem));
-    }
-    return PredictedPayload{width.value(), height.value(), qp.value(),
-                            (flags.value() & 1U) != 0, (flags.value() & 2U) != 0,
-                            payload.subspan(offset)};
 }
 
 Result<CodecDecodeResult> decode_intra(

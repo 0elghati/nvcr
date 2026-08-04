@@ -15,12 +15,13 @@ before treating an implemented path as supported.
 6. [Architecture](architecture.md)
 7. [C++ API status](reference.md)
 8. [Bitstream and access units](bitstream.md)
-9. [CLI](cli.md)
-10. [DCVC-RT integration](dcvcrt-integration.md)
-11. [Performance protocol and historical results](performance.md)
-12. [Release gates](releasing.md)
-13. [Docker execution and development](docker.md)
-14. [Roadmap and evidence](../ROADMAP.md)
+9. [Unified neural codec bitstream envelope](neural-bitstream-envelope.md)
+10. [CLI](cli.md)
+11. [DCVC-RT integration](dcvcrt-integration.md)
+12. [Performance protocol and historical results](performance.md)
+13. [Release gates](releasing.md)
+14. [Docker execution and development](docker.md)
+15. [Roadmap and evidence](../ROADMAP.md)
 
 ## Policy shortcuts
 
@@ -30,7 +31,9 @@ before treating an implemented path as supported.
 - DCVC-RT is the only implemented and supported v1 codec backend.
 - FP16 and YUV420P8 are the v1 product profiles; INT8 is experimental.
 - `NVAU` is the candidate codec access-unit contract. `NVCR`/`NVCS` remain
-  development application framing.
+  development application framing. The unified neural codec envelope is the
+  documented next access-unit architecture direction, not a current multi-codec
+  support claim.
 - C ABI, FFmpeg, and standard container mapping are post-v1.
 - Historical binary-install instructions, where retained, describe old snapshots
   and are not current product-support guidance.

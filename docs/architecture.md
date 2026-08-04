@@ -35,7 +35,8 @@ implementation types do not cross the public runtime boundary.
 |---|---|---|
 | `runtime` | Session lifecycle, serialized calls, `Frame`, `Packet`, statistics | Neural graph ordering or TensorRT objects |
 | `codec` | Backend interface, generic sequence state, access-unit wrapping | Concrete model architecture or vendor SDK objects |
-| `dcvcrt` | DCVC-RT I/P decisions, TensorRT/CUDA/rANS orchestration, model-specific payloads | Training, checkpoints, other codec families |
+| `dcvcrt` | DCVC-RT I/P decisions, model-specific payloads, codec-level QP/state rules | Training, checkpoints, other codec families, or backend-specific engine details |
+| `dcvcrt/backend/tensorrt` | TensorRT/CUDA execution, engine specs, engine/session orchestration, backend-local CUDA helpers | DCVC-RT payload syntax or public runtime contracts |
 | `bitstream` | Bounded `NVAU` access units and development packet framing | Standard containers or FFmpeg metadata |
 | `configuration` | Per-session model, device, memory/execution, QP, GOP, and compatibility policy | Engine generation |
 | `memory` | Host resource and reusable best-fit pool | Completed CUDA arena (v1 work) |
@@ -115,6 +116,11 @@ The CLI wraps access units in the older `NVCR` packet and `NVCS` sequence record
 for timestamps and file streaming. Those outer formats are development formats,
 not a v1 container or an upstream compatibility claim. See [Bitstream](bitstream.md).
 
+The longer-term bitstream direction is a backend-neutral access-unit envelope:
+NVCR core owns framing, identity, dependency metadata, bounds checks, and
+container-facing semantics, while each codec backend owns its versioned learned
+payload sections. See [Unified neural codec bitstream envelope](neural-bitstream-envelope.md).
+
 ## Public API status
 
 The current C++ API uses owned `Frame`/`Packet` values, `RuntimeConfiguration`,
@@ -128,17 +134,21 @@ hardware-frame integration are post-v1 work.
 
 ## Incremental structure
 
-Large directory moves are deferred until correctness tests are reliable. As code
-is modified, generic codec contracts move under `include/nvcr/codec`, application
-entry points move toward `apps/`, artifact/reference logic toward `tools`, and
-performance/energy logic toward `benchmarks`. The DCVC-RT TensorRT backend should
-be split along manifest, engine/session, I-frame, P-frame, and state/asset
-boundaries without rewriting working behavior.
+TensorRT-specific DCVC-RT implementation files live under
+`src/dcvcrt/backend/tensorrt/`. Codec-level DCVC-RT syntax, such as the current
+`NVI1`/`NVP1` payload helpers, stays directly under `src/dcvcrt/` so it is not
+tied to one execution backend. As code is modified, generic codec contracts move
+under `include/nvcr/codec`, application entry points move toward `apps/`,
+artifact/reference logic toward `tools`, and performance/energy logic toward
+`benchmarks`. The remaining DCVC-RT TensorRT backend should be split along
+manifest, engine/session, I-frame, P-frame, frame I/O, memory/staging, and
+state/asset boundaries without rewriting working behavior.
 
 ## See also
 
 - [Scope and support](scope-and-support.md)
 - [Compatibility](compatibility.md)
 - [Bitstream](bitstream.md)
+- [Unified neural codec bitstream envelope](neural-bitstream-envelope.md)
 - [Model and engine preparation](dcvcrt-artifacts.md)
 - [Performance](performance.md)

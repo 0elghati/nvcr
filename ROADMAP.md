@@ -16,7 +16,8 @@ CVPR 2025 I/P model pair, that:
 - meets or beats its warmed encode/decode latency on the same hardware;
 - supports complete I/P GOP operation, reset, drain, and flush;
 - validates model and target-local engine bundles before execution;
-- defines bounded versioned codec access units; and
+- defines bounded versioned codec access units and evolves them toward a
+  backend-neutral neural codec envelope; and
 - records correctness, performance, memory, bitrate/distortion, and Orin energy
   evidence for RTX 4070 and Jetson Orin Nano.
 
@@ -67,10 +68,12 @@ Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
 Current next action: finish the remaining rolling-catalog gates on Orin and the
-wrong-GPU/wrong-TensorRT negative matrix on both reference targets. The complete
-six-profile RTX set is published on the mutable `engine-assets` release; a clean
-container installed it and passed automatic encode/decode selection at every
-registered RTX resolution.
+wrong-GPU/wrong-TensorRT negative matrix on both reference targets, while
+turning the documented unified neural codec bitstream envelope into the next
+concrete access-unit design step. Draft `NVAU` v2 around a common header plus
+typed, bounded sections; keep DCVC-RT payload internals codec-private; and add
+parser/writer/conformance gates before treating the format as a stable
+multi-codec boundary.
 The current Orin FP16 runtime-only FPS wave is closed at its measured ceiling;
 do not resume speculative backend tuning without a newly profiled candidate
 capable of clearing the 3% whole-codec gate. Cross-runtime I/P golden vectors,
@@ -387,16 +390,39 @@ State: **Active**
 - [x] Define syntax for frame type, effective QP, reset state, and payload lengths.
 - [x] Define bounds/version behavior and add parser/writer plus deterministic fuzz tests.
 - [x] Separate the generic codec backend/session boundary from the DCVC-RT TensorRT implementation.
+- [x] Establish the TensorRT backend implementation layout under
+  `src/dcvcrt/backend/tensorrt/`, keeping DCVC-RT payload syntax at the codec
+  level. Verification, 2026-08-04: Release build passed and
+  `ctest --test-dir build-release --output-on-failure -E nvcr_dcvcrt_i_frame_golden`
+  passed 16/16 expected tests after the move.
 - [ ] Add Python→native and native→Python I/P golden vectors. The initial
   720p two-frame probe is preserved as failed evidence: Python→native reaches
   `24.864091 dB`, native→Python reaches `25.152377 dB`, and both diverge at
   the I-frame entropy/index-map boundary despite byte-identical CDF assets.
 - [x] 720p frame-1 quality parity restored at QP 32 by returning direct YUV420P8 reconstruction; durable cross-runtime golden vectors remain the next M2 action.
 - [x] Add an opt-in deterministic Python/native 720p I-frame reconstruction golden at QP 32 with machine-readable evidence.
+- [x] Document the unified neural codec bitstream-envelope decision in
+  `docs/neural-bitstream-envelope.md`: common NVCR access-unit envelope,
+  codec-specific learned payload sections, and no premature universal entropy
+  syntax.
+- [ ] Draft `NVAU` v2 as a backend-neutral envelope with codec/profile/model
+  identity, visible format, frame order, dependency semantics, flags, bounded
+  section table, and extension rules.
+- [ ] Define common section classes and required/optional unknown-section
+  behavior.
+- [ ] Update the codec backend interface so backends return structured
+  access-unit descriptors instead of owning top-level stream serialization.
+- [ ] Add conformance tests for `NVAU` v2 parser/writer round trips, canonical
+  serialization, malformed input rejection, unknown required-section rejection,
+  and optional-section skipping.
+- [ ] Port the DCVC-RT backend to the new envelope while preserving its
+  codec-private `NVI1`/`NVP1` payload behavior.
 
 Exit criteria:
 
 - [ ] The normative syntax document and compatibility position are reviewed.
+- [ ] The unified envelope is implemented as the single runtime access-unit
+  boundary for DCVC-RT and is ready for the next codec backend.
 - [x] I/P access units work in both native runtime directions.
 - [x] Timestamps/container metadata are not duplicated in access units.
 
