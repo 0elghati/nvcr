@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.0](https://github.com/0elghati/nvcr/compare/v0.6.0...v0.7.0) (2026-08-04)
+
+
+### Features
+
+* **artifacts:** add rolling engine catalog installer ([#49](https://github.com/0elghati/nvcr/issues/49)) ([e17f78e](https://github.com/0elghati/nvcr/commit/e17f78e67b02ffd587846c8b31c7964ddba2be67))
+* **bistream:** Unified bitstream access units ([#53](https://github.com/0elghati/nvcr/issues/53)) ([d3a022d](https://github.com/0elghati/nvcr/commit/d3a022df77bdf58f1c399002331bc5922566aee2))
+* **x86:** Rolling engine assets ([#51](https://github.com/0elghati/nvcr/issues/51)) ([446a6d5](https://github.com/0elghati/nvcr/commit/446a6d511488ddf33f6ef1393479531e91a796f9))
+
 ## [0.6.0](https://github.com/0elghati/nvcr/compare/v0.5.1...v0.6.0) (2026-08-03)
 
 
