@@ -1,0 +1,23 @@
+services:
+  engine-install:
+    image: ${NVCR_BLACKWELL_IMAGE:-nvcr:rtx5060-blackwell}
+    build:
+      args: &blackwell-build-args
+        CUDA_DEVEL_IMAGE: nvidia/cuda:12.8.1-devel-ubuntu24.04
+        CUDA_RUNTIME_IMAGE: nvidia/cuda:12.8.1-runtime-ubuntu24.04
+        TENSORRT_PACKAGE_VERSION: 10.9.0.34-1+cuda12.8
+        NVCR_CUDA_ARCHITECTURES: "120"
+        NVCR_TARGET_PROFILE: rtx5060-laptop-ubuntu2404
+        NVCR_CUDA_VERSION: "12.8"
+        NVCR_TENSORRT_VERSION: "10.9"
+        NVCR_IMAGE_DESCRIPTION: NVCR runtime for linux/amd64 NVIDIA RTX 5060 Laptop GPU; SM 12.0
+
+  test:
+    image: nvcr-test:rtx5060-blackwell
+    build:
+      args: *blackwell-build-args
+
+  nvcr:
+    image: ${NVCR_BLACKWELL_IMAGE:-nvcr:rtx5060-blackwell}
+    build:
+      args: *blackwell-build-args

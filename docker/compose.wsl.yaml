@@ -1,0 +1,9 @@
+services:
+  engine-install:
+    devices: !reset []
+
+  test:
+    devices: !reset []
+
+  nvcr:
+    devices: !reset []

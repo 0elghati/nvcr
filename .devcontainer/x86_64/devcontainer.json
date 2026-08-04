@@ -5,6 +5,9 @@
     "dockerfile": "../../docker/Dockerfile.x86_64",
     "target": "development"
   },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
   "runArgs": ["--gpus=all"],
   "containerEnv": {
     "NVIDIA_DRIVER_CAPABILITIES": "compute,utility",
@@ -12,6 +15,7 @@
   },
   "remoteUser": "nvcr",
   "updateRemoteUserUID": true,
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/nvcr,type=bind,consistency=cached",
   "workspaceFolder": "/workspace/nvcr",
   "mounts": [
     "source=nvcr-x86-build,target=/workspace/nvcr/build-devcontainer,type=volume"

@@ -77,15 +77,18 @@ do not resume speculative backend tuning without a newly profiled candidate
 capable of clearing the 3% whole-codec gate. Cross-runtime I/P golden vectors,
 drain/flush semantics, and target support remain pending.
 
-Deployment next action: package a complete target-local Orin set and merge it
-into the rolling `engine-assets` release only after each archive and catalog
-identity pass on the Orin that built it. Then run clean `nvcr-artifacts install`
-checks plus wrong-GPU and wrong-TensorRT negative cases on RTX and Orin, and the
-six-resolution runtime selection matrix on Orin. Desktop compatibility-class
-publication is a separate gate: run one built bundle on a second intended GPU,
-then record correctness, whole-codec performance, and wrong-device rejection.
-Binary
-packages stay semver'd, architecture-specific, and engine-free. The CLI now warns when
+Deployment next action: land the bounded desktop-portability change first, then
+land the dependent RTX 5060 target/container and execution-policy correction.
+Once both are on `main`, restage or redispatch the six exact RTX 5060 assets;
+workflow `30953514587` stopped before upload because the target profile was not
+yet registered, so the public release still contains only RTX 4070 entries.
+Validate a clean catalog install plus wrong-GPU and wrong-TensorRT negative
+cases, locked-clock/peak-memory performance, and pinned-Python parity before
+changing the RTX 5060 target from validation-in-progress. Package the complete
+target-local Orin set and run its remaining native selection/negative gates
+separately. Desktop compatibility-class publication still requires a second
+intended GPU, correctness, whole-codec performance, and wrong-device rejection.
+Binary packages stay semver'd, architecture-specific, and engine-free. The CLI now warns when
 multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
 Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and uses
 persistent contexts backed by one shared activation workspace on integrated/
@@ -99,10 +102,13 @@ intentional host boundaries. I-decode now reuses pinned buffers at those entropy
 boundaries and uploads packed int8 symbols before converting them to FP16 on the
 GPU.
 
-Container next action: build and run the Jetson definition natively on the
-recorded Orin target. The x86_64 `test gpu` suite, private rolling-catalog
-download into a clean volume, and all-six-profile runtime selection matrix are
-complete; static Jetson checks do not substitute for its native GPU suite.
+Container next action: after the two branches land, exercise the Blackwell/WSL
+Compose path from a clean build and clean engine volume against the published
+exact assets. The Release SM-120 suite now passes the six-profile 20/20 matrix;
+static checks and same-device local assets do not replace clean catalog-install
+or negative compatibility gates. Build and run the Jetson definition natively
+on the recorded Orin target; static Jetson checks do not substitute for its
+native GPU suite.
 
 Superseded release tooling note, 2026-08-01: `release_engine_assets.sh --latest-draft`
 now resolves tags through `gh api` rather than the newer
@@ -594,6 +600,59 @@ Exit criteria:
   compiler cannot emit SM 120 (`Unsupported gpu architecture 'compute_120'`).
   The established CUDA 12.8/TensorRT 10.9 target image resolved the environment
   mismatch; the failed outer-shell attempt is not a codec regression.
+
+### 2026-08-04 — Validate exact RTX 5060 assets and correct automatic execution
+
+- Registered `rtx5060-laptop-ubuntu2404` for CUDA 12.8, TensorRT 10.9,
+  SM 12.0, and the 26-SM RTX 5060 Laptop GPU. The x86_64 Dockerfile now
+  accepts target-specific CUDA images, TensorRT packages, CUDA architecture,
+  target identity, and OCI version labels. Blackwell and WSL Compose overlays
+  select those values without claiming RTX 4070 identity.
+- The first full Blackwell image build was canceled before image creation after
+  its context reached 1.57 GB. Normalizing and hardening `.dockerignore` with
+  explicit Git, build, asset, dataset, distribution, and upload-manifest
+  exclusions reduced the rerun context to 3.55 MB, keeping local engines and
+  signed staging data out of image layers.
+- Built all six exact fixed-shape bundles from the pinned CVPR 2025 model
+  export: 84 TensorRT plans totaling 1,122,904,800 bytes. All six local
+  package checksum sidecars pass. Archive SHA-256 values are
+  `76d6fe23d1b8964fee55cae49555b72671d01e87c8f8635b122d4a008198efc3`
+  (QCIF), `7df93d99f1a16a79da0da3f84aad526c5b12a3331d92c4984de491be6086dd47`
+  (CIF), `9d45cc87b3436b987268306cea4dbf0fc442f19b5bea87963aecc37f0da42217`
+  (360p), `809d1a2380c1c7d461076ed7d31594a7c0a8e6ea880006fcac478e74f9562ffa`
+  (540p), `065075b348795491a7d0a93ccd65d26de40ac82b6a690c096942bf01d079aeb0`
+  (720p), and `efb44843376f8973d006eecc797360eca6c30218a5b63eb125ccc57201d379fa`
+  (1080p). Generated packages remain excluded from Git.
+- A Release SM-120 build registered every exact bundle together and passed
+  20/20 tests: base CPU/catalog/CUDA coverage plus engine-contract and native
+  I/P roundtrip tests at QCIF, CIF, 360p, 540p, 720p, and 1080p.
+- GitHub Actions run `30953514587` failed validation before upload because
+  `configs/targets/rtx5060-laptop-ubuntu2404.json` was absent on `main`.
+  Upload was skipped and the public rolling release was unchanged. This branch
+  adds the prerequisite; publication must be redispatched only after merge.
+- The first five-sequence 360p/540p run selected per-engine low-memory mode
+  because 8,151 MiB of reported usable VRAM fell below the former 8 GiB
+  cutoff. It measured 53.619/65.949 encode/decode fps at 360p and
+  30.330/34.625 at 540p. This result remains preserved as the superseded
+  pre-fix diagnostic; WSL2 was secondary to context churn and synchronizations.
+- Automatic mode now keeps persistent contexts on every discrete GPU while
+  retaining explicit low-memory mode and integrated shared-workspace mode.
+  With the same Release binary, inputs, bundles, and protocol, the five-sequence
+  means were 244.671/198.669 encode/decode fps at 360p and 131.200/112.389
+  at 540p, versus forced low-memory 45.438/56.292 and 26.250/30.130.
+  Payload and PSNR-YUV matched exactly. The automatic and forced-control
+  evidence SHA-256 values are
+  `b82ef89a21a1e50f7983715c44e1b50f38bd2e01a2ec02a74e9a3c552caac622`
+  and `e8792a60304450a5764957427059b892b0b85ae7cefa6e80d43d7d98747d7773`.
+- After AC power was connected, the identical automatic case reached
+  285.454/236.747 fps at 360p and 168.464/135.827 fps at 540p, improving
+  16.67%, 19.17%, 28.40%, and 20.85% over the earlier persistent run.
+  Its 80-row evidence SHA-256 is
+  `7cb3a57636a266e994fc33c88feaa62682332fc63fd764f1157f9bbc28c21a2d`;
+  payload and quality fields still match, so only timing changed.
+- Results remain diagnostic rather than a release claim: WSL2 was used, clocks
+  were observed but not locked, peak memory and pinned-Python parity were not
+  captured, and wrong-GPU/wrong-TensorRT negative gates remain open.
 
 ### 2026-08-04 — Keep research profile IDs out of emitted access units
 
