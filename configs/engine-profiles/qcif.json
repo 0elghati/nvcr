@@ -1,12 +1,12 @@
 {
   "schema": "nvcr.engine-profile.v1",
-  "id": "cif-fp16",
-  "optimization_point": "cif",
+  "id": "qcif",
+  "optimization_point": "qcif",
   "precision": "fp16",
   "visible_dimensions": {
     "minimum": [64, 64],
-    "optimum": [352, 288],
-    "maximum": [352, 288]
+    "optimum": [176, 144],
+    "maximum": [176, 144]
   },
   "workspace_mib": 512,
   "builder_optimization_level": 1

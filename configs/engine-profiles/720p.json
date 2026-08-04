@@ -1,6 +1,6 @@
 {
   "schema": "nvcr.engine-profile.v1",
-  "id": "720p-fp16",
+  "id": "720p",
   "optimization_point": "720p",
   "precision": "fp16",
   "visible_dimensions": {

@@ -27,7 +27,7 @@ enable_int8=0
 model_profile_id=dcvcrt-cvpr2025
 target_profile_id=local-auto
 model_profile_path="$repo_root/configs/models/dcvcrt-cvpr2025.json"
-engine_profile_path="$repo_root/configs/engine-profiles/1080p-fp16.json"
+engine_profile_path="$repo_root/configs/engine-profiles/1080p.json"
 target_profile_path=""
 engine_profile_explicit=0
 
@@ -189,7 +189,7 @@ while (($#)); do
 done
 
 if ((engine_profile_explicit == 0)); then
-    engine_profile_path="$repo_root/configs/engine-profiles/${optimization_point}-fp16.json"
+    engine_profile_path="$repo_root/configs/engine-profiles/${optimization_point}.json"
 fi
 
 for profile_path in "$model_profile_path" "$engine_profile_path"; do

@@ -70,7 +70,7 @@ void usage(std::ostream& out) {
         << "      --width N             Raw input width (encode only)\n"
         << "      --height N            Raw input height (encode only)\n"
         << "      --backend NAME        Installed backend selector (default: NVCR_BACKEND or default)\n"
-        << "      --engine-profile NAME Installed engine profile, for example 720p-fp16\n"
+        << "      --engine-profile NAME Installed engine profile, for example 720p\n"
         << "                            (default: inferred from encoded dimensions)\n"
         << "      --engine-dir DIR      Custom TensorRT engine and entropy asset directory\n"
         << "                            (overrides backend/profile selection)\n"
@@ -134,12 +134,12 @@ std::string normalize_backend(std::string backend) {
 }
 
 std::string engine_profile_for_dimensions(std::uint32_t width, std::uint32_t height) {
-    if (width == 640U && height == 360U) return "360p-fp16";
-    if (width == 960U && height == 540U) return "540p-fp16";
-    if (width <= 176U && height <= 144U) return "qcif-fp16";
-    if (width <= 352U && height <= 288U) return "cif-fp16";
-    if (width <= 1280U && height <= 720U) return "720p-fp16";
-    if (width <= 1920U && height <= 1080U) return "1080p-fp16";
+    if (width == 640U && height == 360U) return "360p";
+    if (width == 960U && height == 540U) return "540p";
+    if (width <= 176U && height <= 144U) return "qcif";
+    if (width <= 352U && height <= 288U) return "cif";
+    if (width <= 1280U && height <= 720U) return "720p";
+    if (width <= 1920U && height <= 1080U) return "1080p";
     return {};
 }
 
@@ -150,14 +150,18 @@ bool engine_bundle_exists(const fs::path& path) {
 
 fs::path engine_profile_dir(
     const fs::path& root, std::string_view backend, std::string_view profile) {
-    const auto installed = root / "profiles" / backend / profile;
-    if (engine_bundle_exists(installed)) return installed;
-
     constexpr std::string_view precision_suffix = "-fp16";
     std::string optimization_point(profile);
     if (optimization_point.ends_with(precision_suffix)) {
         optimization_point.resize(optimization_point.size() - precision_suffix.size());
     }
+    const auto installed = root / "profiles" / backend / optimization_point;
+    if (engine_bundle_exists(installed)) return installed;
+
+    const auto legacy_installed =
+        root / "profiles" / backend / (optimization_point + std::string(precision_suffix));
+    if (engine_bundle_exists(legacy_installed)) return legacy_installed;
+
     const auto build_tree = root / (std::string(backend) + "-" + optimization_point);
     if (engine_bundle_exists(build_tree)) return build_tree;
 
@@ -301,6 +305,14 @@ bool parse_options(int argc, char* argv[], Options& options) {
     }
     if (const char* profile = std::getenv("NVCR_ENGINE_PROFILE")) {
         if (*profile != '\0' && options.engine_profile.empty()) options.engine_profile = profile;
+    }
+    constexpr std::string_view legacy_precision_suffix = "-fp16";
+    if (options.engine_profile.ends_with(legacy_precision_suffix)) {
+        const auto legacy = options.engine_profile;
+        options.engine_profile.resize(
+            options.engine_profile.size() - legacy_precision_suffix.size());
+        std::cerr << "nvcr: warning: engine profile '" << legacy
+                  << "' is deprecated; use '" << options.engine_profile << "'\n";
     }
     options.backend = normalize_backend(std::move(options.backend));
     if (options.input.empty() || options.output.empty()) {
@@ -476,6 +488,16 @@ nvcr::Result<nvcr::Runtime> create_runtime(
             "no automatic TensorRT engine profile covers " + std::to_string(width) + "x" +
                 std::to_string(height) +
                 "; use --engine-profile or --engine-dir for a custom bundle",
+            "cli");
+    }
+    if (!engine_bundle_exists(engine_dir)) {
+        const std::string profile = options.engine_profile.empty()
+            ? engine_profile_for_dimensions(width, height)
+            : options.engine_profile;
+        return nvcr::Error(
+            nvcr::ErrorCode::dependency_unavailable,
+            "no installed TensorRT engine bundle for profile " + profile +
+                "; run: nvcr-artifacts install --profile " + profile,
             "cli");
     }
     if (options.verbose) {

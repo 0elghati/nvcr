@@ -6,10 +6,18 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import platform
+import re
+import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 SOURCE_ROOT = SCRIPT_DIRECTORY.parent
@@ -20,8 +28,22 @@ else:
     install_root = SCRIPT_DIRECTORY.parent
     REPOSITORY_ROOT = install_root / "share" / "nvcr"
     HELPER_DIRECTORY = REPOSITORY_ROOT / "scripts" / "backends" / "dcvcrt"
+sys.path.insert(0, str(REPOSITORY_ROOT / "scripts"))
+from nvcr_device import (  # noqa: E402
+    DeviceDetectionError,
+    detect_device_identity,
+    identity_summary,
+)
+
 DEFAULT_MODEL_PROFILE = REPOSITORY_ROOT / "configs/models/dcvcrt-cvpr2025.json"
-DEFAULT_ENGINE_PROFILE = REPOSITORY_ROOT / "configs/engine-profiles/1080p-fp16.json"
+ENGINE_PROFILE_DIRECTORY = REPOSITORY_ROOT / "configs/engine-profiles"
+TARGET_PROFILE_DIRECTORY = REPOSITORY_ROOT / "configs/targets"
+ENGINE_PROFILES = ("qcif", "cif", "360p", "540p", "720p", "1080p")
+CATALOG_SCHEMA = "nvcr.engine-catalog.v1"
+CATALOG_FILENAME = "nvcr-engine-catalog.json"
+DEFAULT_REPOSITORY = "0elghati/nvcr"
+DEFAULT_ASSET_RELEASE = "engine-assets"
+SAFE_IDENTIFIER = re.compile(r"^[0-9A-Za-z._-]+$")
 PINNED_COMMIT = "48ab0ac5e5199d78fffb944bfbafafb2b6142f7b"
 EXPECTED_CHECKPOINTS = {
     "i_frame_manifest.json": ("555eff5f4026774f477bebdcbb3b52548e0da230803959dcebcea4d732a90dd9", "cvpr2025_image.pth.tar"),
@@ -83,6 +105,22 @@ MODEL_ASSETS = {
 
 class ValidationError(RuntimeError):
     """A bundle or profile failed the NVCR contract."""
+
+
+def canonical_profile_name(value: str, *, warn_legacy: bool = False) -> str:
+    profile = value
+    if profile.endswith("-fp16"):
+        profile = profile[:-5]
+        if warn_legacy:
+            print(
+                f"nvcr-artifacts: warning: profile '{value}' is deprecated; use '{profile}'",
+                file=sys.stderr,
+            )
+    if profile not in ENGINE_PROFILES:
+        raise ValidationError(
+            f"unsupported engine profile: {value}; expected one of {', '.join(ENGINE_PROFILES)}"
+        )
+    return profile
 
 
 def sha256(path: Path) -> str:
@@ -237,7 +275,11 @@ def parse_checksum_manifest(path: Path) -> dict[str, str]:
         raise ValidationError(f"missing checksum manifest: {path}")
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         fields = line.split()
-        if len(fields) != 2 or len(fields[0]) != 64:
+        if (
+            len(fields) != 2
+            or len(fields[0]) != 64
+            or any(character not in "0123456789abcdef" for character in fields[0])
+        ):
             raise ValidationError(f"invalid checksum line {line_number}: {path}")
         name = safe_bundle_name(fields[1], path)
         if name in checksums:
@@ -296,7 +338,11 @@ def validate_engine_bundle(root: Path) -> dict[str, Any]:
 
     if manifest["workspace_mib"] <= 0 or not 0 <= manifest["builder_optimization_level"] <= 5:
         raise ValidationError("engine workspace or builder level is invalid")
-    if manifest["engine_profile_id"] != f"{manifest['optimization_point']}-fp16":
+    try:
+        manifest_profile = canonical_profile_name(str(manifest["engine_profile_id"]))
+    except ValidationError as error:
+        raise ValidationError("engine profile and optimization point do not match") from error
+    if manifest_profile != manifest["optimization_point"]:
         raise ValidationError("engine profile and optimization point do not match")
     expected_shape_profile = validate_visible_dimensions(manifest, manifest_path)
     shape_profile = manifest.get("shape_profile")
@@ -379,7 +425,7 @@ def load_profile(path: Path, expected_schema: str) -> dict[str, Any]:
     profile_id = require_string(profile, "id", path)
     if expected_schema == "nvcr.engine-profile.v1":
         optimization_point = require_string(profile, "optimization_point", path)
-        if profile_id != f"{optimization_point}-fp16":
+        if canonical_profile_name(profile_id) != optimization_point:
             raise ValidationError(f"{path} engine profile id and optimization point differ")
         validate_visible_dimensions(profile, path)
         workspace = profile.get("workspace_mib")
@@ -395,46 +441,530 @@ def load_profile(path: Path, expected_schema: str) -> dict[str, Any]:
     return profile
 
 
+def default_engine_root() -> Path:
+    configured = os.environ.get("NVCR_ENGINE_ROOT")
+    if configured:
+        return Path(configured)
+    data_home = os.environ.get("XDG_DATA_HOME")
+    if data_home:
+        return Path(data_home) / "nvcr" / "engines"
+    return Path.home() / ".local" / "share" / "nvcr" / "engines"
+
+
+def expected_asset_filename(target: str, model: str, profile: str) -> str:
+    return f"nvcr-engines-{target}-{model}-{profile}.tar.gz"
+
+
+def validate_catalog(document: object, source: str = CATALOG_FILENAME) -> list[dict[str, Any]]:
+    if not isinstance(document, dict) or document.get("schema") != CATALOG_SCHEMA:
+        raise ValidationError(f"{source} must use schema {CATALOG_SCHEMA}")
+    raw_assets = document.get("assets")
+    if not isinstance(raw_assets, list):
+        raise ValidationError(f"{source} requires an assets list")
+    assets: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    string_fields = (
+        "backend",
+        "model_profile_id",
+        "target_profile_id",
+        "profile",
+        "precision",
+        "operating_system",
+        "architecture",
+        "device_name",
+        "filename",
+        "sha256",
+    )
+    integer_fields = (
+        "size_bytes",
+        "compute_capability_major",
+        "compute_capability_minor",
+        "multiprocessor_count",
+        "cuda_runtime_version",
+        "tensorrt_version_major",
+        "tensorrt_version_minor",
+        "tensorrt_version_patch",
+    )
+    for index, raw in enumerate(raw_assets):
+        if not isinstance(raw, dict):
+            raise ValidationError(f"{source} asset {index} must be an object")
+        for key in string_fields:
+            if not isinstance(raw.get(key), str) or not raw[key]:
+                raise ValidationError(f"{source} asset {index} requires string {key}")
+        for key in integer_fields:
+            if not isinstance(raw.get(key), int) or isinstance(raw[key], bool):
+                raise ValidationError(f"{source} asset {index} requires integer {key}")
+        for key in ("backend", "model_profile_id", "target_profile_id"):
+            if not SAFE_IDENTIFIER.fullmatch(raw[key]):
+                raise ValidationError(f"{source} asset {index} has unsafe {key}")
+        profile = canonical_profile_name(raw["profile"])
+        if raw["profile"] != profile:
+            raise ValidationError(f"{source} asset {index} must use canonical profile {profile}")
+        if raw["precision"] != "fp16":
+            raise ValidationError(f"{source} asset {index} must use internal FP16 precision")
+        if raw["operating_system"] != "linux" or raw["architecture"] not in (
+            "x86_64",
+            "aarch64",
+        ):
+            raise ValidationError(f"{source} asset {index} has an unsupported platform")
+        expected_name = expected_asset_filename(
+            raw["target_profile_id"], raw["model_profile_id"], profile
+        )
+        if raw["filename"] != expected_name:
+            raise ValidationError(
+                f"{source} asset {index} filename does not match its identity; expected {expected_name}"
+            )
+        if (
+            len(raw["sha256"]) != 64
+            or any(character not in "0123456789abcdef" for character in raw["sha256"])
+            or raw["size_bytes"] <= 0
+            or raw["compute_capability_major"] <= 0
+            or raw["compute_capability_minor"] < 0
+            or raw["multiprocessor_count"] <= 0
+            or raw["cuda_runtime_version"] <= 0
+            or raw["tensorrt_version_major"] <= 0
+            or raw["tensorrt_version_minor"] < 0
+            or raw["tensorrt_version_patch"] < 0
+        ):
+            raise ValidationError(f"{source} asset {index} has invalid hash, size, or runtime data")
+        key = (
+            raw["backend"],
+            raw["model_profile_id"],
+            raw["target_profile_id"],
+            profile,
+        )
+        if key in seen:
+            raise ValidationError(f"{source} contains duplicate catalog identity: {key}")
+        seen.add(key)
+        assets.append(dict(raw))
+    return assets
+
+
+def catalog_entry_matches(entry: dict[str, Any], identity: dict[str, Any]) -> bool:
+    fields = (
+        "operating_system",
+        "architecture",
+        "device_name",
+        "compute_capability_major",
+        "compute_capability_minor",
+        "multiprocessor_count",
+        "cuda_runtime_version",
+        "tensorrt_version_major",
+        "tensorrt_version_minor",
+        "tensorrt_version_patch",
+    )
+    return all(entry[field] == identity[field] for field in fields)
+
+
+def github_request_json(url: str, token: str | None = None) -> dict[str, Any]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "nvcr-artifacts",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        with urlopen(Request(url, headers=headers), timeout=60) as response:
+            document = json.load(response)
+    except (HTTPError, URLError, OSError, json.JSONDecodeError) as error:
+        raise ValidationError(f"cannot download {url}: {error}") from error
+    if not isinstance(document, dict):
+        raise ValidationError(f"GitHub returned a non-object response for {url}")
+    return document
+
+
+def download_file(url: str, destination: Path, token: str | None = None) -> None:
+    headers = {"User-Agent": "nvcr-artifacts"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        with urlopen(Request(url, headers=headers), timeout=1800) as response:
+            with destination.open("wb") as output:
+                shutil.copyfileobj(response, output, length=1024 * 1024)
+    except (HTTPError, URLError, OSError) as error:
+        raise ValidationError(f"cannot download {url}: {error}") from error
+
+
+def safe_archive_member(name: str) -> bool:
+    if not name or name.startswith("/") or "\\" in name:
+        return False
+    return all(part not in ("", ".", "..") for part in Path(name).parts)
+
+
+def validate_asset_manifest(asset_root: Path) -> None:
+    manifest_path = asset_root / "ENGINE-ASSET-MANIFEST.sha256"
+    if not manifest_path.is_file():
+        raise ValidationError("engine archive is missing ENGINE-ASSET-MANIFEST.sha256")
+    expected: dict[str, str] = {}
+    for line_number, line in enumerate(manifest_path.read_text(encoding="utf-8").splitlines(), 1):
+        fields = line.split()
+        if len(fields) != 2 or len(fields[0]) != 64:
+            raise ValidationError(f"invalid engine asset manifest line {line_number}")
+        name = fields[1]
+        if name.startswith("./"):
+            name = name[2:]
+        if not safe_archive_member(name) or name in expected:
+            raise ValidationError(f"invalid engine asset manifest path: {name}")
+        expected[name] = fields[0]
+    actual = {
+        path.relative_to(asset_root).as_posix(): path
+        for path in asset_root.rglob("*")
+        if path.is_file() and path != manifest_path
+    }
+    if set(actual) != set(expected):
+        raise ValidationError(
+            "engine asset manifest file set differs; "
+            f"missing={sorted(set(expected) - set(actual))}, "
+            f"extra={sorted(set(actual) - set(expected))}"
+        )
+    for name, digest in expected.items():
+        if sha256(actual[name]) != digest:
+            raise ValidationError(f"engine asset manifest SHA-256 mismatch: {name}")
+
+
+def extract_engine_archive(archive: Path, extract_root: Path) -> Path:
+    archive_stem = archive.name.removesuffix(".tar.gz")
+    with tarfile.open(archive, "r:gz") as stream:
+        members = stream.getmembers()
+        if not members:
+            raise ValidationError(f"{archive.name} is empty")
+        top_levels: set[str] = set()
+        for member in members:
+            if not safe_archive_member(member.name):
+                raise ValidationError(f"{archive.name} contains unsafe path: {member.name}")
+            if not (member.isfile() or member.isdir()):
+                raise ValidationError(f"{archive.name} contains a non-regular member")
+            if Path(member.name).name.endswith((".onnx", ".pth", ".pth.tar")):
+                raise ValidationError(f"{archive.name} contains a model-source asset")
+            top_levels.add(Path(member.name).parts[0])
+        if top_levels != {archive_stem}:
+            raise ValidationError(
+                f"{archive.name} must contain one top-level directory named {archive_stem}"
+            )
+        stream.extractall(extract_root)
+    asset_root = extract_root / archive_stem
+    validate_asset_manifest(asset_root)
+    bundle_root = asset_root / "dcvcrt"
+    validate_engine_bundle(bundle_root)
+    return bundle_root
+
+
+def atomic_symlink(target: Path, link: Path) -> None:
+    link.parent.mkdir(parents=True, exist_ok=True)
+    temporary = link.with_name(f".{link.name}.tmp-{os.getpid()}")
+    try:
+        temporary.unlink(missing_ok=True)
+        temporary.symlink_to(target, target_is_directory=True)
+        os.replace(temporary, link)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def install_catalog_assets(
+    entries: list[dict[str, Any]],
+    asset_urls: dict[str, str],
+    identity: dict[str, Any],
+    *,
+    backend: str,
+    requested_profiles: list[str],
+    engine_root: Path,
+    token: str | None = None,
+) -> list[str]:
+    matching = [
+        entry
+        for entry in entries
+        if entry["backend"] == backend and catalog_entry_matches(entry, identity)
+    ]
+    if not matching:
+        published = sorted(
+            {
+                f"{entry['architecture']} {entry['device_name']} TensorRT "
+                f"{entry['tensorrt_version_major']}.{entry['tensorrt_version_minor']}."
+                f"{entry['tensorrt_version_patch']}"
+                for entry in entries
+                if entry["backend"] == backend
+            }
+        )
+        raise ValidationError(
+            f"no published {backend} engine target exactly matches {identity_summary(identity)}; "
+            f"published targets: {published or ['none']}"
+        )
+    by_profile: dict[str, dict[str, Any]] = {}
+    for entry in matching:
+        profile = entry["profile"]
+        if profile in by_profile:
+            raise ValidationError(
+                f"catalog match is ambiguous for {backend}/{profile} and {identity_summary(identity)}"
+            )
+        by_profile[profile] = entry
+    try:
+        profiles = (
+            [canonical_profile_name(item, warn_legacy=True) for item in requested_profiles]
+            if requested_profiles
+            else [profile for profile in ENGINE_PROFILES if profile in by_profile]
+        )
+    except ValidationError as error:
+        raise ValidationError(
+            f"{error}; detected {identity_summary(identity)}; available={sorted(by_profile)}"
+        ) from error
+    profiles = list(dict.fromkeys(profiles))
+    missing = [profile for profile in profiles if profile not in by_profile]
+    if missing:
+        raise ValidationError(
+            f"profiles {missing} are unavailable for {identity_summary(identity)}; "
+            f"available={sorted(by_profile)}"
+        )
+    installed: list[str] = []
+    engine_root = engine_root.expanduser().resolve()
+    for profile in profiles:
+        entry = by_profile[profile]
+        filename = entry["filename"]
+        url = asset_urls.get(filename)
+        if not url:
+            raise ValidationError(f"rolling release is missing catalog asset: {filename}")
+        with tempfile.TemporaryDirectory(prefix="nvcr-engine-install-") as temporary:
+            temporary_root = Path(temporary)
+            archive = temporary_root / filename
+            print(f"Downloading {filename}")
+            download_file(url, archive, token)
+            if archive.stat().st_size != entry["size_bytes"]:
+                raise ValidationError(f"downloaded size mismatch: {filename}")
+            if sha256(archive) != entry["sha256"]:
+                raise ValidationError(f"downloaded SHA-256 mismatch: {filename}")
+            bundle_root = extract_engine_archive(archive, temporary_root / "extract")
+            manifest = load_json(bundle_root / "engine_manifest.json")
+            catalog_manifest_fields = (
+                "device_name",
+                "compute_capability_major",
+                "compute_capability_minor",
+                "multiprocessor_count",
+                "cuda_runtime_version",
+                "tensorrt_version_major",
+                "tensorrt_version_minor",
+                "tensorrt_version_patch",
+                "precision",
+            )
+            if (
+                manifest.get("target_profile_id") != entry["target_profile_id"]
+                or manifest.get("model_profile_id") != entry["model_profile_id"]
+                or canonical_profile_name(str(manifest.get("engine_profile_id", ""))) != profile
+                or any(manifest.get(field) != entry[field] for field in catalog_manifest_fields)
+            ):
+                raise ValidationError(f"catalog and bundle identity differ: {filename}")
+            final = (
+                engine_root
+                / "bundles"
+                / backend
+                / entry["target_profile_id"]
+                / profile
+                / entry["sha256"]
+            )
+            if not final.exists():
+                final.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(bundle_root), str(final))
+            validate_engine_bundle(final)
+        canonical_link = engine_root / "profiles" / backend / profile
+        atomic_symlink(final, canonical_link)
+        atomic_symlink(final, engine_root / "profiles" / backend / f"{profile}-fp16")
+        installed.append(profile)
+    atomic_symlink(engine_root / "profiles" / backend, engine_root / "profiles" / "default")
+    return installed
+
+
+def install_command(arguments: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="nvcr-artifacts install",
+        description="Install exact-compatible engines from the rolling NVCR asset catalog.",
+    )
+    parser.add_argument("--profile", action="append", default=[])
+    parser.add_argument("--backend", default=os.environ.get("NVCR_BACKEND", "dcvcrt"))
+    parser.add_argument("--device-id", type=int, default=0)
+    parser.add_argument("--repo", default=os.environ.get("NVCR_REPO", DEFAULT_REPOSITORY))
+    parser.add_argument(
+        "--asset-release",
+        default=os.environ.get("NVCR_ENGINE_ASSET_RELEASE", DEFAULT_ASSET_RELEASE),
+    )
+    parser.add_argument("--engine-root", type=Path, default=default_engine_root())
+    args = parser.parse_args(arguments)
+    if args.backend in ("default", "dcvc_rt", "dcvc-rt"):
+        args.backend = "dcvcrt"
+    if args.backend != "dcvcrt":
+        raise ValidationError(f"unsupported backend: {args.backend}")
+    if (
+        args.repo.count("/") != 1
+        or args.repo.startswith("/")
+        or ".." in args.repo
+        or not all(SAFE_IDENTIFIER.fullmatch(part) for part in args.repo.split("/"))
+    ):
+        raise ValidationError(f"invalid GitHub repository: {args.repo}")
+    if not SAFE_IDENTIFIER.fullmatch(args.asset_release):
+        raise ValidationError(f"invalid engine asset release: {args.asset_release}")
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    api_url = f"https://api.github.com/repos/{args.repo}/releases/tags/{args.asset_release}"
+    release = github_request_json(api_url, token)
+    release_assets = release.get("assets")
+    if not isinstance(release_assets, list):
+        raise ValidationError("GitHub engine release has no asset list")
+    asset_urls = {
+        item["name"]: item["browser_download_url"]
+        for item in release_assets
+        if isinstance(item, dict)
+        and isinstance(item.get("name"), str)
+        and isinstance(item.get("browser_download_url"), str)
+    }
+    catalog_url = asset_urls.get(CATALOG_FILENAME)
+    if not catalog_url:
+        raise ValidationError(f"rolling release is missing {CATALOG_FILENAME}")
+    with tempfile.TemporaryDirectory(prefix="nvcr-catalog-") as temporary:
+        catalog_path = Path(temporary) / CATALOG_FILENAME
+        download_file(catalog_url, catalog_path, token)
+        catalog = load_json(catalog_path)
+    entries = validate_catalog(catalog)
+    try:
+        identity = detect_device_identity(args.device_id)
+    except DeviceDetectionError as error:
+        raise ValidationError(str(error)) from error
+    print(f"Detected {identity_summary(identity)}")
+    installed = install_catalog_assets(
+        entries,
+        asset_urls,
+        identity,
+        backend=args.backend,
+        requested_profiles=args.profile,
+        engine_root=args.engine_root,
+        token=token,
+    )
+    print("Installed engine profiles: " + ", ".join(installed))
+    return 0
+
+
+def cuda_runtime_from_profile(value: str) -> int | None:
+    match = re.match(r"^(\d+)\.(\d+)", value)
+    if not match:
+        return None
+    return int(match.group(1)) * 1000 + int(match.group(2)) * 10
+
+
+def target_profile_matches(profile: dict[str, Any], identity: dict[str, Any]) -> bool:
+    host = profile.get("host")
+    gpu = profile.get("gpu")
+    if not isinstance(host, dict) or not isinstance(gpu, dict):
+        return False
+    compute = str(gpu.get("compute_capability", "")).split(".")
+    tensorrt = str(profile.get("tensorrt", "")).split(".")
+    if len(compute) != 2 or len(tensorrt) < 3:
+        return False
+    try:
+        expected = {
+            "architecture": host["architecture"],
+            "compute_capability_major": int(compute[0]),
+            "compute_capability_minor": int(compute[1]),
+            "multiprocessor_count": int(gpu["multiprocessor_count"]),
+            "cuda_runtime_version": cuda_runtime_from_profile(str(profile["cuda"])),
+            "tensorrt_version_major": int(tensorrt[0]),
+            "tensorrt_version_minor": int(tensorrt[1]),
+            "tensorrt_version_patch": int(tensorrt[2]),
+        }
+    except (KeyError, TypeError, ValueError):
+        return False
+    return all(identity.get(key) == value for key, value in expected.items())
+
+
+def detect_target_profile(device_id: int) -> Path:
+    try:
+        identity = detect_device_identity(device_id)
+    except DeviceDetectionError as error:
+        raise ValidationError(str(error)) from error
+    matches: list[Path] = []
+    for path in sorted(TARGET_PROFILE_DIRECTORY.glob("*.json")):
+        profile = load_profile(path, "nvcr.target-profile.v1")
+        if target_profile_matches(profile, identity):
+            matches.append(path)
+    if len(matches) != 1:
+        raise ValidationError(
+            f"could not select exactly one registered target profile for {identity_summary(identity)}; "
+            f"matches={[str(path) for path in matches]}; pass --target-profile"
+        )
+    return matches[0]
+
+
 def forward_artifact_command(command: str, arguments: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog=f"nvcr-artifacts {command}",
-        description="Profile-aware front end; unrecognized options pass to the established helper.",
+        description="Profile-aware front end; helper-specific options pass through unchanged.",
     )
     parser.add_argument("--model-profile", type=Path, default=DEFAULT_MODEL_PROFILE)
-    parser.add_argument("--engine-profile", type=Path, default=DEFAULT_ENGINE_PROFILE)
-    parser.add_argument("--target-profile", type=Path, required=True)
+    selection = parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--profile")
+    selection.add_argument("--all", action="store_true")
+    selection.add_argument("--engine-profile", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--target-profile", type=Path)
+    parser.add_argument("--engines-root", type=Path, default=Path("build/engines"))
+    parser.add_argument("--device-id", type=int, default=0)
     known, passthrough = parser.parse_known_args(arguments)
     model = load_profile(known.model_profile, "nvcr.model-profile.v1")
-    engine = load_profile(known.engine_profile, "nvcr.engine-profile.v1")
-    target_id = "local-auto"
-    if known.target_profile is not None:
-        target = load_profile(known.target_profile, "nvcr.target-profile.v1")
-        target_id = str(target["id"])
+    if known.engine_profile is not None:
+        profile_paths = [known.engine_profile]
+    elif known.all:
+        profile_paths = [ENGINE_PROFILE_DIRECTORY / f"{name}.json" for name in ENGINE_PROFILES]
+    else:
+        profile = canonical_profile_name(str(known.profile), warn_legacy=True)
+        profile_paths = [ENGINE_PROFILE_DIRECTORY / f"{profile}.json"]
+    if known.all and "--engines" in passthrough:
+        raise ValidationError("use --engines-root with --all, not the single-bundle --engines option")
+    target_path = known.target_profile or detect_target_profile(known.device_id)
+    target = load_profile(target_path, "nvcr.target-profile.v1")
+    target_id = str(target["id"])
     helper = "prepare_artifacts.sh" if command == "prepare" else "build_tensorrt.sh"
-    child = [str(HELPER_DIRECTORY / helper)]
-    # Keep the profile files themselves bound to the generated engine
-    # manifest, not just their human-readable IDs.  This makes changing a
-    # profile without changing its ID a detectable bundle invalidation.
-    child.extend(("--model-profile-path", str(known.model_profile)))
-    child.extend(("--engine-profile-path", str(known.engine_profile)))
-    if known.target_profile is not None:
-        child.extend(("--target-profile-path", str(known.target_profile)))
-    child.extend(("--optimization-point", str(engine["optimization_point"])))
-    child.extend(("--workspace-mib", str(engine["workspace_mib"])))
-    child.extend(("--builder-optimization-level", str(engine["builder_optimization_level"])))
-    if command in ("prepare", "build"):
-        child.extend(("--model-profile-id", str(model["id"])))
-        child.extend(("--target-profile-id", target_id))
-    child.extend(passthrough)
-    return subprocess.run(child, check=False).returncode
+    for index, profile_path in enumerate(profile_paths):
+        engine = load_profile(profile_path, "nvcr.engine-profile.v1")
+        profile = canonical_profile_name(str(engine["id"]))
+        child = [
+            str(HELPER_DIRECTORY / helper),
+            "--model-profile-path",
+            str(known.model_profile),
+            "--engine-profile-path",
+            str(profile_path),
+            "--target-profile-path",
+            str(target_path),
+            "--optimization-point",
+            str(engine["optimization_point"]),
+            "--workspace-mib",
+            str(engine["workspace_mib"]),
+            "--builder-optimization-level",
+            str(engine["builder_optimization_level"]),
+            "--model-profile-id",
+            str(model["id"]),
+            "--target-profile-id",
+            target_id,
+            "--device-id",
+            str(known.device_id),
+        ]
+        if "--engines" not in passthrough:
+            child.extend(
+                (
+                    "--engines",
+                    str(known.engines_root / f"dcvcrt-{profile}"),
+                )
+            )
+        if command == "prepare" and index > 0:
+            child.extend(("--skip-clone", "--skip-export"))
+        child.extend(passthrough)
+        result = subprocess.run(child, check=False).returncode
+        if result != 0:
+            return result
+    return 0
 
 
 def main() -> int:
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
-        print("usage: nvcr-artifacts {prepare|build|inspect|validate} [options]")
+        print("usage: nvcr-artifacts {install|prepare|build|inspect|validate} [options]")
         return 0 if len(sys.argv) >= 2 else 2
     command = sys.argv[1]
     try:
+        if command == "install":
+            return install_command(sys.argv[2:])
         if command in ("prepare", "build"):
             return forward_artifact_command(command, sys.argv[2:])
         parser = argparse.ArgumentParser(prog=f"nvcr-artifacts {command}")

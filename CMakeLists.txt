@@ -132,6 +132,9 @@ install(
     DESTINATION "${CMAKE_INSTALL_BINDIR}"
     RENAME nvcr-artifacts)
 install(
+    FILES scripts/nvcr_device.py
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/nvcr/scripts")
+install(
     PROGRAMS
         scripts/detect_platform.sh
         scripts/install.sh

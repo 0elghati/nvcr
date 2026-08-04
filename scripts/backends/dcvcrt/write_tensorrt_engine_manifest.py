@@ -4,115 +4,21 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import hashlib
-import ctypes.util
 import json
 import re
-import shutil
 import subprocess
+import sys
 from pathlib import Path
 
-
-def load_shared_library(name: str, extra_paths: tuple[str, ...] = ()) -> ctypes.CDLL | None:
-    candidates = [ctypes.util.find_library(name), *extra_paths]
-    for candidate in candidates:
-        if not candidate:
-            continue
-        try:
-            return ctypes.CDLL(candidate)
-        except OSError:
-            continue
-    return None
-
-
-def infer_tensorrt_version() -> tuple[int | None, int | None, int | None]:
-    nvinfer = load_shared_library(
-        "nvinfer",
-        (
-            "/usr/lib/aarch64-linux-gnu/libnvinfer.so",
-            "/usr/lib/x86_64-linux-gnu/libnvinfer.so",
-        ),
-    )
-    if nvinfer is None:
-        return None, None, None
-    try:
-        get_version = nvinfer.getInferLibVersion
-        get_version.restype = ctypes.c_int32
-        version = int(get_version())
-    except (AttributeError, OSError):
-        return None, None, None
-    return version // 10000, (version // 100) % 100, version % 100
-
-
-def query_device_with_nvidia_smi(device_id: int) -> dict[str, object]:
-    if shutil.which("nvidia-smi") is None:
-        return {}
-    fields = [
-        "name",
-        "compute_cap",
-        "multiprocessor_count",
-    ]
-    command = [
-        "nvidia-smi",
-        f"--id={device_id}",
-        f"--query-gpu={','.join(fields)}",
-        "--format=csv,noheader,nounits",
-    ]
-    try:
-        output = subprocess.check_output(command, text=True, stderr=subprocess.DEVNULL)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return {}
-    values = [item.strip() for item in output.strip().split(",")]
-    if len(values) != len(fields):
-        return {}
-    result: dict[str, object] = {"device_name": values[0]}
-    match = re.fullmatch(r"(\d+)\.(\d+)", values[1])
-    if match:
-        result["compute_capability_major"] = int(match.group(1))
-        result["compute_capability_minor"] = int(match.group(2))
-    if values[2].isdigit():
-        result["multiprocessor_count"] = int(values[2])
-    return result
-
-
-def query_device_with_cudart(device_id: int) -> dict[str, object]:
-    cudart = load_shared_library(
-        "cudart",
-        (
-            "/usr/local/cuda/lib64/libcudart.so",
-            "/usr/local/cuda/targets/aarch64-linux/lib/libcudart.so",
-            "/usr/local/cuda-12.6/targets/aarch64-linux/lib/libcudart.so",
-            "/usr/local/cuda-12.6/lib64/libcudart.so",
-        ),
-    )
-    if cudart is None:
-        return {}
-    try:
-        get_name = cudart.cudaDeviceGetName
-        get_name.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int]
-        get_name.restype = ctypes.c_int
-        get_attribute = cudart.cudaDeviceGetAttribute
-        get_attribute.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_int]
-        get_attribute.restype = ctypes.c_int
-    except (AttributeError, OSError):
-        return {}
-
-    result: dict[str, object] = {}
-    name = ctypes.create_string_buffer(256)
-    if get_name(name, len(name), device_id) == 0:
-        result["device_name"] = name.value.decode("utf-8", errors="replace")
-
-    attributes = {
-        "multiprocessor_count": 16,
-        "compute_capability_major": 75,
-        "compute_capability_minor": 76,
-    }
-    for key, attribute in attributes.items():
-        value = ctypes.c_int()
-        if get_attribute(ctypes.byref(value), attribute, device_id) == 0:
-            result[key] = int(value.value)
-    return result
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from nvcr_device import (  # noqa: E402
+    query_cuda_runtime_version,
+    query_device_with_cuda_driver,
+    query_device_with_cudart,
+    query_device_with_nvidia_smi,
+    query_tensorrt_version,
+)
 
 
 def query_device_with_trtexec(
@@ -246,9 +152,9 @@ def main() -> None:
     target_profile = load_profile(args.target_profile_path, "nvcr.target-profile.v1")
     if model_profile["id"] != args.model_profile_id:
         raise SystemExit("model profile id does not match --model-profile-id")
-    expected_engine_id = f"{args.optimization_point}-fp16"
+    expected_engine_id = str(engine_profile.get("id", ""))
     if (
-        engine_profile["id"] != expected_engine_id
+        expected_engine_id not in (args.optimization_point, f"{args.optimization_point}-fp16")
         or engine_profile.get("optimization_point") != args.optimization_point
         or engine_profile.get("precision") != "fp16"
     ):
@@ -316,28 +222,9 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    cuda_runtime_version: int | None = None
-    cudart = load_shared_library(
-        "cudart",
-        (
-            "/usr/local/cuda/lib64/libcudart.so",
-            "/usr/local/cuda/targets/aarch64-linux/lib/libcudart.so",
-            "/usr/local/cuda-12.6/targets/aarch64-linux/lib/libcudart.so",
-            "/usr/local/cuda-12.6/lib64/libcudart.so",
-        ),
-    )
-    if cudart is not None:
-        try:
-            get_version = cudart.cudaRuntimeGetVersion
-            get_version.argtypes = [ctypes.POINTER(ctypes.c_int)]
-            get_version.restype = ctypes.c_int
-            value = ctypes.c_int()
-            if get_version(ctypes.byref(value)) == 0:
-                cuda_runtime_version = int(value.value)
-        except (AttributeError, OSError):
-            pass
-
-    major, minor, patch = infer_tensorrt_version()
+    cuda_runtime_version = query_cuda_runtime_version()
+    tensorrt_version = query_tensorrt_version()
+    major, minor, patch = tensorrt_version or (None, None, None)
     metadata: dict[str, object] = {
         "format": 2,
         "schema": "nvcr.engine-bundle.v2",
@@ -367,9 +254,16 @@ def main() -> None:
         metadata.update(
             query_device_with_trtexec(
                 args.trtexec, args.engines, args.device_id, reject_device_warning=True))
-    if "device_name" not in metadata or "compute_capability_major" not in metadata:
+    device_keys = (
+        "device_name",
+        "compute_capability_major",
+        "compute_capability_minor",
+        "multiprocessor_count",
+    )
+    if not all(key in metadata for key in device_keys):
         metadata.update(query_device_with_cudart(args.device_id))
-    if "device_name" not in metadata or "compute_capability_major" not in metadata:
+    metadata.update(query_device_with_cuda_driver(args.device_id))
+    if not all(key in metadata for key in device_keys):
         metadata.update(query_device_with_trtexec(args.trtexec, args.engines, args.device_id))
 
     for key in (

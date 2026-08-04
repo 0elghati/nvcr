@@ -649,7 +649,8 @@ Result<EngineManifest> validate_engine_manifest(
     if (!valid_profile_id(manifest.value().model_profile_id) ||
         !valid_profile_id(manifest.value().target_profile_id) ||
         !valid_profile_id(manifest.value().engine_profile_id) ||
-        manifest.value().engine_profile_id != manifest.value().optimization_point + "-fp16" ||
+        (manifest.value().engine_profile_id != manifest.value().optimization_point &&
+         manifest.value().engine_profile_id != manifest.value().optimization_point + "-fp16") ||
         !valid_sha256(manifest.value().model_profile_sha256) ||
         !valid_sha256(manifest.value().engine_profile_sha256) ||
         !valid_sha256(manifest.value().target_profile_sha256)) {
