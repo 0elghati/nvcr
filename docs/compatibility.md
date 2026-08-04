@@ -43,6 +43,9 @@ Published binary archives use generic family names such as
 `linux-x86_64-nvidia` and `linux-aarch64-jetson-l4t36`. These identifiers are
 package labels, not support claims. The current validated reference targets and
 evidence requirements remain the RTX 4070 and Jetson Orin Nano profiles above.
+The two packages are required because native x86_64 and AArch64 ELF binaries are
+not CPU-architecture portable. CUDA fat binaries only broaden GPU-code coverage
+within one host architecture.
 
 ## Engine compatibility
 
@@ -59,6 +62,11 @@ these match its v2 manifest and checksum set:
 NVCR rejects a stale, edited, wrong-model, cross-GPU, cross-CUDA, or
 cross-TensorRT bundle during initialization. A multi-architecture CUDA library
 does not relax TensorRT plan compatibility. Rebuild engines on the final target.
+
+Published engines live outside semver application releases in the rolling
+`engine-assets` release. `nvcr-engine-catalog.json` first narrows by Linux host
+architecture, then requires exact device name, compute capability, SM count,
+CUDA runtime, and TensorRT version before downloading an archive.
 
 TensorRT does provide optional discrete-GPU hardware-compatibility modes for some
 deployment environments, but NVCR does not currently ship public compatibility-

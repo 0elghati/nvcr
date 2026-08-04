@@ -5,20 +5,20 @@ offline pinned-model preparation, release packaging, and focused measurement.
 
 ## Supported user entry points
 
-- `install.sh`: native configure/build/install convenience wrapper.
-- `nvcr_artifacts.py`: `prepare`, `build`, `inspect`, and `validate` for
+- `install.sh`: architecture-specific binary installer that delegates engines.
+- `nvcr_artifacts.py`: `install`, `prepare`, `build`, `inspect`, and `validate` for
   backend artifact bundles and versioned profiles. The current implementation
   supports the DCVC-RT backend.
 - `package_release.sh`: package an installed tree; refuses model/engine assets.
 - `../docker/publish.sh`: build or publish one architecture-qualified Docker
   Hub runtime image from an exact release tag.
-- `package_engine_bundle.sh`: package one already validated engine bundle as a
-  separate package-family GitHub Release asset.
+- `package_engine_bundle.sh`: package one validated engine bundle with a stable,
+  unversioned rolling-release name.
 - `stage_engine_release_asset.sh`: package an engine bundle, optionally upload
   it to S3 or copy it to another staging folder, and generate the
   `engine_assets.txt` workflow input row.
-- `release_engine_assets.sh`: stage one or more validated engine bundles to S3
-  and dispatch the GitHub Release upload workflow for a Release Please tag.
+- `release_engine_assets.sh`: stage validated bundles and update the rolling
+  `engine-assets` GitHub Release catalog.
 - `profile_energy.py`: focused Jetson command/rail measurement helper.
 
 `nvcr_artifacts.py` calls backend-local helpers under
@@ -30,7 +30,7 @@ define separate supported workflows.
 ```bash
 ./scripts/nvcr_artifacts.py prepare \
   --model-profile configs/models/dcvcrt-cvpr2025.json \
-  --engine-profile configs/engine-profiles/1080p-fp16.json \
+  --profile 1080p \
   --target-profile configs/targets/rtx4070-ubuntu2404.json \
   --dcvcrt-root /path/to/DCVC-RT \
   --models build/models/dcvcrt \
@@ -43,8 +43,8 @@ a convenience. TensorRT plans remain tied to the final target and are validated
 by hashes plus exact CUDA/TensorRT/GPU/model identities.
 
 ```bash
-./scripts/nvcr_artifacts.py inspect build/engines/dcvcrt --json
-./scripts/nvcr_artifacts.py validate build/engines/dcvcrt --json
+./scripts/nvcr_artifacts.py inspect build/engines/dcvcrt-1080p --json
+./scripts/nvcr_artifacts.py validate build/engines/dcvcrt-1080p --json
 ```
 
 ## Build detection
@@ -59,11 +59,10 @@ v1 reference targets; detection of another GPU is not a support claim.
 ./scripts/install_from_source.sh --run-tests
 ```
 
-Published binary releases use `./scripts/install.sh`, which downloads the release
-package and, unless `--engine-profile` is set, every engine profile for the
-selected backend. The optional `--arch-set portable` produces a CUDA fat binary
-for experimentation.
-It does not make the runtime universal or make TensorRT plans portable.
+Published binary releases use `./scripts/install.sh`. It selects the native
+x86_64 or AArch64 package, then runs `nvcr-artifacts install`; without repeated
+`--profile` arguments, the façade downloads every exact-compatible catalog
+profile. CUDA fat binaries do not make CPU binaries or TensorRT plans portable.
 
 ## Packaging
 
@@ -85,30 +84,26 @@ validation:
 
 ```bash
 ./scripts/package_engine_bundle.sh \
-  --version 0.3.0 \
-  --engine-dir build/engines/dcvcrt \
+  --engine-dir build/engines/dcvcrt-1080p \
   --output-dir dist
 ```
 
-The generated asset name is derived from the engine manifest and uses the public package family:
+The generated asset name is stable and derived from the manifest:
 
 ```text
-nvcr-v0.3.0-<package-family>-dcvcrt-cvpr2025-<engine-profile>-engines.tar.gz
+nvcr-engines-<target-profile>-dcvcrt-cvpr2025-<resolution>.tar.gz
 ```
 
-Upload these engine archives as separate GitHub Release assets only after their
-target evidence is recorded. They are not bundled into the generic binary
-packages.
+Upload these archives only to the rolling `engine-assets` release after target
+evidence is recorded. They are never bundled into binary packages.
 
 To combine packaging, S3 upload, presigned URL generation, and workflow-input
 generation:
 
 ```bash
-release_tag="v$(cat version.txt)"
 ./scripts/stage_engine_release_asset.sh \
-  --version "${release_tag#v}" \
   --engine-dir build/engines/dcvcrt-720p \
-  --s3-uri "s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases/$release_tag" \
+  --s3-uri "s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases/engine-assets" \
   --aws-region eu-west-1 \
   --asset-manifest dist/nvcr-engine-assets.txt
 ```
@@ -117,8 +112,7 @@ The generated text file is a manual `workflow_dispatch` input, not a file
 committed to the repository. If you do not use S3, pass `--download-url` with an
 HTTPS URL that works with `curl -fL` from a signed-out machine.
 
-To avoid manual copy/paste after Release Please creates a draft release, stage
-and upload every validated local engine bundle in one command:
+Stage and upload a complete new target set or selected replacements in one command:
 
 ```bash
 ./scripts/release_engine_assets.sh \
@@ -128,9 +122,9 @@ and upload every validated local engine bundle in one command:
   --aws-region eu-west-1
 ```
 
-The helper validates the bundles, uploads the archives to S3 with temporary
-presigned URLs, writes `dist/nvcr-engine-assets.txt`, verifies the draft release
-exists, and dispatches `upload-engine-assets.yml` against the exact tag.
+The helper validates the bundles, uploads archives to temporary S3 staging,
+writes `dist/nvcr-engine-assets.txt`, and dispatches the rolling catalog merge.
+New targets must contribute all six registered profiles.
 
 ## Paired performance smoke
 

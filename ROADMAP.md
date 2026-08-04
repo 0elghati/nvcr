@@ -4,7 +4,7 @@ This is the source of truth for the scoped neural video codec runtime
 architecture described in `docs/scope-and-support.md`. DCVC-RT is the first and
 currently only supported codec backend.
 
-Last reviewed: 2026-08-02
+Last reviewed: 2026-08-04
 
 ## Objective
 
@@ -66,26 +66,23 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: integrate exact-resolution selection for the accepted
-canonical fixed 360p/540p Orin bundles, retaining the dynamic bundle as fallback,
-then stage the preserved v0.6.0 assets and build/measure separate target-local
-profiles on RTX/x86.
+Current next action: finish clean rolling-catalog install gates on both reference
+targets. Rebuild the six canonical resolution bundles on RTX rather than reusing
+Orin plans, package complete target-local sets for RTX and Orin, publish them to
+the mutable `engine-assets` release, and exercise automatic encode/decode
+selection at every registered resolution.
 The current Orin FP16 runtime-only FPS wave is closed at its measured ceiling;
 do not resume speculative backend tuning without a newly profiled candidate
 capable of clearing the 3% whole-codec gate. Cross-runtime I/P golden vectors,
 drain/flush semantics, and target support remain pending.
 
-Deployment next action: stage the locally validated v0.6.0 Orin 360p and 540p
-engine assets and run the exact-tag upload workflow. Before publishing an
-all-profile v0.6.0 release, repackage QCIF, CIF, 720p, and 1080p under the same
-version; do not mix the retained v0.5.0 filenames into a v0.6.0 upload. Then run
-the full registered suite and record the clean target, correctness, performance,
-memory, rate/distortion, and energy matrix. Engine-cache reuse must
-be keyed by model, target, TensorRT/CUDA, precision, and shape profile. The
-release installer now downloads every selected-backend engine profile by default
-and uses backend/profile aliases plus a backend-neutral default engine slot under
-`$XDG_DATA_HOME/nvcr/engines`; exact-tag installer smoke remains pending until
-the next published package/engine assets exist. The CLI now warns when
+Deployment next action: publish complete six-profile sets to the rolling
+`engine-assets` release only after each archive and its catalog identity have
+been validated on the target that built it. Upload stable, non-semver engine
+archive names and the merged `nvcr-engine-catalog.json` last. Then run clean
+`nvcr-artifacts install` checks for all profiles, wrong-GPU and wrong-TensorRT
+negative cases, and runtime resolution selection on RTX and Orin. Binary
+packages stay semver'd, architecture-specific, and engine-free. The CLI now warns when
 multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
 Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and uses
 persistent contexts backed by one shared activation workspace on integrated/
@@ -105,13 +102,15 @@ the recorded Orin target. Static Docker checks, x86_64 builds, the CPU suite,
 and automatic 360p/540p runtime GPU smokes are complete; they do not substitute
 for the full target GPU suite.
 
-Release tooling note, 2026-08-01: `release_engine_assets.sh --latest-draft`
+Superseded release tooling note, 2026-08-01: `release_engine_assets.sh --latest-draft`
 now resolves tags through `gh api` rather than the newer
 `gh release list --json` interface, retaining compatibility with the packaged
 GitHub CLI 2.4.0 used by the release host. It prefers the newest draft and falls
 back to the newest published release when no draft exists. Shell syntax and
 focused mocked resolution were verified locally; live staging/upload remains
-the deployment next action.
+the deployment next action. The 2026-08-04 rolling-catalog decision below
+replaces this exact-application-tag workflow; the note remains historical
+evidence.
 
 Orin benchmark automation note, 2026-08-01: `benchmark_orin_release.py` now
 orchestrates target preparation, artifact validation, Release build/tests,
@@ -433,21 +432,25 @@ State: **Active**
 
 - [x] Version ONNX, entropy, quantization, and model manifests as one v2 bundle.
 - [x] Validate model/engine hashes and compatibility before plan deserialization.
-- [ ] Key reusable TensorRT caches by GPU, TensorRT/CUDA, precision, model, and profile.
-- [x] Provide one profile-aware `prepare`/`build`/`inspect`/`validate` command.
-- [x] Add a one-command release installer that downloads the latest package plus
-  backend-selected engine bundles into profile aliases and a backend-neutral
-  default engine slot.
-- [x] Adopt a local-build/no-redistribution policy pending an explicit rights review.
+- [x] Key installed TensorRT bundles by content digest and catalog-match them by
+  exact GPU, CUDA, TensorRT, architecture, precision, model, target, and profile.
+- [x] Provide one profile-aware `install`/`prepare`/`build`/`inspect`/`validate`
+  command; local generation requires an explicit profile or `--all`.
+- [x] Keep semver'd binary packages engine-free and delegate engine installation
+  to the separate rolling `engine-assets` catalog.
+- [x] Install every exact-compatible profile by default, or a repeated
+  `--profile` subset, into content-addressed storage with atomic canonical and
+  backend collection aliases.
 - [x] Provide architecture-scoped Docker test/runtime images and Dev Container
   definitions for x86_64/SM 8.9 and Jetson aarch64/SM 8.7 without embedding
   checkpoints, model assets, or target-local TensorRT plans.
 
 Exit criteria:
 
-- [ ] An exact-tag clean install can build compatible engines reproducibly.
-- [ ] The release installer succeeds from a published tag and validates every
-  downloaded backend engine bundle plus the selected default profile.
+- [ ] Clean installs select the native CPU package and install compatible engines
+  reproducibly from the rolling catalog on both reference targets.
+- [ ] The published rolling release validates and installs all six profiles on
+  RTX and Orin, including wrong-GPU and wrong-TensorRT negative tests.
 - [x] Corrupt/incompatible bundles fail during initialization.
 - [x] Access-unit model identity resolves to the configured decoder bundle.
 
@@ -520,6 +523,45 @@ Exit criteria:
 - [ ] Performance, conformance, ABI, packaging, and security gates pass.
 
 ## Evidence log
+
+### 2026-08-04 — Rolling engine catalog and canonical resolution façade
+
+- Replaced application-tag-coupled engine publication with the fixed
+  `engine-assets` release contract. Stable archives now omit application
+  versions and `fp16`; the workflow validates staged archives, preserves other
+  catalog targets, requires all six profiles for a newly updated target set,
+  replaces archives/checksums, and uploads `nvcr-engine-catalog.json` last.
+- Added exact device/runtime detection shared by local target selection,
+  manifest generation, and installation. On the recorded Orin host it reported
+  AArch64, device `Orin`, SM 8.7 with 8 multiprocessors, CUDA runtime 12060, and
+  TensorRT 10.3.0, then selected `orin-nano-l4t3647` uniquely.
+- Added canonical `qcif`, `cif`, `360p`, `540p`, `720p`, and `1080p` configs.
+  New local builds require `--profile` or `--all`; installed selection and CLI
+  resolution mapping use canonical names. Legacy `*-fp16` inputs and existing
+  bundle IDs remain accepted only as transition aliases with warnings.
+- Release build passed. The direct-device Release suite passed 7/7, including
+  the artifact/profile and new rolling-catalog tests. The focused catalog suite
+  has 12 cases covering architecture aliases, device selection and CUDA
+  fallback, exact/no/ambiguous matching, complete-target merging, default-all
+  installation, legacy aliases, hash failure, unsafe archives, atomic links,
+  and all-profile local build expansion.
+- A fresh Jetson binary-package smoke produced an ARM AArch64 ELF archive with a
+  valid outer checksum, all six canonical configs, no legacy config copies, and
+  no model or engine assets. The existing unwritable
+  `build-release/install_manifest.txt` still makes CMake report a final install
+  bookkeeping error after copying files; packaging and archive validation
+  themselves passed.
+- A real preserved Orin QCIF bundle was repackaged under the stable filename and
+  validated through the catalog merger. A clean local install verified archive
+  SHA-256 and structure, validated the v2 bundle, stored it under its content
+  digest, and atomically created canonical, transition, and backend aliases.
+  Offline runtime failure emitted the exact canonical install command, and a
+  legacy `720p-fp16` override emitted its deprecation warning.
+- M4 remains active. No public `engine-assets` catalog has been published in
+  this change, the current x86_64 binary workflow has not run, the missing
+  target-local RTX profiles have not been built, and clean published installs
+  plus six-resolution runtime selection/negative gates are still required on
+  both RTX and Orin. Unit negative tests do not replace those target gates.
 
 ### 2026-08-01 — Orin Nano four-resolution v0.5.0 engine assets
 
@@ -1340,13 +1382,37 @@ release, but it does not publish the release. The Jetson archive, exact target
 matrices, and final publication remain manual release responsibilities recorded
 in the roadmap.
 
-### 2026-07-29 — Orchestrate engine assets from Release Please tags
+### 2026-07-29 — Orchestrate engine assets from Release Please tags (superseded)
 
 Decision: add `scripts/release_engine_assets.sh` as the default operator path for optional TensorRT engine release assets. The helper derives the release tag from the checked-out `version.txt` by default, validates local target-built bundles, stages archives under a caller-provided S3 prefix, generates presigned URLs and `dist/nvcr-engine-assets.txt`, checks the matching GitHub draft release, and dispatches `upload-engine-assets.yml` for that Release Please tag.
 
 Rationale: Release Please should remain the only version and tag authority, S3 should remain temporary staging, and GitHub Releases should remain the public distribution channel. Automating the handoff removes manual manifest copy/paste and reduces the chance of attaching engines to a stale or mismatched release tag.
 
 Consequence: engine assets are still built on validated target machines and are still separate from generic binary packages, but the release operator now has a repeatable one-command path from target-local bundles to draft-release assets. Publishing remains gated on the recorded roadmap evidence for the release track.
+
+### 2026-08-04 — Decouple rolling engine assets from application releases
+
+Decision: retain separate `linux-x86_64-nvidia` and
+`linux-aarch64-jetson-l4t36` semver'd binary packages because native ELF host
+architectures are not cross-compatible. Publish target-local TensorRT bundles
+instead to one mutable, non-semver GitHub release tagged `engine-assets`, with a
+catalog uploaded last after stable archive names are replaced.
+
+Rationale: the executable can contain portable CUDA device code for multiple GPU
+SMs, but it cannot be one native Linux executable for both x86_64 and AArch64,
+and TensorRT plans are even narrower: they require an exact GPU, CUDA runtime,
+TensorRT version, model, and shape-profile match. Coupling those plans to every
+application tag duplicated large assets and exposed implementation precision in
+user-facing profile names.
+
+Consequence: `nvcr-artifacts install` is the only networked engine-download
+facade; encode and decode remain offline. Catalog profile IDs and archive names
+use `qcif`, `cif`, `360p`, `540p`, `720p`, and `1080p`, while bundle manifests
+continue to record FP16 internally. The first application release accepts
+legacy `*-fp16` IDs and bundle links with a warning; the immediately following
+release removes those aliases. New targets must publish all six profiles in one
+catalog update. Existing versioned GitHub assets and roadmap records remain
+untouched historical evidence.
 
 ## M4 checkpoint: four-resolution TensorRT profiles (2026-07-30)
 
@@ -1659,10 +1725,9 @@ builds and measurements. Do not share Orin `.plan` files with RTX/x86 targets.
 - Machine-readable preservation evidence is in
   `docs/evidence/orin-fixed-engine-packages-2026-08-02.json`.
 
-Current next action: integrate runtime selection with dynamic fallback. For a
-later upload, stage the two v0.6.0 fixed-profile archives, regenerate
-`dist/nvcr-engine-assets.txt`, and run the exact-tag upload workflow. Repackage
-the other four profiles as v0.6.0 first if they are included in that release.
+Superseded next action: this checkpoint originally called for a v0.6.0
+exact-tag upload. The preserved archives remain historical inputs; the
+2026-08-04 rolling-catalog decision now governs new packaging and publication.
 
 ### 2026-08-03 — Add architecture-scoped Docker execution and development
 

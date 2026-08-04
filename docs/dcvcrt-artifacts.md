@@ -65,14 +65,14 @@ alone.
 ## Prepare from checkpoints
 
 Create a Python environment with PyTorch, ONNX, and ONNXScript, then select one
-model, engine, and target profile explicitly:
+resolution profile. The registered target is auto-detected unless overridden:
 
 ```bash
 /path/to/python -c 'import torch, onnx, onnxscript'
 
 ./scripts/nvcr_artifacts.py prepare \
   --model-profile configs/models/dcvcrt-cvpr2025.json \
-  --engine-profile configs/engine-profiles/1080p-fp16.json \
+  --profile 1080p \
   --target-profile configs/targets/rtx4070-ubuntu2404.json \
   --dcvcrt-root /path/to/DCVC-RT \
   --models build/models/dcvcrt \
@@ -83,17 +83,20 @@ model, engine, and target profile explicitly:
 The helper clones/checks out the pinned source by default when the target path is
 absent. Use `--skip-clone` only for an already verified checkout. Use
 `--skip-engine` to stop after portable model assets are ready.
+Exactly one of `--profile NAME` or `--all` is required because TensorRT builds
+are expensive. `--all --engines-root build/engines` creates one bundle per
+registered resolution and reuses the model export.
 
 The declared FP16 profiles are:
 
 | Profile | Visible dimensions | Workspace | Builder level | Purpose |
 |---|---|---:|---:|---|
-| `qcif-fp16` | 64×64 to 176×144 | 512 MiB | 1 | Small correctness/development bundle |
-| `cif-fp16` | 64×64 to 352×288 | 512 MiB | 1 | CIF correctness/development bundle |
-| `360p-fp16` | fixed 640×360 | 1024 MiB | 4 | Edge latency specialization |
-| `540p-fp16` | fixed 960×540 | 1024 MiB | 4 | Edge latency specialization |
-| `720p-fp16` | 64×64 to 1280×720 | 1024 MiB | 2 | 720p target validation |
-| `1080p-fp16` | 64×64 to 1920×1080 | 1024 MiB | 2 | Reference target validation |
+| `qcif` | 64×64 to 176×144 | 512 MiB | 1 | Small correctness/development bundle |
+| `cif` | 64×64 to 352×288 | 512 MiB | 1 | CIF correctness/development bundle |
+| `360p` | fixed 640×360 | 1024 MiB | 4 | Edge latency specialization |
+| `540p` | fixed 960×540 | 1024 MiB | 4 | Edge latency specialization |
+| `720p` | 64×64 to 1280×720 | 1024 MiB | 2 | 720p target validation |
+| `1080p` | 64×64 to 1920×1080 | 1024 MiB | 2 | Reference target validation |
 
 Internal graph shapes may be padded (for example 1080 to 1088 lines); manifests
 record user-visible dimensions and the engine builder records the actual TensorRT
@@ -110,10 +113,10 @@ there, selecting that target's profile:
 
 ./scripts/nvcr_artifacts.py build \
   --model-profile configs/models/dcvcrt-cvpr2025.json \
-  --engine-profile configs/engine-profiles/1080p-fp16.json \
+  --profile 1080p \
   --target-profile configs/targets/orin-nano-l4t3647.json \
   --models build/models/dcvcrt \
-  --engines build/engines/dcvcrt \
+  --engines build/engines/dcvcrt-1080p \
   --trtexec /usr/src/tensorrt/bin/trtexec \
   --device-id 0
 ```
@@ -129,23 +132,22 @@ If engine bundles are retained internally for CI or reviewer convenience, store
 them under `dcvcrt-cvpr2025/<target-profile>/<engine-profile>/` rather than by
 resolution name alone.
 
-For a reviewer-convenience GitHub Release asset, package a validated bundle as:
+For the rolling GitHub engine release, package a validated bundle as:
 
 ```bash
 ./scripts/package_engine_bundle.sh \
-  --version 0.3.0 \
-  --engine-dir build/engines/dcvcrt \
+  --engine-dir build/engines/dcvcrt-1080p \
   --output-dir dist
 ```
 
-The archive name is derived from the manifest and uses the public package family:
+The stable archive name is derived from the target/model/profile identity:
 
 ```text
-nvcr-v0.3.0-<package-family>-dcvcrt-cvpr2025-<engine-profile>-engines.tar.gz
+nvcr-engines-<target-profile>-dcvcrt-cvpr2025-<resolution>.tar.gz
 ```
 
 The archive contains one `dcvcrt/` engine bundle plus
-`ENGINE-ASSET-MANIFEST.sha256`. It must remain a separate GitHub Release asset,
+`ENGINE-ASSET-MANIFEST.sha256`. It remains a separate rolling GitHub Release asset,
 not part of the generic `linux-x86_64-nvidia` or `linux-aarch64-jetson-l4t36`
 binary packages.
 
@@ -223,12 +225,12 @@ also include the runtime padding required by the codec.
 
 | Profile | Visible optimum | Release gate |
 |---|---:|---|
-| `qcif-fp16` | 176x144 | Contract plus native I/P roundtrip |
-| `cif-fp16` | 352x288 | Contract plus native I/P roundtrip |
-| `720p-fp16` | 1280x720 | Contract plus native I/P roundtrip |
-| `1080p-fp16` | 1920x1080 | Contract plus native I/P roundtrip |
+| `qcif` | 176x144 | Contract plus native I/P roundtrip |
+| `cif` | 352x288 | Contract plus native I/P roundtrip |
+| `720p` | 1280x720 | Contract plus native I/P roundtrip |
+| `1080p` | 1920x1080 | Contract plus native I/P roundtrip |
 
-The fixed-shape `360p-fp16` and `540p-fp16` profiles are edge-performance
+The fixed-shape `360p` and `540p` profiles are edge-performance
 candidates. On Orin Nano, a conservative 13-fixed-engine candidate retained the
 validated dynamic `p_synthesis.plan` while a stale source graph was
 quarantined. Repeated BasketballDrive measurements improved 360p encode/decode

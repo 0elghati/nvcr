@@ -24,10 +24,10 @@ MATRIX = ROOT / "scripts/benchmark_resolution_matrix.sh"
 ARTIFACTS = ROOT / "scripts/nvcr_artifacts.py"
 ENERGY = ROOT / "scripts/profile_energy.py"
 RESOLUTIONS = {
-    "qcif": ("176x144", 30, "qcif-fp16", "qcif/akiyo_qcif.yuv"),
-    "cif": ("352x288", 30, "cif-fp16", "cif/paris_cif.yuv"),
-    "720p": ("1280x720", 30, "720p-fp16", "720p/FourPeople_1280x720_60.yuv"),
-    "1080p": ("1920x1080", 60, "1080p-fp16", "hd/BasketballDrive_1920x1080_50.yuv"),
+    "qcif": ("176x144", 30, "qcif", "qcif/akiyo_qcif.yuv"),
+    "cif": ("352x288", 30, "cif", "cif/paris_cif.yuv"),
+    "720p": ("1280x720", 30, "720p", "720p/FourPeople_1280x720_60.yuv"),
+    "1080p": ("1920x1080", 60, "1080p", "hd/BasketballDrive_1920x1080_50.yuv"),
 }
 LFB_RE = re.compile(r"\(lfb\s+([0-9]+)x([0-9]+)([KMG]B)\)")
 

@@ -215,12 +215,12 @@ run_case() {
 run_resolution() {
     local label="$1" gop="$2"
     case "$label" in
-        qcif) run_case qcif 176x144 30 qcif-fp16 "$input_qcif" "$gop" ;;
-        cif) run_case cif 352x288 30 cif-fp16 "$input_cif" "$gop" ;;
-        360p) run_case 360p 640x360 50 360p-fp16 "$input_360" "$gop" ;;
-        540p) run_case 540p 960x540 50 540p-fp16 "$input_540" "$gop" ;;
-        720p) run_case 720p 1280x720 30 720p-fp16 "$input_720" "$gop" ;;
-        1080p) run_case 1080p 1920x1080 60 1080p-fp16 "$input_1080" "$gop" ;;
+        qcif) run_case qcif 176x144 30 qcif "$input_qcif" "$gop" ;;
+        cif) run_case cif 352x288 30 cif "$input_cif" "$gop" ;;
+        360p) run_case 360p 640x360 50 360p "$input_360" "$gop" ;;
+        540p) run_case 540p 960x540 50 540p "$input_540" "$gop" ;;
+        720p) run_case 720p 1280x720 30 720p "$input_720" "$gop" ;;
+        1080p) run_case 1080p 1920x1080 60 1080p "$input_1080" "$gop" ;;
         *) echo "unsupported resolution label: $label" >&2; return 2 ;;
     esac
 }

@@ -66,30 +66,12 @@ def main() -> int:
         REPOSITORY_ROOT / "configs/models/dcvcrt-cvpr2025.json",
         "nvcr.model-profile.v1",
     )
-    artifacts.load_profile(
-        REPOSITORY_ROOT / "configs/engine-profiles/qcif-fp16.json",
-        "nvcr.engine-profile.v1",
-    )
-    artifacts.load_profile(
-        REPOSITORY_ROOT / "configs/engine-profiles/cif-fp16.json",
-        "nvcr.engine-profile.v1",
-    )
-    artifacts.load_profile(
-        REPOSITORY_ROOT / "configs/engine-profiles/360p-fp16.json",
-        "nvcr.engine-profile.v1",
-    )
-    artifacts.load_profile(
-        REPOSITORY_ROOT / "configs/engine-profiles/540p-fp16.json",
-        "nvcr.engine-profile.v1",
-    )
-    artifacts.load_profile(
-        REPOSITORY_ROOT / "configs/engine-profiles/720p-fp16.json",
-        "nvcr.engine-profile.v1",
-    )
-    artifacts.load_profile(
-        REPOSITORY_ROOT / "configs/engine-profiles/1080p-fp16.json",
-        "nvcr.engine-profile.v1",
-    )
+    for profile in artifacts.ENGINE_PROFILES:
+        loaded = artifacts.load_profile(
+            REPOSITORY_ROOT / "configs/engine-profiles" / f"{profile}.json",
+            "nvcr.engine-profile.v1",
+        )
+        assert loaded["id"] == profile
     for target in ("rtx4070-ubuntu2404.json", "orin-nano-l4t3647.json"):
         artifacts.load_profile(
             REPOSITORY_ROOT / "configs/targets" / target,
@@ -161,7 +143,7 @@ def main() -> int:
             "kind": "nvcr-tensorrt-engine-bundle",
             "model_profile_id": "dcvcrt-cvpr2025",
             "target_profile_id": "test-target",
-            "engine_profile_id": "qcif-fp16",
+            "engine_profile_id": "qcif",
             "model_profile_sha256": checksums["i_frame_manifest.json"],
             "engine_profile_sha256": checksums["p_frame_manifest.json"],
             "target_profile_sha256": "0" * 64,
@@ -203,7 +185,7 @@ def main() -> int:
         write_json(root / "engine_manifest.json", engine_manifest)
 
         fixed_without_contract = dict(engine_manifest)
-        fixed_without_contract["engine_profile_id"] = "360p-fp16"
+        fixed_without_contract["engine_profile_id"] = "360p"
         fixed_without_contract["optimization_point"] = "360p"
         fixed_without_contract["visible_dimensions"] = {
             "minimum": [640, 360],
@@ -219,6 +201,12 @@ def main() -> int:
         fixed_contract["shape_profile"] = "fixed"
         write_json(root / "engine_manifest.json", fixed_contract)
         assert artifacts.validate_engine_bundle(root)["shape_profile"] == "fixed"
+        write_json(root / "engine_manifest.json", engine_manifest)
+
+        legacy_manifest = dict(engine_manifest)
+        legacy_manifest["engine_profile_id"] = "qcif-fp16"
+        write_json(root / "engine_manifest.json", legacy_manifest)
+        assert artifacts.validate_engine_bundle(root)["engine_profile_id"] == "qcif-fp16"
         write_json(root / "engine_manifest.json", engine_manifest)
 
         write_bytes(root / artifacts.REQUIRED_PLANS[0], b"modified")

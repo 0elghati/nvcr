@@ -76,15 +76,16 @@ cp -a "$install_prefix/." "$package_root/"
 required_files=(
     bin/nvcr
     bin/nvcr-artifacts
+    share/nvcr/scripts/nvcr_device.py
     share/nvcr/scripts/backends/dcvcrt/prepare_artifacts.sh
     share/nvcr/scripts/backends/dcvcrt/build_tensorrt.sh
     share/nvcr/configs/models/dcvcrt-cvpr2025.json
-    share/nvcr/configs/engine-profiles/qcif-fp16.json
-    share/nvcr/configs/engine-profiles/cif-fp16.json
-    share/nvcr/configs/engine-profiles/360p-fp16.json
-    share/nvcr/configs/engine-profiles/540p-fp16.json
-    share/nvcr/configs/engine-profiles/720p-fp16.json
-    share/nvcr/configs/engine-profiles/1080p-fp16.json
+    share/nvcr/configs/engine-profiles/qcif.json
+    share/nvcr/configs/engine-profiles/cif.json
+    share/nvcr/configs/engine-profiles/360p.json
+    share/nvcr/configs/engine-profiles/540p.json
+    share/nvcr/configs/engine-profiles/720p.json
+    share/nvcr/configs/engine-profiles/1080p.json
     "share/nvcr/configs/targets/$target_profile"
     share/doc/nvcr/README.md
     share/doc/nvcr/ROADMAP.md

@@ -84,7 +84,7 @@ current DCVC-RT backend preparation helpers:
 ```bash
 ./scripts/nvcr_artifacts.py prepare \
   --model-profile configs/models/dcvcrt-cvpr2025.json \
-  --engine-profile configs/engine-profiles/1080p-fp16.json \
+  --profile 1080p \
   --target-profile configs/targets/rtx4070-ubuntu2404.json \
   --dcvcrt-root /path/to/DCVC-RT \
   --models build/models/dcvcrt \
@@ -101,8 +101,8 @@ Inspect and validate without executing a bundle:
 ```bash
 ./scripts/nvcr_artifacts.py inspect build/models/dcvcrt --json
 ./scripts/nvcr_artifacts.py validate build/models/dcvcrt --json
-./scripts/nvcr_artifacts.py inspect build/engines/dcvcrt --json
-./scripts/nvcr_artifacts.py validate build/engines/dcvcrt --json
+./scripts/nvcr_artifacts.py inspect build/engines/dcvcrt-1080p --json
+./scripts/nvcr_artifacts.py validate build/engines/dcvcrt-1080p --json
 ```
 
 ## Run the complete configured suite

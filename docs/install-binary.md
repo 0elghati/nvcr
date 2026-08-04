@@ -1,51 +1,68 @@
-# Binary package status
+# Binary and engine installation
 
-The current repository is a development snapshot; it does not advertise a
-supported v1 binary download or prebuilt engine bundle. Use
-[Getting started](getting-started.md) to build from source and generate target-local
-assets.
+NVCR publishes two semver'd Linux binary families because native x86_64 and
+AArch64 executables are not interchangeable:
 
-When a gated NVCR package is published, it contains the native library/CLI,
-headers, CMake metadata, `nvcr-artifacts`, versioned profiles, configuration,
-documentation, roadmap/changelog, licenses/notices, and a
-`PACKAGE-MANIFEST.sha256`. It does **not** contain checkpoints, ONNX/model assets,
-or TensorRT engines.
+- `linux-x86_64-nvidia` for desktop/discrete NVIDIA hosts;
+- `linux-aarch64-jetson-l4t36` for Jetson L4T 36.
 
-A future validated archive and matching backend engine bundles can be installed
-with the convenience installer. Without `--engine-profile`, it downloads every
-available profile for the selected backend:
+The executable inside either package is named `nvcr`. Binary packages contain
+the runtime, headers, CMake metadata, configuration, documentation, licenses,
+and `nvcr-artifacts`. They remain free of checkpoints, ONNX graphs, runtime
+model data, and TensorRT plans.
+
+The convenience installer selects the binary family from `uname`, then delegates
+engine installation to the GPU-aware rolling catalog:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
 ```
 
-By default it installs NVCR under `$HOME/.local/nvcr`, validates downloaded
-checksums, extracts engine bundles under `$XDG_DATA_HOME/nvcr/engines/releases/`,
-and creates profile aliases under
-`$XDG_DATA_HOME/nvcr/engines/profiles/<backend>/<profile>`. Encode selects the
-profile from its raw input dimensions; decode selects it from the first access
-unit. Normal commands therefore do not need `--engine-profile` or
-`--engine-dir`.
-
-Select a profile at runtime without passing a path:
+With no profile option, every catalog entry matching the selected device's exact
+GPU name, compute capability, SM count, CUDA runtime, and TensorRT version is
+installed. To install a subset or no engines:
 
 ```bash
-nvcr encode ... --engine-profile 720p-fp16
-nvcr decode ... --backend dcvcrt --engine-profile 1080p-fp16
-NVCR_ENGINE_PROFILE=720p-fp16 nvcr encode ...
-```
-
-Pin a release, test a fork or private staging repository, download one profile,
-or install only the binary package when needed:
-
-```bash
-NVCR_TAG=vX.Y.Z ./scripts/install.sh --run-tests
-./scripts/install.sh --repo OWNER/REPO --tag vX.Y.Z
-./scripts/install.sh --engine-profile 720p-fp16
+./scripts/install.sh --profile 720p
+./scripts/install.sh --profile 360p --profile 540p
 ./scripts/install.sh --no-engines
 ```
 
-Manual installation remains supported for offline or audited environments:
+The binary and engine lifecycles are independent. Pinning `--tag vX.Y.Z` pins
+the binary package; engines still come from the rolling `engine-assets` release
+unless `--asset-release` is overridden:
+
+```bash
+./scripts/install.sh --tag vX.Y.Z --run-tests
+./scripts/install.sh --repo OWNER/REPO --asset-release engine-assets
+```
+
+After a binary-only install, manage engines directly:
+
+```bash
+nvcr-artifacts install
+nvcr-artifacts install --profile 1080p --device-id 0
+```
+
+Validated bundles are stored in content-addressed directories under
+`$XDG_DATA_HOME/nvcr/engines/bundles/`. Atomic aliases live under
+`profiles/<backend>/<resolution>`, and `profiles/default` points to the default
+backend collection. Encode selects a resolution from its raw input dimensions;
+decode selects from the first access unit. Neither command performs downloads.
+
+Force an installed resolution only when needed:
+
+```bash
+nvcr encode ... --engine-profile 720p
+NVCR_ENGINE_PROFILE=1080p nvcr decode ...
+```
+
+For the transition release only, `720p-fp16` and the installer flag
+`--engine-profile` remain accepted with a deprecation warning. FP16 is still the
+internal v1 engine precision; it is no longer part of the user-facing resolution
+name.
+
+Manual binary extraction remains available for audited environments:
 
 ```bash
 export NVCR_ARCHIVE=nvcr-vX.Y.Z-linux-x86_64-nvidia.tar.gz
@@ -54,23 +71,9 @@ mkdir -p "$NVCR_PREFIX"
 sha256sum -c "$NVCR_ARCHIVE.sha256"
 tar -xzf "$NVCR_ARCHIVE" -C "$NVCR_PREFIX" --strip-components=1
 export PATH="$NVCR_PREFIX/bin:$PATH"
-nvcr --help
-nvcr-artifacts --help
 ```
 
-The package must match the recorded target runtime. Build or download the pinned
-model and engines with [Model and engine preparation](dcvcrt-artifacts.md),
-validate them, and install them under the profile alias layout above. Pass
-`nvcr --engine-dir` only for custom bundles or local development tests. Never
-substitute an engine from another GPU, CUDA/TensorRT runtime, or model manifest.
-
-Engine assets are not generic TensorRT plans. Their filename records the package family,
-model, and engine-profile identity, and the runtime still checks the
-manifest and hashes before loading any TensorRT plan.
-
-The public archive family name is generic. It does not broaden the current
-support claim beyond the validated reference targets recorded in the roadmap and
-compatibility matrix.
-
-See [Compatibility](compatibility.md) for support status and
-[Releasing](releasing.md) for the publication gates.
+If no catalog target matches, the installer fails rather than downloading a
+cross-GPU plan. Build locally using [Model and engine preparation](dcvcrt-artifacts.md).
+See [Compatibility](compatibility.md) for the exact target contract and
+[Releasing](releasing.md) for publication gates.

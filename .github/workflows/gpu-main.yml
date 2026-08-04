@@ -38,7 +38,7 @@ jobs:
 
       - name: CPU, parser fuzz/boundary, manifest/profile, rANS, and CUDA tests
         run: |
-          ctest --test-dir build-main-gpu --output-on-failure -R 'nvcr_(artifact_profiles|smoke_tests|parser_fuzz_boundaries|rans_conformance|cuda_ops)'
+          ctest --test-dir build-main-gpu --output-on-failure -R 'nvcr_(artifact_profiles|engine_catalog|smoke_tests|parser_fuzz_boundaries|rans_conformance|cuda_ops)'
 
   self-hosted-disabled-summary:
     if: ${{ vars.NVCR_ENABLE_SELF_HOSTED_REFERENCE_GATES != 'true' }}
