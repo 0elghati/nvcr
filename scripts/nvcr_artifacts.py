@@ -356,6 +356,14 @@ def validate_engine_bundle(root: Path) -> dict[str, Any]:
     if shape_profile not in ("dynamic", "fixed") or shape_profile != expected_shape_profile:
         raise ValidationError("engine shape profile does not match visible dimensions")
 
+    hardware_compatibility = manifest.get("hardware_compatibility", "exact")
+    if hardware_compatibility not in (
+        "exact",
+        "same_compute_capability",
+        "ampere_plus",
+    ):
+        raise ValidationError("engine manifest has invalid hardware_compatibility")
+
     checksum_name = safe_bundle_name(str(manifest["checksum_manifest"]), manifest_path)
     checksum_path = root / checksum_name
     if sha256(checksum_path) != manifest["checksum_manifest_sha256"]:
@@ -452,7 +460,24 @@ def default_engine_root() -> Path:
     return Path.home() / ".local" / "share" / "nvcr" / "engines"
 
 
-def expected_asset_filename(target: str, model: str, profile: str) -> str:
+def expected_asset_filename(
+    target: str,
+    model: str,
+    profile: str,
+    hardware_compatibility: str = "exact",
+    architecture: str = "x86_64",
+    compute_capability_major: int = 0,
+    compute_capability_minor: int = 0,
+) -> str:
+    public_architecture = {"x86_64": "amd64", "aarch64": "arm64"}.get(
+        architecture, architecture
+    )
+    if hardware_compatibility == "same_compute_capability":
+        target = (
+            f"linux-{public_architecture}-sm{compute_capability_major}{compute_capability_minor}"
+        )
+    elif hardware_compatibility == "ampere_plus":
+        target = f"linux-{public_architecture}-ampere-plus"
     return f"nvcr-engines-{target}-{model}-{profile}.tar.gz"
 
 
@@ -463,7 +488,8 @@ def validate_catalog(document: object, source: str = CATALOG_FILENAME) -> list[d
     if not isinstance(raw_assets, list):
         raise ValidationError(f"{source} requires an assets list")
     assets: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str]] = set()
+    seen_filenames: set[str] = set()
     string_fields = (
         "backend",
         "model_profile_id",
@@ -495,6 +521,17 @@ def validate_catalog(document: object, source: str = CATALOG_FILENAME) -> list[d
         for key in integer_fields:
             if not isinstance(raw.get(key), int) or isinstance(raw[key], bool):
                 raise ValidationError(f"{source} asset {index} requires integer {key}")
+        compatibility = raw.get("hardware_compatibility", "exact")
+        if compatibility not in ("exact", "same_compute_capability", "ampere_plus"):
+            raise ValidationError(
+                f"{source} asset {index} has unsupported hardware_compatibility"
+            )
+        if raw["architecture"] == "aarch64" and compatibility != "exact":
+            raise ValidationError(
+                f"{source} asset {index} uses hardware compatibility on Jetson/AArch64"
+            )
+        raw = dict(raw)
+        raw["hardware_compatibility"] = compatibility
         for key in ("backend", "model_profile_id", "target_profile_id"):
             if not SAFE_IDENTIFIER.fullmatch(raw[key]):
                 raise ValidationError(f"{source} asset {index} has unsafe {key}")
@@ -509,7 +546,13 @@ def validate_catalog(document: object, source: str = CATALOG_FILENAME) -> list[d
         ):
             raise ValidationError(f"{source} asset {index} has an unsupported platform")
         expected_name = expected_asset_filename(
-            raw["target_profile_id"], raw["model_profile_id"], profile
+            raw["target_profile_id"],
+            raw["model_profile_id"],
+            profile,
+            compatibility,
+            raw["architecture"],
+            raw["compute_capability_major"],
+            raw["compute_capability_minor"],
         )
         if raw["filename"] != expected_name:
             raise ValidationError(
@@ -533,28 +576,54 @@ def validate_catalog(document: object, source: str = CATALOG_FILENAME) -> list[d
             raw["model_profile_id"],
             raw["target_profile_id"],
             profile,
+            compatibility,
         )
         if key in seen:
             raise ValidationError(f"{source} contains duplicate catalog identity: {key}")
+        if raw["filename"] in seen_filenames:
+            raise ValidationError(
+                f"{source} contains duplicate catalog filename: {raw['filename']}"
+            )
         seen.add(key)
+        seen_filenames.add(raw["filename"])
         assets.append(dict(raw))
     return assets
 
 
-def catalog_entry_matches(entry: dict[str, Any], identity: dict[str, Any]) -> bool:
-    fields = (
+def catalog_entry_match_rank(entry: dict[str, Any], identity: dict[str, Any]) -> int | None:
+    common_fields = (
         "operating_system",
         "architecture",
-        "device_name",
-        "compute_capability_major",
-        "compute_capability_minor",
-        "multiprocessor_count",
         "cuda_runtime_version",
         "tensorrt_version_major",
         "tensorrt_version_minor",
         "tensorrt_version_patch",
     )
-    return all(entry[field] == identity[field] for field in fields)
+    if not all(entry[field] == identity[field] for field in common_fields):
+        return None
+    compatibility = entry.get("hardware_compatibility", "exact")
+    if compatibility == "exact":
+        exact_fields = (
+            "device_name",
+            "compute_capability_major",
+            "compute_capability_minor",
+            "multiprocessor_count",
+        )
+        return 0 if all(entry[field] == identity[field] for field in exact_fields) else None
+    if entry["architecture"] != "x86_64":
+        return None
+    if compatibility == "same_compute_capability":
+        return 1 if (
+            entry["compute_capability_major"] == identity["compute_capability_major"]
+            and entry["compute_capability_minor"] == identity["compute_capability_minor"]
+        ) else None
+    if compatibility == "ampere_plus":
+        return 2 if identity["compute_capability_major"] >= 8 else None
+    return None
+
+
+def catalog_entry_matches(entry: dict[str, Any], identity: dict[str, Any]) -> bool:
+    return catalog_entry_match_rank(entry, identity) is not None
 
 
 def github_request_json(url: str, token: str | None = None) -> dict[str, Any]:
@@ -696,10 +765,18 @@ def install_catalog_assets(
     engine_root: Path,
     token: str | None = None,
 ) -> list[str]:
-    matching = [
-        entry
+    ranked = [
+        (rank, entry)
         for entry in entries
-        if entry["backend"] == backend and catalog_entry_matches(entry, identity)
+        if entry["backend"] == backend
+        if (rank := catalog_entry_match_rank(entry, identity)) is not None
+    ]
+    best_rank_by_profile: dict[str, int] = {}
+    for rank, entry in ranked:
+        profile = entry["profile"]
+        best_rank_by_profile[profile] = min(rank, best_rank_by_profile.get(profile, rank))
+    matching = [
+        entry for rank, entry in ranked if rank == best_rank_by_profile[entry["profile"]]
     ]
     if not matching:
         published = sorted(
@@ -712,8 +789,10 @@ def install_catalog_assets(
             }
         )
         raise ValidationError(
-            f"no published {backend} engine target exactly matches {identity_summary(identity)}; "
-            f"published targets: {published or ['none']}"
+            f"no compatible published {backend} engine was found for "
+            f"{identity_summary(identity)}; published targets: {published or ['none']}; "
+            "NVCR does not build engines automatically—follow docs/dcvcrt-artifacts.md "
+            "to build a target-local engine manually"
         )
     by_profile: dict[str, dict[str, Any]] = {}
     for entry in matching:
@@ -770,11 +849,13 @@ def install_catalog_assets(
                 "tensorrt_version_patch",
                 "precision",
             )
+            manifest_compatibility = manifest.get("hardware_compatibility", "exact")
             if (
                 manifest.get("target_profile_id") != entry["target_profile_id"]
                 or manifest.get("model_profile_id") != entry["model_profile_id"]
                 or canonical_profile_name(str(manifest.get("engine_profile_id", ""))) != profile
                 or any(manifest.get(field) != entry[field] for field in catalog_manifest_fields)
+                or manifest_compatibility != entry.get("hardware_compatibility", "exact")
             ):
                 raise ValidationError(f"catalog and bundle identity differ: {filename}")
             final = (
@@ -800,7 +881,7 @@ def install_catalog_assets(
 def install_command(arguments: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="nvcr-artifacts install",
-        description="Install exact-compatible engines from the rolling NVCR asset catalog.",
+        description="Install the best compatible engines from the rolling NVCR asset catalog.",
     )
     parser.add_argument("--profile", action="append", default=[])
     parser.add_argument("--backend", default=os.environ.get("NVCR_BACKEND", "dcvcrt"))
@@ -928,6 +1009,11 @@ def forward_artifact_command(command: str, arguments: list[str]) -> int:
     parser.add_argument("--target-profile", type=Path)
     parser.add_argument("--engines-root", type=Path, default=Path("build/engines"))
     parser.add_argument("--device-id", type=int, default=0)
+    parser.add_argument(
+        "--hardware-compatibility",
+        choices=("exact", "same_compute_capability", "ampere_plus"),
+        default="exact",
+    )
     known, passthrough = parser.parse_known_args(arguments)
     model = load_profile(known.model_profile, "nvcr.model-profile.v1")
     if known.engine_profile is not None:
@@ -966,6 +1052,8 @@ def forward_artifact_command(command: str, arguments: list[str]) -> int:
             target_id,
             "--device-id",
             str(known.device_id),
+            "--hardware-compatibility",
+            known.hardware_compatibility,
         ]
         if "--engines" not in passthrough:
             child.extend(

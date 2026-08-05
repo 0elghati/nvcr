@@ -81,7 +81,10 @@ Deployment next action: package a complete target-local Orin set and merge it
 into the rolling `engine-assets` release only after each archive and catalog
 identity pass on the Orin that built it. Then run clean `nvcr-artifacts install`
 checks plus wrong-GPU and wrong-TensorRT negative cases on RTX and Orin, and the
-six-resolution runtime selection matrix on Orin. Binary
+six-resolution runtime selection matrix on Orin. Desktop compatibility-class
+publication is a separate gate: run one built bundle on a second intended GPU,
+then record correctness, whole-codec performance, and wrong-device rejection.
+Binary
 packages stay semver'd, architecture-specific, and engine-free. The CLI now warns when
 multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
 Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and uses
@@ -466,15 +469,17 @@ State: **Active**
 
 - [x] Version ONNX, entropy, quantization, and model manifests as one v2 bundle.
 - [x] Validate model/engine hashes and compatibility before plan deserialization.
-- [x] Key installed TensorRT bundles by content digest and catalog-match them by
-  exact GPU, CUDA, TensorRT, architecture, precision, model, target, and profile.
+- [x] Key installed TensorRT bundles by content digest and rank each catalog
+  profile by exact device, same compute capability, then Ampere-plus on desktop;
+  CUDA, TensorRT, architecture, precision, model, and profile remain exact, and
+  Jetson remains exact-device only.
 - [x] Provide one profile-aware `install`/`prepare`/`build`/`inspect`/`validate`
   command; local generation requires an explicit profile or `--all`.
 - [x] Keep semver'd binary packages engine-free and delegate engine installation
   to the separate rolling `engine-assets` catalog.
-- [x] Install every exact-compatible profile by default, or a repeated
-  `--profile` subset, into content-addressed storage with atomic canonical and
-  backend collection aliases.
+- [x] Install the best published compatible bundle for every profile by default,
+  or a repeated `--profile` subset, into content-addressed storage with atomic
+  canonical and backend collection aliases; installation never builds plans.
 - [x] Provide architecture-scoped Docker test/runtime images and Dev Container
   definitions for x86_64/SM 8.9 and Jetson aarch64/SM 8.7 without embedding
   checkpoints, model assets, or target-local TensorRT plans.
@@ -557,6 +562,38 @@ Exit criteria:
 - [ ] Performance, conformance, ABI, packaging, and security gates pass.
 
 ## Evidence log
+
+### 2026-08-04 — Implement bounded desktop TensorRT hardware compatibility
+
+- Added explicit `exact`, `same_compute_capability`, and `ampere_plus` classes
+  across TensorRT building, v2 manifests, runtime validation, catalog selection,
+  archive naming, CI merge validation, and documentation. Compatibility classes
+  are discrete-x86_64 only; CUDA and TensorRT versions remain exact, Jetson stays
+  exact-device only, and catalog installation never starts a local build.
+- Catalog selection ranks each requested profile independently: exact device,
+  then same compute capability, then Ampere-plus. Generalized asset names use
+  `linux-amd64-sm<CC>` or `linux-amd64-ampere-plus`, and validation rejects two
+  rows claiming the same release-asset filename. The artifact/profile suite,
+  Python and shell syntax checks, and all 18 focused catalog tests passed.
+- In the existing `nvcr:rtx5060-development` image (CUDA 12.8, TensorRT 10.9,
+  SM 12.0), a Release SM-120 build passed its base 8/8 tests. A real fixed 360p
+  `sameComputeCapability` build then generated all 14 plans from the pinned ONNX
+  export and passed every per-plan TensorRT smoke run. The validated manifest
+  records `same_compute_capability`, CUDA runtime 12080, TensorRT 10.9.0, and
+  SHA-256 `58fce1cfa271c39fed69715a261ae44d593b496fd9c9ee582727017d566ddf42`.
+  Packaging produced the expected 166,342,745-byte
+  `nvcr-engines-linux-amd64-sm120-dcvcrt-cvpr2025-360p.tar.gz`, SHA-256
+  `cc3dcca9153813e26cc07428e7fce3a9452e3ffe21420ce3b45a3461975a31e9`.
+- Registering that bundle in the Release build passed 10/10 tests, including
+  CUDA operators, TensorRT identity/integrity/engine contracts, and a native
+  360p I/P encode-decode roundtrip. This is same-device validation of a
+  compatibility-mode plan, not evidence that a second GPU can consume it.
+  Public compatibility-class assets remain gated on cross-device correctness,
+  whole-codec performance, and wrong-device negative tests.
+- A host-shell configure attempt with CUDA 12.6 failed as expected because that
+  compiler cannot emit SM 120 (`Unsupported gpu architecture 'compute_120'`).
+  The established CUDA 12.8/TensorRT 10.9 target image resolved the environment
+  mismatch; the failed outer-shell attempt is not a codec regression.
 
 ### 2026-08-04 — Keep research profile IDs out of emitted access units
 
@@ -1587,6 +1624,25 @@ release removes those aliases. New targets must publish all six profiles in one
 catalog update. Existing versioned GitHub assets and roadmap records remain
 untouched historical evidence.
 
+### 2026-08-04 — Bound desktop TensorRT hardware compatibility explicitly
+
+Decision: exact-device TensorRT plans remain the default and Jetson/L4T remains
+exact-only. Discrete x86_64 builders may opt into `same_compute_capability` or,
+separately, `ampere_plus`; manifests must record the choice, runtime and catalog
+matching must enforce it, and CUDA/TensorRT/model/profile identity stays exact.
+The catalog ranks exact, same-compute-capability, then Ampere-plus per profile.
+
+Rationale: TensorRT exposes narrower and broader desktop hardware-compatible
+plan modes that can reduce repeated per-SKU publication, but treating all plans
+as portable would erase a material execution contract. Explicit classes bound
+the blast radius and allow exact plans to continue winning when more than one
+candidate exists.
+
+Consequence: generalized class assets use stable class-based names and require
+their own complete six-profile catalog set. Same-device build/runtime evidence
+does not establish cross-device support; a class remains unpublished until the
+same bundle passes correctness, whole-codec performance, and negative gates on
+the intended device range. Install failure remains explicit and never triggers
 ## M4 checkpoint: four-resolution TensorRT profiles (2026-07-30)
 
 Status: the QCIF, CIF, 720p, and 1080p FP16 profile matrix is implemented and

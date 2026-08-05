@@ -64,9 +64,12 @@ cross-TensorRT bundle during initialization. A multi-architecture CUDA library
 does not relax TensorRT plan compatibility. Rebuild engines on the final target.
 
 Published engines live outside semver application releases in the rolling
-`engine-assets` release. `nvcr-engine-catalog.json` first narrows by Linux host
-architecture, then requires exact device name, compute capability, SM count,
-CUDA runtime, and TensorRT version before downloading an archive.
+`engine-assets` release. `nvcr-engine-catalog.json` selects independently for
+each resolution profile, preferring an exact device engine, then a
+`SAME_COMPUTE_CAPABILITY` engine, then an `AMPERE_PLUS` engine. CUDA and
+TensorRT versions remain exact in all three classes. When none matches, install
+fails with the manual target-local build documentation; NVCR never builds an
+engine automatically.
 
 TensorRT does provide optional discrete-GPU hardware-compatibility modes for some
 deployment environments, but NVCR does not currently ship public compatibility-

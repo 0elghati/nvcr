@@ -156,6 +156,33 @@ engines, treat them as a separate non-default engine class and record the chosen
 compatibility mode in the engine manifest and support docs. Jetson/L4T is not
 part of that portability path; build Jetson engines on the final target.
 
+Catalog installation never invokes the TensorRT builder. It selects the most
+specialized published compatible bundle for each requested profile (exact
+device, same compute capability, then Ampere-plus) and returns an error when no
+published bundle applies. A user may then choose to follow the manual build
+procedure above; no build is started implicitly or in the background.
+
+Release maintainers can build any catalog class explicitly:
+
+```bash
+nvcr-artifacts build --profile 1080p --target-profile <target.json> \
+  --hardware-compatibility exact
+nvcr-artifacts build --profile 1080p --target-profile <target.json> \
+  --hardware-compatibility same_compute_capability
+nvcr-artifacts build --profile 1080p --target-profile <target.json> \
+  --hardware-compatibility ampere_plus
+```
+
+The latter two modes pass TensorRT's hardware-compatibility setting to every
+plan and stamp the class into the bundle. They are rejected for public support
+until cross-device correctness and complete-codec performance evidence passes.
+Do not use either compatibility mode on Jetson.
+
+Generalized archive names describe the portability boundary rather than the
+GPU that built them: for example, `linux-amd64-sm89` for same-compute-capability
+plans and `linux-amd64-ampere-plus` for the broad desktop fallback. Exact plans
+retain their registered target ID.
+
 ## Model bundle contract
 
 `i_frame_manifest.json` and `p_frame_manifest.json` use

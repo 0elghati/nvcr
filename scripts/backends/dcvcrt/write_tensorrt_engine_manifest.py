@@ -133,6 +133,11 @@ def main() -> None:
     )
     parser.add_argument("--workspace-mib", required=True, type=int)
     parser.add_argument("--builder-optimization-level", required=True, type=int)
+    parser.add_argument(
+        "--hardware-compatibility",
+        default="exact",
+        choices=("exact", "same_compute_capability", "ampere_plus"),
+    )
     parser.add_argument("--model-profile-id", default="dcvcrt-cvpr2025")
     parser.add_argument("--target-profile-id", default="local-auto")
     parser.add_argument("--model-profile-path", required=True, type=Path)
@@ -150,6 +155,11 @@ def main() -> None:
     model_profile = load_profile(args.model_profile_path, "nvcr.model-profile.v1")
     engine_profile = load_profile(args.engine_profile_path, "nvcr.engine-profile.v1")
     target_profile = load_profile(args.target_profile_path, "nvcr.target-profile.v1")
+    if (
+        args.hardware_compatibility != "exact"
+        and target_profile.get("host", {}).get("architecture") != "x86_64"
+    ):
+        raise SystemExit("hardware-compatible TensorRT plans are desktop x86_64 only")
     if model_profile["id"] != args.model_profile_id:
         raise SystemExit("model profile id does not match --model-profile-id")
     expected_engine_id = str(engine_profile.get("id", ""))
@@ -239,6 +249,7 @@ def main() -> None:
         "shape_profile": shape_profile,
         "workspace_mib": args.workspace_mib,
         "builder_optimization_level": args.builder_optimization_level,
+        "hardware_compatibility": args.hardware_compatibility,
         "cuda_runtime_version": cuda_runtime_version,
         "tensorrt_version_major": major,
         "tensorrt_version_minor": minor,

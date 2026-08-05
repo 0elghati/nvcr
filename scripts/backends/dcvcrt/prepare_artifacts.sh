@@ -30,6 +30,7 @@ model_profile_path="$repo_root/configs/models/dcvcrt-cvpr2025.json"
 engine_profile_path="$repo_root/configs/engine-profiles/1080p.json"
 target_profile_path=""
 engine_profile_explicit=0
+hardware_compatibility=exact
 
 checkpoint_url="https://1drv.ms/f/c/2866592d5c55df8c/Esu0KJ-I2kxCjEP565ARx_YB88i0UnR6XnODqFcvZs4LcA?e=by8CO8"
 checkpoint_backup_url="https://1drv.ms/f/c/2866592d5c55df8c/EozfVVwtWWYggCitBAAAAAABbT4z2Z10fMXISnan72UtSA?e=BID7DA"
@@ -67,6 +68,9 @@ Options:
   --builder-optimization-level N
                            TensorRT builder optimization level 0-5
                            (must match the selected engine profile)
+  --hardware-compatibility CLASS
+                           exact, same_compute_capability, or ampere_plus
+                           (default: exact; compatibility modes are desktop-only)
   --device-id N            CUDA device used for TensorRT engine building (default: auto-selected)
   --no-auto-tune           Disable platform/tool/device auto-detection; use
                            device 0 unless overridden. Build settings still
@@ -146,6 +150,10 @@ while (($#)); do
         ;;
     --builder-optimization-level)
         builder_optimization_level="$2"
+        shift 2
+        ;;
+    --hardware-compatibility)
+        hardware_compatibility="$2"
         shift 2
         ;;
     --device-id)
@@ -361,6 +369,7 @@ if ((skip_engine == 0)); then
         --optimization-point "$optimization_point"
         --workspace-mib "$workspace_mib"
         --builder-optimization-level "$builder_optimization_level"
+        --hardware-compatibility "$hardware_compatibility"
         --device-id "$device_id"
         --python "$python_bin"
     )
@@ -387,6 +396,7 @@ Use this engine directory with NVCR:
 Example:
   nvcr encode -i input.yuv -o output.nvcr -s 1920x1080 -r 50 --frames 97 --qp 32 --engine-dir $engines_dir
 
-TensorRT .plan files are target-runtime-specific. Re-run this script on each
-Jetson/GPU/TensorRT runtime instead of copying .plan files from another machine.
+Exact TensorRT plans are target-specific. Desktop compatibility plans may be
+shared only according to their recorded hardware class. Jetson plans remain
+exact. CUDA and TensorRT versions remain exact for every class.
 EOF

@@ -146,6 +146,160 @@ class CatalogTests(unittest.TestCase):
         wrong["tensorrt_version_patch"] = 1
         self.assertFalse(artifacts.catalog_entry_matches(validated[0], wrong))
 
+    def test_catalog_ranks_exact_before_hardware_compatible_entries(self) -> None:
+        exact = entry("720p")
+        same_cc = entry("720p", target="ada-sm89")
+        same_cc.update(
+            hardware_compatibility="same_compute_capability",
+            device_name="Ada compatibility build host",
+            multiprocessor_count=128,
+            filename=artifacts.expected_asset_filename(
+                "ada-sm89",
+                "dcvcrt-cvpr2025",
+                "720p",
+                "same_compute_capability",
+                "x86_64",
+                8,
+                9,
+            ),
+        )
+        broad = entry("720p", target="ampere-plus")
+        broad.update(
+            hardware_compatibility="ampere_plus",
+            device_name="Ampere compatibility build host",
+            compute_capability_minor=0,
+            multiprocessor_count=108,
+            filename=artifacts.expected_asset_filename(
+                "ampere-plus", "dcvcrt-cvpr2025", "720p", "ampere_plus"
+            ),
+        )
+        validated = artifacts.validate_catalog(
+            {"schema": artifacts.CATALOG_SCHEMA, "assets": [broad, same_cc, exact]}
+        )
+        self.assertEqual(
+            [artifacts.catalog_entry_match_rank(item, identity()) for item in validated],
+            [2, 1, 0],
+        )
+
+    def test_catalog_rejects_hardware_compatible_jetson_entry(self) -> None:
+        candidate = entry("720p", target="orin-family")
+        candidate.update(
+            architecture="aarch64",
+            hardware_compatibility="ampere_plus",
+            filename=artifacts.expected_asset_filename(
+                "orin-family", "dcvcrt-cvpr2025", "720p", "ampere_plus"
+            ),
+        )
+        with self.assertRaisesRegex(artifacts.ValidationError, "Jetson/AArch64"):
+            artifacts.validate_catalog(
+                {"schema": artifacts.CATALOG_SCHEMA, "assets": [candidate]}
+            )
+
+    def test_catalog_rejects_duplicate_compatibility_filename(self) -> None:
+        first = entry("720p", target="ada-sm89-a")
+        first.update(
+            hardware_compatibility="same_compute_capability",
+            filename=artifacts.expected_asset_filename(
+                "ada-sm89-a",
+                "dcvcrt-cvpr2025",
+                "720p",
+                "same_compute_capability",
+                "x86_64",
+                8,
+                9,
+            ),
+        )
+        second = dict(first)
+        second["target_profile_id"] = "ada-sm89-b"
+        with self.assertRaisesRegex(artifacts.ValidationError, "duplicate catalog filename"):
+            artifacts.validate_catalog(
+                {"schema": artifacts.CATALOG_SCHEMA, "assets": [first, second]}
+            )
+
+    def test_catalog_selects_best_rank_per_profile(self) -> None:
+        payload = b"catalog asset"
+        digest = hashlib.sha256(payload).hexdigest()
+        same_cc = entry("720p", target="ada-sm89")
+        same_cc.update(
+            hardware_compatibility="same_compute_capability",
+            device_name="Ada compatibility build host",
+            multiprocessor_count=128,
+            filename=artifacts.expected_asset_filename(
+                "ada-sm89",
+                "dcvcrt-cvpr2025",
+                "720p",
+                "same_compute_capability",
+                "x86_64",
+                8,
+                9,
+            ),
+            size_bytes=len(payload),
+            sha256=digest,
+        )
+        broad = entry("720p", target="ampere-plus")
+        broad.update(
+            hardware_compatibility="ampere_plus",
+            device_name="Ampere compatibility build host",
+            compute_capability_minor=0,
+            multiprocessor_count=108,
+            filename=artifacts.expected_asset_filename(
+                "ampere-plus", "dcvcrt-cvpr2025", "720p", "ampere_plus"
+            ),
+            size_bytes=len(payload),
+            sha256=digest,
+        )
+
+        def fake_extract(archive: Path, root: Path) -> Path:
+            candidate = same_cc if archive.name == same_cc["filename"] else broad
+            bundle = root / "bundle"
+            bundle.mkdir(parents=True)
+            manifest = {
+                "target_profile_id": candidate["target_profile_id"],
+                "model_profile_id": candidate["model_profile_id"],
+                "engine_profile_id": candidate["profile"],
+                "hardware_compatibility": candidate["hardware_compatibility"],
+                **{
+                    field: candidate[field]
+                    for field in (
+                        "device_name",
+                        "compute_capability_major",
+                        "compute_capability_minor",
+                        "multiprocessor_count",
+                        "cuda_runtime_version",
+                        "tensorrt_version_major",
+                        "tensorrt_version_minor",
+                        "tensorrt_version_patch",
+                        "precision",
+                    )
+                },
+            }
+            (bundle / "engine_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            return bundle
+
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(
+            artifacts,
+            "download_file",
+            side_effect=lambda _url, path, _token: path.write_bytes(payload),
+        ) as download, mock.patch.object(
+            artifacts, "extract_engine_archive", side_effect=fake_extract
+        ), mock.patch.object(
+            artifacts, "validate_engine_bundle", return_value={}
+        ), mock.patch.object(artifacts, "atomic_symlink"):
+            installed = artifacts.install_catalog_assets(
+                [broad, same_cc],
+                {
+                    str(same_cc["filename"]): "https://example.invalid/same-cc",
+                    str(broad["filename"]): "https://example.invalid/ampere-plus",
+                },
+                identity(),
+                backend="dcvcrt",
+                requested_profiles=["720p"],
+                engine_root=Path(temporary),
+            )
+        self.assertEqual(installed, ["720p"])
+        self.assertEqual(download.call_count, 1)
+        self.assertEqual(Path(download.call_args.args[1]).name, same_cc["filename"])
+
     def test_catalog_rejects_legacy_public_name_and_duplicates(self) -> None:
         legacy = entry("720p")
         legacy["profile"] = "720p-fp16"
@@ -171,7 +325,9 @@ class CatalogTests(unittest.TestCase):
 
     def test_no_match_and_ambiguous_match(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            with self.assertRaises(artifacts.ValidationError):
+            with self.assertRaisesRegex(
+                artifacts.ValidationError, "does not build engines automatically"
+            ):
                 artifacts.install_catalog_assets(
                     [entry("720p")],
                     {},
@@ -329,6 +485,28 @@ class CatalogTests(unittest.TestCase):
             engine_paths,
             [str(Path(temporary) / f"dcvcrt-{profile}") for profile in artifacts.ENGINE_PROFILES],
         )
+
+    def test_build_forwards_hardware_compatibility(self) -> None:
+        target = REPOSITORY_ROOT / "configs/targets/rtx4070-ubuntu2404.json"
+        with mock.patch.object(
+            artifacts.subprocess,
+            "run",
+            return_value=SimpleNamespace(returncode=0),
+        ) as run:
+            artifacts.forward_artifact_command(
+                "build",
+                [
+                    "--profile",
+                    "720p",
+                    "--target-profile",
+                    str(target),
+                    "--hardware-compatibility",
+                    "same_compute_capability",
+                ],
+            )
+        command = run.call_args.args[0]
+        index = command.index("--hardware-compatibility")
+        self.assertEqual(command[index + 1], "same_compute_capability")
 
 
 if __name__ == "__main__":

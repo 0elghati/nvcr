@@ -120,12 +120,6 @@ def validate_archive(
     manifest_path = bundle_root / "engine_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     profile = artifacts.canonical_profile_name(str(manifest["engine_profile_id"]))
-    expected_name = artifacts.expected_asset_filename(
-        str(manifest["target_profile_id"]), str(manifest["model_profile_id"]), profile
-    )
-    if archive.name != expected_name:
-        fail(f"{archive.name} does not match bundle identity; expected {expected_name}")
-
     target_profile_path = target_profiles_dir / f"{manifest['target_profile_id']}.json"
     if not target_profile_path.is_file():
         fail(f"missing registered target profile: {target_profile_path}")
@@ -135,12 +129,24 @@ def validate_archive(
     architecture = target_profile.get("host", {}).get("architecture")
     if architecture not in ("x86_64", "aarch64"):
         fail(f"target profile has unsupported architecture: {architecture}")
+    expected_name = artifacts.expected_asset_filename(
+        str(manifest["target_profile_id"]),
+        str(manifest["model_profile_id"]),
+        profile,
+        str(manifest.get("hardware_compatibility", "exact")),
+        architecture,
+        int(manifest["compute_capability_major"]),
+        int(manifest["compute_capability_minor"]),
+    )
+    if archive.name != expected_name:
+        fail(f"{archive.name} does not match bundle identity; expected {expected_name}")
     return {
         "backend": "dcvcrt",
         "model_profile_id": str(manifest["model_profile_id"]),
         "target_profile_id": str(manifest["target_profile_id"]),
         "profile": profile,
         "precision": "fp16",
+        "hardware_compatibility": str(manifest.get("hardware_compatibility", "exact")),
         "operating_system": "linux",
         "architecture": architecture,
         "device_name": str(manifest["device_name"]),
@@ -160,21 +166,27 @@ def validate_archive(
 def merge_catalog(
     existing: list[dict[str, object]], updates: list[dict[str, object]]
 ) -> list[dict[str, object]]:
-    def key(entry: dict[str, object]) -> tuple[str, str, str, str]:
+    def key(entry: dict[str, object]) -> tuple[str, str, str, str, str]:
         return (
             str(entry["backend"]),
             str(entry["model_profile_id"]),
             str(entry["target_profile_id"]),
             str(entry["profile"]),
+            str(entry.get("hardware_compatibility", "exact")),
         )
 
     merged = {key(entry): entry for entry in existing}
-    updated_targets: set[tuple[str, str, str]] = set()
+    updated_targets: set[tuple[str, str, str, str]] = set()
     for entry in updates:
         merged[key(entry)] = entry
-        updated_targets.add(key(entry)[:3])
+        item_key = key(entry)
+        updated_targets.add((item_key[0], item_key[1], item_key[2], item_key[4]))
     for target in updated_targets:
-        profiles = {item_key[3] for item_key in merged if item_key[:3] == target}
+        profiles = {
+            item_key[3]
+            for item_key in merged
+            if (item_key[0], item_key[1], item_key[2], item_key[4]) == target
+        }
         if profiles != set(artifacts.ENGINE_PROFILES):
             fail(
                 f"rolling target {target} must contain all registered profiles; "

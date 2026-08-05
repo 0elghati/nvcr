@@ -50,6 +50,13 @@ if profile.endswith("-fp16"):
     profile = profile[:-5]
 if profile != manifest.get("optimization_point"):
     raise SystemExit("engine profile does not match optimization point")
+compatibility = manifest.get("hardware_compatibility", "exact")
+if compatibility not in ("exact", "same_compute_capability", "ampere_plus"):
+    raise SystemExit(f"invalid hardware_compatibility: {compatibility!r}")
+if compatibility == "same_compute_capability":
+    target = f"linux-amd64-sm{manifest['compute_capability_major']}{manifest['compute_capability_minor']}"
+elif compatibility == "ampere_plus":
+    target = "linux-amd64-ampere-plus"
 print(f"nvcr-engines-{target}-{model}-{profile}")
 PY_NAME
 )"

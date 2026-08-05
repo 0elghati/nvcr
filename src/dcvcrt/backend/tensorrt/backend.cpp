@@ -331,6 +331,7 @@ struct EngineManifest final {
     std::string precision;
     std::string optimization_point;
     std::string shape_profile{"dynamic"};
+    std::string hardware_compatibility{"exact"};
     std::string device_name;
     std::string checksum_manifest;
     std::string checksum_manifest_sha256;
@@ -386,6 +387,8 @@ Result<EngineManifest> load_engine_manifest(const fs::path& root) {
     auto precision = read_json_string(text.value(), "precision");
     auto profile = read_json_string(text.value(), "optimization_point");
     auto shape_profile = read_optional_json_string(text.value(), "shape_profile");
+    auto hardware_compatibility =
+        read_optional_json_string(text.value(), "hardware_compatibility");
     auto device_name = read_json_string(text.value(), "device_name");
     auto checksum_manifest = read_json_string(text.value(), "checksum_manifest");
     auto checksum_manifest_sha256 =
@@ -410,6 +413,7 @@ Result<EngineManifest> load_engine_manifest(const fs::path& root) {
     if (!precision) return precision.error();
     if (!profile) return profile.error();
     if (!shape_profile) return shape_profile.error();
+    if (!hardware_compatibility) return hardware_compatibility.error();
     if (!device_name) return device_name.error();
     if (!checksum_manifest) return checksum_manifest.error();
     if (!checksum_manifest_sha256) return checksum_manifest_sha256.error();
@@ -434,6 +438,10 @@ Result<EngineManifest> load_engine_manifest(const fs::path& root) {
     manifest.optimization_point = std::move(profile.value());
     if (shape_profile.value().has_value()) {
         manifest.shape_profile = std::move(shape_profile.value().value());
+    }
+    if (hardware_compatibility.value().has_value()) {
+        manifest.hardware_compatibility =
+            std::move(hardware_compatibility.value().value());
     }
     manifest.device_name = std::move(device_name.value());
     manifest.checksum_manifest = std::move(checksum_manifest.value());
@@ -556,6 +564,11 @@ Result<EngineManifest> validate_engine_manifest(
         manifest.value().shape_profile != "fixed") {
         return backend_error("engine_manifest.json has an invalid shape_profile");
     }
+    if (manifest.value().hardware_compatibility != "exact" &&
+        manifest.value().hardware_compatibility != "same_compute_capability" &&
+        manifest.value().hardware_compatibility != "ampere_plus") {
+        return backend_error("engine_manifest.json has an invalid hardware_compatibility");
+    }
     if (!valid_profile_id(manifest.value().model_profile_id) ||
         !valid_profile_id(manifest.value().target_profile_id) ||
         !valid_profile_id(manifest.value().engine_profile_id) ||
@@ -596,10 +609,22 @@ Result<EngineManifest> validate_engine_manifest(
     cudaDeviceProp properties{};
     const auto status = cudaGetDeviceProperties(&properties, device_id);
     if (status != cudaSuccess) return cuda_error("cudaGetDeviceProperties", status);
-    if (manifest.value().device_name != properties.name ||
-        manifest.value().compute_major != properties.major ||
-        manifest.value().compute_minor != properties.minor ||
-        manifest.value().multiprocessor_count != properties.multiProcessorCount) {
+    const bool exact_device =
+        manifest.value().device_name == properties.name &&
+        manifest.value().compute_major == properties.major &&
+        manifest.value().compute_minor == properties.minor &&
+        manifest.value().multiprocessor_count == properties.multiProcessorCount;
+    const bool same_compute_capability =
+        !properties.integrated &&
+        manifest.value().compute_major == properties.major &&
+        manifest.value().compute_minor == properties.minor;
+    const bool ampere_plus = !properties.integrated && properties.major >= 8;
+    const bool compatible_device =
+        (manifest.value().hardware_compatibility == "exact" && exact_device) ||
+        (manifest.value().hardware_compatibility == "same_compute_capability" &&
+         same_compute_capability) ||
+        (manifest.value().hardware_compatibility == "ampere_plus" && ampere_plus);
+    if (!compatible_device) {
         return backend_error(
             "TensorRT engine bundle was built for " + manifest.value().device_name +
             " (SM " + std::to_string(manifest.value().compute_major) + "." +
@@ -609,7 +634,9 @@ Result<EngineManifest> validate_engine_manifest(
             " is " + properties.name + " (SM " + std::to_string(properties.major) + "." +
             std::to_string(properties.minor) + ", " +
             std::to_string(properties.multiProcessorCount) +
-            " multiprocessors); rebuild the engine directory on the selected device");
+            " multiprocessors); hardware compatibility class is " +
+            manifest.value().hardware_compatibility +
+            "; rebuild the engine directory on the selected device");
     }
     return std::move(manifest.value());
 }
