@@ -573,6 +573,21 @@ Exit criteria:
 
 ## Evidence log
 
+### 2026-08-05 - Relax desktop CUDA engine catalog matching
+
+- Updated catalog installation and runtime TensorRT bundle validation so desktop
+  x86_64 engines recorded on an older CUDA runtime within the same CUDA major
+  family can match a newer active CUDA runtime. Older active runtimes, cross-major
+  CUDA runtimes, exact TensorRT mismatches, and Jetson/L4T CUDA runtime mismatches
+  remain rejected.
+- Improved the no-compatible-engine diagnostic to include each published target's
+  recorded CUDA runtime so CUDA-family versus TensorRT/GPU mismatches are visible.
+- Verification: `python3 -m unittest tests.engine_catalog_tests` passed 20 tests,
+  including CUDA 12.6-to-12.8 desktop matching and Jetson exact-runtime rejection;
+  `cmake --build build-tensorrt-check --target nvcr --parallel` compiled the
+  TensorRT backend; `bash -n scripts/backends/dcvcrt/prepare_artifacts.sh` and
+  `git diff --check` passed.
+
 ### 2026-08-05 - Add generic CUDA 12.8 / TensorRT 10.9 amd64 image tags
 
 - Extended `docker/publish.sh` with the generic `amd64-cuda12.8-trt10.9` runtime family and non-RTX-specific Docker tags.

@@ -21,7 +21,9 @@ curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.
 With no profile option, the installer selects the best published compatible
 bundle for each canonical profile independently: exact device first, then
 same-compute-capability desktop bundles, then Ampere-plus desktop bundles.
-CUDA runtime and TensorRT version remain exact in every class. To install a
+TensorRT version remains exact in every class. Desktop CUDA runtimes may use
+engines recorded on an older runtime within the same CUDA major family; Jetson
+CUDA runtime matching remains exact. To install a
 subset or no engines:
 
 ```bash

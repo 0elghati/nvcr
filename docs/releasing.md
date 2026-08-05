@@ -64,8 +64,10 @@ archive hash/size, backend/model/target/profile, Linux architecture, hardware
 compatibility class, GPU identity recorded at build time, CUDA runtime,
 TensorRT version, and internal FP16 precision. Catalog installation selects the
 best published match per profile: exact device first, then
-`same_compute_capability`, then `ampere_plus`. CUDA and TensorRT matching remain
-exact, and NVCR never builds a missing engine automatically during install.
+`same_compute_capability`, then `ampere_plus`. TensorRT matching remains exact.
+Desktop CUDA runtime matching allows an active runtime to use an engine recorded
+on an older runtime within the same CUDA major family; Jetson remains exact.
+NVCR never builds a missing engine automatically during install.
 
 From each target machine, stage a complete six-profile set for a new target or
 selected replacements for a target already present in the catalog. Treat each

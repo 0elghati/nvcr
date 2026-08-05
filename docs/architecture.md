@@ -96,7 +96,7 @@ Before TensorRT deserializes a plan, initialization requires an
 `nvcr.engine-bundle.v2` manifest and verifies:
 
 - configured model profile identity and FP16 precision;
-- CUDA runtime, exact TensorRT version, GPU name, compute capability, and SM count;
+- CUDA runtime compatibility, exact TensorRT version, GPU name, compute capability, and SM count;
 - the digest of `engine.sha256`;
 - the exact 14-plan/six-runtime-asset file set and every file digest;
 - I/P model-manifest identities.

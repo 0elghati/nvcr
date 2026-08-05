@@ -56,19 +56,22 @@ these match its v2 manifest and checksum set:
 
 - model profile and I/P model-manifest digests;
 - FP16 engine profile and optimization dimensions;
-- CUDA runtime and exact TensorRT version;
+- CUDA runtime compatibility and exact TensorRT version;
 - GPU model, compute capability, and multiprocessor count;
 - every required plan and runtime asset SHA-256 digest.
 
-NVCR rejects a stale, edited, wrong-model, cross-GPU, cross-CUDA, or
-cross-TensorRT bundle during initialization. A multi-architecture CUDA library
+NVCR rejects a stale, edited, wrong-model, cross-GPU, incompatible-CUDA,
+or cross-TensorRT bundle during initialization. A multi-architecture CUDA library
 does not relax TensorRT plan compatibility. Rebuild engines on the final target.
 
 Published engines live outside semver application releases in the rolling
 `engine-assets` release. `nvcr-engine-catalog.json` selects independently for
 each resolution profile, preferring an exact device engine, then a
-`SAME_COMPUTE_CAPABILITY` engine, then an `AMPERE_PLUS` engine. CUDA and
-TensorRT versions remain exact in all three classes. When none matches, install
+`SAME_COMPUTE_CAPABILITY` engine, then an `AMPERE_PLUS` engine. TensorRT
+versions remain exact in all three classes. On desktop x86_64, the active CUDA
+runtime may consume an engine recorded on an older CUDA runtime within the same
+CUDA major family; older active runtimes and cross-major CUDA runtimes do not
+match. Jetson/L4T CUDA runtime matching remains exact. When none matches, install
 fails with the manual target-local build documentation; NVCR never builds an
 engine automatically.
 

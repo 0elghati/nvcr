@@ -288,6 +288,6 @@ devcontainers intentionally model the two deployment architectures.
 
 Image architecture and CUDA code generation are only the first compatibility
 layer. Before execution, NVCR still checks the engine bundle's model/profile
-hashes, GPU identity, compute capability, CUDA runtime, TensorRT version, and
-plan checksums. Never copy an Orin engine bundle into the x86_64 image or an RTX
+hashes, GPU identity, compute capability, CUDA runtime compatibility, exact
+TensorRT version, and plan checksums. Never copy an Orin engine bundle into the x86_64 image or an RTX
 bundle into the Jetson image. A container does not make a TensorRT plan portable.
