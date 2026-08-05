@@ -8,7 +8,7 @@ them.
 
 | Definition | Docker platform | CUDA architecture | Reference target |
 |---|---|---:|---|
-| `docker/Dockerfile.x86_64` | `linux/amd64` | SM 8.9 | RTX 4070 / Ubuntu 24.04 |
+| `docker/Dockerfile.x86_64` | `linux/amd64` | CUDA 12.8 image uses the compiler-supported architecture set; CUDA 12.6 legacy defaults to SM 8.9 | RTX 4070 / Ubuntu 24.04 and validated desktop targets |
 | `docker/Dockerfile.jetson` | `linux/arm64` | SM 8.7 | Jetson Orin Nano / L4T 36.4.x |
 
 Each Dockerfile has a `test` target for one-command validation, a

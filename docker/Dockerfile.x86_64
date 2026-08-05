@@ -101,7 +101,7 @@ COPY . /src
 
 RUN cmake -S /src -B /tmp/nvcr-build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_CUDA_ARCHITECTURES=${NVCR_CUDA_ARCHITECTURES} \
+        "-DCMAKE_CUDA_ARCHITECTURES=${NVCR_CUDA_ARCHITECTURES}" \
         -DCMAKE_INSTALL_PREFIX=/opt/nvcr \
         -DNVCR_BUILD_TESTS=OFF \
         -DNVCR_ENABLE_TENSORRT=ON \
