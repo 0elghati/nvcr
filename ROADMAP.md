@@ -106,6 +106,13 @@ verification found 25 assets total: 12 archives, 12 checksums, and
 `nvcr-engine-catalog.json`. S3 cleanup removed 24 stale SM 120 and RTX 5060
 objects, leaving only the current 24 archive/checksum objects under
 `s3://nvcr-release-assets-820926961377-eu-west-1/releases/engine-assets/`.
+Local container build evidence, 2026-08-05: built and loaded
+`omarelghati/nvcr:0.7.1-amd64-cuda12.8-trt10.9` and the moving local alias
+`omarelghati/nvcr:amd64-cuda12.8-trt10.9` from revision
+`44bdf21281210e208873a44ca2b481ec4fd3f5fe` with CUDA 12.8/TensorRT 10.9.
+Image inspection reported linux/amd64, OCI version `0.7.1`, and image ID
+`sha256:0c27b1fea39d1ec73faf0c5f16b6591c02ec4a89b8452b887c6bf772c25072f2`.
+`nvcr --help` and `nvcr-artifacts --help` both ran inside the loaded image.
 Binary packages stay semver'd, architecture-specific, and engine-free. The CLI now warns when
 multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
 Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and uses
