@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/0elghati/nvcr/compare/v0.8.1...v0.8.2) (2026-08-05)
+
+
+### Bug Fixes
+
+* **docker:** Build amd64 CUDA 12.8 image for compiler GPU set ([#64](https://github.com/0elghati/nvcr/issues/64)) ([09ed9ac](https://github.com/0elghati/nvcr/commit/09ed9ac603a7daa72439d6ffadf6deacab230e18))
+
 ## [0.8.1](https://github.com/0elghati/nvcr/compare/v0.8.0...v0.8.1) (2026-08-05)
 
 
