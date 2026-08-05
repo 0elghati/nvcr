@@ -23,15 +23,20 @@ There is intentionally no shared `latest` tag:
 
 | Runtime family | Immutable tag | Moving family tag |
 |---|---|---|
-| x86_64 / CUDA 12.6 / TensorRT 10.7 | `VERSION-x86_64-cuda12.6-trt10.7` | `x86_64-cuda12.6-trt10.7` |
+| amd64 / CUDA 12.8 / TensorRT 10.9 | `VERSION-amd64-cuda12.8-trt10.9` | `amd64-cuda12.8-trt10.9` |
+| amd64 / CUDA 12.6 / TensorRT 10.7 | `VERSION-amd64-cuda12.6-trt10.7` | `amd64-cuda12.6-trt10.7` |
 | Jetson / L4T 36.4 / JetPack 6.1 | `VERSION-jetson-l4t36.4` | `jetson-l4t36.4` |
 
-The default Docker Hub repository is `0elghati/nvcr`. Override
+Docker image tags use `amd64`, matching the OCI/Docker `linux/amd64` platform
+name. Repository internals may still use `x86_64` for compiler, filesystem, and
+target-profile naming.
+
+The default Docker Hub repository is `omarelghati/nvcr`. Override
 `NVCR_DOCKERHUB_REPOSITORY` if the repository lives under another namespace.
-Build and inspect the x86_64 image locally:
+Build and inspect the current amd64 image locally:
 
 ```bash
-./docker/publish.sh --load x86_64
+./docker/publish.sh --load amd64-cuda12.8-trt10.9
 ```
 
 Publishing is deliberately guarded: the worktree must be clean and HEAD must
@@ -39,7 +44,7 @@ exactly match `v$(cat version.txt)`.
 
 ```bash
 docker login
-./docker/publish.sh --push x86_64
+./docker/publish.sh --push amd64-cuda12.8-trt10.9
 ```
 
 Run the Jetson form only on the native aarch64 Jetson target:
@@ -54,10 +59,10 @@ release build. Configure `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository
 secrets. The Jetson job additionally requires a self-hosted runner labeled
 `jetson`; hosted x86_64 emulation is not used for that image.
 
-To consume a published x86_64 image with Compose:
+To consume a published amd64 image with Compose:
 
 ```bash
-export NVCR_X86_64_IMAGE="0elghati/nvcr:0.5.1-x86_64-cuda12.6-trt10.7"
+export NVCR_X86_64_IMAGE="omarelghati/nvcr:0.7.0-amd64-cuda12.8-trt10.9"
 export NVCR_INPUT_DIR="/path/to/yuv-input"
 export NVCR_OUTPUT_DIR="/path/to/nvcr-output"
 
