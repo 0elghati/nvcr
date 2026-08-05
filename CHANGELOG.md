@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/0elghati/nvcr/compare/v0.7.0...v0.8.0) (2026-08-05)
+
+
+### Features
+
+* **artifacts:** add bounded TensorRT engine portability ([#55](https://github.com/0elghati/nvcr/issues/55)) ([038adc7](https://github.com/0elghati/nvcr/commit/038adc79a752c2f08286f134c5fefdeb61e5d6bb))
+* **targets:** validate RTX 5060 Blackwell path ([#56](https://github.com/0elghati/nvcr/issues/56)) ([0ac426f](https://github.com/0elghati/nvcr/commit/0ac426fe5ecb213d33b7005abb31e3784bb74224))
+
+
+### Performance Improvements
+
+* record Orin sequence-GOP diagnostic ([#59](https://github.com/0elghati/nvcr/issues/59)) ([9239719](https://github.com/0elghati/nvcr/commit/9239719208d2e6679fde29a72f271b99a8411cbb))
+
 ## [0.7.0](https://github.com/0elghati/nvcr/compare/v0.6.0...v0.7.0) (2026-08-04)
 
 

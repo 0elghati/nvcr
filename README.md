@@ -5,7 +5,7 @@ Its first and currently only supported backend is the pinned DCVC-RT I/P model
 pair, executed through a Linux C++20/CUDA/TensorRT runtime and reproducible
 artifact toolchain.
 
-> Repository status: development snapshot `0.7.0` <!-- x-release-please-version -->.
+> Repository status: development snapshot `0.8.0` <!-- x-release-please-version -->.
 > `v0.3` is the active scope-and-foundation target; `v1.0` is the first scoped
 > product release. This repository is not currently a validated v1 release.
 
