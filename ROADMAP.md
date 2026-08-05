@@ -90,6 +90,22 @@ separately. The user-directed SM 8.9 `same_compute_capability` 40-series set
 was staged to S3 and published through `upload-engine-assets.yml`; second
 intended GPU correctness, whole-codec performance, and wrong-device rejection
 remain the compatibility-class release gates.
+Local rebuild evidence, 2026-08-05: rebuilt QCIF, CIF, 360p, 540p, 720p, and
+1080p DCVC-RT TensorRT 10.9.0 FP16 engines on the RTX 4070 target with
+`--hardware-compatibility same_compute_capability`. The manifests record
+`device_name` `NVIDIA GeForce RTX 4070`, SM 8.9, 46 multiprocessors, CUDA
+runtime `12060`, and TensorRT `10.9.0`. All six engine directories validated as
+`nvcr.engine-bundle.v2` and were packaged locally under
+`dist/sm89-rebuild-20260805/`. A matching exact RTX 4070 set was derived from
+the same TensorRT plans by changing only `hardware_compatibility` to `exact`;
+all six derived bundles validated and were packaged under
+`dist/rtx4070-exact-20260805/`. Workflow `31004804410` published the twelve exact
+plus SM 8.9 compatibility assets to the rolling `engine-assets` release, then
+the catalog was trimmed to those twelve TensorRT 10.9.0 entries. GitHub release
+verification found 25 assets total: 12 archives, 12 checksums, and
+`nvcr-engine-catalog.json`. S3 cleanup removed 24 stale SM 120 and RTX 5060
+objects, leaving only the current 24 archive/checksum objects under
+`s3://nvcr-release-assets-820926961377-eu-west-1/releases/engine-assets/`.
 Binary packages stay semver'd, architecture-specific, and engine-free. The CLI now warns when
 multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
 Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and uses
