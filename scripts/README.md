@@ -182,6 +182,11 @@ PSNR calculation is deliberately outside codec timing. Keep the emitted JSONL
 with the corresponding performance documentation so per-run variance is not
 lost behind aggregate FPS values.
 
+When the helper is bind-mounted into a minimal runtime container without Git,
+set `NVCR_BENCH_COMMIT` to the exact source revision and
+`NVCR_BENCH_DIRTY=true|false`. If those variables are unset, the helper keeps
+its native behavior and reads the revision and worktree state from Git.
+
 ## Complete Orin release benchmark
 
 Use `benchmark_orin_release.py` after rebooting the Jetson when `tegrastats`

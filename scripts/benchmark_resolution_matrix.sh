@@ -107,10 +107,20 @@ if [[ -n "$jsonl" ]]; then
     mkdir -p "$(dirname "$jsonl")"
 fi
 
-commit="$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || printf unknown)"
-dirty="false"
-if [[ -n "$(git -C "$repo_root" status --short 2>/dev/null || true)" ]]; then
-    dirty="true"
+commit="${NVCR_BENCH_COMMIT:-}"
+if [[ -z "$commit" ]]; then
+    commit="$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || printf unknown)"
+fi
+dirty="${NVCR_BENCH_DIRTY:-}"
+if [[ -z "$dirty" ]]; then
+    dirty="false"
+    if [[ -n "$(git -C "$repo_root" status --short 2>/dev/null || true)" ]]; then
+        dirty="true"
+    fi
+fi
+if [[ "$dirty" != true && "$dirty" != false ]]; then
+    echo "NVCR_BENCH_DIRTY must be true or false" >&2
+    exit 2
 fi
 
 select_engine() {

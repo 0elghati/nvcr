@@ -77,10 +77,15 @@ FROM toolchain AS build
 
 COPY . /src
 
+# The JetPack TensorRT DSOs retain DLA/CUDLA references that the NVIDIA
+# container runtime satisfies from the host driver stack. Docker build stages
+# do not run with that injection, so permit unresolved symbols in dependent
+# shared libraries while still requiring NVCR's own link symbols to resolve.
 RUN test "$(uname -m)" = aarch64 \
     && cmake -S /src -B /tmp/nvcr-build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CUDA_ARCHITECTURES=87 \
+        -DCMAKE_EXE_LINKER_FLAGS="-Wl,--allow-shlib-undefined" \
         -DCMAKE_INSTALL_PREFIX=/opt/nvcr \
         -DNVCR_BUILD_TESTS=OFF \
         -DNVCR_ENABLE_TENSORRT=ON \

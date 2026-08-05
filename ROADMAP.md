@@ -104,13 +104,15 @@ intentional host boundaries. I-decode now reuses pinned buffers at those entropy
 boundaries and uploads packed int8 symbols before converting them to FP16 on the
 GPU.
 
-Container next action: after the two branches land, exercise the Blackwell/WSL
-Compose path from a clean build and clean engine volume against the published
-exact assets. The Release SM-120 suite now passes the six-profile 20/20 matrix;
-static checks and same-device local assets do not replace clean catalog-install
-or negative compatibility gates. Build and run the Jetson definition natively
-on the recorded Orin target; static Jetson checks do not substitute for its
-native GPU suite.
+Container next action: exercise the Blackwell/WSL Compose path from a clean
+build and clean engine volume against the published exact assets. The Release
+SM-120 suite now passes the six-profile 20/20 matrix; static checks and
+same-device local assets do not replace clean catalog-install or negative
+compatibility gates. The Orin Docker sequence-length GOP diagnostic is now
+recorded at all six resolutions. Repeat from a clean committed image and
+catalog-installed canonical engine collection only after resolving the
+TensorRT cross-device-model warning; add peak memory, energy, pinned-Python
+parity, and wrong-device/runtime negative gates before advancing target status.
 
 Superseded release tooling note, 2026-08-01: `release_engine_assets.sh --latest-draft`
 now resolves tags through `gh api` rather than the newer
@@ -607,6 +609,58 @@ Exit criteria:
   and `1080p` `13cd0949894b051fbbb2f7525eef3f1d10b51c50b9501faf664e96d3b51e562c`.
   This remains same-device generation and staging evidence until the second
   intended GPU, whole-codec performance, and wrong-device negative gates pass.
+
+### 2026-08-05 — Latest-main Orin Docker sequence-length GOP diagnostic
+
+- Based the rerun on latest `main` commit
+  `0ac426fe5ecb213d33b7005abb31e3784bb74224`. The benchmark source diff was
+  limited to the Jetson container linker fix, container-safe provenance
+  support, and the evidence runner; generated release archives were not source
+  inputs.
+- Restored only the two harness fixes needed by the rerun: the Jetson runtime
+  build permits unresolved symbols in dependent TensorRT DLA/CUDLA DSOs at the
+  final executable link, and the resolution-matrix helper accepts explicit
+  commit/dirty provenance when bind-mounted into a runtime container.
+- Built revision-labeled Release image
+  `sha256:9c681930a4975de53942452e9ada221ec85830ea287138674a6c668992345d4a`.
+  All six selected bundles passed v2 validation, and a lightweight two-frame
+  QCIF container I/P encode/decode smoke passed before measurement.
+- After a reboot and benchmark-input page-cache eviction restored contiguous
+  NVMap headroom, ran three complete QP-32 repetitions at all six resolutions.
+  Each case used every complete source frame and set GOP equal to frame count,
+  producing one initial I-frame followed entirely by inter frames. GPU and CPU
+  clocks remained fixed at 1.02 GHz and 1.728 GHz before and after the matrix.
+- Mean encode/decode throughput was QCIF `255.849/271.963` fps, CIF
+  `105.074/109.397`, 360p `51.668/56.078`, 540p `20.966/23.847`, 720p
+  `10.494/11.999`, and 1080p `5.738/6.455`. Payload bytes and PSNR-YUV were
+  deterministic across repetitions at every resolution. The widest variance
+  was QCIF decode at 5.80%; decode spread from 360p through 1080p stayed below
+  0.89%.
+- The complete 48-row JSONL has SHA-256
+  `dc550c4c21b68a6760fed13b3950ca410f605b6cd8b69c418a5143b1c2959e09`.
+  Raw rows, exact runner, inputs and manifest hashes, source provenance, image
+  metadata, validation, logs, and clock/thermal snapshots are in
+  `docs/evidence/orin-container-gop-sequence-2026-08-05/` and summarized in
+  `docs/performance.md`.
+- This does not advance the Orin gate. TensorRT emitted repeated cross-device-
+  model plan warnings, the image used a dirty harness-only worktree, warm-up was
+  a separate process, and pinned-Python, peak-memory, and energy parity were not
+  captured.
+- Post-run inspection confirmed that the active device and all six bundle
+  manifests agree on the coarse identity (`Orin`, SM 8.7, 8 multiprocessors,
+  CUDA 12.6, TensorRT 10.3). TensorRT's serialized-plan compatibility check
+  compares additional hardware properties, so passing the NVCR manifest guard
+  does not clear the warning. The warning is emitted during the fourteen plan
+  deserializations rather than per frame; its logging overhead is outside codec
+  timing, but the embedded tactic selection can still affect throughput, memory
+  use, or runtime reliability.
+
+Current next action: resolve the Orin device-model warning and repeat from a
+clean committed image plus catalog-installed canonical engine collection. This
+requires rebuilding all fourteen plans for each of the six profiles on the
+current Orin configuration and rejecting any bundle whose load smoke still
+reports the warning. Add same-protocol pinned-Python, peak-memory, energy, and
+wrong-device/runtime negative evidence before advancing M1 or M4.
 
 ### 2026-08-04 — Implement bounded desktop TensorRT hardware compatibility
 

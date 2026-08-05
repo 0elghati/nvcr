@@ -114,6 +114,72 @@ The next performance milestone is to tighten the unavoidable entropy boundaries:
 4. Bind TensorRT outputs directly to downstream inputs where lifetimes permit.
 5. Add an automated post-warmup comparison gate.
 
+### 2026-08-05 Orin Docker sequence-length GOP diagnostic
+
+The Jetson Release runtime image was built from commit
+`0ac426fe5ecb213d33b7005abb31e3784bb74224` plus the pending container-only
+linker and benchmark-provenance fixes. The image is
+`sha256:9c681930a4975de53942452e9ada221ec85830ea287138674a6c668992345d4a`
+and carries the exact commit in its OCI revision label. It ran through the
+NVIDIA container runtime on the recorded Jetson Orin Nano / L4T 36.4.7 host
+with the JetPack 6.1/L4T r36.4.0 userspace, CUDA 12.6, and TensorRT 10.3.
+
+Every selected engine directory passed `nvcr.engine-bundle.v2` validation. A
+two-frame QCIF container I/P encode/decode smoke also passed before timing. The
+target was in `MAXN_SUPER`; GPU min/current/max stayed fixed at 1.02 GHz and
+CPU0 min/current/max at 1.728 GHz before and after the matrix.
+
+Each case used every complete YUV420P8 frame in its source, QP 32, one initial
+I-frame followed by inter frames, and a GOP equal to the sequence length. A
+separate 10-frame encode/decode process warmed the path before three complete
+measured repetitions. Codec timing excludes initialization, file I/O, and PSNR
+calculation. The helper retained its existing nominal timestamp rates of 30 fps
+for FourPeople 720p and 60 fps for BasketballDrive 1080p, differing from the
+filenames' 60/50 fps labels; those values construct timestamps and do not enter
+codec-time throughput. Results are arithmetic means:
+
+| Resolution | Frames/GOP | Payload | Encode | Decode | PSNR-YUV |
+|---|---:|---:|---:|---:|---:|
+| QCIF | 300 | 30,244 bytes | 255.849 fps | 271.963 fps | 38.342767 dB |
+| CIF | 266 | 381,952 bytes | 105.074 fps | 109.397 fps | 26.030571 dB |
+| 640x360 | 500 | 388,547 bytes | 51.668 fps | 56.078 fps | 34.765268 dB |
+| 960x540 | 500 | 664,997 bytes | 20.966 fps | 23.847 fps | 35.722156 dB |
+| 1280x720 | 601 | 495,231 bytes | 10.494 fps | 11.999 fps | 40.492927 dB |
+| 1920x1080 | 500 | 1,689,457 bytes | 5.738 fps | 6.455 fps | 36.385035 dB |
+
+Payload bytes and PSNR-YUV were identical across all three repetitions at every
+resolution. Encode spread was 0.17--1.53% except QCIF at 0.26%; decode spread
+was at most 0.88% from 360p through 1080p. QCIF decode had a wider 5.80% range
+(`275.692`, `277.983`, and `262.214` fps), and CIF decode had a 2.05% range;
+the table retains the specified arithmetic means rather than hiding those
+outliers. The board rose from about 55.3 C to 69.6 C GPU temperature while the
+locked clocks remained unchanged.
+
+TensorRT repeatedly warned that the plans were being used across different
+device models despite the bundles passing NVCR's recorded Orin identity checks.
+The active GPU and all six manifests agree on `Orin`, SM 8.7, eight
+multiprocessors, CUDA 12.6, and TensorRT 10.3, but TensorRT also compares
+properties not represented by that coarse manifest identity. The warnings occur
+during the fourteen plan deserializations for each process, not per frame, and
+codec timing excludes initialization; warning output itself therefore does not
+materially lower the reported FPS. The tactics serialized into a plan can still
+be suboptimal for the active device or increase memory and runtime-failure risk.
+NVIDIA's compatibility guidance recommends building and deploying on the same
+device model and notes that JetPack does not support the general hardware-
+compatibility mode: <https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/engine-compatibility.html>.
+
+Together with the dirty container-harness worktree, separate-process warm-up,
+and missing pinned-Python, peak-memory, and energy measurements, this makes the
+matrix diagnostic evidence rather than a release or parity gate. The values are
+valid measurements of these exact plans on this board, but not a target-local
+performance ceiling. A clean rerun requires rebuilding all 84 plans on the
+current Orin configuration and rejecting the bundle if any load smoke retains
+the warning. Raw 48-row JSONL (SHA-256
+`dc550c4c21b68a6760fed13b3950ca410f605b6cd8b69c418a5143b1c2959e09`),
+commands, hashes, compressed source patch and status, image metadata,
+validation logs, and platform/thermal snapshots are under
+[`evidence/orin-container-gop-sequence-2026-08-05/`](evidence/orin-container-gop-sequence-2026-08-05/).
+
 ### 2026-08-01 Orin Nano partial four-resolution diagnostic
 
 Commit `41a458fc53b54d329fcf813205d0e546b7eed057` was rebuilt in Release mode
