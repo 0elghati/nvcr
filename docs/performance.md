@@ -729,3 +729,110 @@ evidence:
 - The first successful QCIF plan build reached manifest generation but lacked `--target-profile-path`. Artifact preparation now rejects that omission before expensive work.
 - The first QCIF contract run rejected the `192x192` warm-up because its I-frame maximum stopped at visible dimensions. QCIF now keeps `176x144` as its optimization point while admitting the padded maximum.
 - The first CIF roundtrip rejected the padded `20x24` I hyper-latent. The CIF hyper-analysis profile now matches runtime latent padding.
+
+### 2026-08-04 RTX 5060 Laptop 360p/540p diagnostic
+
+Commit `7f6027873a474d54dbcf66f3b38f9c39ce5c9fde` was measured from a
+dirty worktree in WSL2 on an RTX 5060 Laptop GPU (SM 12.0, 26 SMs), driver
+591.86, CUDA 12.8.1, TensorRT 10.9.0.34, and GCC 13.3 Release code.
+
+Protocol:
+
+- Exact target-local fixed 360p and 540p FP16 bundles were used.
+- Five matched YUV420P8 sequences per resolution retained source frame rates.
+- QP 32, GOP 97, and 97 measured frames exercised the complete I/P path.
+- Each case used separate 10-frame encode/decode warm-ups and three measured
+  encode/decode repetitions; table FPS values are arithmetic means.
+- Codec-reported time excludes initialization, file I/O, and PSNR calculation.
+- Clocks were not locked. Post-run state was P0, 180 MHz graphics/SM, 12,001 MHz
+  memory, 14.13 W, and 49 C; this is diagnostic rather than release evidence.
+
+| Resolution | Sequence | Payload bytes | Encode FPS | Decode FPS | PSNR-YUV | kbit/s | bpp |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 360p | BasketballDrive | 79,390 | 53.647 | 65.760 | 34.885378 | 327.381 | 0.028419 |
+| 360p | HoneyBee | 45,621 | 53.203 | 65.699 | 38.731648 | 451.507 | 0.016331 |
+| 360p | Jockey | 52,628 | 53.843 | 66.115 | 36.498574 | 520.854 | 0.018839 |
+| 360p | Kimono | 89,200 | 53.666 | 65.811 | 34.374634 | 176.561 | 0.031930 |
+| 360p | ReadySteadyGo | 88,358 | 53.737 | 66.361 | 34.308937 | 874.471 | 0.031629 |
+| **360p mean** | **5 sequences** | — | **53.619** | **65.949** | — | — | — |
+| 540p | BasketballDrive | 133,621 | 30.461 | 34.515 | 35.901900 | 551.014 | 0.021258 |
+| 540p | HoneyBee | 63,511 | 30.253 | 35.295 | 40.273609 | 628.562 | 0.010104 |
+| 540p | Jockey | 83,325 | 30.365 | 34.230 | 37.700352 | 824.660 | 0.013256 |
+| 540p | Kimono | 151,616 | 30.142 | 34.491 | 35.703137 | 300.106 | 0.024121 |
+| 540p | ReadySteadyGo | 147,245 | 30.427 | 34.595 | 35.585649 | 1,457.270 | 0.023426 |
+| **540p mean** | **5 sequences** | — | **30.330** | **34.625** | — | — | — |
+
+Machine-readable per-run and aggregate rows are in
+[`evidence/rtx5060-edge-360p-540p-2026-08-04.jsonl`](evidence/rtx5060-edge-360p-540p-2026-08-04.jsonl);
+input hashes are in the adjacent `-inputs.sha256` sidecar.
+The full 9-test suite had one unrelated catalog-fixture size failure. The direct
+CUDA, TensorRT contract, and native 360p I/P roundtrip tests passed 3/3.
+Peak host/GPU memory and allocation/transfer counts were not captured, and no
+matching pinned-Python cu128 run was made, so this remains diagnostic evidence.
+
+#### Same-binary automatic persistent correction
+
+The initial automatic runs above selected per-engine low-memory execution:
+the RTX 5060 reports 8,151 MiB, which fell below the former 8 GiB cutoff.
+Profiles showed context setup and six forced synchronizations per P-frame as
+the dominant loss. Automatic mode now keeps persistent contexts on every
+discrete GPU; explicit low-memory mode remains available, while integrated
+devices retain the shared-workspace persistent policy.
+
+A fresh Release SM-120 build passed its 360p-focused 10/10 suite; the later
+all-six-profile configuration passed 20/20. The five matched sequences,
+fixed 360p/540p bundles, QP 32, GOP 97, warm-up, repetition count, and codec
+timing boundaries were then held constant while the same binary ran once in
+automatic persistent mode and once with forced low-memory mode.
+
+| Resolution / operation | Forced low-memory FPS | Automatic persistent FPS | Gain |
+|---|---:|---:|---:|
+| 360p encode | 45.438 | 244.671 | +438.47% (5.385x) |
+| 360p decode | 56.292 | 198.669 | +252.92% (3.529x) |
+| 540p encode | 26.250 | 131.200 | +399.82% (4.998x) |
+| 540p decode | 30.130 | 112.389 | +273.02% (3.730x) |
+
+Payload bytes matched between modes for every sequence and resolution; decode
+PSNR-YUV also matched exactly. The current mainline access-unit format differs
+from commit `7f60278`, so only this same-binary pair is used for causal gains.
+
+Machine-readable automatic rows are in
+[`evidence/rtx5060-edge-360p-540p-persistent-2026-08-04.jsonl`](evidence/rtx5060-edge-360p-540p-persistent-2026-08-04.jsonl);
+the forced control is in
+[`evidence/rtx5060-edge-360p-540p-low-memory-control-2026-08-04.jsonl`](evidence/rtx5060-edge-360p-540p-low-memory-control-2026-08-04.jsonl).
+Their SHA-256 digests are `b82ef89a21a1e50f7983715c44e1b50f38bd2e01a2ec02a74e9a3c552caac622`
+and `e8792a60304450a5764957427059b892b0b85ae7cefa6e80d43d7d98747d7773`,
+respectively.
+
+These remain diagnostic results: WSL2 was used, clocks and peak memory were not
+locked/recorded, and no matching pinned-Python run was made. They establish the
+execution-policy regression and its correction, but not final target parity or
+release readiness.
+
+#### AC-powered automatic persistent run
+
+After AC power was connected, the automatic persistent case was repeated with
+the same five inputs, 97 frames, QP 32, GOP 97, ten warm-up frames, three
+repetitions, exact 360p/540p engine bundles, Release binary, and timing boundary.
+
+| Resolution / operation | Earlier persistent FPS | AC-powered FPS | Change |
+|---|---:|---:|---:|
+| 360p encode | 244.671 | 285.454 | +16.67% |
+| 360p decode | 198.669 | 236.747 | +19.17% |
+| 540p encode | 131.200 | 168.464 | +28.40% |
+| 540p decode | 112.389 | 135.827 | +20.85% |
+
+This is the best absolute RTX 5060 result in the current matrix. It also shows
+that laptop power state materially affects unlocked-clock results, so the
+earlier same-binary execution-policy A/B remains the causal comparison.
+
+Machine-readable rows are in
+[`evidence/rtx5060-edge-360p-540p-ac-powered-2026-08-04.jsonl`](evidence/rtx5060-edge-360p-540p-ac-powered-2026-08-04.jsonl).
+Its SHA-256 is `7cb3a57636a266e994fc33c88feaa62682332fc63fd764f1157f9bbc28c21a2d`.
+
+Payload bytes and decoded PSNR-YUV match the earlier persistent run for every
+input, repetition, and resolution; only timing fields differ. Immediately after
+the run, `nvidia-smi` reported P0, 1,560 MHz graphics, 12,001 MHz memory, 13.13 W,
+and 44 C. Clocks were observed rather than locked, peak memory was not captured,
+and no pinned-Python comparison was run, so this is still diagnostic evidence
+rather than a final release-performance claim.

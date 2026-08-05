@@ -133,6 +133,24 @@ The x86_64 Compose services also map `/dev/nvidia-uvm` and
 `/dev/nvidia-uvm-tools` explicitly. This preserves CUDA access on Docker/toolkit
 combinations that expose those nodes through `--gpus all` but omit their
 device-cgroup rules.
+WSL2 exposes GPU compute through Docker Desktop rather than host
+`/dev/nvidia-uvm*` nodes. Apply the supplied WSL override after confirming that
+`docker run --rm --gpus all ubuntu nvidia-smi` succeeds. For the registered RTX
+5060 Laptop migration target, also apply the Blackwell overlay:
+
+```bash
+docker compose \
+  -f docker/compose.x86_64.yaml \
+  -f docker/compose.blackwell.yaml \
+  -f docker/compose.wsl.yaml \
+  build engine-install
+```
+
+This selects CUDA 12.8, TensorRT 10.9, native SM 120 code generation, and the
+`rtx5060-laptop-ubuntu2404` target profile. It is an exact-target migration
+baseline and does not make existing RTX 4070 plans portable. Evaluate
+TensorRT `AMPERE_PLUS` plans only after exact RTX 5060 correctness and
+performance evidence exists; edge bundles remain target-local.
 The Jetson needs the matching JetPack/L4T installation, Docker, and the NVIDIA
 runtime installed by JetPack. Check GPU injection before debugging NVCR:
 

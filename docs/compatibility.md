@@ -30,6 +30,7 @@ correctness, and target evidence; changing a filename is not sufficient.
 | Target profile | OS / platform | CUDA | TensorRT | GPU | Status |
 |---|---|---|---|---|---|
 | `rtx4070-ubuntu2404` | Ubuntu 24.04 x86_64 | 12.6 | 10.7.0 | RTX 4070, SM 8.9 | v0.3 validation in progress |
+| `rtx5060-laptop-ubuntu2404` | Ubuntu 24.04 x86_64 | 12.8 | 10.9.0 | RTX 5060 Laptop GPU, SM 12.0 | migration baseline in progress |
 | `orin-nano-l4t3647` | L4T 36.4.7 aarch64 | 12.6.68 | 10.3.0.30 | Jetson Orin Nano, SM 8.7 | current v1 validation incomplete |
 
 Exact recorded compiler, driver/JetPack, memory, power, and clock details belong

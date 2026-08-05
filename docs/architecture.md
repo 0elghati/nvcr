@@ -61,7 +61,8 @@ state. A failed backend operation is not committed. `reset()` discards sequence
 state immediately; `flush()` finishes backend work and resets both directions.
 
 The current DCVC-RT backend stores its selected TensorRT execution policy.
-`automatic` chooses a conservative low-memory mode on constrained devices;
+`automatic` keeps persistent contexts on discrete GPUs and uses persistent
+context metadata with one shared activation workspace on integrated GPUs;
 `low_memory` and `performance` are explicit per-session choices. The legacy
 environment override is only a fallback and is not the v1 configuration contract.
 

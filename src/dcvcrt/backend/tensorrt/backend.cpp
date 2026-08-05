@@ -148,15 +148,15 @@ Result<ContextPolicy> determine_context_policy(const RuntimeConfiguration& confi
     }
 
     // Discrete GPUs should keep persistent TensorRT contexts by default. A
-    // capacity-only cutoff incorrectly classified 12 GiB RTX 4070 cards as
-    // low-memory, adding context churn and stream waits to every device stage.
+    // capacity-only cutoff incorrectly classifies nominal 8 GiB devices whose
+    // reported usable memory is slightly below 8 GiB, adding context churn and
+    // stream waits to every device stage. Explicit low-memory mode remains
+    // available for constrained discrete deployments.
     // Integrated/Jetson-class devices keep persistent context metadata while
     // sharing one user-managed activation workspace across engines. All engine
     // invocations use one stream, so their workspace lifetimes do not overlap.
     if (properties.integrated != 0) return ContextPolicy::shared_workspace_persistent;
-    constexpr std::size_t constrained_discrete_bytes = 8ULL * 1024ULL * 1024ULL * 1024ULL;
-    return static_cast<std::size_t>(properties.totalGlobalMem) <= constrained_discrete_bytes ?
-        ContextPolicy::per_engine : ContextPolicy::persistent;
+    return ContextPolicy::persistent;
 }
 
 std::string_view context_policy_name(ContextPolicy policy) noexcept {
