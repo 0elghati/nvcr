@@ -102,6 +102,15 @@ Uploading the catalog last makes it the authority for the completed update.
 The release is already public and rolling; there is no application draft or
 `publish_release` input in this workflow.
 
+S3 is staging only. Uploading archives and checksum sidecars to
+`releases/engine-assets/` does not make them installable. Do not report an
+engine set as published until `upload-engine-assets.yml` succeeds, the GitHub
+`engine-assets` release contains the archives, and its final
+`nvcr-engine-catalog.json` advertises the new target and compatibility class.
+An installer that lists only older published targets is evidence that this
+catalog-publication step is still missing, even when the staged S3 objects are
+present.
+
 Use `--skip-dispatch` to stage only. The lower-level helper accepts a direct
 HTTPS URL, public URL base, local copy destination, or exact S3 prefix:
 

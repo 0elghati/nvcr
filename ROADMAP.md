@@ -120,6 +120,14 @@ intentional host boundaries. I-decode now reuses pinned buffers at those entropy
 boundaries and uploads packed int8 symbols before converting them to FP16 on the
 GPU.
 
+WSL documentation follow-up, 2026-08-05: documented that Docker Desktop may
+silently bind an empty daemon-side directory for a path that exists only in the
+current WSL/container filesystem, including an in-image inspection command and
+a named-volume plus `docker cp` workaround. Release documentation now also
+states explicitly that S3 upload is staging, not publication: the GitHub
+workflow, release assets, and catalog entry must all be verified before an
+engine set is described as installable.
+
 Container next action: exercise the Blackwell/WSL Compose path from a clean
 build and clean engine volume against the published exact assets. The Release
 SM-120 suite now passes the six-profile 20/20 matrix; static checks and

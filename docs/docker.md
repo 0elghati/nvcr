@@ -156,6 +156,38 @@ This selects CUDA 12.8, TensorRT 10.9, native SM 120 code generation, and the
 baseline and does not make existing RTX 4070 plans portable. Evaluate
 TensorRT `AMPERE_PLUS` plans only after exact RTX 5060 correctness and
 performance evidence exists; edge bundles remain target-local.
+
+### WSL bind-mount visibility
+
+With Docker Desktop and WSL, a Linux path can exist in the current shell yet be
+outside the filesystem visible to the Docker daemon. Docker may then create and
+mount an empty directory without reporting a mount error. NVCR subsequently
+reports `cannot open input` even though the source file is readable from WSL.
+Inspect the mount from the same image before debugging the codec or engines:
+
+```bash
+docker run --rm --entrypoint /bin/sh \
+  -v /workspace/nvcr/datasets:/work/input:ro \
+  omarelghati/nvcr:VERSION-amd64-cuda12.8-trt10.9 \
+  -c 'ls -l /work/input/360p/input.yuv'
+```
+
+If the directory is empty, use a Docker Desktop-shared host path or copy the
+data into a named volume. `docker cp` crosses the client/daemon filesystem
+boundary reliably:
+
+```bash
+docker volume create nvcr-input
+container_id="$(docker create -v nvcr-input:/data alpine)"
+docker cp /workspace/nvcr/datasets/. "$container_id:/data"
+docker rm "$container_id"
+```
+
+Mount the result as `-v nvcr-input:/work/input:ro`. Apply the same check to
+bind-mounted output directories; a successful input fix does not prove that the
+daemon can write to a different WSL path. Engine installation normally avoids
+this problem because the documented flow already uses a named volume.
+
 The Jetson needs the matching JetPack/L4T installation, Docker, and the NVIDIA
 runtime installed by JetPack. Check GPU injection before debugging NVCR:
 
