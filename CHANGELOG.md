@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/0elghati/nvcr/compare/v0.8.0...v0.8.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* **installer:** relax desktop cuda engine catalog ([#62](https://github.com/0elghati/nvcr/issues/62)) ([d504cc1](https://github.com/0elghati/nvcr/commit/d504cc12204c9e23f001e01f45ea14d7a9e8254a))
+* Relax desktop CUDA engine runtime matching ([#60](https://github.com/0elghati/nvcr/issues/60)) ([19586b3](https://github.com/0elghati/nvcr/commit/19586b3d5f00d6ceae3ccf9e0b575731bccc1c55))
+
 ## [0.8.0](https://github.com/0elghati/nvcr/compare/v0.7.0...v0.8.0) (2026-08-05)
 
 
