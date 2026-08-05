@@ -99,9 +99,13 @@ runtime `12060`, and TensorRT `10.9.0`. All six engine directories validated as
 `dist/sm89-rebuild-20260805/`. A matching exact RTX 4070 set was derived from
 the same TensorRT plans by changing only `hardware_compatibility` to `exact`;
 all six derived bundles validated and were packaged under
-`dist/rtx4070-exact-20260805/`. Publishing the twelve exact plus SM 8.9
-compatibility assets to the rolling `engine-assets` release is pending explicit
-approval for the S3 staging bucket and GitHub workflow dispatch.
+`dist/rtx4070-exact-20260805/`. Workflow `31004804410` published the twelve exact
+plus SM 8.9 compatibility assets to the rolling `engine-assets` release, then
+the catalog was trimmed to those twelve TensorRT 10.9.0 entries. GitHub release
+verification found 25 assets total: 12 archives, 12 checksums, and
+`nvcr-engine-catalog.json`. S3 cleanup removed 24 stale SM 120 and RTX 5060
+objects, leaving only the current 24 archive/checksum objects under
+`s3://nvcr-release-assets-820926961377-eu-west-1/releases/engine-assets/`.
 Binary packages stay semver'd, architecture-specific, and engine-free. The CLI now warns when
 multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
 Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and uses
