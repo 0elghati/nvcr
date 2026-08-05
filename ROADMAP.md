@@ -4,7 +4,7 @@ This is the source of truth for the scoped neural video codec runtime
 architecture described in `docs/scope-and-support.md`. DCVC-RT is the first and
 currently only supported codec backend.
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-05
 
 ## Objective
 
@@ -86,8 +86,10 @@ Validate a clean catalog install plus wrong-GPU and wrong-TensorRT negative
 cases, locked-clock/peak-memory performance, and pinned-Python parity before
 changing the RTX 5060 target from validation-in-progress. Package the complete
 target-local Orin set and run its remaining native selection/negative gates
-separately. Desktop compatibility-class publication still requires a second
-intended GPU, correctness, whole-codec performance, and wrong-device rejection.
+separately. The user-directed SM 8.9 `same_compute_capability` 40-series set
+was staged to S3 and published through `upload-engine-assets.yml`; second
+intended GPU correctness, whole-codec performance, and wrong-device rejection
+remain the compatibility-class release gates.
 Binary packages stay semver'd, architecture-specific, and engine-free. The CLI now warns when
 multi-frame `--gop-size 1` all-intra runs are used as performance measurements.
 Automatic TensorRT mode now keeps persistent contexts on discrete GPUs and uses
@@ -568,6 +570,43 @@ Exit criteria:
 - [ ] Performance, conformance, ABI, packaging, and security gates pass.
 
 ## Evidence log
+
+### 2026-08-05 - Add generic CUDA 12.8 / TensorRT 10.9 amd64 image tags
+
+- Extended `docker/publish.sh` with the generic `amd64-cuda12.8-trt10.9` runtime family and non-RTX-specific Docker tags.
+- Documented `amd64` as the Docker tag spelling for desktop images. Images remain engine-free; TensorRT plans stay in the rolling engine catalog.
+- Verification: `bash -n docker/publish.sh` passed. `docker/publish.sh --load amd64-cuda12.8-trt10.9` built and loaded the CUDA 12.8 / TensorRT 10.9 image; Docker inspection reported architecture amd64, CUDA 12.8, TensorRT 10.9, and SM 120. The versioned Docker Hub tag `omarelghati/nvcr:0.7.0-amd64-cuda12.8-trt10.9` was pushed and verified with digest `sha256:b6c9da9472dbcc160e8cf5c6b09341b6aa92f45957e8927e0a4aec5670fb36de`. No unversioned family alias was pushed.
+
+### 2026-08-05 — Stage SM 8.9 same-compute 40-series assets
+
+- Upgraded the native Linux release host from TensorRT 10.7 to TensorRT 10.9
+  packages to access `trtexec --hardwareCompatibilityLevel=sameComputeCapability`;
+  Docker was not used for the final build path. Generated all six
+  `same_compute_capability` SM 8.9 bundles under `build/engines-sm89` for the
+  RTX 4070 target profile using TensorRT 10.9.0. Every build invocation emitted
+  `--hardwareCompatibilityLevel=sameComputeCapability` and every per-plan
+  TensorRT smoke-load run passed.
+- Artifact validation passed for `qcif`, `cif`, `360p`, `540p`, `720p`, and
+  `1080p` with schema `nvcr.engine-bundle.v2`. The manifests record
+  `same_compute_capability`, target `rtx4070-ubuntu2404`, compute capability
+  8.9, device `NVIDIA GeForce RTX 4070`, 46 SMs, CUDA runtime 12060, and
+  TensorRT 10.9.0.
+- `scripts/release_engine_assets.sh` packaged and uploaded all six archives and
+  `.sha256` files to
+  `s3://nvcr-release-assets-820926961377-eu-west-1/releases/engine-assets/`,
+  regenerated `dist/nvcr-engine-assets.txt`, and dispatched
+  `upload-engine-assets.yml` as workflow run `30986919564` on `main` at
+  2026-08-05T07:55:39Z. The run completed successfully at
+  2026-08-05T07:57:05Z after publishing the stable archives, checksums, and
+  catalog last. Archive SHA-256 values:
+  `qcif` `692f7d937abd6f6ec08588b52c2cc03d20b867f055742de94afe1ed1b97e7749`,
+  `cif` `5c3acee5677853d8faae6a033afdc7ccc555fcf66c5aeddd82f70d078ae422c2`,
+  `360p` `e91a5279c116e18458b11f9936d0fdc2e694c9e55f3e4886fec88458a286a994`,
+  `540p` `b1ccd1ba19d9856734522f16e82c469e011b8ef3f50a3a10dd22f524265d41bf`,
+  `720p` `2d16965ce2f6bebf5641da233e1772bcc3454f8abf1568052f8490cbbd0cfcf7`,
+  and `1080p` `13cd0949894b051fbbb2f7525eef3f1d10b51c50b9501faf664e96d3b51e562c`.
+  This remains same-device generation and staging evidence until the second
+  intended GPU, whole-codec performance, and wrong-device negative gates pass.
 
 ### 2026-08-04 — Implement bounded desktop TensorRT hardware compatibility
 

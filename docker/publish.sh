@@ -3,14 +3,14 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: docker/publish.sh [--load|--push] <x86_64|jetson>
+Usage: docker/publish.sh [--load|--push] <amd64-cuda12.8-trt10.9|amd64-cuda12.6-trt10.7|jetson>
 
 Builds one architecture-specific NVCR runtime image. --load imports it into the
 local Docker daemon (default). --push publishes both immutable-version and
 runtime-family tags to Docker Hub.
 
 Environment:
-  NVCR_DOCKERHUB_REPOSITORY  Docker Hub repository (default: 0elghati/nvcr)
+  NVCR_DOCKERHUB_REPOSITORY  Docker Hub repository (default: omarelghati/nvcr)
   NVCR_IMAGE_VERSION         Image version (default: version.txt)
   NVCR_IMAGE_SOURCE          OCI source URL (default: GitHub repository)
 EOF
@@ -31,8 +31,10 @@ case "${1:-}" in
     ;;
 esac
 
-architecture="${1:-}"
-if [[ "$architecture" != x86_64 && "$architecture" != jetson ]]; then
+image_family="${1:-}"
+if [[ "$image_family" != amd64-cuda12.8-trt10.9 \
+    && "$image_family" != amd64-cuda12.6-trt10.7 \
+    && "$image_family" != jetson ]]; then
     usage >&2
     exit 2
 fi
@@ -43,7 +45,7 @@ fi
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd -- "$script_dir/.." && pwd)"
-repository="${NVCR_DOCKERHUB_REPOSITORY:-0elghati/nvcr}"
+repository="${NVCR_DOCKERHUB_REPOSITORY:-omarelghati/nvcr}"
 version="${NVCR_IMAGE_VERSION:-$(tr -d '[:space:]' <"$repository_root/version.txt")}"
 source_url="${NVCR_IMAGE_SOURCE:-https://github.com/0elghati/nvcr}"
 revision="$(git -C "$repository_root" rev-parse HEAD)"
@@ -71,12 +73,28 @@ if [[ "$action" == push ]]; then
     fi
 fi
 
-case "$architecture" in
-x86_64)
+build_args=()
+tag_suffixes=()
+case "$image_family" in
+amd64-cuda12.8-trt10.9)
     platform=linux/amd64
     dockerfile=docker/Dockerfile.x86_64
-    immutable_tag="$repository:$version-x86_64-cuda12.6-trt10.7"
-    family_tag="$repository:x86_64-cuda12.6-trt10.7"
+    tag_suffixes=(amd64-cuda12.8-trt10.9)
+    build_args=(
+        "CUDA_DEVEL_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04"
+        "CUDA_RUNTIME_IMAGE=nvidia/cuda:12.8.1-runtime-ubuntu24.04"
+        "TENSORRT_PACKAGE_VERSION=10.9.0.34-1+cuda12.8"
+        "NVCR_CUDA_ARCHITECTURES=120"
+        "NVCR_TARGET_PROFILE=desktop-amd64-cuda12.8-trt10.9"
+        "NVCR_CUDA_VERSION=12.8"
+        "NVCR_TENSORRT_VERSION=10.9"
+        "NVCR_IMAGE_DESCRIPTION=NVCR runtime for linux/amd64 NVIDIA desktop GPUs using CUDA 12.8 and TensorRT 10.9; TensorRT engines are installed separately from the rolling catalog"
+    )
+    ;;
+amd64-cuda12.6-trt10.7)
+    platform=linux/amd64
+    dockerfile=docker/Dockerfile.x86_64
+    tag_suffixes=(amd64-cuda12.6-trt10.7)
     ;;
 jetson)
     if [[ "$(uname -m)" != aarch64 ]]; then
@@ -85,10 +103,24 @@ jetson)
     fi
     platform=linux/arm64
     dockerfile=docker/Dockerfile.jetson
-    immutable_tag="$repository:$version-jetson-l4t36.4"
-    family_tag="$repository:jetson-l4t36.4"
+    tag_suffixes=(jetson-l4t36.4)
     ;;
 esac
+
+docker_tags=()
+for suffix in "${tag_suffixes[@]}"; do
+    docker_tags+=("$repository:$version-$suffix" "$repository:$suffix")
+done
+
+tag_args=()
+for tag in "${docker_tags[@]}"; do
+    tag_args+=(--tag "$tag")
+done
+
+build_arg_args=()
+for arg in "${build_args[@]}"; do
+    build_arg_args+=(--build-arg "$arg")
+done
 
 output_flag=--load
 attestation_args=()
@@ -97,25 +129,26 @@ if [[ "$action" == push ]]; then
     attestation_args=(--provenance=mode=max --sbom=true)
 fi
 
-echo "Building $immutable_tag"
+echo "Building ${docker_tags[0]}"
 docker buildx build \
     --platform "$platform" \
     --target runtime \
     --file "$dockerfile" \
+    "${build_arg_args[@]}" \
     --build-arg "NVCR_VERSION=$version" \
     --build-arg "NVCR_REVISION=$revision" \
     --build-arg "NVCR_SOURCE=$source_url" \
     --build-arg "NVCR_CREATED=$created" \
-    --tag "$immutable_tag" \
-    --tag "$family_tag" \
+    "${tag_args[@]}" \
     "${attestation_args[@]}" \
     "$output_flag" \
     "$repository_root"
 
 if [[ "$action" == load ]]; then
-    docker image inspect "$immutable_tag" \
+    docker image inspect "${docker_tags[0]}" \
         --format 'Loaded {{.RepoTags}} ({{.Architecture}}); version={{index .Config.Labels "org.opencontainers.image.version"}}'
 else
-    echo "Published $immutable_tag"
-    echo "Published $family_tag"
+    for tag in "${docker_tags[@]}"; do
+        echo "Published $tag"
+    done
 fi
