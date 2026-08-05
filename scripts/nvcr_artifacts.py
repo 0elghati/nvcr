@@ -594,12 +594,13 @@ def catalog_entry_match_rank(entry: dict[str, Any], identity: dict[str, Any]) ->
     common_fields = (
         "operating_system",
         "architecture",
-        "cuda_runtime_version",
         "tensorrt_version_major",
         "tensorrt_version_minor",
         "tensorrt_version_patch",
     )
     if not all(entry[field] == identity[field] for field in common_fields):
+        return None
+    if not cuda_runtime_compatible(entry, identity):
         return None
     compatibility = entry.get("hardware_compatibility", "exact")
     if compatibility == "exact":
@@ -624,6 +625,21 @@ def catalog_entry_match_rank(entry: dict[str, Any], identity: dict[str, Any]) ->
 
 def catalog_entry_matches(entry: dict[str, Any], identity: dict[str, Any]) -> bool:
     return catalog_entry_match_rank(entry, identity) is not None
+
+
+def cuda_runtime_major(version: int) -> int:
+    return version // 1000
+
+
+def cuda_runtime_compatible(entry: dict[str, Any], identity: dict[str, Any]) -> bool:
+    engine_runtime = int(entry["cuda_runtime_version"])
+    active_runtime = int(identity["cuda_runtime_version"])
+    if entry["architecture"] != "x86_64":
+        return engine_runtime == active_runtime
+    return (
+        cuda_runtime_major(engine_runtime) == cuda_runtime_major(active_runtime)
+        and engine_runtime <= active_runtime
+    )
 
 
 def github_request_json(url: str, token: str | None = None) -> dict[str, Any]:
@@ -783,7 +799,8 @@ def install_catalog_assets(
             {
                 f"{entry['architecture']} {entry['device_name']} TensorRT "
                 f"{entry['tensorrt_version_major']}.{entry['tensorrt_version_minor']}."
-                f"{entry['tensorrt_version_patch']}"
+                f"{entry['tensorrt_version_patch']} CUDA runtime "
+                f"{entry['cuda_runtime_version']}"
                 for entry in entries
                 if entry["backend"] == backend
             }
@@ -843,7 +860,6 @@ def install_catalog_assets(
                 "compute_capability_major",
                 "compute_capability_minor",
                 "multiprocessor_count",
-                "cuda_runtime_version",
                 "tensorrt_version_major",
                 "tensorrt_version_minor",
                 "tensorrt_version_patch",
@@ -855,6 +871,7 @@ def install_catalog_assets(
                 or manifest.get("model_profile_id") != entry["model_profile_id"]
                 or canonical_profile_name(str(manifest.get("engine_profile_id", ""))) != profile
                 or any(manifest.get(field) != entry[field] for field in catalog_manifest_fields)
+                or manifest.get("cuda_runtime_version") != entry["cuda_runtime_version"]
                 or manifest_compatibility != entry.get("hardware_compatibility", "exact")
             ):
                 raise ValidationError(f"catalog and bundle identity differ: {filename}")

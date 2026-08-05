@@ -206,6 +206,8 @@ digest.
 - whether runtime-variable TensorRT axes use a `dynamic` or fully `fixed`
   shape profile;
 - CUDA runtime, TensorRT version, GPU name, compute capability, and SM count;
+  desktop installation/runtime accept an engine recorded on an older CUDA
+  runtime within the same CUDA major family, while Jetson remains exact;
 - I/P model-manifest digests;
 - every generated plan/runtime-asset hash;
 - the digest of the relative `engine.sha256` checksum manifest.

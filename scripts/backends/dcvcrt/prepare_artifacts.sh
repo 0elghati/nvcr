@@ -397,6 +397,7 @@ Example:
   nvcr encode -i input.yuv -o output.nvcr -s 1920x1080 -r 50 --frames 97 --qp 32 --engine-dir $engines_dir
 
 Exact TensorRT plans are target-specific. Desktop compatibility plans may be
-shared only according to their recorded hardware class. Jetson plans remain
-exact. CUDA and TensorRT versions remain exact for every class.
+shared only according to their recorded hardware class. TensorRT versions remain
+exact. Desktop CUDA runtimes may consume engines recorded on an older runtime
+within the same CUDA major family; Jetson plans remain exact.
 EOF

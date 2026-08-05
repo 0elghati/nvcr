@@ -477,6 +477,21 @@ bool valid_sha256(std::string_view value) {
     return true;
 }
 
+std::int32_t cuda_runtime_major(std::int32_t version) {
+    return version / 1000;
+}
+
+bool cuda_runtime_compatible(
+    std::int32_t engine_runtime,
+    std::int32_t active_runtime,
+    const cudaDeviceProp& properties) {
+    if (properties.integrated != 0) {
+        return engine_runtime == active_runtime;
+    }
+    return cuda_runtime_major(engine_runtime) == cuda_runtime_major(active_runtime) &&
+        engine_runtime <= active_runtime;
+}
+
 Result<void> validate_bundle_hashes(const fs::path& root, const EngineManifest& manifest) {
     if (manifest.checksum_manifest != "engine.sha256") {
         return backend_error("engine manifest must reference portable engine.sha256");
@@ -587,11 +602,16 @@ Result<EngineManifest> validate_engine_manifest(
     if (cuda_version_status != cudaSuccess) {
         return cuda_error("cudaRuntimeGetVersion", cuda_version_status);
     }
-    if (manifest.value().cuda_runtime_version != cuda_runtime_version) {
+    cudaDeviceProp properties{};
+    const auto status = cudaGetDeviceProperties(&properties, device_id);
+    if (status != cudaSuccess) return cuda_error("cudaGetDeviceProperties", status);
+    if (!cuda_runtime_compatible(
+            manifest.value().cuda_runtime_version, cuda_runtime_version, properties)) {
         return backend_error(
             "TensorRT engine bundle CUDA runtime " +
             std::to_string(manifest.value().cuda_runtime_version) +
-            " does not match active CUDA runtime " + std::to_string(cuda_runtime_version));
+            " is not compatible with active CUDA runtime " +
+            std::to_string(cuda_runtime_version));
     }
     if (manifest.value().tensorrt_major != NV_TENSORRT_MAJOR ||
         manifest.value().tensorrt_minor != NV_TENSORRT_MINOR ||
@@ -606,9 +626,6 @@ Result<EngineManifest> validate_engine_manifest(
             "; rebuild the engine directory on this runtime");
     }
 
-    cudaDeviceProp properties{};
-    const auto status = cudaGetDeviceProperties(&properties, device_id);
-    if (status != cudaSuccess) return cuda_error("cudaGetDeviceProperties", status);
     const bool exact_device =
         manifest.value().device_name == properties.name &&
         manifest.value().compute_major == properties.major &&

@@ -146,6 +146,27 @@ class CatalogTests(unittest.TestCase):
         wrong["tensorrt_version_patch"] = 1
         self.assertFalse(artifacts.catalog_entry_matches(validated[0], wrong))
 
+    def test_desktop_catalog_allows_newer_cuda_runtime_within_major(self) -> None:
+        candidate = entry("720p")
+        newer_runtime = identity()
+        newer_runtime["cuda_runtime_version"] = 12080
+        self.assertTrue(artifacts.catalog_entry_matches(candidate, newer_runtime))
+
+        older_runtime = identity()
+        older_runtime["cuda_runtime_version"] = 12050
+        self.assertFalse(artifacts.catalog_entry_matches(candidate, older_runtime))
+
+        next_major = identity()
+        next_major["cuda_runtime_version"] = 13000
+        self.assertFalse(artifacts.catalog_entry_matches(candidate, next_major))
+
+    def test_jetson_catalog_keeps_exact_cuda_runtime_match(self) -> None:
+        candidate = entry("720p", target="orin-nano-l4t3647")
+        candidate.update(architecture="aarch64", cuda_runtime_version=12060)
+        detected = identity()
+        detected.update(architecture="aarch64", cuda_runtime_version=12080)
+        self.assertFalse(artifacts.catalog_entry_matches(candidate, detected))
+
     def test_catalog_ranks_exact_before_hardware_compatible_entries(self) -> None:
         exact = entry("720p")
         same_cc = entry("720p", target="ada-sm89")
@@ -326,7 +347,7 @@ class CatalogTests(unittest.TestCase):
     def test_no_match_and_ambiguous_match(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             with self.assertRaisesRegex(
-                artifacts.ValidationError, "does not build engines automatically"
+                artifacts.ValidationError, r"TensorRT 10\.7\.0 CUDA runtime 12060"
             ):
                 artifacts.install_catalog_assets(
                     [entry("720p")],
