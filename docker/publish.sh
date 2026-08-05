@@ -84,11 +84,11 @@ amd64-cuda12.8-trt10.9)
         "CUDA_DEVEL_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04"
         "CUDA_RUNTIME_IMAGE=nvidia/cuda:12.8.1-runtime-ubuntu24.04"
         "TENSORRT_PACKAGE_VERSION=10.9.0.34-1+cuda12.8"
-        "NVCR_CUDA_ARCHITECTURES=120"
+        "NVCR_CUDA_ARCHITECTURES=all"
         "NVCR_TARGET_PROFILE=desktop-amd64-cuda12.8-trt10.9"
         "NVCR_CUDA_VERSION=12.8"
         "NVCR_TENSORRT_VERSION=10.9"
-        "NVCR_IMAGE_DESCRIPTION=NVCR runtime for linux/amd64 NVIDIA desktop GPUs using CUDA 12.8 and TensorRT 10.9; TensorRT engines are installed separately from the rolling catalog"
+        "NVCR_IMAGE_DESCRIPTION=NVCR runtime for linux/amd64 NVIDIA desktop GPUs using CUDA 12.8 and TensorRT 10.9 with CUDA helper kernels for the compiler-supported GPU architecture set; TensorRT engines are installed separately from the rolling catalog"
     )
     ;;
 amd64-cuda12.6-trt10.7)
