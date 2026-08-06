@@ -58,8 +58,9 @@ Reprioritization decision, 2026-08-06: work switched from M1–M4 performance/
 evidence gathering to `M-EXT`, an extensible-runtime architecture refactor
 (codec-adapter/execution-provider separation, session-oriented API, static
 codec/provider registries, formal stream spec, artifact provenance, SoftwareX
-release readiness) at the user's explicit direction. This is tracked on branch
-`refactor/extensible-runtime-v1`. The baseline audit, gap matrix, and full
+release readiness) at the user's explicit direction. The implementation was
+developed on `refactor/extensible-runtime-v1` and is now merged into `main`.
+The baseline audit, gap matrix, and full
 phased plan are recorded in `docs/refactor/00-current-state-audit.md` and
 `docs/refactor/01-architecture-refactor-plan.md`. M1–M4 resume in Phase 10 of
 that plan under a formal SoftwareX evaluation structure rather than the prior ad
@@ -120,6 +121,16 @@ commit `1feb52a592a9ff2c4e4ba2e5122e2da49a211466`. The former
 the generated engines and is superseded in active profiles, conformance
 metadata, and evidence records. Artifact payload and measurement digests were
 not changed by this metadata correction.
+M-EXT Phase 7 resolver identity correction, 2026-08-06: merged on `main` after
+the provenance slice. Catalog-facing C++ types now distinguish codec identity,
+model component identity, and provider engine-profile identity. The loader
+accepts canonical `codec_id`/`engine_profile_id` keys while retaining the
+rolling catalog's `backend`/`profile` keys as compatibility aliases, and bundle
+candidates use an explicit `engine-bundle` component. Runtime services now load
+the provider selected by the resolver and do not silently fall back to another
+provider. Focused artifact catalog and resolver tests pass, including canonical
+and legacy catalog keys, empty provider preference, `ampere_plus`, license
+override, and selected-provider failure behavior.
 
 M-EXT Phase 5/6 implementation evidence, 2026-08-06: the first vertical slice
 is implemented. Phase 5 now has a registered concrete test codec adapter with

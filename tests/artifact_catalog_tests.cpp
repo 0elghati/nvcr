@@ -52,8 +52,8 @@ void accepts_valid_catalog() {
     expect(catalog.value().entries().size() == 1U, "catalog has one typed entry");
     if (catalog.value().entries().empty()) return;
     const auto& entry = catalog.value().entries().front();
-    expect(entry.backend == "dcvcrt", "backend is ingested");
-    expect(entry.profile == "720p", "profile is ingested");
+    expect(entry.codec_id == "dcvcrt", "codec identity is ingested");
+    expect(entry.engine_profile_id == "720p", "engine profile identity is ingested");
     expect(entry.tensorrt_version_minor == 9U, "TensorRT version is ingested");
 
     nvcr::artifacts::Resolver resolver;
@@ -66,7 +66,10 @@ void accepts_valid_catalog() {
     if (resolver.candidates().empty()) return;
     const auto& candidate = resolver.candidates().front();
     expect(candidate.artifact.codec_id == "dcvc-rt", "caller controls codec identity mapping");
-    expect(candidate.artifact.component_id == "720p", "catalog profile maps to bundle component id");
+        expect(candidate.artifact.component_id == "engine-bundle",
+            "catalog assigns the explicit bundle component id");
+        expect(candidate.artifact.engine_profile_id == "720p",
+            "catalog preserves the engine profile identity");
     expect(candidate.artifact.provider_id == "tensorrt", "provider identity is preserved");
     expect(candidate.license_restricted, "external catalog assets remain license-restricted by default");
     expect(!candidate.available, "catalog metadata does not claim a local artifact is available");
@@ -90,7 +93,8 @@ void accepts_valid_catalog() {
     auto local_request = nvcr::artifacts::ArtifactRequest{};
     local_request.codec_id = "dcvc-rt";
     local_request.model_set_id = "dcvcrt-cvpr2025";
-    local_request.component_id = "720p";
+    local_request.component_id = "engine-bundle";
+    local_request.engine_profile_id = "720p";
     local_request.provider_id = "tensorrt";
     local_request.target_profile_id = "target-a";
     local_request.target_device = "Test Device";
@@ -105,6 +109,26 @@ void accepts_valid_catalog() {
     expect(resolved.has_value(), "ingested local catalog asset resolves");
     std::error_code ignored;
     std::filesystem::remove_all(root, ignored);
+
+    std::string canonical_catalog(valid_catalog);
+    const auto replace_key = [](std::string& document,
+                                std::string_view legacy,
+                                std::string_view canonical) {
+        const auto position = document.find(legacy);
+        if (position != std::string::npos) {
+            document.replace(position, legacy.size(), canonical);
+        }
+    };
+    replace_key(canonical_catalog, "\"backend\"", "\"codec_id\"");
+    replace_key(canonical_catalog, "\"profile\"", "\"engine_profile_id\"");
+    auto canonical = nvcr::artifacts::Catalog::from_json(canonical_catalog);
+    expect(canonical.has_value(), "canonical catalog identity keys parse");
+    if (canonical && !canonical.value().entries().empty()) {
+        expect(canonical.value().entries().front().codec_id == "dcvcrt",
+               "canonical codec identity is ingested");
+        expect(canonical.value().entries().front().engine_profile_id == "720p",
+               "canonical engine profile identity is ingested");
+    }
 }
 
 void rejects_invalid_catalogs() {

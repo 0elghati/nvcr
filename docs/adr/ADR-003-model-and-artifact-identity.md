@@ -14,6 +14,7 @@ Artifact identity uses a tuple including at least:
 - codec_id
 - model_set_id
 - component_id
+- engine_profile_id when the artifact is a target-specific provider bundle
 - provider_id
 - target_device
 - precision
@@ -21,4 +22,5 @@ Artifact identity uses a tuple including at least:
 ## Consequences
 
 - Resolver behavior becomes explicit and testable.
+- Provider bundle profiles cannot be mistaken for model components.
 - Missing/incompatible artifacts map to structured errors instead of ad-hoc failures.

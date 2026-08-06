@@ -325,7 +325,7 @@ std::string expected_filename(const CatalogEntry& entry) {
         target = "linux-" + architecture + "-ampere-plus";
     }
     return "nvcr-engines-" + target + "-" + entry.model_profile_id + "-" +
-        entry.profile + ".tar.gz";
+        entry.engine_profile_id + ".tar.gz";
 }
 
 Result<HardwareCompatibility> parse_compatibility(
@@ -355,10 +355,27 @@ Result<CatalogEntry> parse_entry(const JsonValue& value, std::size_t index) {
         destination = std::move(result.value());
         return {};
     };
-    if (auto result = set_string(entry.backend, "backend"); !result) return result.error();
+    auto set_aliased_string = [&](std::string& destination,
+                                  std::string_view canonical,
+                                  std::string_view legacy) -> Result<void> {
+        const auto* canonical_value = member(value, canonical);
+        const auto* legacy_value = member(value, legacy);
+        if (canonical_value != nullptr && legacy_value != nullptr) {
+            return catalog_error(context + " must not contain both '" +
+                                 std::string(canonical) + "' and '" +
+                                 std::string(legacy) + "'");
+        }
+        return set_string(destination, canonical_value != nullptr ? canonical : legacy);
+    };
+    if (auto result = set_aliased_string(entry.codec_id, "codec_id", "backend"); !result) {
+        return result.error();
+    }
     if (auto result = set_string(entry.model_profile_id, "model_profile_id"); !result) return result.error();
     if (auto result = set_string(entry.target_profile_id, "target_profile_id"); !result) return result.error();
-    if (auto result = set_string(entry.profile, "profile"); !result) return result.error();
+    if (auto result = set_aliased_string(entry.engine_profile_id, "engine_profile_id", "profile");
+        !result) {
+        return result.error();
+    }
     if (auto result = set_string(entry.precision, "precision"); !result) return result.error();
     if (auto result = set_string(entry.operating_system, "operating_system"); !result) return result.error();
     if (auto result = set_string(entry.architecture, "architecture"); !result) return result.error();
@@ -389,13 +406,14 @@ Result<CatalogEntry> parse_entry(const JsonValue& value, std::size_t index) {
     if (!compatibility) return compatibility.error();
     entry.hardware_compatibility = compatibility.value();
 
-    if (!safe_identifier(entry.backend) || !safe_identifier(entry.model_profile_id) ||
-        !safe_identifier(entry.target_profile_id)) {
+    if (!safe_identifier(entry.codec_id) || !safe_identifier(entry.model_profile_id) ||
+        !safe_identifier(entry.target_profile_id) ||
+        !safe_identifier(entry.engine_profile_id)) {
         return catalog_error(context + " has an unsafe identity field");
     }
     static constexpr std::string_view profiles[] = {
         "qcif", "cif", "360p", "540p", "720p", "1080p"};
-    if (std::ranges::find(profiles, entry.profile) == std::end(profiles)) {
+    if (std::ranges::find(profiles, entry.engine_profile_id) == std::end(profiles)) {
         return catalog_error(context + " has an unsupported profile");
     }
     if (entry.precision != "fp16") {
@@ -460,9 +478,10 @@ Result<Catalog> Catalog::from_json(std::string_view document) {
         for (std::size_t index = 0; index < assets->array_value.size(); ++index) {
             auto entry = parse_entry(assets->array_value[index], index);
             if (!entry) return entry.error();
-            const auto identity = entry.value().backend + "\x1f" +
+            const auto identity = entry.value().codec_id + "\x1f" +
                 entry.value().model_profile_id + "\x1f" +
-                entry.value().target_profile_id + "\x1f" + entry.value().profile + "\x1f" +
+                entry.value().target_profile_id + "\x1f" +
+                entry.value().engine_profile_id + "\x1f" +
                 std::to_string(static_cast<unsigned>(entry.value().hardware_compatibility));
             if (!identities.insert(identity).second) {
                 return catalog_error("catalog contains duplicate asset identity");
@@ -487,8 +506,9 @@ Result<Catalog> Catalog::from_file(const std::filesystem::path& path) {
 Result<void> Catalog::append_candidates(
     Resolver& resolver,
     const CatalogLoadOptions& options) const {
-    if (options.codec_id.empty() || options.provider_id.empty()) {
-        return catalog_error("catalog candidate conversion requires codec_id and provider_id");
+    if (options.codec_id.empty() || options.provider_id.empty() || options.component_id.empty()) {
+        return catalog_error(
+            "catalog candidate conversion requires codec_id, provider_id, and component_id");
     }
     for (const auto& entry : entries_) {
         auto digest = decode_digest(entry.sha256);
@@ -496,7 +516,8 @@ Result<void> Catalog::append_candidates(
         ArtifactCandidate candidate;
         candidate.artifact.codec_id = options.codec_id;
         candidate.artifact.model_set_id = entry.model_profile_id;
-        candidate.artifact.component_id = entry.profile;
+        candidate.artifact.component_id = options.component_id;
+        candidate.artifact.engine_profile_id = entry.engine_profile_id;
         candidate.artifact.provider_id = options.provider_id;
         candidate.artifact.precision = entry.precision;
         candidate.artifact.expected_digest = digest.value();

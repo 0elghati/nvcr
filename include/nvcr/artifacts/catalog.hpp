@@ -12,12 +12,13 @@
 namespace nvcr::artifacts {
 
 inline constexpr std::string_view catalog_schema = "nvcr.engine-catalog.v1";
+inline constexpr std::string_view engine_bundle_component_id = "engine-bundle";
 
 struct CatalogEntry final {
-    std::string backend;
+    std::string codec_id;
     std::string model_profile_id;
     std::string target_profile_id;
-    std::string profile;
+    std::string engine_profile_id;
     std::string precision;
     std::string operating_system;
     std::string architecture;
@@ -38,6 +39,7 @@ struct CatalogEntry final {
 struct CatalogLoadOptions final {
     std::string codec_id;
     std::string provider_id{"tensorrt"};
+    std::string component_id{engine_bundle_component_id};
     std::filesystem::path artifact_root;
     bool mark_license_restricted{true};
 };
@@ -52,9 +54,9 @@ public:
         return entries_;
     }
 
-    // Convert catalog bundle records into resolver candidates. The catalog's
-    // profile is used as the resolver component_id because each catalog asset
-    // represents one executable bundle profile rather than one model tensor.
+    // Convert catalog bundle records into resolver candidates. Each catalog
+    // asset is an engine bundle, so its engine profile is kept separate from
+    // the explicit bundle component identifier.
     [[nodiscard]] Result<void> append_candidates(
         Resolver& resolver,
         const CatalogLoadOptions& options) const;

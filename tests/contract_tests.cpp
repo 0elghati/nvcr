@@ -121,8 +121,8 @@ void runtime_services_contract() {
     auto missing = services.resolve(descriptor);
     expect(!missing.has_value(), "runtime services reports missing provider artifact");
     if (!missing) {
-        expect(missing.error().code() == nvcr::ErrorCode::missing_artifact,
-               "missing provider maps to missing_artifact error");
+         expect(missing.error().code() == nvcr::ErrorCode::missing_provider,
+             "missing provider maps to missing_provider error");
     }
 
     descriptor.component_id.clear();

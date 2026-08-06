@@ -35,7 +35,8 @@ struct ArtifactCandidate final {
 struct ArtifactRequest final {
     std::string codec_id;
     std::string model_set_id;
-    std::string component_id;
+    std::string component_id;      // model component or provider bundle kind
+    std::string engine_profile_id; // provider bundle profile, when applicable
     std::string provider_id;
     std::vector<std::string> provider_preference;
     std::string target_profile_id;

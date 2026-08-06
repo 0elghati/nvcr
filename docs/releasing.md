@@ -60,7 +60,7 @@ nvcr-engines-linux-amd64-ampere-plus-dcvcrt-cvpr2025-720p.tar.gz
 ```
 
 `nvcr-engine-catalog.json` uses `nvcr.engine-catalog.v1`. Every row includes the
-archive hash/size, backend/model/target/profile, Linux architecture, hardware
+archive hash/size, codec/model/target/engine profile, Linux architecture, hardware
 compatibility class, GPU identity recorded at build time, CUDA runtime,
 TensorRT version, and internal FP16 precision. Catalog installation selects the
 best published match per profile: exact device first, then
