@@ -77,6 +77,7 @@ target_sources(
         src/common/error.cpp
         src/common/sha256.cpp
         src/configuration/configuration.cpp
+        src/dcvcrt/adapter.cpp
         src/dcvcrt/payload.cpp
         src/dcvcrt/rans_codec.cpp
         src/dcvcrt/registration.cpp

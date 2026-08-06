@@ -1,3 +1,4 @@
+#include <nvcr/dcvcrt/adapter.hpp>
 #include <nvcr/dcvcrt/tensorrt_backend.hpp>
 #include <nvcr/nvcr.hpp>
 
@@ -677,8 +678,8 @@ nvcr::Result<nvcr::Runtime> create_runtime(
     if (options.verbose) {
         std::cout << "Using TensorRT engine bundle: " << engine_dir << '\n';
     }
-    auto backend = nvcr::dcvcrt::make_tensorrt_backend();
-    if (!backend) return backend.error();
+    auto adapter = nvcr::dcvcrt::make_adapter();
+    if (!adapter) return adapter.error();
     nvcr::RuntimeConfiguration configuration;
     configuration.intra_engine_path = engine_dir;
     configuration.device_id = options.device_id;
@@ -686,9 +687,9 @@ nvcr::Result<nvcr::Runtime> create_runtime(
     configuration.gop_size = options.gop_size;
     configuration.enable_profiling = options.profile;
     configuration.log_level = options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
-    nvcr::codec::Components components;
-    components.codec = std::move(backend.value());
-    return nvcr::Runtime::create(configuration, std::move(components));
+    auto components = adapter.value()->create_components(configuration);
+    if (!components) return components.error();
+    return nvcr::Runtime::create(configuration, std::move(components.value()));
 }
 
 int encode(const Options& options) {

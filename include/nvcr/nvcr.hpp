@@ -2,6 +2,7 @@
 
 #include "nvcr/bitstream/access_unit.hpp"
 #include "nvcr/bitstream/packet_io.hpp"
+#include "nvcr/codec/adapter.hpp"
 #include "nvcr/codec/backend.hpp"
 #include "nvcr/codec/descriptor.hpp"
 #include "nvcr/codec/runtime.hpp"
@@ -9,6 +10,7 @@
 #include "nvcr/codec/session.hpp"
 #include "nvcr/common/error.hpp"
 #include "nvcr/configuration/configuration.hpp"
+#include "nvcr/dcvcrt/adapter.hpp"
 #include "nvcr/dcvcrt/backend.hpp"
 #include "nvcr/dcvcrt/rans_codec.hpp"
 #include "nvcr/memory/memory_pool.hpp"
