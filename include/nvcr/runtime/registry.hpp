@@ -13,6 +13,7 @@
 // "nvcr provider list/describe", and "nvcr compatibility check".
 
 #include "nvcr/codec/descriptor.hpp"
+#include "nvcr/codec/adapter.hpp"
 #include "nvcr/provider/provider_api.hpp"
 
 #include <functional>
@@ -34,6 +35,7 @@ struct CodecEntry {
     codec::CodecCapabilities capabilities;
     codec::OptionSchema encoder_options;
     codec::OptionSchema decoder_options;
+    std::function<std::unique_ptr<codec::ICodecAdapter>()> factory;
 };
 
 // ---------------------------------------------------------------------------
@@ -65,6 +67,9 @@ public:
 
     [[nodiscard]] std::optional<CodecEntry>
     find_codec(std::string_view id) const;
+
+    [[nodiscard]] Result<std::unique_ptr<codec::ICodecAdapter>>
+    create_codec(std::string_view id) const;
 
     [[nodiscard]] std::optional<ProviderEntry>
     find_provider(std::string_view id) const;

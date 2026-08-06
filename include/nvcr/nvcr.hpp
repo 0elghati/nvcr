@@ -9,6 +9,7 @@
 #include "nvcr/codec/sequence_state.hpp"
 #include "nvcr/codec/session.hpp"
 #include "nvcr/common/error.hpp"
+#include "nvcr/common/versions.hpp"
 #include "nvcr/configuration/configuration.hpp"
 #include "nvcr/dcvcrt/adapter.hpp"
 #include "nvcr/dcvcrt/backend.hpp"

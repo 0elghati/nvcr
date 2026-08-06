@@ -1,6 +1,7 @@
 #pragma once
 
 #include "nvcr/common/error.hpp"
+#include "nvcr/common/versions.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -30,6 +31,12 @@ struct RuntimeConfiguration final {
     std::filesystem::path entropy_model_path;
     std::string model_id{"dcvcrt-cvpr2025"};
     std::string bitstream_model_id{"dcvcrt"};
+    CodecApiVersion codec_api_version{1};
+    ProviderApiVersion provider_api_version{1};
+    StreamFormatVersion stream_format_version{1, 0};
+    PayloadSyntaxVersion payload_syntax_version{1};
+    ModelSetVersion model_set_version{1, 0};
+    ManifestSchemaVersion manifest_schema_version{2, 0};
     std::int32_t device_id{0};
     std::uint32_t intra_qp{32};
     std::uint32_t gop_size{32};

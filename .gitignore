@@ -57,6 +57,9 @@ venv
 # Local install prefixes produced by scripts/install.sh
 /install-*/
 
+# Raw streams from local resolution-matrix evidence runs.
+/evidence/live-release-*/streams/
+
 # Vendored/cloned DCVC-RT checkout used by the artifact pipeline
 # (scripts/prepare_dcvcrt_artifacts.sh clones it here; it has its own git
 # history, checkpoints, and upstream license and must not be committed here)

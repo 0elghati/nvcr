@@ -52,6 +52,25 @@ std::optional<CodecEntry> Registry::find_codec(std::string_view id) const {
     return std::nullopt;
 }
 
+Result<std::unique_ptr<codec::ICodecAdapter>> Registry::create_codec(
+    std::string_view id) const {
+    auto entry = find_codec(id);
+    if (!entry || !entry->factory) {
+        return Error(
+            ErrorCode::dependency_unavailable,
+            "codec has no registered adapter factory: " + std::string(id),
+            "registry");
+    }
+    auto adapter = entry->factory();
+    if (!adapter) {
+        return Error(
+            ErrorCode::internal_error,
+            "registered codec adapter factory returned null",
+            "registry");
+    }
+    return adapter;
+}
+
 std::optional<ProviderEntry> Registry::find_provider(std::string_view id) const {
     std::scoped_lock lock(mutex_);
     for (const auto& entry : providers_) {

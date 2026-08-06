@@ -61,6 +61,7 @@ void register_codec() {
              "TensorRT execution policy: automatic | low_memory | performance",
              "automatic", {}, {}, false},
         }},
+        {},
     });
 }
 

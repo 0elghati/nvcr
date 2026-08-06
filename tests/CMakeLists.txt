@@ -26,6 +26,36 @@ add_executable(nvcr_parser_fuzz_tests parser_fuzz_tests.cpp)
 target_link_libraries(nvcr_parser_fuzz_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_parser_fuzz_tests)
 add_test(NAME nvcr_parser_fuzz_boundaries COMMAND nvcr_parser_fuzz_tests)
+
+add_executable(
+    nvcr_contract_tests
+    contract_tests.cpp
+    support/test_codec/test_codec.cpp
+    support/test_provider/test_provider.cpp)
+target_link_libraries(nvcr_contract_tests PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_contract_tests)
+if(NVCR_ENABLE_TENSORRT)
+    target_compile_definitions(nvcr_contract_tests PRIVATE NVCR_TEST_HAS_TENSORRT=1)
+endif()
+add_test(NAME nvcr_contract_tests COMMAND nvcr_contract_tests)
+
+add_executable(nvcr_format_contract_tests format_contract_tests.cpp)
+target_link_libraries(nvcr_format_contract_tests PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_format_contract_tests)
+add_test(NAME nvcr_format_contract_tests COMMAND nvcr_format_contract_tests)
+
+if(NVCR_ENABLE_FUZZING)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_executable(nvcr_access_unit_fuzz fuzz/access_unit_fuzz.cpp)
+        target_link_libraries(nvcr_access_unit_fuzz PRIVATE NVCR::nvcr)
+        target_compile_options(nvcr_access_unit_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
+        target_link_options(nvcr_access_unit_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
+        nvcr_set_project_warnings(nvcr_access_unit_fuzz)
+    else()
+        message(WARNING "NVCR_ENABLE_FUZZING is ON but libFuzzer target is only wired for Clang")
+    endif()
+endif()
+
 nvcr_set_project_warnings(nvcr_tests)
 
 add_executable(nvcr_dcvcrt_payload_tests dcvcrt_payload_tests.cpp)

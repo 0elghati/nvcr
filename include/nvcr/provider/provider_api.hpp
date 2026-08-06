@@ -6,6 +6,7 @@
 // Runtime, etc.).  No TensorRT or CUDA types appear in this header.
 
 #include "nvcr/common/error.hpp"
+#include "nvcr/common/versions.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -48,6 +49,10 @@ struct ArtifactDescriptor {
     std::string precision;        // e.g. "fp16"
     std::string path;             // resolved local filesystem path
     std::vector<std::byte> expected_digest; // SHA-256, or empty to skip
+    CodecApiVersion codec_api_version{1};
+    ProviderApiVersion provider_api_version{1};
+    ModelSetVersion model_set_version{1, 0};
+    ManifestSchemaVersion manifest_schema_version{2, 0};
 };
 
 // Named tensor binding: name -> typed byte span (host memory).
