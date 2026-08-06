@@ -45,7 +45,7 @@ CATALOG_FILENAME = "nvcr-engine-catalog.json"
 DEFAULT_REPOSITORY = "0elghati/nvcr"
 DEFAULT_ASSET_RELEASE = "engine-assets"
 SAFE_IDENTIFIER = re.compile(r"^[0-9A-Za-z._-]+$")
-PINNED_COMMIT = "48ab0ac5e5199d78fffb944bfbafafb2b6142f7b"
+PINNED_COMMIT = "1feb52a592a9ff2c4e4ba2e5122e2da49a211466"
 EXPECTED_CHECKPOINTS = {
     "i_frame_manifest.json": ("555eff5f4026774f477bebdcbb3b52548e0da230803959dcebcea4d732a90dd9", "cvpr2025_image.pth.tar"),
     "p_frame_manifest.json": ("b12e7faf4ddb6126d8e138a627ed6a349b8e1052d3ed9e343e1ba266466675d6", "cvpr2025_video.pth.tar"),

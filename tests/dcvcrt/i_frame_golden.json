@@ -4,7 +4,7 @@
   "height": 720,
   "frames": 1,
   "qp": 32,
-  "reference_commit": "48ab0ac5e5199d78fffb944bfbafafb2b6142f7b",
+  "reference_commit": "1feb52a592a9ff2c4e4ba2e5122e2da49a211466",
   "image_checkpoint_sha256": "555eff5f4026774f477bebdcbb3b52548e0da230803959dcebcea4d732a90dd9",
   "video_checkpoint_sha256": "b12e7faf4ddb6126d8e138a627ed6a349b8e1052d3ed9e343e1ba266466675d6",
   "source_frame_sha256": "c575f55fe861753059d76d29add8df5af91c03d3942d9f41b08188ef876562b2",

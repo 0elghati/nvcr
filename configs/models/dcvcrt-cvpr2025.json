@@ -3,8 +3,8 @@
   "id": "dcvcrt-cvpr2025",
   "codec": "DCVC-RT",
   "upstream": {
-    "repository": "https://github.com/0elghati/DCVC-RT.git",
-    "commit": "48ab0ac5e5199d78fffb944bfbafafb2b6142f7b"
+    "repository": "https://github.com/microsoft/DCVC.git",
+    "commit": "1feb52a592a9ff2c4e4ba2e5122e2da49a211466"
   },
   "checkpoints": {
     "image": {
