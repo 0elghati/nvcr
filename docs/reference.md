@@ -1,82 +1,42 @@
-# Public C++ API reference
+# C++ API
 
-The current API is a development C++ boundary, not a frozen ABI. v1 stabilization
-still requires explicit plane/stride and host/device view contracts.
+The public C++ API is a development interface, not a frozen ABI. Pin the NVCR revision and manifest schema when integrating it.
 
-## Runtime and values
+## Runtime
 
-### `nvcr::Runtime`
+`nvcr::Runtime` owns one encoder state and one decoder state. The compatibility surface provides:
 
-Create with `Runtime::create(configuration, components)`, then use:
+- `Runtime::create(configuration, components)`;
+- `encode(const Frame&)` and `decode(const Packet&)`;
+- `reset()` and `flush()`;
+- `state()` and `statistics()`.
 
-- `encode(const Frame&)` to produce a `Packet` containing one `NVAU`;
-- `decode(const Packet&)` to reconstruct a frame;
-- `reset()` to discard encoder/decoder state;
-- `flush()` to finish backend work and reset state;
-- `state()` and `statistics()` for lifecycle/counter inspection.
+Operations return `nvcr::Result<T>`. Calls are serialized per runtime session because codec state is mutable.
 
-Calls return `Result<T>` and are serialized per runtime session.
+The codec API also defines session-oriented send/receive contracts for adapters that may delay output. The current DCVC-RT path preserves the one-frame/one-access-unit behavior underneath that boundary.
 
-### `nvcr::Frame`
+## Values and format
 
-An owned pixel buffer with width, height, format, and timestamp. `Frame::create`
-checks storage arithmetic and format constraints; `copy_from` imports external
-bytes. The CLI-supported v1 boundary is YUV420P8. Other enum formats are utility or
-internal paths and are not independent v1 codec support claims.
+- `Frame` owns a pixel buffer, dimensions, format, and timestamp.
+- `Packet` owns one application-level payload and timestamp.
+- `AccessUnit` is the bounded codec unit. `AccessUnitIO` reads `NVAU` v1 and v2 and writes the supported forms.
 
-### `nvcr::Packet`
-
-An owned application packet with codec payload, timestamp, frame type, and bounded
-metadata. `PacketIO` implements the development `NVCR` envelope.
-
-### `nvcr::AccessUnit` / `nvcr::AccessUnitIO`
-
-The versioned codec unit carries a public bitstream model ID, dimensions,
-effective QP, frame type, reset flag, and payload. Serialization/deserialization
-are bounded and validate all fields. `AccessUnitIO::deserialize` accepts v1 and
-the sectioned v2 envelope.
-`AccessUnitIO::serialize` writes v1 for compatibility;
-`AccessUnitIO::serialize_sectioned` writes the explicit v2 envelope with codec
-identity, ordering, dependencies, and typed sections. See [Bitstream](bitstream.md).
+The CLI boundary is planar 8-bit YUV420. Other format enum values are not independent product support.
 
 ## Configuration
 
-`RuntimeConfiguration` includes:
+Runtime configuration covers model and public bitstream IDs, device and engine selection, QP, GOP size, packet limits, memory policy, TensorRT execution mode, and diagnostic options. Configuration is checked before backend initialization.
 
-- `model_id`, for backend artifact/profile selection;
-- `bitstream_model_id`, for the public access-unit identity written to streams;
-- `device_id`;
-- engine directory;
-- GOP size and base intra QP;
-- maximum packet bytes, host memory pool, and intended device-arena capacity;
-- per-session `automatic`, `low_memory`, or `performance` TensorRT mode;
-- legacy raw-access-unit policy;
-- opt-in encoder reconstruction download for conformance tests;
-- logging/profiling settings.
+## Codec and provider boundaries
 
-Configuration is validated before backend initialization. The encoder
-reconstruction option is a test hook and should remain false in normal execution.
+`codec::ICodecAdapter` owns codec semantics. `provider::IExecutionProvider` owns artifact loading and execution. `runtime::RuntimeServices` is the bridge between them. TensorRT and CUDA types do not cross the public provider API.
 
-## Codec backend boundary
-
-`codec::Components` holds the explicit backend injected into `Runtime::create`.
-`codec::CodecBackend` owns initialization, frame encode/decode, reset, and flush.
-No CUDA/TensorRT type or exception crosses this interface.
-
-The current release provides one implementation, created by
-`dcvcrt::make_tensorrt_backend()`. Additional neural codec backends would require
-their own model profiles, payload contracts, conformance tests, and target
-evidence before they could be described as supported.
+The registry is static in v1. `dcvcrt` and `tensorrt` are the only production entries. Test codec/provider entries exist for contract coverage.
 
 ## Errors
 
-Public operations return `nvcr::Result<T>`. `Error` supplies a stable category,
-subsystem, and human-readable message. Expected invalid inputs, state errors,
-malformed access units, unavailable dependencies, resource exhaustion, and backend
-failures do not use exceptions as cross-module control flow.
+`Error` provides a category, subsystem, and message. Structured categories include invalid state, malformed bitstream, missing artifact, missing provider, incompatible target/version/precision, digest mismatch, license restriction, and backend failure.
 
-## ABI and integration status
+## ABI status
 
-Headers may change before v1. A public C ABI and FFmpeg integration are post-v1.
-Applications targeting the development tree should pin the exact NVCR revision,
-public bitstream model ID, backend model profile, and engine-bundle schema.
+Headers and behavior may change before v1. A stable C ABI, FFmpeg integration, hardware-frame ownership contract, and standard container mapping are post-v1 work.

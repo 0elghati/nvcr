@@ -153,12 +153,9 @@ integration, and no pre-v1 backward-compatibility promise is made. Temporary
 legacy raw `NVI1`/`NVP1` decode can be enabled per session only for isolated
 development migration.
 
-## Compatibility evidence
+## Compatibility position
 
-NVCR v1 does not claim upstream DCVC-RT byte or payload interchangeability.
-Independent native/Python reconstruction remains a pinned quality reference; a
-future interoperability claim requires passing framing-only decode vectors in
-both directions. The current failed result is recorded in
-[`docs/evidence/2026-07-30-rtx4070-dcvcrt-cross-runtime-probe.json`](evidence/2026-07-30-rtx4070-dcvcrt-cross-runtime-probe.json). Additional codec backends
-need their own access-unit compatibility position and evidence. See
-[Compatibility](compatibility.md) and the M2 gates in [ROADMAP.md](../ROADMAP.md).
+NVCR does not claim upstream DCVC-RT byte or payload interchangeability.
+That claim requires clean bidirectional Python/native golden vectors. Additional
+codec adapters will need their own access-unit compatibility position and tests.
+See [Compatibility](compatibility.md).

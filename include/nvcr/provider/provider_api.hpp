@@ -1,6 +1,6 @@
 #pragma once
 
-// Provider-API public types (Phase 3 of M-EXT).
+// Provider API public types.
 // IExecutionProvider, IExecutable, and IArtifactCompiler define the boundary
 // between the codec adapter and the execution technology (TensorRT, ONNX
 // Runtime, etc.).  No TensorRT or CUDA types appear in this header.
@@ -21,7 +21,7 @@ namespace nvcr::provider {
 // Identifies the execution-provider family; new values are additive.
 enum class ProviderKind : std::uint8_t {
     tensorrt = 0,
-    cpu_reference,  // deterministic test provider (Phase 5)
+    cpu_reference,  // deterministic test provider
     // future: onnx_runtime, openvino, core_ml, directml
 };
 

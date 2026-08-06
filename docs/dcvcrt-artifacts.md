@@ -281,10 +281,8 @@ option is omitted; an unconfigured CPU/CUDA-only suite is not end-to-end evidenc
 ## Clean-room rule
 
 Release evidence uses empty model/engine/build directories and the selected
-versioned profiles. Record all commands, hashes, tool versions, hardware, engine
-build settings, test results, and reference/performance evidence in
-[ROADMAP.md](../ROADMAP.md). Preserve failed or superseded results as labeled
-history.
+versioned profiles. Record the commands, hashes, tool versions, hardware,
+engine settings, tests, and measurements in one current machine-readable result.
 
 ## Validated FP16 resolution profiles
 
@@ -299,17 +297,8 @@ also include the runtime padding required by the codec.
 | `720p` | 1280x720 | Contract plus native I/P roundtrip |
 | `1080p` | 1920x1080 | Contract plus native I/P roundtrip |
 
-The fixed-shape `360p` and `540p` profiles are edge-performance
-candidates. On Orin Nano, a conservative 13-fixed-engine candidate retained the
-validated dynamic `p_synthesis.plan` while a stale source graph was
-quarantined. Repeated BasketballDrive measurements improved 360p encode/decode
-by 7.74%/3.65% and 540p encode/decode by 5.18%/2.35%. The 360p candidate and
-540p encode clear the 3% candidate gate; 540p decode does not. See
-`evidence/orin-fixed-edge-profiles-2026-08-02.json` for run order, hashes,
-quality, and artifact provenance. This hybrid is retained as historical
-performance evidence only: the hardened validator and runtime now reject it as
-an incomplete fixed bundle. Fully fixed bundles remain pending a clean export
-and locked-clock repetition.
+Additional profiles may be used for target evaluation when their complete
+engine bundles pass the same manifest, checksum, and round-trip checks.
 
 The profile definitions and runtime support are architecture-neutral. Their
 generated TensorRT plans remain target-specific, so Orin and desktop RTX use

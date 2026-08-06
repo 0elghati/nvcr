@@ -1,90 +1,25 @@
-# DCVC-RT backend integration contract
+# DCVC-RT integration
 
-NVCR's first and currently only codec backend is the pinned `dcvcrt-cvpr2025`
-I/P model profile. This backend implements the generic `nvcr::codec::CodecBackend`
-boundary and owns all DCVC-RT TensorRT, CUDA, native rANS, and temporal-state
-ordering. These operations cannot be separated into generic pre/post processors
-because entropy coding and spatial priors alternate.
+DCVC-RT is NVCR's first and only production codec adapter. It owns GOP decisions, model-component meaning, entropy state, codec-private payloads, and frame/feature references. TensorRT is an execution provider, not part of the codec identity.
 
 ## Initialization
 
-A session receives an explicit model ID, engine directory, device ID, QP, GOP,
-packet/memory limits, TensorRT execution mode, and legacy-compatibility policy.
-Before TensorRT plan deserialization, initialization validates the v2 bundle
-schema, exact file/checksum set, model-manifest identities, FP16, CUDA/TensorRT,
-and selected GPU identity. It then loads 14 plans and six runtime assets, creates
-the stream/contexts, uploads all 72 P-frame quantization entries, and warms the
-engines.
+A session selects a model profile, target-local engine directory, device, QP, GOP, memory policy, and TensorRT execution mode. Before deserialization, NVCR validates the bundle schema, model and target identity, precision, runtime versions, required files, and checksums.
 
-Artifact preparation is described in [Model and engine preparation](dcvcrt-artifacts.md).
-`scripts/nvcr_artifacts.py` is the supported front end. Individual DCVC-RT
-exporters and builders live under `scripts/backends/dcvcrt/` as backend-local
-implementation helpers.
+The supported artifact front end is `scripts/nvcr_artifacts.py`. The backend-specific exporters and builders under `scripts/backends/dcvcrt/` are implementation helpers, not separate user workflows.
 
-## Encode/decode
+## Frame paths
 
-The I path owns:
+The I path runs image analysis, hyperprior, spatial priors, synthesis, and native rANS. The P path runs temporal/reference adaptation, analysis, hyperprior, temporal and spatial priors, synthesis, state updates, and native rANS.
 
-- `i_analysis`, `i_hyper_analysis`, `i_hyper_synthesis`;
-- `i_spatial_prior_1`, `_2`, and `_3` over four checkerboard passes;
-- `i_synthesis`, image entropy tables/quantization, and native rANS.
+An I-frame starts a GOP. P-frames require a valid reference. The encoder reports the effective QP used by the access unit. Reset clears references; flush completes work and resets the session.
 
-The P path owns:
+## Payload and compatibility
 
-- frame and learned-feature reference adaptation;
-- `p_analysis`, `p_hyper_analysis`, `p_prior`, `p_spatial_prior`, `p_synthesis`;
-- adaptive effective QP (`0..71`), video entropy tables/quantization, native rANS;
-- encoder and decoder device DPBs with frame/feature state.
+The native rANS coder and `NVI1`/`NVP1` payload layouts are NVCR implementation details. They are carried inside the bounded `NVAU` contract and are not claimed to be upstream Python bitstreams.
 
-The encoder returns the actual effective QP so the outer `NVAU` access unit binds
-the quantization entry that was used. Invalid base/derived QP indexes, dimensions,
-frame order, or missing references fail before unsafe access.
+Python is an offline export and reference-conformance dependency. Cross-runtime payload compatibility remains unclaimed until clean bidirectional golden tests pass.
 
-## State and execution policy
+## Current work
 
-Encoder and decoder state are independent. An I-frame starts/reset a GOP; P-frames
-require a reference. `reset()` clears state immediately and `flush()` completes
-backend work then resets the session. Two-GOP and reset/reuse behavior is covered
-by the registered TensorRT roundtrip test.
-
-DCVC-RT reconstructed frames are returned as direct full-range `YUV420P8`. The
-backend rounds luma and averages each 2x2 chroma block from the model output,
-avoiding an RGB color-matrix round trip. The CLI writes this format directly.
-
-`automatic`, `low_memory`, and `performance` TensorRT execution modes are selected
-per runtime configuration. Performance mode reuses execution contexts; low-memory
-mode recreates them to lower residency. The reusable device arena and removal of
-remaining avoidable per-frame allocations are active v1 work.
-
-## Entropy and payloads
-
-The vendored native rANS implementation is the runtime entropy coder. Python is
-used only as an offline model/reference tool. `NVI1`/`NVP1` remain isolated inner
-payload formats; the versioned `NVAU` codec contract carries model identity,
-dimensions, type, effective QP, reset state, and bounded payload length.
-
-No upstream Python payload or reconstruction compatibility claim is made until
-cross-runtime golden tests pass. The CLI's `NVCR`/`NVCS` wrappers are also
-pre-v1 development formats, not containers.
-
-The opt-in `nvcr_dcvcrt_i_frame_golden` test pins the upstream commit,
-checkpoints, FourPeople 720p source frame, Python bitstream, and Python
-reconstruction at QP 32. It gates native source quality and cross-runtime
-reconstruction PSNR while preserving the payload-format distinction above. The recorded RTX 4070 result is in
-[`docs/evidence/2026-07-30-rtx4070-dcvcrt-i-frame-reference.json`](evidence/2026-07-30-rtx4070-dcvcrt-i-frame-reference.json).
-
-The follow-up 97-frame I/P comparison found byte-identical repeated native
-encodes and decodes. Python/native reconstruction remained above `44.13 dB`
-PSNR-YUV on every frame. The machine-readable result is in
-[`docs/evidence/2026-07-30-rtx4070-dcvcrt-gop97-conformance.json`](evidence/2026-07-30-rtx4070-dcvcrt-gop97-conformance.json).
-
-## Current gates
-
-Implemented tests cover parser/allocation bounds, rANS vectors, CUDA operators,
-model/profile and bundle tampering, wrong-model/corrupt bundle rejection, I/P
-reconstruction equality, maximum effective P QP, two GOPs, and reset/reuse on the
-configured RTX engine bundle.
-
-Still required for v1 are expanded Python/native I/P golden evidence, a stable
-plane/stride session API, the reusable device arena and complete GPU state path,
-release-build performance gates, and a fresh Orin clean-room workflow. See [ROADMAP.md](../ROADMAP.md).
+The current release path is correctness-first. Stable plane/stride ownership, reusable device memory, target performance gates, a clean post-refactor evidence run, and the final v1 release package remain to be completed.

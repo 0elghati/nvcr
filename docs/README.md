@@ -1,41 +1,32 @@
 # Documentation
 
-NVCR is a development snapshot of a neural video codec runtime architecture,
-progressing through v0.3 foundation gates toward a first scoped v1 release. The
-current release path supports DCVC-RT only. Read the scope and evidence status
-before treating an implemented path as supported.
+These pages describe the software that exists in this repository. The short version is on the [project overview](../README.md); this page is the map.
 
-## Reading order
+## Start here
 
-1. [Project overview](../README.md)
-2. [Authoritative scope and support](scope-and-support.md)
-3. [Compatibility matrix](compatibility.md)
-4. [Getting started and builds](getting-started.md)
-5. [Model and engine preparation](dcvcrt-artifacts.md)
-6. [Architecture](architecture.md)
-7. [C++ API status](reference.md)
-8. [Bitstream and access units](bitstream.md)
-9. [Unified neural codec bitstream envelope](neural-bitstream-envelope.md)
-10. [CLI](cli.md)
-11. [DCVC-RT integration](dcvcrt-integration.md)
-12. [Performance protocol and historical results](performance.md)
-13. [Release gates](releasing.md)
-14. [Docker execution and development](docker.md)
-15. [Roadmap and evidence](../ROADMAP.md)
-16. [M-EXT extensible runtime architecture refactor plan](refactor/01-architecture-refactor-plan.md)
-17. [M-EXT current-state audit](refactor/00-current-state-audit.md)
+1. [Scope and support](scope-and-support.md)
+2. [Getting started](getting-started.md)
+3. [Architecture](architecture.md)
+4. [Model and engine preparation](dcvcrt-artifacts.md)
+5. [CLI](cli.md)
+6. [Bitstream and access units](bitstream.md)
+7. [C++ API](reference.md)
+8. [Compatibility](compatibility.md)
+9. [Performance protocol](performance.md)
+10. [Docker](docker.md)
+11. [Release policy](releasing.md)
 
-## Policy shortcuts
+## Contracts
 
-- Checkpoints, ONNX/runtime assets, and TensorRT engines are built locally and
-  are not shipped in NVCR releases.
-- RTX 4070 and Jetson Orin Nano are the only v1 reference targets.
-- DCVC-RT is the only implemented and supported v1 codec backend.
-- FP16 and YUV420P8 are the v1 product profiles; INT8 is experimental.
-- `NVAU` is the candidate codec access-unit contract. `NVCR`/`NVCS` remain
-  development application framing. The unified neural codec envelope is the
-  documented next access-unit architecture direction, not a current multi-codec
-  support claim.
-- C ABI, FFmpeg, and standard container mapping are post-v1.
-- Historical binary-install instructions, where retained, describe old snapshots
-  and are not current product-support guidance.
+- [DCVC-RT integration](dcvcrt-integration.md)
+- [Neural codec envelope direction](neural-bitstream-envelope.md)
+- [Elementary stream specification](spec/nvcr-elementary-stream-v1.md)
+- [Architecture decisions](adr/ADR-001-codec-provider-separation.md)
+
+## Current boundary
+
+NVCR currently supports one codec adapter, DCVC-RT, and one execution provider, TensorRT. The static registry and artifact resolver prove the extension boundary; they do not mean that a second production codec or provider already exists.
+
+The release is Linux-only, FP16-only, and target-local for TensorRT engines. Checkpoints, exported model assets, and plans are excluded from generic packages.
+
+The latest machine-readable performance matrix is kept under `../evidence/`. It is diagnostic until a clean post-refactor run replaces it. Old run dumps and working notes are intentionally not part of the active documentation set.

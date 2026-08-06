@@ -276,7 +276,7 @@ def main() -> int:
         "matrix_cases_failed": len(failures),
         "documentation_instruction": (
             "Update docs/performance.md and ROADMAP.md only from passed aggregate rows. "
-            "Preserve failed cases and stderr as labeled history; do not advance release gates when status is partial."
+            "Keep failed cases in this report; a partial report does not advance release gates."
         ),
     }
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")

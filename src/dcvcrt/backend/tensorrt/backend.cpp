@@ -3629,7 +3629,7 @@ public:
         const provider::ArtifactDescriptor&) override {
         return Error(
             ErrorCode::not_implemented,
-            "TensorRT provider registry entry is discovery-only in Phase 3",
+            "TensorRT provider registry entry is not executable through this path",
             "dcvcrt.tensorrt");
     }
 };

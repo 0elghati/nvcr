@@ -18,7 +18,7 @@ enum class ErrorCode {
     backend_error,
     not_implemented,
     internal_error,
-    // Session-API status values (Phase 2).  Returned by send/receive calls;
+    // Session-API status values. Returned by send/receive calls;
     // these are not error conditions but signals about the codec pipeline state.
     try_again,            // no output available yet; send more input
     end_of_stream,        // codec has emitted all output after flush()

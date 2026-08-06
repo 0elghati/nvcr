@@ -1,6 +1,6 @@
 #pragma once
 
-// Static codec / execution-provider registry (Phase 3 of M-EXT).
+// Static codec / execution-provider registry.
 //
 // Registration is static: implementations call register_codec() /
 // register_provider() at program start (e.g. from a namespace-scope variable

@@ -5,16 +5,14 @@ option(NVCR_BUILD_CLI "Build the native nvcr command-line tool" ON)
 option(NVCR_BUILD_REFERENCE_TOOLS "Build the developer-only Python reference launcher" OFF)
 option(NVCR_FETCH_DEPENDENCIES "Download missing lightweight dependencies" OFF)
 option(NVCR_ENABLE_TENSORRT "Build the TensorRT/CUDA backend" OFF)
-# NVCR_ENABLE_CUDA: currently implied by NVCR_ENABLE_TENSORRT; explicit flag
-# separates CUDA availability from TensorRT once nvcr_provider_tensorrt is its
-# own target in Phase 4. Does not gate any CMake logic yet.
+# NVCR_ENABLE_CUDA is currently implied by NVCR_ENABLE_TENSORRT. It remains an
+# explicit option so CUDA support can be separated from TensorRT later.
 option(NVCR_ENABLE_CUDA "Enable CUDA support (implied when NVCR_ENABLE_TENSORRT is ON)" OFF)
-# NVCR_ENABLE_DCVC_RT: will gate nvcr_codec_dcvc_rt in Phase 4; currently all
-# DCVC-RT codec-adapter sources compile unconditionally in the nvcr umbrella.
+# The current umbrella target includes the DCVC-RT adapter when this is enabled.
 option(NVCR_ENABLE_DCVC_RT "Enable the DCVC-RT codec adapter" ON)
-# NVCR_ENABLE_TOOLS: reserved for a future nvcr_inspect stream/manifest tool.
+# Reserved for the future stream/manifest inspection tool.
 option(NVCR_ENABLE_TOOLS "Build stream and manifest inspection tools" OFF)
-# NVCR_ENABLE_FUZZING: enables libFuzzer targets under tests/fuzz/ (Phase 6).
+# Enables libFuzzer targets under tests/fuzz/.
 option(NVCR_ENABLE_FUZZING "Build libFuzzer fuzz targets" OFF)
 option(NVCR_ENABLE_OPENCV "Enable optional OpenCV frame interoperability" OFF)
 option(NVCR_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)

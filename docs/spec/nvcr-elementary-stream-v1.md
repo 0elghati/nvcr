@@ -1,6 +1,6 @@
 # NVCR Elementary Stream Specification (v1)
 
-Status: draft for M-EXT Phase 6
+Status: implemented specification; covered by format and parser tests
 Scope: documents the existing NVAU v1 and NVAU v2 wire formats without changing bytes.
 
 ## 1. Byte order and primitive widths
