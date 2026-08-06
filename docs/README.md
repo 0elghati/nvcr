@@ -22,6 +22,8 @@ before treating an implemented path as supported.
 13. [Release gates](releasing.md)
 14. [Docker execution and development](docker.md)
 15. [Roadmap and evidence](../ROADMAP.md)
+16. [M-EXT extensible runtime architecture refactor plan](refactor/01-architecture-refactor-plan.md)
+17. [M-EXT current-state audit](refactor/00-current-state-audit.md)
 
 ## Policy shortcuts
 

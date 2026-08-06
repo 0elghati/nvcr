@@ -47,16 +47,16 @@ the same detection and installs to a local platform-specific prefix by default:
 ./scripts/install_from_source.sh --run-tests
 ```
 
-Auto-detection is convenience, not support evidence. v1 is validated only for
-[the RTX 4070 and Orin Nano profiles](compatibility.md). Explicit overrides are
-available for target bring-up:
+Auto-detection is convenience, not support evidence. Use a matching
+[reference target profile](compatibility.md) and target-local engine set for
+support evidence. Explicit overrides are available for target bring-up:
 
 ```bash
-cmake -S . -B build-orin-release \
+cmake -S . -B build-target-release \
   -DCMAKE_BUILD_TYPE=Release \
   -DNVCR_ENABLE_TENSORRT=ON \
   -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
-  -DCMAKE_CUDA_ARCHITECTURES=87 \
+  -DCMAKE_CUDA_ARCHITECTURES="${NVCR_CUDA_ARCHITECTURES:?set the target compute capability}" \
   -DTensorRT_ROOT=/usr
 ```
 
@@ -82,19 +82,21 @@ Use the profile-aware artifact command. This generic front end dispatches to the
 current DCVC-RT backend preparation helpers:
 
 ```bash
+target_profile="${NVCR_TARGET_PROFILE:?set NVCR_TARGET_PROFILE to a target JSON profile}"
+
 ./scripts/nvcr_artifacts.py prepare \
   --model-profile configs/models/dcvcrt-cvpr2025.json \
   --profile 1080p \
-  --target-profile configs/targets/rtx4070-ubuntu2404.json \
+  --target-profile "$target_profile" \
   --dcvcrt-root /path/to/DCVC-RT \
   --models build/models/dcvcrt \
   --engines build/engines/dcvcrt \
   --python /path/to/python
 ```
 
-For Orin, select `configs/targets/orin-nano-l4t3647.json` and run engine
-building on the Orin itself. Portable ONNX/assets may be transferred only after
-`nvcr-artifacts validate` succeeds; plans must be rebuilt on the final target.
+Run engine building on the final target described by `target_profile`.
+Portable ONNX/assets may be transferred only after `nvcr-artifacts validate`
+succeeds; plans must be rebuilt on the final target.
 
 Inspect and validate without executing a bundle:
 
@@ -108,22 +110,91 @@ Inspect and validate without executing a bundle:
 ## Run the complete configured suite
 
 The engine and native I/P tests are registered only when CMake receives an engine
-bundle. Reconfigure after generating it:
+bundle. Use a TensorRT engine set built for the active target and installed
+runtime. Keep the generated engine directories outside the build directory;
+CMake and the runtime consume them in place.
+
+Use the 720p bundle as the primary bundle because the pinned Python I-frame
+golden test uses a 720p input. Register the other five profiles through
+`NVCR_TENSORRT_ENGINE_DIRS`:
 
 ```bash
-cmake -S . -B build-release \
+target_profile="${NVCR_TARGET_PROFILE:?set NVCR_TARGET_PROFILE to a target JSON profile}"
+engine_root="${NVCR_ENGINE_ROOT:?set NVCR_ENGINE_ROOT to the target-local engine set}"
+golden_input="${NVCR_DCVCRT_720P_GOLDEN_INPUT:?set the 720p golden input path}"
+
+cmake -S . -B build-release-clean \
   -DCMAKE_BUILD_TYPE=Release \
   -DNVCR_ENABLE_TENSORRT=ON \
-  -DNVCR_TENSORRT_ENGINE_DIR="$PWD/build/engines/dcvcrt"
-cmake --build build-release --parallel
-ctest --test-dir build-release --output-on-failure
+  -DNVCR_BUILD_TESTS=ON \
+  -DNVCR_BUILD_CLI=ON \
+  -DNVCR_TENSORRT_ENGINE_DIR="$engine_root/dcvcrt-720p" \
+  -DNVCR_TENSORRT_ENGINE_DIRS="$engine_root/dcvcrt-qcif;$engine_root/dcvcrt-cif;$engine_root/dcvcrt-360p;$engine_root/dcvcrt-540p;$engine_root/dcvcrt-1080p" \
+  -DNVCR_DCVCRT_ROOT="${NVCR_DCVCRT_ROOT:?set the pinned DCVC-RT checkout path}" \
+  -DNVCR_DCVCRT_720P_GOLDEN_INPUT="$golden_input"
+cmake --build build-release-clean --parallel
+ctest --test-dir build-release-clean --output-on-failure
 ```
 
-Check `ctest --test-dir build-release -N`: a full GPU configuration includes
+Check `ctest --test-dir build-release-clean -N`: a full GPU configuration includes
 artifact/profile, parser/rANS, CUDA ops, engine contracts, and I/P roundtrip
 tests. The roundtrip test covers high effective QP, two GOPs, reset/reuse, and
 encoder/decoder reconstruction equality. The engine-contract test covers
 wrong-model, corrupt-manifest, and corrupt-checksum rejection.
+
+Validate all six engine bundles before configuring CMake:
+
+```bash
+for profile in qcif cif 360p 540p 720p 1080p; do
+  ./scripts/nvcr_artifacts.py validate \
+    "$engine_root/dcvcrt-$profile" --json
+done
+```
+
+Do not use an engine bundle with a different TensorRT runtime or target than the
+one recorded in its manifest. Engine bundles are target-local and are
+intentionally not copied into the installed Release prefix.
+
+## Run the real resolution matrix
+
+After the complete CTest suite passes, run warmed Release measurements at QP 32
+for QCIF, CIF, 360p, 540p, 720p, and 1080p. This command runs all-intra and
+GOP-97 cases, three measured repetitions, and ten warm-up frames per case. It
+writes compact JSONL evidence and leaves raw `.nvcr` streams under the separate
+output directory:
+
+```bash
+engine_root="${NVCR_ENGINE_ROOT:?set NVCR_ENGINE_ROOT to the target-local engine set}"
+golden_input="${NVCR_DCVCRT_720P_GOLDEN_INPUT:?set the 720p golden input path}"
+run_id="live-release-$(date +%Y%m%d)"
+evidence_dir="$PWD/evidence/$run_id"
+mkdir -p "$evidence_dir/streams"
+scripts/benchmark_resolution_matrix.sh \
+  --nvcr "$PWD/build-release-clean/cli/nvcr" \
+  --frames 97 \
+  --qp 32 \
+  --gops "1 97" \
+  --resolutions "qcif cif 360p 540p 720p 1080p" \
+  --repetitions 3 \
+  --warmup-frames 10 \
+  --qcif-engine-dir "$engine_root/dcvcrt-qcif" \
+  --cif-engine-dir "$engine_root/dcvcrt-cif" \
+  --360p-engine-dir "$engine_root/dcvcrt-360p" \
+  --540p-engine-dir "$engine_root/dcvcrt-540p" \
+  --720p-engine-dir "$engine_root/dcvcrt-720p" \
+  --1080p-engine-dir "$engine_root/dcvcrt-1080p" \
+  --qcif-input "${NVCR_BENCH_QCIF_INPUT:?set the QCIF input path}" \
+  --cif-input "${NVCR_BENCH_CIF_INPUT:?set the CIF input path}" \
+  --360p-input "${NVCR_BENCH_360P_INPUT:?set the 360p input path}" \
+  --540p-input "${NVCR_BENCH_540P_INPUT:?set the 540p input path}" \
+  --720p-input "$golden_input" \
+  --1080p-input "${NVCR_BENCH_1080P_INPUT:?set the 1080p input path}" \
+  --output-dir "$evidence_dir/streams" \
+  --jsonl "$evidence_dir/resolution-matrix.jsonl"
+```
+
+For a quicker single profile smoke test, replace the matrix options with
+`--resolutions "720p" --gops "97" --repetitions 1 --warmup-frames 2`.
 
 On Jetson, tests require access to `/dev/nvmap` and `/dev/nvhost-*`. A container
 that hides those devices can compile successfully but cannot provide GPU test
@@ -176,5 +247,6 @@ and records:
 7. release-build latency, memory, throughput, rate/distortion, and applicable
    energy evidence using [Performance](performance.md).
 
-v0.3 requires the RTX 4070 foundation workflow. v1.0 requires separate successful
-RTX 4070 and Orin Nano matrices and all applicable M1–M4 roadmap gates.
+v0.3 requires one complete reference-target foundation workflow. v1.0 requires
+separate successful matrices for each declared reference target and all
+applicable M1–M4 roadmap gates.

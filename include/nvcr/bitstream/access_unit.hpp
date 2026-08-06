@@ -1,6 +1,7 @@
 #pragma once
 
 #include "nvcr/common/error.hpp"
+#include "nvcr/common/versions.hpp"
 #include "nvcr/runtime/packet.hpp"
 
 #include <cstddef>
@@ -61,6 +62,9 @@ struct AccessUnit final {
 
     std::string codec_id;
     std::string codec_profile_id;
+    StreamFormatVersion stream_format_version{1, 0};
+    PayloadSyntaxVersion payload_syntax_version{1};
+    ModelSetVersion model_set_version{1, 0};
     AccessUnitPixelFormat pixel_format{AccessUnitPixelFormat::yuv420p8};
     std::uint8_t bit_depth{8};
     bool random_access{};

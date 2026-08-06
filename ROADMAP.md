@@ -4,7 +4,7 @@ This is the source of truth for the scoped neural video codec runtime
 architecture described in `docs/scope-and-support.md`. DCVC-RT is the first and
 currently only supported codec backend.
 
-Last reviewed: 2026-08-05
+Last reviewed: 2026-08-06
 
 ## Objective
 
@@ -22,8 +22,8 @@ CVPR 2025 I/P model pair, that:
   evidence for RTX 4070 and Jetson Orin Nano.
 
 Additional codec backends, a public C ABI, FFmpeg integration, and container
-mapping are post-v1 work. They remain in the roadmap but are not v1 exit
-criteria.
+mapping remain in the roadmap under `M-EXT` (see below) rather than being
+deferred as unscheduled post-v1 work.
 
 ## Release status
 
@@ -39,16 +39,32 @@ criteria.
 | Milestone | State | Exit gate |
 |---|---|---|
 | M0 — Baseline and entropy | Complete | Golden rANS tests and repeatable baseline |
-| M1 — GPU-resident I-frame | Active | Warmed native I-frame latency ≤ Python |
-| M2 — Codec access unit and conformance | Active | Cross-runtime I/P golden streams |
-| M3 — Predicted frames | Active | Two complete conformant GOPs |
-| M4 — Deployment artifacts | Active | Reproducible validated model/engine loading |
+| M1 — GPU-resident I-frame | Paused | Warmed native I-frame latency ≤ Python |
+| M2 — Codec access unit and conformance | Paused | Cross-runtime I/P golden streams |
+| M3 — Predicted frames | Paused | Two complete conformant GOPs |
+| M4 — Deployment artifacts | Paused | Reproducible validated model/engine loading |
+| M-EXT — Extensible runtime architecture | Active | Section-20 acceptance checklist in `docs/refactor/99-final-acceptance-report.md` |
 | M5 — Stable C ABI | Post-v1 | C-only encode/decode/drain/reset tests |
 | M6 — FFmpeg codec wrapper | Post-v1 | `libnvcr` transcode tests |
 | M7 — Container integration | Post-v1 | Seekable mux/demux round trip |
 | M8 — Zero-copy and hardening | Post-v1 | CUDA-frame path and expanded release matrix |
 
-Current milestones: **M1–M4**, ordered by the 0.3/v1 release gates.
+Current milestone: **M-EXT**. M1–M4 evidence-gathering is explicitly paused (not
+abandoned) while the extensible codec/provider architecture refactor is
+implemented; M-EXT effectively pulls forward and formalizes the M5 design intent
+ahead of a stable C ABI.
+
+Reprioritization decision, 2026-08-06: work switched from M1–M4 performance/
+evidence gathering to `M-EXT`, an extensible-runtime architecture refactor
+(codec-adapter/execution-provider separation, session-oriented API, static
+codec/provider registries, formal stream spec, artifact provenance, SoftwareX
+release readiness) at the user's explicit direction. This is tracked on branch
+`refactor/extensible-runtime-v1`. The baseline audit, gap matrix, and full
+phased plan are recorded in `docs/refactor/00-current-state-audit.md` and
+`docs/refactor/01-architecture-refactor-plan.md`. M1–M4 resume in Phase 10 of
+that plan under a formal SoftwareX evaluation structure rather than the prior ad
+hoc protocol. No wire-format, CLI, or public-behavior change is authorized
+without a documented compatibility alias or migration note, per the phased plan.
 
 Orin INT8 PTQ investigation, 2026-08-02: explicit-Q/DQ W8A8 TensorRT
 engines confirmed a material Orin hardware opportunity but failed the codec
@@ -67,15 +83,28 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: finish the remaining rolling-catalog gates on Orin and the
-wrong-GPU/wrong-TensorRT negative matrix on both reference targets, while
-continuing M2 by moving DCVC-RT runtime serialization onto structured
-access-unit descriptors, adding canonical `NVAU` v2 byte fixtures, and keeping
-public bitstream identity separate from backend checkpoint/profile provenance.
-The current Orin FP16 runtime-only FPS wave is closed at its measured ceiling;
-do not resume speculative backend tuning without a newly profiled candidate
-capable of clearing the 3% whole-codec gate. Cross-runtime I/P golden vectors,
-drain/flush semantics, and target support remain pending.
+Current next action: run the new CI Clang sanitizer/fuzzer job, preserve the
+clean target-local Release evidence, and begin Phase 7 artifact provenance and
+resolver work.
+
+M-EXT Phase 5/6 implementation evidence, 2026-08-06: the first vertical slice
+is implemented. Phase 5 now has a registered concrete test codec adapter with
+delayed encoder output, flush/reset lifecycle, common NVAU envelope payloads,
+and a deterministic CPU provider with load/execute negative-path contracts.
+Phase 6 now has fixed NVAU v1/v2 golden byte vectors, explicit version metadata
+on runtime/access-unit/artifact identity types, the stream specification and
+five ADRs, parser fuzz coverage, and a CI-hosted Clang ASan/UBSan plus bounded
+libFuzzer job. Core GCC build and six focused tests pass; the TensorRT-enabled
+Release build and nine non-GPU tests pass; the available GCC ASan/UBSan build
+and six focused tests pass. Local Clang/libFuzzer evidence is unavailable
+because `clang++` is not installed. A clean TensorRT 10.9 Release build using
+the dated exact target engine set passed the complete 23/23 suite, including
+all six engine contracts, all six I/P roundtrips, CUDA ops, and the pinned
+Python I-frame golden test. The warmed QP32 six-resolution matrix for GOP 1 and
+GOP 97, three repetitions each, is recorded in
+`evidence/live-release-20260806/resolution-matrix.jsonl`; raw streams remain
+local and ignored. Phase 5/6 still needs the CI Clang sanitizer/fuzzer job
+before its verification gate is fully closed.
 
 Deployment next action: land the bounded desktop-portability change first, then
 land the dependent RTX 5060 target/container and execution-policy correction.

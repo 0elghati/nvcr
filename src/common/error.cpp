@@ -27,6 +27,10 @@ std::string_view to_string(ErrorCode code) noexcept {
     case ErrorCode::backend_error: return "backend error";
     case ErrorCode::not_implemented: return "not implemented";
     case ErrorCode::internal_error: return "internal error";
+    case ErrorCode::try_again: return "try again";
+    case ErrorCode::end_of_stream: return "end of stream";
+    case ErrorCode::missing_artifact: return "missing artifact";
+    case ErrorCode::incompatible_target: return "incompatible target";
     }
     return "unknown error";
 }

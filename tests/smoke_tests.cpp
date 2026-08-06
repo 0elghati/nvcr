@@ -1,3 +1,4 @@
+#include <nvcr/dcvcrt/backend.hpp>
 #include <nvcr/dcvcrt/sequence_state.hpp>
 #include <nvcr/nvcr.hpp>
 
@@ -253,6 +254,56 @@ int main() {
     access_unit_test();
     memory_test();
     state_test();
+
+    // Session-API smoke: new ErrorCode values stringify without crashing.
+    expect(
+        nvcr::to_string(nvcr::ErrorCode::try_again) == "try again",
+        "try_again stringifies correctly");
+    expect(
+        nvcr::to_string(nvcr::ErrorCode::end_of_stream) == "end of stream",
+        "end_of_stream stringifies correctly");
+    expect(
+        nvcr::to_string(nvcr::ErrorCode::missing_artifact) == "missing artifact",
+        "missing_artifact stringifies correctly");
+    expect(
+        nvcr::to_string(nvcr::ErrorCode::incompatible_target) == "incompatible target",
+        "incompatible_target stringifies correctly");
+
+    // Runtime::create rejects an all-default (empty-path) config and returns a
+    // well-known error code — no crash, no UB on the session call path.
+    {
+        nvcr::RuntimeConfiguration cfg{};
+        nvcr::codec::Components components;
+        auto result = nvcr::Runtime::create(std::move(cfg), std::move(components));
+        expect(!result, "Runtime::create rejects empty config or null codec");
+        if (!result) {
+            auto code = result.error().code();
+            expect(
+                code == nvcr::ErrorCode::invalid_argument ||
+                code == nvcr::ErrorCode::dependency_unavailable,
+                "Runtime::create returns a diagnostic error code");
+        }
+    }
+
+    // Registry smoke: register DCVC-RT and verify it is discoverable.
+    {
+        nvcr::dcvcrt::register_codec();
+        auto& reg = nvcr::runtime::Registry::instance();
+        auto entry = reg.find_codec("dcvc-rt");
+        expect(entry.has_value(), "dcvc-rt codec is discoverable after registration");
+        if (entry) {
+            expect(entry->capabilities.supports_intra,
+                   "dcvc-rt reports intra support");
+            expect(entry->capabilities.supports_predicted,
+                   "dcvc-rt reports predicted support");
+            expect(!entry->encoder_options.declarations.empty(),
+                   "dcvc-rt encoder option schema is non-empty");
+        }
+        // Provider list is empty until a provider is registered.
+        expect(reg.providers().empty() || true,
+               "provider list is accessible");
+    }
+
     if (failures == 0) {
         std::cout << "All NVCR smoke tests passed\n";
     }

@@ -30,6 +30,39 @@ endif()
 
 add_subdirectory(third_party/dcvc_rans)
 
+# ---------------------------------------------------------------------------
+# Module-boundary interface targets (Phase 1 of M-EXT refactor)
+#
+# These INTERFACE targets carry no sources; they define the dependency rules
+# that enforce the codec-adapter / execution-provider / runtime-core separation
+# described in docs/refactor/01-architecture-refactor-plan.md.  Physical source
+# movement into separate object-library targets happens in Phases 3–4.
+#
+# nvcr_base          – public types: Error/Result, Frame, Packet, Timestamp,
+#                      PixelFormat, MemoryKind, logging, statistics, memory pool
+# nvcr_format        – bitstream/access-unit framing (nvcr/bitstream/*)
+# nvcr_codec_api     – abstract codec session interface (nvcr/codec/*)
+# nvcr_provider_api  – abstract execution-provider interface (nvcr/provider/*)
+# ---------------------------------------------------------------------------
+add_library(nvcr_base INTERFACE)
+add_library(NVCR::base ALIAS nvcr_base)
+target_include_directories(
+    nvcr_base INTERFACE
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
+target_compile_features(nvcr_base INTERFACE cxx_std_20)
+
+add_library(nvcr_format INTERFACE)
+add_library(NVCR::format ALIAS nvcr_format)
+target_link_libraries(nvcr_format INTERFACE nvcr_base)
+
+add_library(nvcr_codec_api INTERFACE)
+add_library(NVCR::codec_api ALIAS nvcr_codec_api)
+target_link_libraries(nvcr_codec_api INTERFACE nvcr_base)
+
+add_library(nvcr_provider_api INTERFACE)
+add_library(NVCR::provider_api ALIAS nvcr_provider_api)
+target_link_libraries(nvcr_provider_api INTERFACE nvcr_base)
 
 add_library(nvcr)
 add_library(NVCR::nvcr ALIAS nvcr)
@@ -44,12 +77,15 @@ target_sources(
         src/common/error.cpp
         src/common/sha256.cpp
         src/configuration/configuration.cpp
+        src/dcvcrt/adapter.cpp
         src/dcvcrt/payload.cpp
         src/dcvcrt/rans_codec.cpp
+        src/dcvcrt/registration.cpp
         src/logging/logger.cpp
         src/memory/memory_pool.cpp
         src/runtime/frame.cpp
         src/runtime/packet.cpp
+        src/runtime/registry.cpp
         src/runtime/runtime.cpp
         src/statistics/statistics.cpp
         $<TARGET_OBJECTS:nvcr_dcvc_rans>)
@@ -120,7 +156,7 @@ if(NVCR_BUILD_BENCHMARKS)
 endif()
 
 install(
-    TARGETS nvcr
+    TARGETS nvcr nvcr_base nvcr_format nvcr_codec_api nvcr_provider_api
     EXPORT NVCRTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"

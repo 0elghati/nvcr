@@ -119,6 +119,43 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+  build-sanitized:
+    # Core-only sanitizer coverage for format parsers and contract suites.
+    needs: changes
+    if: needs.changes.outputs.cpp == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Clang
+        run: sudo apt-get update && sudo apt-get install -y clang
+
+      - name: Configure (Clang ASan/UBSan and libFuzzer)
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          cmake -S . -B build-sanitized \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DNVCR_ENABLE_TENSORRT=OFF \
+            -DNVCR_ENABLE_SANITIZERS=ON \
+            -DNVCR_ENABLE_FUZZING=ON \
+            -DNVCR_BUILD_TESTS=ON \
+            -DNVCR_BUILD_CLI=OFF
+
+      - name: Build
+        run: cmake --build build-sanitized --parallel
+
+      - name: Test
+        run: ctest --test-dir build-sanitized --output-on-failure
+
+      - name: Bounded parser fuzz run
+        run: |
+          ./build-sanitized/tests/nvcr_access_unit_fuzz \
+            -runs=1000 \
+            -timeout=5 \
+            -max_total_time=10
+
   build-cuda-portable:
     # Hosted CUDA/TensorRT build plus generic x86_64 packaging smoke coverage.
     # This is a required PR gate for release-surface changes.

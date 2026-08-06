@@ -61,6 +61,48 @@ int main() {
             std::span(access_wire.value()).first(size), parser_limit));
     }
 
+    nvcr::AccessUnit v2_access_unit{
+        "dcvcrt", 176, 144, 63, nvcr::FrameType::predicted, false,
+        {std::byte{0x10}, std::byte{0x20}}};
+    v2_access_unit.codec_id = "dcvcrt";
+    v2_access_unit.codec_profile_id = "dcvcrt";
+    v2_access_unit.sections = {
+        {
+            static_cast<std::uint16_t>(nvcr::AccessUnitSectionType::codec_payload),
+            1,
+            nvcr::AccessUnitIO::required_section_flag,
+            v2_access_unit.payload,
+        },
+    };
+    auto v2_wire = nvcr::AccessUnitIO::serialize_sectioned(v2_access_unit, parser_limit);
+    if (!v2_wire) {
+        std::cerr << v2_wire.error().describe() << '\n';
+        return 1;
+    }
+    auto unknown_required = v2_access_unit;
+    unknown_required.sections = {
+        {
+            static_cast<std::uint16_t>(0x1234U),
+            1,
+            nvcr::AccessUnitIO::required_section_flag,
+            {std::byte{0x01}},
+        },
+        {
+            static_cast<std::uint16_t>(nvcr::AccessUnitSectionType::codec_payload),
+            1,
+            nvcr::AccessUnitIO::required_section_flag,
+            unknown_required.payload,
+        },
+    };
+    auto unknown_wire = nvcr::AccessUnitIO::serialize_sectioned(unknown_required, parser_limit);
+    if (unknown_wire) {
+        auto parsed = nvcr::AccessUnitIO::deserialize(unknown_wire.value(), parser_limit);
+        if (parsed) {
+            std::cerr << "unknown required section was not rejected\n";
+            return 1;
+        }
+    }
+
     std::cout << "NVCR deterministic parser fuzz/boundary corpus passed\n";
     return 0;
 }
