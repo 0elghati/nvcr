@@ -3,7 +3,7 @@
   "date": "2026-07-30",
   "target": "NVIDIA GeForce RTX 4070",
   "native_commit": "ff76b7a",
-  "reference_commit": "48ab0ac5e5199d78fffb944bfbafafb2b6142f7b",
+  "reference_commit": "1feb52a592a9ff2c4e4ba2e5122e2da49a211466",
   "engine_manifest_sha256": "42fa27c5fabd4fb43074985bdd61827a9a1790c98e2ec736865681a7020d81c0",
   "sequence": "FourPeople_1280x720_60.yuv",
   "source_two_frames_sha256": "265988388e722d1e939f00891401237e18cfc35cd0e9502d0fff14a805bee15c",

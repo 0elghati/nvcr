@@ -12,9 +12,12 @@ NVCR source is distributed under the MIT License in `LICENSE`.
 
 The pinned source repository and commit are recorded in
 `third_party/dcvc_rt/UPSTREAM.md`, `upstream-repository.txt`, and
-`upstream-commit.txt`. NVCR does not vendor the upstream checkout in the source
-tree. Review the upstream repository's license and notices before redistributing
-source, checkpoints, exported graphs, or derived plans.
+`upstream-commit.txt`. Microsoft distributes the official repository software
+under the MIT License in its `LICENSE.txt`; its `NOTICE.txt` records applicable
+CompressAI, BSD 3-Clause Clear, and MIT attributions. NVCR does not vendor that
+checkout. Any distribution containing official DCVC source or a derivative
+must retain the MIT notice and applicable upstream NOTICE content. These source
+terms do not establish checkpoint or derived-engine redistribution rights.
 
 ## DCVC-RT native rANS import
 

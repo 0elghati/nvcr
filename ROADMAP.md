@@ -83,9 +83,10 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: extend the Phase 7 resolver from typed validated records to
-catalog/manifest ingestion, complete the explicit license review, and then move
-to Phase 8 CI and release hardening.
+Current next action: obtain an explicit checkpoint/weight redistribution grant
+from the DCVC publisher or keep checkpoints and derived assets excluded, then
+move to Phase 8 CI and release hardening. Official DCVC source licensing and
+catalog ingestion are now reviewed and validated.
 
 M-EXT Phase 7 first-slice evidence, 2026-08-06: DCVC-RT provenance is now
 recorded under `third_party/dcvc_rt/` with the pinned repository, source commit,
@@ -100,8 +101,25 @@ selected artifact through `RuntimeServices`. Core validation passes 9/9; the
 clean TensorRT 10.9 Release validation passes 24/24; all six
 local engine bundles pass `nvcr-artifacts validate`; and the installed package
 contains the resolver header and Phase 7 provenance/policy documents. This is a
-first implementation slice, not a claim that JSON manifest ingestion or the
-license review is complete.
+first implementation slice, not a claim that the license review is complete.
+The C++ `Catalog::from_json`/`from_file` loader now validates the existing
+`nvcr.engine-catalog.v1` fields, identities, filenames, and digest syntax before
+converting entries to resolver candidates. The Python catalog suite passes
+20/20, the core CTest suite passes 10/10, and the clean TensorRT 10.9 Release
+CTest suite passes 25/25. No real catalog file is present in the local source
+tree, so catalog ingestion was verified with schema-faithful fixtures rather
+than an invented production catalog. The official Microsoft DCVC source is MIT
+licensed and carries an upstream `NOTICE.txt`; checkpoint and derived-asset
+permissions remain unresolved and restricted by policy because no separate
+pretrained-weight redistribution grant was found.
+
+M-EXT Phase 7 provenance correction, 2026-08-06: the generated engine lineage
+uses the official `https://github.com/microsoft/DCVC.git` DCVC-RT source at
+commit `1feb52a592a9ff2c4e4ba2e5122e2da49a211466`. The former
+`0elghati/DCVC-RT` aggregation identifier did not describe the source used for
+the generated engines and is superseded in active profiles, conformance
+metadata, and evidence records. Artifact payload and measurement digests were
+not changed by this metadata correction.
 
 M-EXT Phase 5/6 implementation evidence, 2026-08-06: the first vertical slice
 is implemented. Phase 5 now has a registered concrete test codec adapter with
@@ -910,8 +928,8 @@ wrong-device/runtime negative evidence before advancing M1 or M4.
 
 ### 2026-08-04 — Rebuild all six canonical RTX engine profiles
 
-- Resolved the pinned exporter inputs to `/home/oelghati/DCVC-RT` at commit
-  `48ab0ac5e5199d78fffb944bfbafafb2b6142f7b`, with both CVPR 2025 checkpoint
+- Resolved the pinned exporter inputs to the official Microsoft DCVC-RT source
+  at commit `1feb52a592a9ff2c4e4ba2e5122e2da49a211466`, with both CVPR 2025 checkpoint
   hashes matching the model profile, Python 3.12 environment
   `/home/oelghati/DCVC-RT/src/venv/bin/python` (PyTorch 2.9.1+cu126, ONNX 1.22.0,
   ONNXScript 0.7.1), and TensorRT 10.7.0 `trtexec` at
@@ -987,8 +1005,8 @@ wrong-device/runtime negative evidence before advancing M1 or M4.
 ### 2026-08-01 — Orin Nano four-resolution v0.5.0 engine assets
 
 - On the recorded Jetson Orin Nano / L4T 36.4.7 target, exported a fresh FP16
-  `nvcr.model-manifest.v2` bundle from pinned DCVC-RT commit
-  `48ab0ac5e5199d78fffb944bfbafafb2b6142f7b` and the pinned CVPR 2025 I/P
+  `nvcr.model-manifest.v2` bundle from the official Microsoft DCVC-RT commit
+  `1feb52a592a9ff2c4e4ba2e5122e2da49a211466` and the pinned CVPR 2025 I/P
   checkpoints. The portable model bundle passed `nvcr-artifacts validate`.
 - Built all 14 TensorRT 10.3.0 plans for each of `qcif-fp16`, `cif-fp16`,
   `720p-fp16`, and `1080p-fp16` using the `orin-nano-l4t3647` target profile.

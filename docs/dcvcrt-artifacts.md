@@ -14,8 +14,8 @@ The versioned model profile is
 [configs/models/dcvcrt-cvpr2025.json](../configs/models/dcvcrt-cvpr2025.json):
 
 ```text
-Source repository: https://github.com/0elghati/DCVC-RT.git
-Source commit:     48ab0ac5e5199d78fffb944bfbafafb2b6142f7b
+Source repository: https://github.com/microsoft/DCVC.git
+Source commit:     1feb52a592a9ff2c4e4ba2e5122e2da49a211466
 Image checkpoint:  cvpr2025_image.pth.tar
 SHA-256:           555eff5f4026774f477bebdcbb3b52548e0da230803959dcebcea4d732a90dd9
 Video checkpoint:  cvpr2025_video.pth.tar
@@ -87,6 +87,17 @@ manifest schema, file inventory, and SHA-256 validation. The resolver is the
 typed selection layer used after that validation boundary. This separation
 keeps artifact discovery deterministic without making the runtime depend on a
 Python process or an implicit engine build.
+
+The C++ catalog loader is exposed through `include/nvcr/artifacts/catalog.hpp`.
+`Catalog::from_json` and `Catalog::from_file` accept only
+`nvcr.engine-catalog.v1`, enforce the required catalog fields, reject duplicate
+identities and filenames, and verify the profile-derived archive filename. The
+loader converts entries into resolver candidates only when the caller supplies
+the codec/provider mapping. With no local artifact root, candidates are marked
+unavailable; with a root, the loader checks path presence only. It parses the
+catalog digest but does not claim the archive bytes match that digest. The
+existing Python validator and downloaded-bundle validation remain authoritative
+for byte-level SHA-256 verification.
 
 ## Prepare from checkpoints
 

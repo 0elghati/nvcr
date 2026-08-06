@@ -72,6 +72,7 @@ target_sources(
     PRIVATE
         src/bitstream/access_unit.cpp
         src/bitstream/packet_io.cpp
+        src/artifacts/catalog.cpp
         src/artifacts/resolver.cpp
         src/codec/runtime.cpp
         src/codec/sequence_state.cpp
