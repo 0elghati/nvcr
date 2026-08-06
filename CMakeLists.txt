@@ -79,10 +79,12 @@ target_sources(
         src/configuration/configuration.cpp
         src/dcvcrt/payload.cpp
         src/dcvcrt/rans_codec.cpp
+        src/dcvcrt/registration.cpp
         src/logging/logger.cpp
         src/memory/memory_pool.cpp
         src/runtime/frame.cpp
         src/runtime/packet.cpp
+        src/runtime/registry.cpp
         src/runtime/runtime.cpp
         src/statistics/statistics.cpp
         $<TARGET_OBJECTS:nvcr_dcvc_rans>)

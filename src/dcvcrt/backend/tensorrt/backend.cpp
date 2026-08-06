@@ -1,4 +1,5 @@
 #include "nvcr/dcvcrt/tensorrt_backend.hpp"
+#include "nvcr/runtime/registry.hpp"
 
 #include "../../../common/sha256.hpp"
 #include "cuda_ops.hpp"
@@ -3589,6 +3590,66 @@ Result<std::unique_ptr<CodecBackend>> make_tensorrt_backend() {
     } catch (...) {
         return backend_error("failed to allocate TensorRT backend");
     }
+}
+
+provider::ProviderDescriptor tensorrt_provider_descriptor() {
+    return {
+        provider::ProviderKind::tensorrt,
+        "tensorrt",
+        std::to_string(NV_TENSORRT_MAJOR) + "." +
+            std::to_string(NV_TENSORRT_MINOR) + "." +
+            std::to_string(NV_TENSORRT_PATCH),
+        "NVIDIA TensorRT",
+    };
+}
+
+namespace {
+
+class TensorRTProviderStub final : public provider::IExecutionProvider {
+public:
+    [[nodiscard]] provider::ProviderDescriptor descriptor() const override {
+        return tensorrt_provider_descriptor();
+    }
+
+    [[nodiscard]] provider::ProviderCapabilities capabilities() const override {
+        return {
+            .supports_fp16 = true,
+            .supports_int8 = true,
+            .supports_dynamic_shapes = true,
+            .supports_cuda_graphs = true,
+            .target_device = "cuda",
+        };
+    }
+
+    [[nodiscard]] bool supports(const provider::ArtifactDescriptor& artifact) const override {
+        return artifact.provider_id == "tensorrt";
+    }
+
+    [[nodiscard]] Result<std::shared_ptr<provider::IExecutable>> load(
+        const provider::ArtifactDescriptor&) override {
+        return Error(
+            ErrorCode::not_implemented,
+            "TensorRT provider registry entry is discovery-only in Phase 3",
+            "dcvcrt.tensorrt");
+    }
+};
+
+}  // namespace
+
+void register_tensorrt_provider() {
+    runtime::Registry::instance().register_provider({
+        tensorrt_provider_descriptor(),
+        provider::ProviderCapabilities{
+            .supports_fp16 = true,
+            .supports_int8 = true,
+            .supports_dynamic_shapes = true,
+            .supports_cuda_graphs = true,
+            .target_device = "cuda",
+        },
+        []() -> std::shared_ptr<provider::IExecutionProvider> {
+            return std::make_shared<TensorRTProviderStub>();
+        },
+    });
 }
 
 }  // namespace nvcr::dcvcrt

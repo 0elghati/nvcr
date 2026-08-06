@@ -3,6 +3,7 @@
 #include "nvcr/bitstream/access_unit.hpp"
 #include "nvcr/bitstream/packet_io.hpp"
 #include "nvcr/codec/backend.hpp"
+#include "nvcr/codec/descriptor.hpp"
 #include "nvcr/codec/runtime.hpp"
 #include "nvcr/codec/sequence_state.hpp"
 #include "nvcr/codec/session.hpp"
@@ -14,6 +15,7 @@
 #include "nvcr/provider/provider_api.hpp"
 #include "nvcr/runtime/frame.hpp"
 #include "nvcr/runtime/packet.hpp"
+#include "nvcr/runtime/registry.hpp"
 #include "nvcr/runtime/runtime.hpp"
 #include "nvcr/statistics/statistics.hpp"
 

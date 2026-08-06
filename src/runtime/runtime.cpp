@@ -1,6 +1,8 @@
 #include "nvcr/runtime/runtime.hpp"
 
 #include "nvcr/codec/runtime.hpp"
+#include "nvcr/dcvcrt/backend.hpp"
+#include "nvcr/dcvcrt/tensorrt_backend.hpp"
 #include "nvcr/logging/logger.hpp"
 #include "nvcr/memory/memory_pool.hpp"
 
@@ -46,6 +48,12 @@ Runtime& Runtime::operator=(Runtime&&) noexcept = default;
 
 Result<Runtime> Runtime::create(
     RuntimeConfiguration configuration, codec::Components components) {
+    // Bootstrap built-in registry entries before validation and initialization.
+    dcvcrt::register_codec();
+#if defined(NVCR_HAS_TENSORRT)
+    dcvcrt::register_tensorrt_provider();
+#endif
+
     auto valid = ConfigurationLoader::validate(configuration);
     if (!valid) {
         return valid.error();
