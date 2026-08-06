@@ -131,6 +131,14 @@ CPU testing is useful, but it does not register or pass the CUDA, engine-contrac
 or native I/P roundtrip gates. The `ctest -N` output in the test log makes that
 difference visible.
 
+## SoftwareX runs
+
+The experiment runbook is the authoritative sequence for CPU, desktop GPU, and
+Jetson evaluation. It keeps container identity separate from engine identity:
+containers reproduce userspace, while TensorRT bundles remain exact or explicitly
+classified target artifacts. See [SoftwareX experiments](experiments/README.md)
+and [the runbook](experiments/runbook.md).
+
 ## Host prerequisites
 
 The x86_64 host needs the NVIDIA driver, Docker, and NVIDIA Container Toolkit.

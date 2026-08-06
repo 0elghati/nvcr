@@ -13,8 +13,9 @@ These pages describe the software that exists in this repository. The short vers
 7. [C++ API](reference.md)
 8. [Compatibility](compatibility.md)
 9. [Performance protocol](performance.md)
-10. [Docker](docker.md)
-11. [Release policy](releasing.md)
+10. [SoftwareX experiment protocol](experiments/README.md)
+11. [Docker](docker.md)
+12. [Release policy](releasing.md)
 
 ## Contracts
 
@@ -22,6 +23,7 @@ These pages describe the software that exists in this repository. The short vers
 - [Neural codec envelope direction](neural-bitstream-envelope.md)
 - [Elementary stream specification](spec/nvcr-elementary-stream-v1.md)
 - [Architecture decisions](adr/ADR-001-codec-provider-separation.md)
+- [SoftwareX experiment protocol](experiments/README.md)
 
 ## Current boundary
 

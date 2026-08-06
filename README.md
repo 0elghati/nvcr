@@ -84,6 +84,7 @@ The CLI reads and writes planar 8-bit YUV420:
 - [C++ API](docs/reference.md)
 - [Compatibility](docs/compatibility.md)
 - [Performance protocol](docs/performance.md)
+- [SoftwareX experiment protocol](docs/experiments/README.md)
 - [Docker](docs/docker.md)
 - [Release policy](docs/releasing.md)
 

@@ -2,6 +2,8 @@
 
 This page defines the measurement protocol. It is intentionally short: numbers belong in the latest machine-readable run, not in a growing diary.
 
+The SoftwareX matrix, target records, result schema, and run commands live in [docs/experiments](experiments/README.md).
+
 ## Rules
 
 Run a Release build only after the configured correctness and artifact tests pass. Record:
@@ -28,6 +30,8 @@ The repository script is the source of the matrix command and options:
 ```bash
 scripts/benchmark_resolution_matrix.sh --help
 ```
+
+Its current output uses `nvcr.benchmark.resolution-matrix.v1`. The complete publication schema is `nvcr.softwarex.result.v1`; use the adapter described in [Result schema](experiments/result-schema.md) before treating rows as SoftwareX evidence.
 
 The publication run should cover QCIF, CIF, 360p, 540p, 720p, and 1080p; all-intra and normal I/P GOP cases; three measured repetitions; warm-up frames; payload size; PSNR-YUV; and a clean pinned-Python comparison where available.
 
