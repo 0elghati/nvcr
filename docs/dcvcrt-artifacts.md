@@ -14,8 +14,8 @@ The versioned model profile is
 [configs/models/dcvcrt-cvpr2025.json](../configs/models/dcvcrt-cvpr2025.json):
 
 ```text
-Source repository: https://github.com/0elghati/DCVC-RT.git
-Source commit:     48ab0ac5e5199d78fffb944bfbafafb2b6142f7b
+Source repository: https://github.com/microsoft/DCVC.git
+Source commit:     1feb52a592a9ff2c4e4ba2e5122e2da49a211466
 Image checkpoint:  cvpr2025_image.pth.tar
 SHA-256:           555eff5f4026774f477bebdcbb3b52548e0da230803959dcebcea4d732a90dd9
 Video checkpoint:  cvpr2025_video.pth.tar
@@ -61,6 +61,43 @@ NVCR identifies prepared artifacts by the tuple
 Resolution is therefore one field inside the engine profile, not the whole
 portability contract. Do not manage or retain engine bundles by resolution name
 alone.
+
+## Runtime artifact resolution
+
+The C++ runtime-facing resolver is exposed through
+`include/nvcr/artifacts/resolver.hpp`. It consumes typed candidate records after
+the manifest and checksum validator has accepted a bundle. It does not build
+engines, fetch checkpoints, or silently parse an unvalidated directory.
+
+Resolution requests identify the codec, model set, component, provider
+constraint or preference, target identity, operating system, architecture,
+runtime/CUDA versions, precision, API/schema versions, and optional expected
+digest. Candidates retain the corresponding catalog fields, target profile,
+compute capability, hardware-compatibility class, availability, digest, and
+licensing status.
+
+Selection prefers the strongest compatible target match, then the requested
+provider order, then a stable artifact path. Failures use structured NVCR error
+codes: `missing_codec`, `missing_model_set`, `missing_provider`,
+`missing_artifact`, `incompatible_version`, `incompatible_target`,
+`incompatible_precision`, `digest_mismatch`, and `license_restricted`.
+
+The Python `nvcr-artifacts validate` command remains responsible for full JSON
+manifest schema, file inventory, and SHA-256 validation. The resolver is the
+typed selection layer used after that validation boundary. This separation
+keeps artifact discovery deterministic without making the runtime depend on a
+Python process or an implicit engine build.
+
+The C++ catalog loader is exposed through `include/nvcr/artifacts/catalog.hpp`.
+`Catalog::from_json` and `Catalog::from_file` accept only
+`nvcr.engine-catalog.v1`, enforce the required catalog fields, reject duplicate
+identities and filenames, and verify the profile-derived archive filename. The
+loader converts entries into resolver candidates only when the caller supplies
+the codec/provider mapping. With no local artifact root, candidates are marked
+unavailable; with a root, the loader checks path presence only. It parses the
+catalog digest but does not claim the archive bytes match that digest. The
+existing Python validator and downloaded-bundle validation remain authoritative
+for byte-level SHA-256 verification.
 
 ## Prepare from checkpoints
 

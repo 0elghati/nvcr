@@ -72,6 +72,8 @@ target_sources(
     PRIVATE
         src/bitstream/access_unit.cpp
         src/bitstream/packet_io.cpp
+        src/artifacts/catalog.cpp
+        src/artifacts/resolver.cpp
         src/codec/runtime.cpp
         src/codec/sequence_state.cpp
         src/common/error.cpp
@@ -194,6 +196,12 @@ install(
     FILES README.md ROADMAP.md CHANGELOG.md LICENSE
     DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr")
 install(
+    FILES
+        THIRD_PARTY_NOTICES.md
+        MODEL_LICENSES.md
+        ASSET_DISTRIBUTION_POLICY.md
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr")
+install(
     DIRECTORY docs/
     DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr/docs"
     PATTERN "*.orig" EXCLUDE
@@ -204,6 +212,9 @@ install(
         third_party/dcvc_rans/LICENSE.MIT
         third_party/dcvc_rans/NOTICE.txt
     DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr/third_party/dcvc_rans")
+install(
+    DIRECTORY third_party/dcvc_rt/
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr/third_party/dcvc_rt")
 install(
     DIRECTORY include/
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"

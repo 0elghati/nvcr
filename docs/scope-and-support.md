@@ -50,9 +50,9 @@ final section is recorded for the selected model, engine profile, and target.
 
 - Codec: DCVC-RT only.
 - Model profile: `dcvcrt-cvpr2025`.
-- Source repository: `https://github.com/0elghati/DCVC-RT.git`.
+- Source repository: `https://github.com/microsoft/DCVC.git`.
 - Upstream reference commit:
-  `48ab0ac5e5199d78fffb944bfbafafb2b6142f7b`.
+  `1feb52a592a9ff2c4e4ba2e5122e2da49a211466`.
 - Image checkpoint: `cvpr2025_image.pth.tar`, SHA-256
   `555eff5f4026774f477bebdcbb3b52548e0da230803959dcebcea4d732a90dd9`.
 - Video checkpoint: `cvpr2025_video.pth.tar`, SHA-256

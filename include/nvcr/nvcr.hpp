@@ -2,6 +2,8 @@
 
 #include "nvcr/bitstream/access_unit.hpp"
 #include "nvcr/bitstream/packet_io.hpp"
+#include "nvcr/artifacts/resolver.hpp"
+#include "nvcr/artifacts/catalog.hpp"
 #include "nvcr/codec/adapter.hpp"
 #include "nvcr/codec/backend.hpp"
 #include "nvcr/codec/descriptor.hpp"

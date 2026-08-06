@@ -128,4 +128,12 @@ RuntimeServices::resolve(const provider::ArtifactDescriptor& artifact) const {
         "registry");
 }
 
+Result<std::shared_ptr<provider::IExecutable>> RuntimeServices::resolve(
+    const artifacts::Resolver& resolver,
+    const artifacts::ArtifactRequest& request) const {
+    auto selected = resolver.resolve(request);
+    if (!selected) return selected.error();
+    return resolve(selected.value().candidate.artifact);
+}
+
 }  // namespace nvcr::runtime

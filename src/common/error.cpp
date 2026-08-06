@@ -30,7 +30,14 @@ std::string_view to_string(ErrorCode code) noexcept {
     case ErrorCode::try_again: return "try again";
     case ErrorCode::end_of_stream: return "end of stream";
     case ErrorCode::missing_artifact: return "missing artifact";
+    case ErrorCode::missing_codec: return "missing codec";
+    case ErrorCode::missing_provider: return "missing provider";
+    case ErrorCode::missing_model_set: return "missing model set";
     case ErrorCode::incompatible_target: return "incompatible target";
+    case ErrorCode::incompatible_precision: return "incompatible precision";
+    case ErrorCode::incompatible_version: return "incompatible version";
+    case ErrorCode::digest_mismatch: return "digest mismatch";
+    case ErrorCode::license_restricted: return "license restricted";
     }
     return "unknown error";
 }

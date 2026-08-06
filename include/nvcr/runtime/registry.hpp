@@ -14,6 +14,7 @@
 
 #include "nvcr/codec/descriptor.hpp"
 #include "nvcr/codec/adapter.hpp"
+#include "nvcr/artifacts/resolver.hpp"
 #include "nvcr/provider/provider_api.hpp"
 
 #include <functional>
@@ -109,6 +110,11 @@ public:
     // compatible local artifact is found.
     [[nodiscard]] Result<std::shared_ptr<provider::IExecutable>>
     resolve(const provider::ArtifactDescriptor& artifact) const;
+
+    [[nodiscard]] Result<std::shared_ptr<provider::IExecutable>>
+    resolve(
+        const artifacts::Resolver& resolver,
+        const artifacts::ArtifactRequest& request) const;
 
     [[nodiscard]] const Registry& registry() const noexcept { return registry_; }
     [[nodiscard]] std::string_view preferred_provider() const noexcept {

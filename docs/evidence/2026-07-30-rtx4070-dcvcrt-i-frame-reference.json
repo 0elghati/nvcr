@@ -36,7 +36,7 @@
     "native_sequence_sha256": "fd5d4032dea18d0d093f9a947f0117ef07cf7177c56524e511f033a0cd418aa4",
     "python_bitstream_sha256": "f3370ae14b12735e123d6e08f6203c2ec65f3ec47e217dbc4623a16df4f5536b",
     "python_reconstruction_sha256": "fc6ab9bc2290a03a6d36ca2ff49369b40eb888b8a309982d38a5ccc6876113ce",
-    "reference_commit": "48ab0ac5e5199d78fffb944bfbafafb2b6142f7b",
+    "reference_commit": "1feb52a592a9ff2c4e4ba2e5122e2da49a211466",
     "source_frame_sha256": "c575f55fe861753059d76d29add8df5af91c03d3942d9f41b08188ef876562b2",
     "video_checkpoint_sha256": "b12e7faf4ddb6126d8e138a627ed6a349b8e1052d3ed9e343e1ba266466675d6"
   },
