@@ -253,6 +253,37 @@ int main() {
     access_unit_test();
     memory_test();
     state_test();
+
+    // Session-API smoke: new ErrorCode values stringify without crashing.
+    expect(
+        nvcr::to_string(nvcr::ErrorCode::try_again) == "try again",
+        "try_again stringifies correctly");
+    expect(
+        nvcr::to_string(nvcr::ErrorCode::end_of_stream) == "end of stream",
+        "end_of_stream stringifies correctly");
+    expect(
+        nvcr::to_string(nvcr::ErrorCode::missing_artifact) == "missing artifact",
+        "missing_artifact stringifies correctly");
+    expect(
+        nvcr::to_string(nvcr::ErrorCode::incompatible_target) == "incompatible target",
+        "incompatible_target stringifies correctly");
+
+    // Runtime::create rejects an all-default (empty-path) config and returns a
+    // well-known error code — no crash, no UB on the session call path.
+    {
+        nvcr::RuntimeConfiguration cfg{};
+        nvcr::codec::Components components;
+        auto result = nvcr::Runtime::create(std::move(cfg), std::move(components));
+        expect(!result, "Runtime::create rejects empty config or null codec");
+        if (!result) {
+            auto code = result.error().code();
+            expect(
+                code == nvcr::ErrorCode::invalid_argument ||
+                code == nvcr::ErrorCode::dependency_unavailable,
+                "Runtime::create returns a diagnostic error code");
+        }
+    }
+
     if (failures == 0) {
         std::cout << "All NVCR smoke tests passed\n";
     }
