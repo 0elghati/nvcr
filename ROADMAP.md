@@ -83,9 +83,25 @@ Project completion rule: an all-intra-only multi-frame path is **incomplete**.
 Normal encoding must use the configured I/P GOP and pass M3 before NVCR can be
 described as a DCVC-RT video encoder.
 
-Current next action: run the new CI Clang sanitizer/fuzzer job, preserve the
-clean target-local Release evidence, and begin Phase 7 artifact provenance and
-resolver work.
+Current next action: extend the Phase 7 resolver from typed validated records to
+catalog/manifest ingestion, complete the explicit license review, and then move
+to Phase 8 CI and release hardening.
+
+M-EXT Phase 7 first-slice evidence, 2026-08-06: DCVC-RT provenance is now
+recorded under `third_party/dcvc_rt/` with the pinned repository, source commit,
+checkpoint identities, and patch inventory. Root third-party, model-license,
+and asset-distribution policy documents explicitly keep unresolved model,
+checkpoint, engine, and test-data permissions out of generic release assets.
+The typed `nvcr::artifacts::Resolver` selects validated candidates by codec,
+model set, component, provider preference, target compatibility, precision,
+version, digest, availability, and license status. Resolver tests cover every
+structured failure category, compatibility-class ranking, and loading the
+selected artifact through `RuntimeServices`. Core validation passes 9/9; the
+clean TensorRT 10.9 Release validation passes 24/24; all six
+local engine bundles pass `nvcr-artifacts validate`; and the installed package
+contains the resolver header and Phase 7 provenance/policy documents. This is a
+first implementation slice, not a claim that JSON manifest ingestion or the
+license review is complete.
 
 M-EXT Phase 5/6 implementation evidence, 2026-08-06: the first vertical slice
 is implemented. Phase 5 now has a registered concrete test codec adapter with

@@ -23,7 +23,14 @@ enum class ErrorCode {
     try_again,            // no output available yet; send more input
     end_of_stream,        // codec has emitted all output after flush()
     missing_artifact,     // required engine/model artifact is absent
+    missing_codec,        // no artifact is registered for the requested codec
+    missing_provider,     // no artifact is registered for the requested provider
+    missing_model_set,    // no artifact is registered for the requested model set
     incompatible_target,  // provider or target device is not compatible
+    incompatible_precision,
+    incompatible_version,
+    digest_mismatch,
+    license_restricted,
 };
 
 class Error final {

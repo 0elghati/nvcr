@@ -44,6 +44,14 @@ target_link_libraries(nvcr_format_contract_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_format_contract_tests)
 add_test(NAME nvcr_format_contract_tests COMMAND nvcr_format_contract_tests)
 
+add_executable(
+    nvcr_artifact_resolver_tests
+    artifact_resolver_tests.cpp
+    support/test_provider/test_provider.cpp)
+target_link_libraries(nvcr_artifact_resolver_tests PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_artifact_resolver_tests)
+add_test(NAME nvcr_artifact_resolver_tests COMMAND nvcr_artifact_resolver_tests)
+
 if(NVCR_ENABLE_FUZZING)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         add_executable(nvcr_access_unit_fuzz fuzz/access_unit_fuzz.cpp)

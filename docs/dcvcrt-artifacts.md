@@ -62,6 +62,32 @@ Resolution is therefore one field inside the engine profile, not the whole
 portability contract. Do not manage or retain engine bundles by resolution name
 alone.
 
+## Runtime artifact resolution
+
+The C++ runtime-facing resolver is exposed through
+`include/nvcr/artifacts/resolver.hpp`. It consumes typed candidate records after
+the manifest and checksum validator has accepted a bundle. It does not build
+engines, fetch checkpoints, or silently parse an unvalidated directory.
+
+Resolution requests identify the codec, model set, component, provider
+constraint or preference, target identity, operating system, architecture,
+runtime/CUDA versions, precision, API/schema versions, and optional expected
+digest. Candidates retain the corresponding catalog fields, target profile,
+compute capability, hardware-compatibility class, availability, digest, and
+licensing status.
+
+Selection prefers the strongest compatible target match, then the requested
+provider order, then a stable artifact path. Failures use structured NVCR error
+codes: `missing_codec`, `missing_model_set`, `missing_provider`,
+`missing_artifact`, `incompatible_version`, `incompatible_target`,
+`incompatible_precision`, `digest_mismatch`, and `license_restricted`.
+
+The Python `nvcr-artifacts validate` command remains responsible for full JSON
+manifest schema, file inventory, and SHA-256 validation. The resolver is the
+typed selection layer used after that validation boundary. This separation
+keeps artifact discovery deterministic without making the runtime depend on a
+Python process or an implicit engine build.
+
 ## Prepare from checkpoints
 
 Create a Python environment with PyTorch, ONNX, and ONNXScript, then select one
