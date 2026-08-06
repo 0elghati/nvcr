@@ -220,7 +220,7 @@ TEST(SequenceState, PredictedCommitCanAdvanceWithoutHostReference) {
 }
 
 // ---------------------------------------------------------------------------
-// Session-API tests (Phase 2 of M-EXT refactor)
+    // Session-API tests.
 // ---------------------------------------------------------------------------
 
 // Verify the new ErrorCode values are distinct and stringify correctly.

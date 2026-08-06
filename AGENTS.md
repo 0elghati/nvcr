@@ -14,7 +14,9 @@ bitstreams, public APIs, packaging, performance, or FFmpeg integration:
 5. Mark a milestone complete only when every exit criterion passes.
 6. After material work, update roadmap status, current next action, evidence, and
    architectural decisions when applicable.
-7. Preserve failed and superseded benchmark results as labeled history.
+7. Keep one current publication result; do not commit raw runs or long historical
+   benchmark logs. Retain an older result only when it explains a compatibility
+   or safety decision that the current result cannot explain.
 
 If requested work conflicts with the roadmap, explain the conflict and update the
 roadmap only after the user chooses the new priority.

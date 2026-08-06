@@ -1,6 +1,6 @@
 #pragma once
 
-// Codec descriptor, capability, and option-schema types (Phase 3 of M-EXT).
+// Codec descriptor, capability, and option-schema types.
 // These allow the runtime to discover and query codec adapters without knowing
 // their implementation details.  ICodecAdapter is in codec/adapter.hpp.
 

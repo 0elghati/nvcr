@@ -1,6 +1,6 @@
 #pragma once
 
-// IEncoderSession / IDecoderSession: session-oriented codec API (Phase 2).
+// Session-oriented codec API.
 //
 // These interfaces support codecs with lookahead, frame reordering, delayed
 // output, and flush-only output.  The current DCVC-RT adapter uses one-frame-

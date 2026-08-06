@@ -1,4 +1,0 @@
-copy_kind,copies,bytes,gpu_time_ms
-Device-to-Device,227,364985344,0.628
-Host-to-Device,723,260481152,21.804
-Device-to-Host,293,183398400,13.916

@@ -31,12 +31,12 @@ endif()
 add_subdirectory(third_party/dcvc_rans)
 
 # ---------------------------------------------------------------------------
-# Module-boundary interface targets (Phase 1 of M-EXT refactor)
+# Module-boundary interface targets
 #
 # These INTERFACE targets carry no sources; they define the dependency rules
 # that enforce the codec-adapter / execution-provider / runtime-core separation
-# described in docs/refactor/01-architecture-refactor-plan.md.  Physical source
-# movement into separate object-library targets happens in Phases 3–4.
+# described in docs/architecture.md. Physical source movement into separate
+# object-library targets remains an implementation detail.
 #
 # nvcr_base          – public types: Error/Result, Frame, Packet, Timestamp,
 #                      PixelFormat, MemoryKind, logging, statistics, memory pool

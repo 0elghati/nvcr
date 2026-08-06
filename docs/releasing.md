@@ -112,9 +112,9 @@ HTTPS URL, public URL base, local copy destination, or exact S3 prefix:
   --asset-manifest dist/nvcr-engine-assets.txt
 ```
 
-Preserve historical semver-coupled engine assets as labeled release history;
-do not rename or delete them to simulate the rolling layout. New installers use
-only the catalog. GitHub's 2 GiB per-asset limit remains enforced.
+Semver package assets are immutable once published. The rolling engine catalog is
+the source for target-local plans, and new installers use only that catalog.
+GitHub's 2 GiB per-asset limit remains enforced.
 
 ## CI and evidence
 
