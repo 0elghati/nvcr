@@ -69,12 +69,12 @@ The C++ runtime-facing resolver is exposed through
 the manifest and checksum validator has accepted a bundle. It does not build
 engines, fetch checkpoints, or silently parse an unvalidated directory.
 
-Resolution requests identify the codec, model set, component, provider
-constraint or preference, target identity, operating system, architecture,
-runtime/CUDA versions, precision, API/schema versions, and optional expected
-digest. Candidates retain the corresponding catalog fields, target profile,
-compute capability, hardware-compatibility class, availability, digest, and
-licensing status.
+Resolution requests identify the codec, model set, executable component, engine
+profile when selecting a provider bundle, provider constraint or preference,
+target identity, operating system, architecture, runtime/CUDA versions,
+precision, API/schema versions, and optional expected digest. Candidates retain
+the corresponding catalog fields, target profile, compute capability,
+hardware-compatibility class, availability, digest, and licensing status.
 
 Selection prefers the strongest compatible target match, then the requested
 provider order, then a stable artifact path. Failures use structured NVCR error
@@ -91,13 +91,16 @@ Python process or an implicit engine build.
 The C++ catalog loader is exposed through `include/nvcr/artifacts/catalog.hpp`.
 `Catalog::from_json` and `Catalog::from_file` accept only
 `nvcr.engine-catalog.v1`, enforce the required catalog fields, reject duplicate
-identities and filenames, and verify the profile-derived archive filename. The
-loader converts entries into resolver candidates only when the caller supplies
-the codec/provider mapping. With no local artifact root, candidates are marked
-unavailable; with a root, the loader checks path presence only. It parses the
-catalog digest but does not claim the archive bytes match that digest. The
-existing Python validator and downloaded-bundle validation remain authoritative
-for byte-level SHA-256 verification.
+identities and filenames, and verify the engine-profile-derived archive
+filename. The runtime-facing model uses `codec_id` and `engine_profile_id`; the
+existing rolling catalog keys `backend` and `profile` remain accepted as
+deprecated aliases. The loader converts entries into resolver candidates with
+the explicit `engine-bundle` component unless the caller supplies another
+component id. With no local artifact root, candidates are marked unavailable;
+with a root, the loader checks path presence only. It parses the catalog digest
+but does not claim the archive bytes match that digest. The existing Python
+validator and downloaded-bundle validation remain authoritative for byte-level
+SHA-256 verification.
 
 ## Prepare from checkpoints
 

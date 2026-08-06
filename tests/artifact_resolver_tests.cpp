@@ -63,6 +63,21 @@ void resolves_best_candidate() {
            "resolver returns selected artifact path");
 }
 
+void resolves_without_provider_preference() {
+       nvcr::artifacts::Resolver resolver;
+       resolver.add(candidate("test-cpu", "z-cpu.plan"));
+       resolver.add(candidate("tensorrt", "a-tensorrt.plan"));
+       auto requested = request();
+       requested.provider_id.clear();
+       requested.provider_preference.clear();
+       auto result = resolver.resolve(requested);
+       expect(result.has_value(), "resolver accepts an empty provider preference");
+       if (result) {
+              expect(result.value().candidate.artifact.path == "a-tensorrt.plan",
+                        "empty provider preference uses stable artifact ordering");
+       }
+}
+
 void reports_missing_identity() {
     nvcr::artifacts::Resolver resolver;
     resolver.add(candidate());
@@ -149,6 +164,30 @@ void supports_compatibility_classes() {
         expect(result.value().target_match_rank == 1U,
                "same-compute-capability match has the expected rank");
     }
+
+       auto ampere_candidate = candidate();
+       ampere_candidate.target_profile_id = "other-target";
+       ampere_candidate.hardware_compatibility =
+              nvcr::artifacts::HardwareCompatibility::ampere_plus;
+       nvcr::artifacts::Resolver ampere_resolver;
+       ampere_resolver.add(std::move(ampere_candidate));
+       auto ampere_result = ampere_resolver.resolve(request());
+       expect(ampere_result.has_value(), "ampere-plus artifact resolves for Ampere targets");
+       if (ampere_result) {
+              expect(ampere_result.value().target_match_rank == 2U,
+                        "ampere-plus match has the expected rank");
+       }
+}
+
+void allows_explicit_license_override() {
+       auto restricted = candidate();
+       restricted.license_restricted = true;
+       auto requested = request();
+       requested.allow_license_restricted = true;
+       nvcr::artifacts::Resolver resolver;
+       resolver.add(std::move(restricted));
+       expect(resolver.resolve(requested).has_value(),
+                 "explicit license override resolves a restricted artifact");
 }
 
 void reports_catalog_runtime_mismatches() {
@@ -210,15 +249,35 @@ void resolves_through_runtime_services() {
        }
 }
 
+void honors_resolver_selected_provider() {
+       nvcr::test_support::register_test_provider();
+       nvcr::artifacts::Resolver resolver;
+       auto artifact = candidate("unregistered-provider", "runtime-artifact");
+       artifact.artifact.precision = "int8";
+       resolver.add(artifact);
+
+       auto requested = request();
+       requested.provider_id = "unregistered-provider";
+       requested.precision = "int8";
+       nvcr::runtime::RuntimeServices services(
+              nvcr::runtime::Registry::instance(), "test-cpu");
+       auto executable = services.resolve(resolver, requested);
+       expect(!executable && executable.error().code() == nvcr::ErrorCode::missing_provider,
+              "runtime services does not fall back after resolver selects a provider");
+}
+
 }  // namespace
 
 int main() {
     resolves_best_candidate();
+        resolves_without_provider_preference();
     reports_missing_identity();
     reports_compatibility_failures();
     supports_compatibility_classes();
+               allows_explicit_license_override();
        reports_catalog_runtime_mismatches();
        resolves_through_runtime_services();
+               honors_resolver_selected_provider();
     if (failures == 0) {
         std::cout << "NVCR artifact resolver tests passed\n";
     }

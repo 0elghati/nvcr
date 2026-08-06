@@ -1,7 +1,8 @@
 # M-EXT: extensible runtime architecture refactor plan
 
 Date: 2026-08-06
-Branch: `refactor/extensible-runtime-v1`
+Implementation branch: `refactor/extensible-runtime-v1` (merged into `main` at
+`4c0cf69`)
 Prerequisite: [00-current-state-audit.md](00-current-state-audit.md)
 
 This is the phased implementation plan for milestone `M-EXT` referenced from

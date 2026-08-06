@@ -114,7 +114,8 @@ bool same_identity(
     const ArtifactRequest& request) noexcept {
     return candidate.artifact.codec_id == request.codec_id &&
         candidate.artifact.model_set_id == request.model_set_id &&
-        candidate.artifact.component_id == request.component_id;
+        candidate.artifact.component_id == request.component_id &&
+        candidate.artifact.engine_profile_id == request.engine_profile_id;
 }
 
 }  // namespace

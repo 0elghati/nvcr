@@ -97,35 +97,41 @@ bool Registry::compatible(
 
 Result<std::shared_ptr<provider::IExecutable>>
 RuntimeServices::resolve(const provider::ArtifactDescriptor& artifact) const {
-    // Try preferred provider first, then any compatible provider.
-    auto try_provider = [&](const ProviderEntry& entry)
-        -> std::optional<Result<std::shared_ptr<provider::IExecutable>>> {
-        if (!entry.factory) return std::nullopt;
-        auto instance = entry.factory();
-        if (!instance) return std::nullopt;
-        if (!instance->supports(artifact)) return std::nullopt;
-        return instance->load(artifact);
-    };
-
-    {
-        std::scoped_lock lock(registry_.mutex_);
-        // Preferred first.
-        for (const auto& entry : registry_.providers_) {
-            if (entry.descriptor.id == preferred_provider_id_) {
-                if (auto result = try_provider(entry)) return std::move(*result);
-            }
-        }
-        // Any compatible provider as fallback.
-        for (const auto& entry : registry_.providers_) {
-            if (entry.descriptor.id == preferred_provider_id_) continue;
-            if (auto result = try_provider(entry)) return std::move(*result);
-        }
+    const std::string& provider_id = artifact.provider_id.empty()
+        ? preferred_provider_id_
+        : artifact.provider_id;
+    if (provider_id.empty()) {
+        return Error(
+            ErrorCode::missing_provider,
+            "artifact does not identify an execution provider",
+            "registry");
     }
 
-    return Error(
-        ErrorCode::missing_artifact,
-        "no compatible provider found for artifact: " + artifact.component_id,
-        "registry");
+    std::scoped_lock lock(registry_.mutex_);
+    const auto provider = std::find_if(
+        registry_.providers_.begin(), registry_.providers_.end(),
+        [&](const ProviderEntry& entry) { return entry.descriptor.id == provider_id; });
+    if (provider == registry_.providers_.end() || !provider->factory) {
+        return Error(
+            ErrorCode::missing_provider,
+            "execution provider is not registered: " + provider_id,
+            "registry");
+    }
+
+    auto instance = provider->factory();
+    if (!instance) {
+        return Error(
+            ErrorCode::dependency_unavailable,
+            "execution provider factory returned null: " + provider_id,
+            "registry");
+    }
+    if (!instance->supports(artifact)) {
+        return Error(
+            ErrorCode::incompatible_target,
+            "execution provider does not support artifact: " + artifact.component_id,
+            "registry");
+    }
+    return instance->load(artifact);
 }
 
 Result<std::shared_ptr<provider::IExecutable>> RuntimeServices::resolve(

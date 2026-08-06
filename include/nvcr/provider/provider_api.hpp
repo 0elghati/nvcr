@@ -44,7 +44,8 @@ struct ProviderCapabilities {
 struct ArtifactDescriptor {
     std::string codec_id;         // e.g. "dcvc-rt"
     std::string model_set_id;     // e.g. "dcvcrt-cvpr2025"
-    std::string component_id;     // e.g. "p_frame_encoder"
+    std::string component_id;     // model component, e.g. "p_frame_encoder"
+    std::string engine_profile_id; // provider bundle profile, e.g. "720p"
     std::string provider_id;      // e.g. "tensorrt"
     std::string precision;        // e.g. "fp16"
     std::string path;             // resolved local filesystem path
