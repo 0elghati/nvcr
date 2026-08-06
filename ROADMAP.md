@@ -22,8 +22,8 @@ CVPR 2025 I/P model pair, that:
   evidence for RTX 4070 and Jetson Orin Nano.
 
 Additional codec backends, a public C ABI, FFmpeg integration, and container
-mapping are post-v1 work. They remain in the roadmap but are not v1 exit
-criteria.
+mapping remain in the roadmap under `M-EXT` (see below) rather than being
+deferred as unscheduled post-v1 work.
 
 ## Release status
 
@@ -39,16 +39,32 @@ criteria.
 | Milestone | State | Exit gate |
 |---|---|---|
 | M0 — Baseline and entropy | Complete | Golden rANS tests and repeatable baseline |
-| M1 — GPU-resident I-frame | Active | Warmed native I-frame latency ≤ Python |
-| M2 — Codec access unit and conformance | Active | Cross-runtime I/P golden streams |
-| M3 — Predicted frames | Active | Two complete conformant GOPs |
-| M4 — Deployment artifacts | Active | Reproducible validated model/engine loading |
+| M1 — GPU-resident I-frame | Paused | Warmed native I-frame latency ≤ Python |
+| M2 — Codec access unit and conformance | Paused | Cross-runtime I/P golden streams |
+| M3 — Predicted frames | Paused | Two complete conformant GOPs |
+| M4 — Deployment artifacts | Paused | Reproducible validated model/engine loading |
+| M-EXT — Extensible runtime architecture | Active | Section-20 acceptance checklist in `docs/refactor/99-final-acceptance-report.md` |
 | M5 — Stable C ABI | Post-v1 | C-only encode/decode/drain/reset tests |
 | M6 — FFmpeg codec wrapper | Post-v1 | `libnvcr` transcode tests |
 | M7 — Container integration | Post-v1 | Seekable mux/demux round trip |
 | M8 — Zero-copy and hardening | Post-v1 | CUDA-frame path and expanded release matrix |
 
-Current milestones: **M1–M4**, ordered by the 0.3/v1 release gates.
+Current milestone: **M-EXT**. M1–M4 evidence-gathering is explicitly paused (not
+abandoned) while the extensible codec/provider architecture refactor is
+implemented; M-EXT effectively pulls forward and formalizes the M5 design intent
+ahead of a stable C ABI.
+
+Reprioritization decision, 2026-08-06: work switched from M1–M4 performance/
+evidence gathering to `M-EXT`, an extensible-runtime architecture refactor
+(codec-adapter/execution-provider separation, session-oriented API, static
+codec/provider registries, formal stream spec, artifact provenance, SoftwareX
+release readiness) at the user's explicit direction. This is tracked on branch
+`refactor/extensible-runtime-v1`. The baseline audit, gap matrix, and full
+phased plan are recorded in `docs/refactor/00-current-state-audit.md` and
+`docs/refactor/01-architecture-refactor-plan.md`. M1–M4 resume in Phase 10 of
+that plan under a formal SoftwareX evaluation structure rather than the prior ad
+hoc protocol. No wire-format, CLI, or public-behavior change is authorized
+without a documented compatibility alias or migration note, per the phased plan.
 
 Orin INT8 PTQ investigation, 2026-08-02: explicit-Q/DQ W8A8 TensorRT
 engines confirmed a material Orin hardware opportunity but failed the codec
