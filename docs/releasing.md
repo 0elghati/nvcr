@@ -116,6 +116,32 @@ Semver package assets are immutable once published. The rolling engine catalog i
 the source for target-local plans, and new installers use only that catalog.
 GitHub's 2 GiB per-asset limit remains enforced.
 
+## SoftwareX evidence package
+
+The publication evaluation uses one clean package per run:
+
+```text
+evidence/softwarex-YYYYMMDD-<shortcommit>/
+  README.md
+  commands.md
+  environment.json
+  hardware-targets.json
+  artifact-catalog.json
+  artifact-digests.json
+  test-summary.json
+  exact-results.jsonl
+  same-compute-results.jsonl
+  ampere-plus-results.jsonl
+  python-reference-results.jsonl
+  failures.jsonl
+  summary.md
+```
+
+Keep metadata, hashes, commands, summaries, and small JSONL rows. Do not commit
+checkpoints, model exports, TensorRT plans, raw YUV, encoded streams, or
+reconstructed video. The field contract is documented in
+[docs/experiments/result-schema.md](experiments/result-schema.md).
+
 ## CI and evidence
 
 Pull-request CI covers shell/Python/JSON/workflow validation, CPU tests on hosted

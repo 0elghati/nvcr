@@ -18,7 +18,7 @@ This is development software, not a supported v1 release. A capability is implem
 
 ## Architecture work
 
-The extensible-runtime refactor is implemented in commit `a397a60` and is now the baseline for the next validation run.
+The extensible-runtime refactor is implemented in the current `main` baseline and is ready for the next validation run.
 
 Completed:
 
@@ -33,13 +33,14 @@ Completed:
 
 ## Next gate
 
-Phase 8 is CI and release hardening:
+The next gate is CI, release hardening, and the SoftwareX evaluation protocol:
 
 1. Run the core GCC/Clang sanitizer and parser jobs.
 2. Test CMake installation with an external consumer.
 3. Validate the release package, license files, and excluded model/engine assets.
 4. Rebuild the target-local engine collection from the current baseline.
 5. Run a clean Release evaluation on the reference target and replace the retained diagnostic matrix.
+6. Follow [the SoftwareX experiment protocol](docs/experiments/README.md) and publish one clean machine-readable result package.
 
 The next evaluation should cover correctness, I/P GOP behavior, reset/reuse, malformed input rejection, runtime, memory, payload size, reconstruction quality, and pinned-Python comparison where available.
 
@@ -48,6 +49,8 @@ The next evaluation should cover correctness, I/P GOP behavior, reset/reuse, mal
 Only the latest machine-readable matrix is retained at [evidence/live-release-20260806/resolution-matrix.jsonl](evidence/live-release-20260806/resolution-matrix.jsonl). It is a diagnostic record, not a post-refactor release result. Raw streams and older run bundles were removed; the next clean run replaces this file.
 
 No performance, energy, cross-runtime, or target-support claim should be made from the retained file alone.
+
+The experiment protocol currently has two explicit blockers: the RTX 3050 engine assets are staged but still need a checked-in `rtx3050-laptop-ubuntu2404` target profile and validation, and no driver yet converts the existing benchmark JSONL into the complete SoftwareX result schema.
 
 ## Release boundary
 
@@ -62,4 +65,4 @@ The following remain outside v1:
 - universal TensorRT-plan portability;
 - redistribution of checkpoints, exported model assets, or TensorRT plans.
 
-See [Scope and support](docs/scope-and-support.md), [Performance](docs/performance.md), and [Release policy](docs/releasing.md) for the current contracts.
+See [Scope and support](docs/scope-and-support.md), [Performance](docs/performance.md), [SoftwareX experiments](docs/experiments/README.md), and [Release policy](docs/releasing.md) for the current contracts.
