@@ -29,7 +29,15 @@ constexpr char sequence_magic[] = {'N', 'V', 'C', 'S'};
 constexpr std::uint16_t sequence_version = 1;
 constexpr std::size_t maximum_record_bytes = 65U * 1024U * 1024U;
 
-enum class Command { encode, decode };
+enum class Command {
+    encode,
+    decode,
+    codec_list,
+    codec_describe,
+    provider_list,
+    provider_describe,
+    compatibility_check,
+};
 
 struct Options final {
     Command command{Command::encode};
@@ -49,6 +57,8 @@ struct Options final {
     bool profile{};
     bool verbose{};
     bool help{};
+    std::string codec_id;
+    std::string provider_id;
 };
 
 void usage(std::ostream& out) {
@@ -59,7 +69,12 @@ void usage(std::ostream& out) {
         << "              [--gop-size N] [-r FPS] [--engine-dir DIR]\n"
         << "  nvcr decode -i INPUT.nvcr -o OUTPUT.yuv [--quality-metrics REFERENCE.yuv]\n"
         << "              [--backend NAME] [--engine-profile NAME] [--frames N]\n"
-        << "              [--device-id N] [--engine-dir DIR]\n\n"
+        << "              [--device-id N] [--engine-dir DIR]\n"
+        << "  nvcr codec list\n"
+        << "  nvcr codec describe CODEC_ID\n"
+        << "  nvcr provider list\n"
+        << "  nvcr provider describe PROVIDER_ID\n"
+        << "  nvcr compatibility check --codec CODEC_ID --provider PROVIDER_ID\n\n"
         << "Input and output video use planar 8-bit YUV 4:2:0. A frame count of zero\n"
         << "means process until end of input. Normal encoding uses the configured I/P\n"
         << "GOP; --gop-size 1 explicitly requests all-intra development mode.\n\n"
@@ -184,6 +199,99 @@ fs::path resolve_engine_dir(
     return engine_profile_dir(root, backend, profile);
 }
 
+void bootstrap_registry() {
+    nvcr::dcvcrt::register_codec();
+    nvcr::dcvcrt::register_tensorrt_provider();
+}
+
+int codec_list_command() {
+    bootstrap_registry();
+    const auto codecs = nvcr::runtime::Registry::instance().codecs();
+    if (codecs.empty()) {
+        std::cout << "No codecs registered\n";
+        return 0;
+    }
+    std::cout << "Registered codecs:\n";
+    for (const auto& codec : codecs) {
+        std::cout << "  " << codec.descriptor.id << " ("
+                  << codec.descriptor.display_name << ")\n";
+    }
+    return 0;
+}
+
+int codec_describe_command(std::string_view codec_id) {
+    bootstrap_registry();
+    const auto entry = nvcr::runtime::Registry::instance().find_codec(codec_id);
+    if (!entry) {
+        std::cerr << "nvcr: unknown codec: " << codec_id << '\n';
+        return 1;
+    }
+    std::cout << "Codec: " << entry->descriptor.id << "\n"
+              << "  name: " << entry->descriptor.display_name << "\n"
+              << "  api version: " << entry->descriptor.api_version << "\n"
+              << "  supports intra: "
+              << (entry->capabilities.supports_intra ? "yes" : "no") << "\n"
+              << "  supports predicted: "
+              << (entry->capabilities.supports_predicted ? "yes" : "no") << "\n"
+              << "  supports delayed output: "
+              << (entry->capabilities.supports_delayed_output ? "yes" : "no") << "\n"
+              << "  qp range: [" << entry->capabilities.min_qp << ", "
+              << entry->capabilities.max_qp << "]\n"
+              << "  encoder options: " << entry->encoder_options.declarations.size() << "\n"
+              << "  decoder options: " << entry->decoder_options.declarations.size() << '\n';
+    return 0;
+}
+
+int provider_list_command() {
+    bootstrap_registry();
+    const auto providers = nvcr::runtime::Registry::instance().providers();
+    if (providers.empty()) {
+        std::cout << "No providers registered\n";
+        return 0;
+    }
+    std::cout << "Registered providers:\n";
+    for (const auto& provider : providers) {
+        std::cout << "  " << provider.descriptor.id << " ("
+                  << provider.descriptor.display_name << ", version "
+                  << provider.descriptor.version << ")\n";
+    }
+    return 0;
+}
+
+int provider_describe_command(std::string_view provider_id) {
+    bootstrap_registry();
+    const auto entry = nvcr::runtime::Registry::instance().find_provider(provider_id);
+    if (!entry) {
+        std::cerr << "nvcr: unknown provider: " << provider_id << '\n';
+        return 1;
+    }
+    std::cout << "Provider: " << entry->descriptor.id << "\n"
+              << "  name: " << entry->descriptor.display_name << "\n"
+              << "  version: " << entry->descriptor.version << "\n"
+              << "  fp16: " << (entry->capabilities.supports_fp16 ? "yes" : "no") << "\n"
+              << "  int8: " << (entry->capabilities.supports_int8 ? "yes" : "no") << "\n"
+              << "  dynamic shapes: "
+              << (entry->capabilities.supports_dynamic_shapes ? "yes" : "no") << "\n"
+              << "  cuda graphs: "
+              << (entry->capabilities.supports_cuda_graphs ? "yes" : "no") << "\n"
+              << "  target device: " << entry->capabilities.target_device << '\n';
+    return 0;
+}
+
+int compatibility_check_command(std::string_view codec_id, std::string_view provider_id) {
+    bootstrap_registry();
+    const bool ok =
+        nvcr::runtime::Registry::instance().compatible(codec_id, provider_id);
+    if (ok) {
+        std::cout << "compatible: codec '" << codec_id << "' with provider '"
+                  << provider_id << "'\n";
+        return 0;
+    }
+    std::cout << "incompatible: codec '" << codec_id << "' with provider '"
+              << provider_id << "'\n";
+    return 1;
+}
+
 bool parse_options(int argc, char* argv[], Options& options) {
     if (argc < 2) {
         usage(std::cerr);
@@ -198,12 +306,63 @@ bool parse_options(int argc, char* argv[], Options& options) {
         options.command = Command::encode;
     } else if (command == "decode") {
         options.command = Command::decode;
+    } else if (command == "codec") {
+        if (argc < 3) {
+            std::cerr << "nvcr: codec requires a subcommand: list | describe\n";
+            return false;
+        }
+        const std::string_view subcommand = argv[2];
+        if (subcommand == "list") {
+            options.command = Command::codec_list;
+        } else if (subcommand == "describe") {
+            if (argc < 4) {
+                std::cerr << "nvcr: codec describe requires CODEC_ID\n";
+                return false;
+            }
+            options.command = Command::codec_describe;
+            options.codec_id = argv[3];
+        } else {
+            std::cerr << "nvcr: unknown codec subcommand: " << subcommand << '\n';
+            return false;
+        }
+        return true;
+    } else if (command == "provider") {
+        if (argc < 3) {
+            std::cerr << "nvcr: provider requires a subcommand: list | describe\n";
+            return false;
+        }
+        const std::string_view subcommand = argv[2];
+        if (subcommand == "list") {
+            options.command = Command::provider_list;
+        } else if (subcommand == "describe") {
+            if (argc < 4) {
+                std::cerr << "nvcr: provider describe requires PROVIDER_ID\n";
+                return false;
+            }
+            options.command = Command::provider_describe;
+            options.provider_id = argv[3];
+        } else {
+            std::cerr << "nvcr: unknown provider subcommand: " << subcommand << '\n';
+            return false;
+        }
+        return true;
+    } else if (command == "compatibility") {
+        if (argc < 3 || std::string_view(argv[2]) != "check") {
+            std::cerr << "nvcr: compatibility requires subcommand: check\n";
+            return false;
+        }
+        options.command = Command::compatibility_check;
     } else {
         std::cerr << "nvcr: unknown command: " << command << '\n';
         return false;
     }
 
-    for (int index = 2; index < argc; ++index) {
+    int argument_index = 2;
+    if (options.command == Command::compatibility_check) {
+        argument_index = 3;  // skip the `check` subcommand token
+    }
+
+    for (int index = argument_index; index < argc; ++index) {
         const std::string_view argument = argv[index];
         const auto value_after = [&](std::string_view flag) -> std::string_view {
             if (++index >= argc) {
@@ -295,11 +454,26 @@ bool parse_options(int argc, char* argv[], Options& options) {
             options.profile = true;
         } else if (argument == "--verbose" || argument == "-v") {
             options.verbose = true;
+        } else if (argument == "--codec") {
+            options.codec_id = std::string(value_after(argument));
+            if (options.codec_id.empty()) return false;
+        } else if (argument == "--provider") {
+            options.provider_id = std::string(value_after(argument));
+            if (options.provider_id.empty()) return false;
         } else {
             std::cerr << "nvcr: unknown option: " << argument << '\n';
             return false;
         }
     }
+
+    if (options.command == Command::compatibility_check) {
+        if (options.codec_id.empty() || options.provider_id.empty()) {
+            std::cerr << "nvcr: compatibility check requires --codec and --provider\n";
+            return false;
+        }
+        return true;
+    }
+
     if (const char* backend = std::getenv("NVCR_BACKEND")) {
         if (*backend != '\0' && options.backend == "default") options.backend = backend;
     }
@@ -796,5 +970,16 @@ int main(int argc, char* argv[]) {
         usage(std::cout);
         return 0;
     }
-    return options.command == Command::encode ? encode(options) : decode(options);
+    switch (options.command) {
+    case Command::encode: return encode(options);
+    case Command::decode: return decode(options);
+    case Command::codec_list: return codec_list_command();
+    case Command::codec_describe: return codec_describe_command(options.codec_id);
+    case Command::provider_list: return provider_list_command();
+    case Command::provider_describe: return provider_describe_command(options.provider_id);
+    case Command::compatibility_check:
+        return compatibility_check_command(options.codec_id, options.provider_id);
+    }
+    std::cerr << "nvcr: unreachable command dispatch\n";
+    return 2;
 }
