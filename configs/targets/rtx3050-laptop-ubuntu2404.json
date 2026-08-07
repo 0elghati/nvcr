@@ -1,0 +1,18 @@
+{
+  "schema": "nvcr.target-profile.v1",
+  "id": "rtx3050-laptop-ubuntu2404",
+  "status": "validation-in-progress",
+  "host": {
+    "os": "Ubuntu 24.04",
+    "architecture": "x86_64",
+    "compiler": "GCC 13.2.0"
+  },
+  "gpu": {
+    "name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "compute_capability": "8.6",
+    "multiprocessor_count": 16
+  },
+  "cuda": "12.6",
+  "tensorrt": "10.7.0",
+  "precision": "fp16"
+}
