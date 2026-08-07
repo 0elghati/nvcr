@@ -72,3 +72,5 @@ venv
 /infra/aws-cdk/.venv/
 /infra/aws-cdk/cdk.out/
 /infra/aws-cdk/.cdk.staging/
+
+/results/**/*.nvcr

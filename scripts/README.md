@@ -68,8 +68,40 @@ repetitions. Add `--profile` for a publication package; it collects latency,
 PSNR, and memory in separate repetitions while preserving clean FPS and wall
 time. A run without the flag is intentionally performance-only and `partial`.
 
-`benchmark_resolution_matrix.sh` is useful for quick diagnostics, but its
-`nvcr.benchmark.resolution-matrix.v1` rows are not publication-ready. Raw
-streams are temporary and should not be committed.
+For ordinary performance collection, use the lower-level resolution pipeline:
+
+```bash
+scripts/benchmark_resolution_matrix.sh \
+  --resolutions "qcif 720p" \
+  --frames 300 \
+  --gops "1 299" \
+  --repetitions 3 \
+  --warmup-frames 10 \
+  --engine-root build/engines-rtx4070-exact-20260805 \
+  --results-dir evidence/performance/rtx4070-qcif-720p \
+  --output-dir /tmp/nvcr-performance-streams \
+  --hardware rtx4070
+```
+
+With the standard sibling layout, `--engine-root` resolves each selected label
+to `dcvcrt-<resolution>` under that directory. The existing per-resolution
+input and engine options (`--qcif-input`, `--720p-input`, `--qcif-engine-dir`,
+and so on) remain available for exceptions. The pipeline writes
+`results.jsonl`, `results.csv`, and
+`summary.md` under `--results-dir`; the CSV and JSONL contain both every measured
+repetition and an `average` row. Each row includes codec payload bytes and
+`payload_bpp`, calculated as payload bits divided by `width * height * frames`.
+Result directories can be committed as interim
+experiment records, while encoded streams remain under `/tmp`.
+
+Use `--resolutions "360p"` or any other supported label to collect one
+resolution. Use `--hardware` to keep labels stable across machines; otherwise
+the pipeline records the first `nvidia-smi` GPU name, falling back to the host
+name. These diagnostic rows are intentionally separate from the SoftwareX
+publication driver and can be aggregated after all hardware runs exist.
+
+`benchmark_resolution_matrix.sh` emits the diagnostic schema
+`nvcr.benchmark.resolution-matrix.v1`; it is designed for this collection stage
+and is not itself a publication-readiness gate.
 
 For target-specific details, read [Getting started](../docs/getting-started.md), [Model and engine preparation](../docs/dcvcrt-artifacts.md), [Performance](../docs/performance.md), and [Release policy](../docs/releasing.md).
