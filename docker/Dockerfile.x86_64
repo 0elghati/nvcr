@@ -1,14 +1,14 @@
 # syntax=docker/dockerfile:1.7
 
 # The defaults reproduce the RTX 4070 reference image. Build arguments allow a
-# discrete-GPU target to select a newer CUDA/TensorRT pair and CUDA architectures.
-ARG CUDA_DEVEL_IMAGE=nvidia/cuda:12.6.3-devel-ubuntu24.04@sha256:392c0df7b577ecae17a17f6ba7f2009c217bb4422f8431c053ae9af61a8c148a
-ARG CUDA_RUNTIME_IMAGE=nvidia/cuda:12.6.3-runtime-ubuntu24.04@sha256:92906d87596d638d35015c6353053121bd299d25943b875763321653884ba924
-ARG TENSORRT_PACKAGE_VERSION=10.7.0.23-1+cuda12.6
+# discrete-GPU target to select CUDA architectures within the common 10.9 stack.
+ARG CUDA_DEVEL_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04
+ARG CUDA_RUNTIME_IMAGE=nvidia/cuda:12.8.1-runtime-ubuntu24.04
+ARG TENSORRT_PACKAGE_VERSION=10.9.0.34-1+cuda12.8
 ARG NVCR_CUDA_ARCHITECTURES=89
 ARG NVCR_TARGET_PROFILE=rtx4070-ubuntu2404
-ARG NVCR_CUDA_VERSION=12.6
-ARG NVCR_TENSORRT_VERSION=10.7
+ARG NVCR_CUDA_VERSION=12.8
+ARG NVCR_TENSORRT_VERSION=10.9
 ARG NVCR_IMAGE_DESCRIPTION="NVCR runtime for linux/amd64 NVIDIA discrete GPUs; default reference is RTX 4070 SM 8.9"
 
 FROM ${CUDA_DEVEL_IMAGE} AS toolchain

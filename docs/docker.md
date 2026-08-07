@@ -8,7 +8,7 @@ them.
 
 | Definition | Docker platform | CUDA architecture | Reference target |
 |---|---|---:|---|
-| `docker/Dockerfile.x86_64` | `linux/amd64` | CUDA 12.8 image uses the compiler-supported architecture set; CUDA 12.6 legacy defaults to SM 8.9 | RTX 4070 / Ubuntu 24.04 and validated desktop targets |
+| `docker/Dockerfile.x86_64` | `linux/amd64` | CUDA 12.8 / TensorRT 10.9, using the compiler-supported architecture set | RTX 4070 / Ubuntu 24.04 and validated desktop targets |
 | `docker/Dockerfile.jetson` | `linux/arm64` | SM 8.7 | Jetson Orin Nano / L4T 36.4.x |
 
 Each Dockerfile has a `test` target for one-command validation, a
@@ -24,7 +24,6 @@ There is intentionally no shared `latest` tag:
 | Runtime family | Immutable tag | Moving family tag |
 |---|---|---|
 | amd64 / CUDA 12.8 / TensorRT 10.9 | `VERSION-amd64-cuda12.8-trt10.9` | `amd64-cuda12.8-trt10.9` |
-| amd64 / CUDA 12.6 / TensorRT 10.7 | `VERSION-amd64-cuda12.6-trt10.7` | `amd64-cuda12.6-trt10.7` |
 | Jetson / L4T 36.4 / JetPack 6.1 | `VERSION-jetson-l4t36.4` | `jetson-l4t36.4` |
 
 Docker image tags use `amd64`, matching the OCI/Docker `linux/amd64` platform

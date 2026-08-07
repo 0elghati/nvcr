@@ -36,10 +36,9 @@ the complete result schema, and writes the evidence package described below.
 
 Checked-in target profiles cover RTX 4070, RTX 5060 Laptop, and Jetson Orin
 Nano. RTX 3050 exact remains blocked on a checked-in profile. A 2026-08-06
-preflight on the RTX 4070 also found that its profile records TensorRT 10.7
-while the current host and local engines use 10.9; the profile and all bundles
-must be reconciled and rebuilt from the current model-profile digest before a
-clean exact run.
+preflight on the RTX 4070 found that the host and local engines use TensorRT
+10.9; the target profile now uses the same stack, while all bundles must still
+be rebuilt from the current model-profile digest before a clean exact run.
 
 The driver is tested automation, not evidence by itself. A result package is
 complete only when it records a clean commit, current artifacts, registered and

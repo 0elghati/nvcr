@@ -82,10 +82,10 @@ The schema-producing driver now exists at
 `scripts/benchmark_softwarex_matrix.py` and has focused unit coverage. Current
 evaluation blockers are:
 
-- RTX 3050 still needs a checked-in
-  `rtx3050-laptop-ubuntu2404` profile and rebuilt exact artifacts;
-- RTX 4070's profile records TensorRT 10.7 while the detected host and local
-  bundles report 10.9;
+- RTX 3050's checked-in `rtx3050-laptop-ubuntu2404` profile and exact artifacts
+  still need validation;
+- RTX 4070's profile now matches the detected TensorRT 10.9 host, but local
+  bundles still predate the current model profile digest;
 - the local 2026-08-05 RTX 4070 bundles predate the current model-profile
   digest and must be rebuilt;
 - the raw input manifest and pinned Python comparison rows are not yet
@@ -113,10 +113,9 @@ The 2026-08-06 repository audit, updated on 2026-08-07, established:
   ran against the install tree;
 - all 13 focused SoftwareX driver tests pass, including coverage that keeps
   profiled repetitions out of primary FPS and wall-time aggregates;
-- a real RTX 4070 plan-only preflight correctly failed before execution because
-  target TensorRT 10.7 does not match detected TensorRT 10.9; the repeated
-  preflight with `--profile` also recorded the intended profiling mode before
-  preserving that strict failure;
+- a real RTX 4070 plan-only preflight previously failed before execution because
+  the target version did not match detected TensorRT 10.9; the target and
+  desktop build stack are now unified on TensorRT 10.9;
 - the current model-profile SHA-256 is
   `3aaa4e2f3d309090e2947e065ce9d6be8456b01d14fde8a05f87f0daed348246`;
   the local RTX 4070 manifests record the stale

@@ -102,10 +102,9 @@ the publication matrix were not run.
 
 ## 5. RTX 4070 exact
 
-The current checkout is blocked before this command can complete: the checked-in
-target records TensorRT 10.7, the detected host is TensorRT 10.9, and the local
-2026-08-05 bundles predate the current model-profile digest. First reconcile the
-target and rebuild every bundle.
+The current checkout is blocked before this command can complete because the
+local 2026-08-05 bundles predate the current model-profile digest. The checked-in
+target and detected host now use TensorRT 10.9. First rebuild every bundle.
 
 Use a fresh directory for the strict preflight:
 

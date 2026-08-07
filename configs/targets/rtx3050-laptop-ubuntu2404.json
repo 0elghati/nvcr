@@ -12,7 +12,7 @@
     "compute_capability": "8.6",
     "multiprocessor_count": 16
   },
-  "cuda": "12.6",
-  "tensorrt": "10.7.0",
+  "cuda": "12.8",
+  "tensorrt": "10.9.0",
   "precision": "fp16"
 }

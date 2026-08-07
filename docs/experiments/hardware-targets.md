@@ -16,7 +16,7 @@ Record the JSON with the run metadata. It includes OS, architecture, GPU name, c
 | Requested target | Actual target/profile today | Expected family | State |
 |---|---|---|---|
 | RTX 3050 exact | No checked-in profile | Usually SM 8.6 | Blocked: add a profile for the actual staged Laptop target and validate it |
-| RTX 4070 exact | `rtx4070-ubuntu2404` | SM 8.9 | Blocked: profile says TensorRT 10.7; current host/local engines report 10.9 |
+| RTX 4070 exact | `rtx4070-ubuntu2404` | SM 8.9 | Blocked: current host/local engines must be rebuilt from the current model profile |
 | RTX 5060 exact | `rtx5060-laptop-ubuntu2404` | Detect exact Blackwell SM | Profile exists for the Laptop GPU; do not rename it to a generic RTX 5060 target |
 | Jetson Orin Nano exact | `orin-nano-l4t3647` | SM 8.7 | Profile exists; validation is incomplete |
 

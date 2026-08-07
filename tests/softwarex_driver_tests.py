@@ -301,7 +301,7 @@ class ContractTests(unittest.TestCase):
     def test_exact_target_requires_runtime_version_match(self) -> None:
         target = self.target()
         softwarex.validate_test_target(target, self.identity(), "exact")
-        target["tensorrt"] = "10.7.0"
+        target["tensorrt"] = "10.8.0"
         with self.assertRaisesRegex(softwarex.SoftwareXError, "TensorRT"):
             softwarex.validate_test_target(target, self.identity(), "exact")
 

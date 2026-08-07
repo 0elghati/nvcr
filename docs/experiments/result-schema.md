@@ -69,7 +69,7 @@ case prevents the package-level status from becoming `complete`.
   "os": "",
   "driver_version": "",
   "cuda_runtime_version": "12.6",
-  "tensorrt_version": "10.7.0",
+  "tensorrt_version": "10.9.0",
   "codec_id": "dcvc-rt",
   "model_set_id": "dcvcrt-cvpr2025",
   "provider_id": "tensorrt",
