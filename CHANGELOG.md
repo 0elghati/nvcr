@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/0elghati/nvcr/compare/v0.9.0...v0.10.0) (2026-08-07)
+
+
+### Features
+
+* measurement pipeline & rtx4070 measurement ([#76](https://github.com/0elghati/nvcr/issues/76)) ([aa16f20](https://github.com/0elghati/nvcr/commit/aa16f20f67cb48636aa5f004925696d69dd7bc9c))
+
 ## [0.9.0](https://github.com/0elghati/nvcr/compare/v0.8.2...v0.9.0) (2026-08-07)
 
 
