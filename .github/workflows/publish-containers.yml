@@ -27,7 +27,7 @@ concurrency:
 jobs:
   publish-x86_64:
     if: ${{ inputs.architecture == 'x86_64' || inputs.architecture == 'all' }}
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     env:
       NVCR_TAG: ${{ inputs.tag }}
       NVCR_DOCKERHUB_REPOSITORY: ${{ secrets.DOCKERHUB_USERNAME }}/nvcr

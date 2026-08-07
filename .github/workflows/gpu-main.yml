@@ -1,8 +1,7 @@
 name: optional-self-hosted-reference-gpu
 
-# Default repository automation assumes GitHub's standard hosted runners.
-# This workflow is an opt-in helper if a self-hosted RTX reference runner is
-# added later; it stays manual and disabled by default.
+# This workflow is an opt-in helper for a specifically labeled self-hosted RTX
+# reference runner; it stays manual and disabled by default.
 on:
   workflow_dispatch:
     inputs:
@@ -42,14 +41,13 @@ jobs:
 
   self-hosted-disabled-summary:
     if: ${{ vars.NVCR_ENABLE_SELF_HOSTED_REFERENCE_GATES != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Explain disabled optional workflow
         run: |
           cat <<'EOF' >>"$GITHUB_STEP_SUMMARY"
           This optional workflow is disabled by default.
 
-          The repository's default automation assumes GitHub standard hosted runners only.
           Enable `NVCR_ENABLE_SELF_HOSTED_REFERENCE_GATES=true` only after you add a
           matching `nvcr-release-discrete` self-hosted runner.
           EOF
