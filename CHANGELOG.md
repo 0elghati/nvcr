@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/0elghati/nvcr/compare/v0.10.0...v0.11.0) (2026-08-07)
+
+
+### Features
+
+* **experiments:** Run on RTX 5060 Laptop ([#78](https://github.com/0elghati/nvcr/issues/78)) ([5aaeeba](https://github.com/0elghati/nvcr/commit/5aaeeba0c6722894f225dc02f186f9c2826deaf4))
+* **experiments:** run on RTX3050 laptop ([#80](https://github.com/0elghati/nvcr/issues/80)) ([0398e3f](https://github.com/0elghati/nvcr/commit/0398e3f901c3a0a9768220dd8042c19aaef53bb7))
+
 ## [0.10.0](https://github.com/0elghati/nvcr/compare/v0.9.0...v0.10.0) (2026-08-07)
 
 
