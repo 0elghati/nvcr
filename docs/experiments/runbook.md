@@ -1,20 +1,95 @@
 # SoftwareX runbook
 
-Run from the repository root. Do not invent missing inputs; mark the row skipped and record the missing item instead.
+Run from a clean repository root on the machine named by the target profile.
+Do not substitute another GPU, invent an input, or reuse an engine after any
+bound profile changes.
 
-## 1. Record identity
+The publication entry point is:
 
 ```bash
+python3 scripts/benchmark_softwarex_matrix.py --help
+```
+
+By default the driver runs only its low-overhead performance repetitions. Add
+`--profile` for publication runs: the driver then collects verbose latency,
+PSNR, and memory in separate repetitions after all primary timing. Omitting the
+flag is useful while tuning, but the resulting package remains `partial`.
+
+`scripts/benchmark_resolution_matrix.sh` remains a lower-level diagnostic. Its
+rows are not SoftwareX evidence.
+
+## 1. Supply local inputs
+
+Start from [softwarex-inputs.example.json](softwarex-inputs.example.json) and
+create a local manifest using schema `nvcr.softwarex.inputs.v1`. Every entry
+must identify a real planar YUV420P8 file, dimensions, frame rate, fixed frame
+count, profile, sequence ID, and redistribution status.
+
+An exact package needs at least one sequence for `qcif`, `cif`, `360p`, `720p`,
+and `1080p`. `540p` is optional. Keep the manifest and raw YUV outside Git when
+the source license requires it.
+
+```bash
+export NVCR_SOFTWAREX_INPUTS=/data/nvcr/softwarex-inputs.json
+python3 -m json.tool "$NVCR_SOFTWAREX_INPUTS"
 python3 scripts/nvcr_device.py > /tmp/nvcr-device.json
 git rev-parse HEAD
 git status --short
 ```
 
-For a container run, record the image tag and digest as well. A dirty tree is allowed for development diagnostics but not for a publication row.
+A publication run requires a clean commit. A dirty run is retained as
+`partial`, even when its cases pass.
 
-## 2. CPU-only container
+## 2. Prepare exact artifacts
 
-This validates public contracts without pretending to validate TensorRT:
+Build plans on the final target. This example exports the pinned model once and
+builds all six registered profiles:
+
+```bash
+export TARGET_PROFILE=configs/targets/rtx4070-ubuntu2404.json
+export ENGINE_ROOT="$PWD/build/engines-rtx4070-exact"
+export TRTEXEC=/usr/src/tensorrt/bin/trtexec
+
+./scripts/nvcr_artifacts.py prepare --all \
+  --target-profile "$TARGET_PROFILE" \
+  --engines-root "$ENGINE_ROOT" \
+  --hardware-compatibility exact \
+  --dcvcrt-root /path/to/DCVC-RT \
+  --models build/models/dcvcrt \
+  --trtexec "$TRTEXEC" \
+  --python /path/to/DCVC-RT/src/venv/bin/python3
+
+for profile in qcif cif 360p 540p 720p 1080p; do
+  ./scripts/nvcr_artifacts.py validate \
+    "$ENGINE_ROOT/dcvcrt-$profile" --json
+done
+```
+
+The target profile, current model profile, every engine profile, device
+identity, CUDA/TensorRT runtime, manifest, and checksum bytes must agree. A
+successful TensorRT deserialization alone is insufficient.
+
+## 3. Configure the registered gates
+
+The driver requires a Release tree whose CTest registry contains an engine
+contract and native I/P roundtrip test for every selected profile:
+
+```bash
+cmake -S . -B build-release \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DNVCR_ENABLE_TENSORRT=ON \
+  -DNVCR_TENSORRT_ENGINE_DIRS="$ENGINE_ROOT/dcvcrt-qcif;$ENGINE_ROOT/dcvcrt-cif;$ENGINE_ROOT/dcvcrt-360p;$ENGINE_ROOT/dcvcrt-720p;$ENGINE_ROOT/dcvcrt-1080p"
+
+cmake --build build-release --parallel
+ctest --test-dir build-release -N
+```
+
+Add the `540p` directory to `NVCR_TENSORRT_ENGINE_DIRS` when that optional
+profile is selected.
+
+## 4. CPU container validation
+
+This is reviewer-accessible contract evidence, not GPU or publication evidence:
 
 ```bash
 docker build --platform linux/amd64 --target test \
@@ -22,11 +97,200 @@ docker build --platform linux/amd64 --target test \
 docker run --rm nvcr-test:cpu cpu
 ```
 
-Record separately: CPU tests passed, GPU tests not registered, engine bundles not validated, and publication matrix not completed.
+Record it as: CPU/core tests passed; TensorRT engine tests, GPU roundtrips, and
+the publication matrix were not run.
 
-## 3. x86_64 CUDA/TensorRT container
+## 5. RTX 4070 exact
 
-Build/run on a desktop NVIDIA host. The image contains no plans or checkpoints:
+The current checkout is blocked before this command can complete: the checked-in
+target records TensorRT 10.7, the detected host is TensorRT 10.9, and the local
+2026-08-05 bundles predate the current model-profile digest. First reconcile the
+target and rebuild every bundle.
+
+Use a fresh directory for the strict preflight:
+
+```bash
+python3 scripts/benchmark_softwarex_matrix.py \
+  --output-dir /tmp/nvcr-softwarex-rtx4070-preflight \
+  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --target-profile configs/targets/rtx4070-ubuntu2404.json \
+  --engine-root "$ENGINE_ROOT" \
+  --profiles qcif cif 360p 720p 1080p \
+  --qps 32 --gops 1 normal \
+  --profile --profile-runs 1 \
+  --native-build-id rtx4070-ubuntu2404-release \
+  --plan-only
+```
+
+After preflight passes, run into a different empty directory. Matching pinned
+Python rows are mandatory for every requested case:
+
+```bash
+python3 scripts/benchmark_softwarex_matrix.py \
+  --output-dir "evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-rtx4070" \
+  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --target-profile configs/targets/rtx4070-ubuntu2404.json \
+  --engine-root "$ENGINE_ROOT" \
+  --build-dir build-release \
+  --nvcr build-release/cli/nvcr \
+  --profiles qcif cif 360p 720p 1080p \
+  --qps 32 --gops 1 normal \
+  --warmup-runs 1 --measured-runs 3 \
+  --profile --profile-runs 1 \
+  --python-reference-command '/path/to/pinned-reference-wrapper --output /data/nvcr/python-reference-results.jsonl' \
+  --python-reference-jsonl /data/nvcr/python-reference-results.jsonl \
+  --native-build-id rtx4070-ubuntu2404-release
+```
+
+## 6. RTX 3050 exact
+
+This is blocked until
+`configs/targets/rtx3050-laptop-ubuntu2404.json` is created from the actual
+machine and exact bundles are rebuilt. Once present:
+
+Configure `build-release-rtx3050` with those five engine directories as in
+step 3, then run:
+
+```bash
+export ENGINE_ROOT="$PWD/build/engines-rtx3050-exact"
+python3 scripts/benchmark_softwarex_matrix.py \
+  --output-dir "evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-rtx3050" \
+  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --target-profile configs/targets/rtx3050-laptop-ubuntu2404.json \
+  --engine-root "$ENGINE_ROOT" \
+  --build-dir build-release-rtx3050 \
+  --nvcr build-release-rtx3050/cli/nvcr \
+  --profiles qcif cif 360p 720p 1080p \
+  --qps 32 --gops 1 normal \
+  --warmup-runs 1 --measured-runs 3 \
+  --profile --profile-runs 1 \
+  --native-build-id rtx3050-laptop-ubuntu2404-release
+```
+
+Do not use an RTX 4070 exact or same-compute bundle for this row.
+
+## 7. RTX 5060 exact
+
+The checked-in profile names the actual Laptop target. Detect the GPU and add a
+different profile if the evaluated RTX 5060 is not that device:
+
+Configure `build-release-rtx5060` with the target's five exact engine
+directories as in step 3, then run:
+
+```bash
+export ENGINE_ROOT="$PWD/build/engines-rtx5060-laptop-exact"
+python3 scripts/benchmark_softwarex_matrix.py \
+  --output-dir "evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-rtx5060" \
+  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --target-profile configs/targets/rtx5060-laptop-ubuntu2404.json \
+  --engine-root "$ENGINE_ROOT" \
+  --build-dir build-release-rtx5060 \
+  --nvcr build-release-rtx5060/cli/nvcr \
+  --profiles qcif cif 360p 720p 1080p \
+  --qps 32 --gops 1 normal \
+  --warmup-runs 1 --measured-runs 3 \
+  --profile --profile-runs 1 \
+  --native-build-id rtx5060-laptop-ubuntu2404-release
+```
+
+## 8. Jetson Orin Nano exact
+
+Run natively on the Orin target. QEMU and cross-platform image construction are
+not evidence:
+
+Configure `build-release-jetson` with the Orin exact engine directories as in
+step 3, then run:
+
+```bash
+export ENGINE_ROOT="$PWD/build/engines-orin-nano-exact"
+python3 scripts/benchmark_softwarex_matrix.py \
+  --output-dir "evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-orin" \
+  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --target-profile configs/targets/orin-nano-l4t3647.json \
+  --engine-root "$ENGINE_ROOT" \
+  --build-dir build-release-jetson \
+  --nvcr build-release-jetson/cli/nvcr \
+  --profiles qcif cif 360p 720p 1080p \
+  --qps 32 --gops 1 normal \
+  --warmup-runs 1 --measured-runs 3 \
+  --profile --profile-runs 1 \
+  --native-build-id orin-nano-l4t3647-release
+```
+
+Jetson is exact-only. The current driver samples discrete-GPU memory through
+`nvidia-smi`; a target-local Jetson GPU-memory sampler must be supplied before a
+Jetson package with unavailable memory can become complete.
+
+## 9. Same-compute validation
+
+Build and test on a named desktop target whose detected SM is the intended
+class. This RTX 4070 example creates SM 8.9-class bundles:
+
+```bash
+export TARGET_PROFILE=configs/targets/rtx4070-ubuntu2404.json
+export ENGINE_ROOT="$PWD/build/engines-linux-amd64-sm89"
+
+./scripts/nvcr_artifacts.py build --all \
+  --target-profile "$TARGET_PROFILE" \
+  --engines-root "$ENGINE_ROOT" \
+  --hardware-compatibility same_compute_capability \
+  --models build/models/dcvcrt \
+  --trtexec "$TRTEXEC"
+
+python3 scripts/benchmark_softwarex_matrix.py \
+  --output-dir "evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-sm89" \
+  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --target-profile "$TARGET_PROFILE" \
+  --engine-root "$ENGINE_ROOT" \
+  --build-dir build-release-sm89 \
+  --nvcr build-release-sm89/cli/nvcr \
+  --profiles 720p \
+  --qps 32 --gops 1 normal \
+  --profile --profile-runs 1 \
+  --compatibility-class same_compute_capability \
+  --exact-baseline-jsonl /path/to/rtx4070-exact-results.jsonl \
+  --native-build-id linux-amd64-sm89-release
+```
+
+Configure `build-release-sm89` with the selected same-compute directories as in
+step 3. Repeat on a representative GPU for every claimed SM class.
+
+## 10. Ampere-plus validation
+
+Ampere-plus is a desktop fallback, never a Jetson mode:
+
+```bash
+export TARGET_PROFILE=configs/targets/rtx4070-ubuntu2404.json
+export ENGINE_ROOT="$PWD/build/engines-linux-amd64-ampere-plus"
+
+./scripts/nvcr_artifacts.py build --all \
+  --target-profile "$TARGET_PROFILE" \
+  --engines-root "$ENGINE_ROOT" \
+  --hardware-compatibility ampere_plus \
+  --models build/models/dcvcrt \
+  --trtexec "$TRTEXEC"
+
+python3 scripts/benchmark_softwarex_matrix.py \
+  --output-dir "evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-ampere-plus" \
+  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --target-profile "$TARGET_PROFILE" \
+  --engine-root "$ENGINE_ROOT" \
+  --build-dir build-release-ampere-plus \
+  --nvcr build-release-ampere-plus/cli/nvcr \
+  --profiles 720p \
+  --qps 32 --gops 1 normal \
+  --profile --profile-runs 1 \
+  --compatibility-class ampere_plus \
+  --exact-baseline-jsonl /path/to/rtx4070-exact-results.jsonl \
+  --native-build-id linux-amd64-ampere-plus-release
+```
+
+Configure the matching Release tree first. Repeat correctness and ratio
+measurement on every desktop target where the fallback is claimed.
+
+## 11. Containers and identity
+
+The x86_64 and Jetson test services validate one selected engine profile:
 
 ```bash
 docker compose -f docker/compose.x86_64.yaml run --rm --build engine-install
@@ -34,129 +298,33 @@ NVCR_TEST_ENGINE_PROFILE=qcif \
   docker compose -f docker/compose.x86_64.yaml run --rm --build test gpu
 ```
 
-For a local engine collection instead of catalog installation:
+Use `docker/compose.jetson.yaml` on the native Jetson. For a driver run inside a
+container, pass both `--container-image` and its immutable
+`--container-digest`; omit `--native-build-id`. The source/test environment
+must mount inputs and engines read-only and evidence output writable. Container
+userspace must match the engine TensorRT identity.
 
-```bash
-export NVCR_ENGINE_ROOT="$PWD/build/engines"
-docker compose -f docker/compose.x86_64.yaml run --rm --build test gpu
-```
+## 12. Accept the package
 
-For direct execution, mount engines read-only and inputs read-only:
+Open `run-summary.json`, `test-summary.json`, `failures.jsonl`, and
+`summary.md`. Only package status `complete` is publication-ready. The driver
+requires:
 
-```bash
-docker run --rm --gpus all \
-  -e NVCR_ENGINE_ROOT=/opt/nvcr/engines \
-  -v "$PWD/build/engines:/opt/nvcr/engines:ro" \
-  -v "/path/to/input:/input:ro" -v "/path/to/output:/output" \
-  nvcr:rtx4070 --help
-```
+- current validated artifacts and target identity;
+- a recorded native build ID or immutable container identity;
+- source build, core tests, GPU registration, engine tests, and native I/P
+  roundtrips;
+- the complete exact profile/QP/GOP definition;
+- `--profile` enabled, with profile metrics collected in repetitions separate
+  from primary timing;
+- finite throughput, latency, payload, BPP, PSNR, host memory, and GPU memory;
+- matching Python rows for every RTX 4070 exact case;
+- matching exact baseline rows for compatibility-class cases;
+- no failed/skipped cases and a clean Git tree.
 
-## 4. Jetson container
+Omitting `--profile` or using `--skip-build`, `--skip-core-tests`,
+`--skip-gpu-tests`, `--plan-only`, or `--allow-partial` is diagnostic. These
+controls cannot turn missing evidence into a complete package.
 
-Build and run on the native Orin host:
-
-```bash
-docker build --platform linux/arm64 --target runtime \
-  -f docker/Dockerfile.jetson -t nvcr:orin-nano .
-docker compose -f docker/compose.jetson.yaml run --rm --build engine-install
-NVCR_TEST_ENGINE_PROFILE=qcif \
-  docker compose -f docker/compose.jetson.yaml run --rm --build test gpu
-```
-
-Jetson rows are exact-only. QEMU or cross-platform image construction is not target evidence.
-
-## 5. Prepare and validate artifacts
-
-Use the checked-in target profile and build on the final target:
-
-```bash
-TARGET_PROFILE=configs/targets/rtx4070-ubuntu2404.json
-./scripts/nvcr_artifacts.py prepare \
-  --model-profile configs/models/dcvcrt-cvpr2025.json \
-  --profile 720p \
-  --target-profile "$TARGET_PROFILE" \
-  --dcvcrt-root /path/to/DCVC-RT \
-  --models build/models/dcvcrt \
-  --engines build/engines/dcvcrt \
-  --python /path/to/python
-./scripts/nvcr_artifacts.py validate build/models/dcvcrt --json
-./scripts/nvcr_artifacts.py validate build/engines/dcvcrt-720p --json
-```
-
-For a complete set, repeat validation for `qcif`, `cif`, `360p`, `540p`, `720p`, and `1080p`.
-
-## 6. Exact-target rows
-
-### RTX 4070 exact
-
-```bash
-export TARGET_PROFILE=configs/targets/rtx4070-ubuntu2404.json
-export NVCR_ENGINE_ROOT=/path/to/rtx4070-engines
-# Validate all selected bundles, run ctest, then run the matrix:
-scripts/benchmark_resolution_matrix.sh \
-  --nvcr build-release/cli/nvcr \
-  --resolutions "qcif cif 360p 540p 720p 1080p" \
-  --gops "1 97" --qp 32 --frames 97 \
-  --repetitions 3 --warmup-frames 10 \
-  --output-dir /tmp/nvcr-rtx4070 \
-  --jsonl evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)/matrix.raw.jsonl
-```
-
-The target is mandatory for the Python comparison.
-
-### RTX 3050 exact
-
-Blocked until `configs/targets/rtx3050-ubuntu2404.json` and a complete validated engine set exist. Do not substitute an RTX 4070 or a same-compute bundle for the exact row.
-
-### RTX 5060 exact
-
-Use the actual checked-in profile name until a separate generic target is added:
-
-```bash
-export TARGET_PROFILE=configs/targets/rtx5060-laptop-ubuntu2404.json
-```
-
-Detect and record the GPU identity before accepting the row. The engine set must be built for that target and TensorRT runtime.
-
-### Jetson Orin Nano exact
-
-```bash
-export TARGET_PROFILE=configs/targets/orin-nano-l4t3647.json
-export NVCR_ENGINE_ROOT=/path/to/orin-engines
-```
-
-Run only exact target-local bundles. Record JetPack/L4T, power mode, clocks, CUDA, and TensorRT.
-
-## 7. Same-compute rows
-
-Build explicitly on a desktop target with the detected SM class:
-
-```bash
-./scripts/nvcr_artifacts.py build \
-  --profile 720p \
-  --target-profile "$TARGET_PROFILE" \
-  --hardware-compatibility same_compute_capability
-```
-
-Package with the resulting `linux-amd64-sm<CC>` name, validate the bundle, and run correctness plus a short sanity matrix on a representative GPU with the same SM. This is a separate row from exact evidence.
-
-## 8. Ampere-plus rows
-
-Desktop/discrete targets only:
-
-```bash
-./scripts/nvcr_artifacts.py build \
-  --profile 720p \
-  --target-profile "$TARGET_PROFILE" \
-  --hardware-compatibility ampere_plus
-```
-
-Record correctness, PSNR sanity, payload size, throughput, and the ratio against the exact result on the same target. Do not use Ampere-plus on Jetson or as primary performance evidence.
-
-## 9. Python comparison
-
-On RTX 4070 exact, run the pinned Python DCVC-RT reference with the same source, resolution, frame count, QP, and GOP policy where possible. Record its command and environment beside the NVCR row. Keep payload and reconstruction comparisons separate; non-bit-exact output is not automatically a failure.
-
-## 10. Package the result
-
-Before calling the run complete, assemble the layout in [softwarex-evaluation-protocol.md](softwarex-evaluation-protocol.md), validate every JSON/JSONL file, and write `summary.md` with pass/fail/skipped counts. Do not add plans, checkpoints, raw YUV, streams, or reconstructed video to the repository.
+Do not commit raw YUV, plans, checkpoints, ONNX files, streams, or
+reconstructions.

@@ -139,6 +139,19 @@ containers reproduce userspace, while TensorRT bundles remain exact or explicitl
 classified target artifacts. See [SoftwareX experiments](experiments/README.md)
 and [the runbook](experiments/runbook.md).
 
+The publication driver lives in the source tree:
+
+```bash
+python3 scripts/benchmark_softwarex_matrix.py --help
+```
+
+The runtime image contains the installed application only. Run the driver from
+a native source build or a matching source/test environment with inputs and
+engines mounted read-only and evidence output writable. Container runs must
+record both the image tag and immutable digest; native runs record
+`--native-build-id`. The image TensorRT userspace must match the selected
+engine bundles.
+
 ## Host prerequisites
 
 The x86_64 host needs the NVIDIA driver, Docker, and NVIDIA Container Toolkit.

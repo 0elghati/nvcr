@@ -1,6 +1,7 @@
 # Architecture
 
-NVCR keeps codec meaning separate from execution technology. The current path has one real codec adapter, DCVC-RT, and one real execution provider, TensorRT.
+NVCR keeps codec meaning separate from execution technology. The current
+production path is DCVC-RT executed by the TensorRT backend.
 
 ```text
 application / CLI
@@ -30,9 +31,17 @@ application / CLI
 | TensorRT provider | TensorRT plans, CUDA bindings, execution contexts, and device-local work |
 | CLI | Raw YUV420 I/O and development file handling |
 
-Public headers do not expose CUDA, TensorRT, or DCVC-RT implementation types. The static registry is intentional; v1 does not introduce a dynamic plugin ABI.
+Public headers do not expose CUDA, TensorRT, or DCVC-RT implementation types.
+The static registry is intentional; v1 does not introduce a dynamic plugin ABI.
 
-## Runtime flow
+The diagram describes the intended provider-mediated flow. The public provider,
+registry, resolver, and `RuntimeServices` contracts are implemented and covered
+with a deterministic test provider. The production handoff is still
+transitional: the DCVC-RT adapter currently constructs its TensorRT backend
+directly, while the registered TensorRT provider's `load` path returns
+`not_implemented`. Closing that handoff is remaining refactor work.
+
+## Provider-mediated flow
 
 1. The application creates a runtime with a codec adapter and configuration.
 2. The adapter requests executable artifacts through `RuntimeServices`.

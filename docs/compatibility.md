@@ -6,8 +6,8 @@ This page is the short support matrix. The detailed product boundary is in [Scop
 
 | Profile | Platform | Engine requirement | Status |
 |---|---|---|---|
-| `rtx3050-laptop-ubuntu2404` | Linux x86_64, RTX 3050 Laptop, SM detected on target | Exact target-local plans | Engine assets staged; target profile and validation still required |
-| `rtx4070-ubuntu2404` | Linux x86_64, RTX 4070, SM 8.9 | Exact TensorRT version and target-local plans | Validation pending after refactor rerun |
+| `rtx3050-laptop-ubuntu2404` | Linux x86_64, RTX 3050 Laptop, SM detected on target | Exact target-local plans | Profile absent; staged assets are not validated evidence |
+| `rtx4070-ubuntu2404` | Linux x86_64, RTX 4070, SM 8.9 | Exact TensorRT version and target-local plans | Blocked: profile is TensorRT 10.7, detected host/local bundles are 10.9, and bundles predate the current model profile |
 | `rtx5060-laptop-ubuntu2404` | Linux x86_64, RTX 5060 Laptop, SM 12.0 in current profile | Exact TensorRT version and target-local plans | Profile exists; validation pending |
 | `orin-nano-l4t3647` | Linux aarch64, Jetson Orin Nano, SM 8.7 | Exact TensorRT and CUDA runtime, target-local plans | Validation pending after refactor rerun |
 
@@ -36,6 +36,7 @@ Desktop compatibility bundles may match by compute capability when explicitly ca
 | YUV420P8 raw I/O | Implemented, target-gated |
 | Bounded `NVAU` v1/v2 parsing | Implemented and tested |
 | Static codec/provider registry | Implemented; test implementations exercise the boundary |
+| Production provider-mediated DCVC-RT loading | Transitional; DCVC-RT still constructs the TensorRT backend directly |
 | Artifact resolver and catalog loading | Implemented and tested |
 | INT8 | Experimental, not a release profile |
 | Additional codecs/providers | Future work |

@@ -13,7 +13,8 @@ The runtime does not depend on Python. These scripts prepare artifacts, package 
 | `package_release.sh` | Create an engine-free binary package |
 | `package_engine_bundle.sh` | Package one validated target-local engine bundle |
 | `release_engine_assets.sh` | Stage and publish rolling engine assets |
-| `benchmark_resolution_matrix.sh` | Run the current encode/decode evaluation matrix |
+| `benchmark_softwarex_matrix.py` | Validate and run the publication matrix; write a complete evidence package |
+| `benchmark_resolution_matrix.sh` | Run the lower-level diagnostic resolution matrix |
 | `profile_energy.py` | Capture optional Jetson energy measurements |
 
 ## Prepare and validate
@@ -50,12 +51,25 @@ Target-local engine bundles are published separately through the rolling `engine
 
 ## Evaluate
 
-Run the matrix only after a clean Release build and the configured correctness tests:
+Use the schema-producing driver for publication work:
 
 ```bash
-scripts/benchmark_resolution_matrix.sh --help
+python3 scripts/benchmark_softwarex_matrix.py --help
 ```
 
-The publication run should write one current JSONL summary under `evidence/`. Raw streams are temporary and should not be committed.
+It validates target and artifact identities, drives the Release build and
+registered CPU/GPU gates, records metrics, and writes the documented evidence
+layout. Start with
+[the input example](../docs/experiments/softwarex-inputs.example.json) and
+[runbook](../docs/experiments/runbook.md).
+
+The default path keeps optional instrumentation out of performance
+repetitions. Add `--profile` for a publication package; it collects latency,
+PSNR, and memory in separate repetitions while preserving clean FPS and wall
+time. A run without the flag is intentionally performance-only and `partial`.
+
+`benchmark_resolution_matrix.sh` is useful for quick diagnostics, but its
+`nvcr.benchmark.resolution-matrix.v1` rows are not publication-ready. Raw
+streams are temporary and should not be committed.
 
 For target-specific details, read [Getting started](../docs/getting-started.md), [Model and engine preparation](../docs/dcvcrt-artifacts.md), [Performance](../docs/performance.md), and [Release policy](../docs/releasing.md).

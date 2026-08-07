@@ -6,6 +6,9 @@ if(Python3_Interpreter_FOUND)
     add_test(
         NAME nvcr_engine_catalog
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/engine_catalog_tests.py")
+    add_test(
+        NAME nvcr_softwarex_driver
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/softwarex_driver_tests.py")
 else()
     message(WARNING "Python 3 not found; artifact/profile validation test is not registered")
 endif()
