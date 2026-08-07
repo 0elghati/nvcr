@@ -14,15 +14,15 @@ if [[ -n "${NVCR_CI_CUDA_PACKAGES:-}" ]]; then
 elif [[ -n "${NVCR_CI_CUDA_TOOLKIT_PACKAGE:-}" ]]; then
     cuda_packages=("${NVCR_CI_CUDA_TOOLKIT_PACKAGE}")
 else
-    cuda_packages=(cuda-nvcc-12-6 cuda-cudart-dev-12-6)
+    cuda_packages=(cuda-nvcc-12-8 cuda-cudart-dev-12-8)
 fi
-# Pin TensorRT to the project's validated 10.x baseline (see ROADMAP.md,
-# TensorRT 10.3.0.30 on Jetson / 10.7.0 on discrete dev hosts). Leaving this
+# Pin TensorRT to the project's validated 10.9 baseline for hosted x86_64
+# builds. Leaving this
 # unpinned lets apt silently install whatever NVIDIA currently ships as "latest"
 # libnvinfer packages (for example a TensorRT 11.x ABI break), producing
 # portable release binaries that fail to load anywhere still running TensorRT
 # 10.x: `libnvinfer.so.11: cannot open shared object file`.
-tensorrt_package_version="${NVCR_CI_TENSORRT_VERSION:-10.7.0.23-1+cuda12.6}"
+tensorrt_package_version="${NVCR_CI_TENSORRT_VERSION:-10.9.0.34-1+cuda12.8}"
 
 if [[ "$(uname -m)" != "x86_64" ]]; then
     echo "install_cuda_tensorrt.sh only supports x86_64 hosted runners" >&2

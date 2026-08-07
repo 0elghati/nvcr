@@ -207,7 +207,7 @@ void reports_catalog_runtime_mismatches() {
        runtime_candidate.architecture = "x86_64";
        runtime_candidate.cuda_runtime_version = 12060U;
        auto runtime_request = request();
-       runtime_request.runtime_version = "10.7.0";
+       runtime_request.runtime_version = "10.8.0";
        runtime_request.architecture = "x86_64";
        runtime_request.cuda_runtime_version = 12080U;
        nvcr::artifacts::Resolver runtime_resolver;

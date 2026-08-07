@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: docker/publish.sh [--load|--push] <amd64-cuda12.8-trt10.9|amd64-cuda12.6-trt10.7|jetson>
+Usage: docker/publish.sh [--load|--push] <amd64-cuda12.8-trt10.9|jetson>
 
 Builds one architecture-specific NVCR runtime image. --load imports it into the
 local Docker daemon (default). --push publishes both immutable-version and
@@ -33,7 +33,6 @@ esac
 
 image_family="${1:-}"
 if [[ "$image_family" != amd64-cuda12.8-trt10.9 \
-    && "$image_family" != amd64-cuda12.6-trt10.7 \
     && "$image_family" != jetson ]]; then
     usage >&2
     exit 2
@@ -90,11 +89,6 @@ amd64-cuda12.8-trt10.9)
         "NVCR_TENSORRT_VERSION=10.9"
         "NVCR_IMAGE_DESCRIPTION=NVCR runtime for linux/amd64 NVIDIA desktop GPUs using CUDA 12.8 and TensorRT 10.9 with CUDA helper kernels for the compiler-supported GPU architecture set; TensorRT engines are installed separately from the rolling catalog"
     )
-    ;;
-amd64-cuda12.6-trt10.7)
-    platform=linux/amd64
-    dockerfile=docker/Dockerfile.x86_64
-    tag_suffixes=(amd64-cuda12.6-trt10.7)
     ;;
 jetson)
     if [[ "$(uname -m)" != aarch64 ]]; then
