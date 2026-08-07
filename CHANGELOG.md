@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.0](https://github.com/0elghati/nvcr/compare/v0.8.2...v0.9.0) (2026-08-07)
+
+
+### Features
+
+* added RTX3050 profile ([#74](https://github.com/0elghati/nvcr/issues/74)) ([975a150](https://github.com/0elghati/nvcr/commit/975a150ba2fa55e8d41ffbe77eaefbafb1d562e1))
+* artifact resolver provenance ([#68](https://github.com/0elghati/nvcr/issues/68)) ([4c0cf69](https://github.com/0elghati/nvcr/commit/4c0cf69ee6ccce621e11d36dcffeeb8110b013c9))
+* softwarex evidence automation ([#73](https://github.com/0elghati/nvcr/issues/73)) ([fb80dca](https://github.com/0elghati/nvcr/commit/fb80dca933491de794c23bb93970908a062bcf61))
+
+
+### Bug Fixes
+
+* **artifacts:** separate engine profiles from components ([#70](https://github.com/0elghati/nvcr/issues/70)) ([cb582fe](https://github.com/0elghati/nvcr/commit/cb582fee21becc44d097a22dd7e0c741b60f87f1))
+
 ## [0.8.2](https://github.com/0elghati/nvcr/compare/v0.8.1...v0.8.2) (2026-08-05)
 
 
