@@ -17,12 +17,12 @@ jsonl=""
 csv=""
 report=""
 
-input_qcif="${NVCR_BENCH_QCIF_INPUT:-/home/oelghati/datasets/qcif/akiyo_qcif.yuv}"
-input_cif="${NVCR_BENCH_CIF_INPUT:-/home/oelghati/datasets/cif/paris_cif.yuv}"
-input_360="${NVCR_BENCH_360P_INPUT:-/home/oelghati/datasets/360p/BasketballDrive_640x360_50.yuv}"
-input_540="${NVCR_BENCH_540P_INPUT:-/home/oelghati/datasets/540p/BasketballDrive_960x540_50.yuv}"
-input_720="${NVCR_BENCH_720P_INPUT:-/home/oelghati/datasets/720p/FourPeople_1280x720_60.yuv}"
-input_1080="${NVCR_BENCH_1080P_INPUT:-/home/oelghati/datasets/hd/BasketballDrive_1920x1080_50.yuv}"
+input_qcif="${NVCR_BENCH_QCIF_INPUT:-/workspace/nvcr/dataset/qcif/akiyo_qcif.yuv}"
+input_cif="${NVCR_BENCH_CIF_INPUT:-/workspace/nvcr/dataset/cif/paris_cif.yuv}"
+input_360="${NVCR_BENCH_360P_INPUT:-/workspace/nvcr/dataset/360p/BasketballDrive_640x360_50.yuv}"
+input_540="${NVCR_BENCH_540P_INPUT:-/workspace/nvcr/dataset/540p/BasketballDrive_960x540_50.yuv}"
+input_720="${NVCR_BENCH_720P_INPUT:-/workspace/nvcr/dataset/720p/FourPeople_1280x720_60.yuv}"
+input_1080="${NVCR_BENCH_1080P_INPUT:-/workspace/nvcr/dataset/hd/BasketballDrive_1920x1080_50.yuv}"
 engine_qcif="${NVCR_BENCH_QCIF_ENGINE_DIR:-}"
 engine_cif="${NVCR_BENCH_CIF_ENGINE_DIR:-}"
 engine_360="${NVCR_BENCH_360P_ENGINE_DIR:-}"
@@ -184,7 +184,7 @@ select_engine() {
         1080p) directory="$engine_1080" ;;
     esac
     if [[ -z "$directory" && -n "$engine_root" ]]; then
-        directory="$engine_root/dcvcrt-$label"
+        directory="$engine_root/$label"
     fi
     if [[ -n "$directory" ]]; then
         [[ -d "$directory" ]] || {
