@@ -15,8 +15,8 @@ Record the JSON with the run metadata. It includes OS, architecture, GPU name, c
 
 | Requested target | Actual target/profile today | Expected family | State |
 |---|---|---|---|
-| RTX 3050 exact | No checked-in profile | Usually SM 8.6 | Blocked: add and validate a target profile first |
-| RTX 4070 exact | `rtx4070-ubuntu2404` | SM 8.9 | Profile exists; validation is pending a clean run |
+| RTX 3050 exact | No checked-in profile | Usually SM 8.6 | Blocked: add a profile for the actual staged Laptop target and validate it |
+| RTX 4070 exact | `rtx4070-ubuntu2404` | SM 8.9 | Blocked: profile says TensorRT 10.7; current host/local engines report 10.9 |
 | RTX 5060 exact | `rtx5060-laptop-ubuntu2404` | Detect exact Blackwell SM | Profile exists for the Laptop GPU; do not rename it to a generic RTX 5060 target |
 | Jetson Orin Nano exact | `orin-nano-l4t3647` | SM 8.7 | Profile exists; validation is incomplete |
 
@@ -49,6 +49,9 @@ hardware_compatibility
 
 - Exact artifacts are the primary SoftwareX evidence.
 - RTX 3050 cannot be claimed until `configs/targets/` contains a matching profile and a complete engine set has passed validation.
+- RTX 4070 exact cannot be claimed until the checked-in TensorRT identity is
+  reconciled with the actual 10.9 host and the complete engine set is rebuilt
+  from the current model profile.
 - The RTX 5060 profile currently names the Laptop GPU. Detect the real SM on the target and add a separate profile if a different RTX 5060 device is evaluated.
 - Jetson/L4T uses exact target-local engines only.
 - Do not copy desktop plans to Jetson or Jetson plans to desktop.

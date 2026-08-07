@@ -1,8 +1,8 @@
 name: ci
 
-# PR validation runs only on GitHub-hosted runners.
-# Reference-target GPU/Jetson validation remains external by default; the
-# repository does not depend on self-hosted hardware for pull requests.
+# PR validation runs on repository-managed self-hosted infrastructure.
+# Reference-target GPU/Jetson validation remains separately gated because it
+# requires specifically labeled hardware.
 on:
   pull_request:
 
@@ -17,7 +17,7 @@ permissions:
 jobs:
   changes:
     # Skip heavier jobs when a change cannot affect compiled or release-packaged output.
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     outputs:
       cpp: ${{ steps.filter.outputs.cpp }}
       release_surface: ${{ steps.filter.outputs.release_surface }}
@@ -61,9 +61,14 @@ jobs:
               - '.github/workflows/upload-engine-assets.yml'
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install lint dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-yaml shellcheck
 
       - name: Shell syntax and shellcheck
         run: |
@@ -91,17 +96,13 @@ jobs:
 
       - name: Validate workflow YAML
         run: |
-          ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].sort.each { |f| YAML.load_file(f, aliases: true) }'
+          python3 -c "from pathlib import Path; import yaml; [yaml.safe_load(path.read_text(encoding='utf-8')) for path in sorted(Path('.github/workflows').glob('*.yml'))]"
 
   build-cpu:
-    # Release-only CPU coverage for the shipped host CPU architectures.
+    # Release-only CPU coverage for the self-hosted runner's native architecture.
     needs: changes
     if: needs.changes.outputs.cpp == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm]
-    runs-on: ${{ matrix.os }}
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -123,7 +124,7 @@ jobs:
     # Core-only sanitizer coverage for format parsers and contract suites.
     needs: changes
     if: needs.changes.outputs.cpp == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -157,12 +158,12 @@ jobs:
             -max_total_time=10
 
   build-cuda-portable:
-    # Hosted CUDA/TensorRT build plus generic x86_64 packaging smoke coverage.
+    # Self-hosted CUDA/TensorRT build plus generic x86_64 packaging smoke coverage.
     # This is a required PR gate for release-surface changes.
-    # Hosted runners have no GPU, so this job does not run CUDA tests.
+    # Target GPU execution remains in the separately labeled GPU workflow.
     needs: changes
     if: needs.changes.outputs.release_surface == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -178,7 +179,7 @@ jobs:
             -DNVCR_FETCH_DEPENDENCIES=ON \
             -DNVCR_BUILD_TESTS=ON
 
-      - name: Build (compile-check only, no GPU present)
+      - name: Build (compile/package check only)
         run: cmake --build build-portable --parallel
 
       - name: Install and smoke-package the generic x86_64 archive

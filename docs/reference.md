@@ -33,6 +33,12 @@ Runtime configuration covers model and public bitstream IDs, device and engine s
 
 The registry is static in v1. `dcvcrt` and `tensorrt` are the only production entries. Test codec/provider entries exist for contract coverage.
 
+The API boundary is ahead of the production wiring: test providers execute
+through `RuntimeServices`, but DCVC-RT currently constructs its TensorRT backend
+directly and the registered TensorRT provider load path is a stub. Treat the
+provider-mediated production flow as refactor closeout work, not a completed
+support claim.
+
 ## Errors
 
 `Error` provides a category, subsystem, and message. Structured categories include invalid state, malformed bitstream, missing artifact, missing provider, incompatible target/version/precision, digest mismatch, license restriction, and backend failure.

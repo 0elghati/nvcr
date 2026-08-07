@@ -1,0 +1,60 @@
+{
+  "schema": "nvcr.softwarex.inputs.v1",
+  "sequences": [
+    {
+      "sequence_id": "akiyo-qcif",
+      "profile": "qcif",
+      "path": "/data/qcif/akiyo_qcif.yuv",
+      "width": 176,
+      "height": 144,
+      "fps": 30,
+      "frames": 97,
+      "pixel_format": "yuv420p8",
+      "redistribution": "local-only"
+    },
+    {
+      "sequence_id": "local-cif",
+      "profile": "cif",
+      "path": "/data/cif/local_352x288.yuv",
+      "width": 352,
+      "height": 288,
+      "fps": 30,
+      "frames": 97,
+      "pixel_format": "yuv420p8",
+      "redistribution": "local-only"
+    },
+    {
+      "sequence_id": "local-360p",
+      "profile": "360p",
+      "path": "/data/360p/local_640x360.yuv",
+      "width": 640,
+      "height": 360,
+      "fps": 30,
+      "frames": 97,
+      "pixel_format": "yuv420p8",
+      "redistribution": "local-only"
+    },
+    {
+      "sequence_id": "fourpeople-720p",
+      "profile": "720p",
+      "path": "/data/720p/FourPeople_1280x720_60.yuv",
+      "width": 1280,
+      "height": 720,
+      "fps": 60,
+      "frames": 97,
+      "pixel_format": "yuv420p8",
+      "redistribution": "local-only"
+    },
+    {
+      "sequence_id": "local-1080p",
+      "profile": "1080p",
+      "path": "/data/1080p/local_1920x1080.yuv",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "frames": 97,
+      "pixel_format": "yuv420p8",
+      "redistribution": "local-only"
+    }
+  ]
+}

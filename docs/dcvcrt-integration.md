@@ -22,4 +22,7 @@ Python is an offline export and reference-conformance dependency. Cross-runtime 
 
 ## Current work
 
-The current release path is correctness-first. Stable plane/stride ownership, reusable device memory, target performance gates, a clean post-refactor evidence run, and the final v1 release package remain to be completed.
+The current release path is correctness-first. Production `RuntimeServices` /
+TensorRT-provider handoff, stable plane/stride ownership, reusable device
+memory, target performance gates, a clean post-closeout evidence run, and the
+final v1 release package remain to be completed.

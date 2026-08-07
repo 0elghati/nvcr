@@ -129,6 +129,7 @@ evidence/softwarex-YYYYMMDD-<shortcommit>/
   artifact-catalog.json
   artifact-digests.json
   test-summary.json
+  run-summary.json
   exact-results.jsonl
   same-compute-results.jsonl
   ampere-plus-results.jsonl
@@ -141,6 +142,12 @@ Keep metadata, hashes, commands, summaries, and small JSONL rows. Do not commit
 checkpoints, model exports, TensorRT plans, raw YUV, encoded streams, or
 reconstructed video. The field contract is documented in
 [docs/experiments/result-schema.md](experiments/result-schema.md).
+
+Generate this layout with `scripts/benchmark_softwarex_matrix.py`. Only
+`run-summary.json` status `complete` is publication-ready. Completion requires
+the separate `--profile` pass; primary FPS and wall time remain sourced from
+the uninstrumented repetitions. Performance-only, plan-only, skipped, dirty,
+missing-metric, or otherwise partial packages remain diagnostics.
 
 ## CI and evidence
 

@@ -23,12 +23,30 @@ The claim is narrow: NVCR provides a reproducible native runtime around this one
 4. [Result schema](result-schema.md)
 5. [Runbook](runbook.md)
 6. [Missing-data checklist](missing-data-checklist.md)
+7. [Input manifest example](softwarex-inputs.example.json)
 
 ## Current state
 
-The repository already has device detection, target profiles, artifact validation, target-local engine building, Docker/Compose workflows, and `benchmark_resolution_matrix.sh`.
+The repository has device detection, target profiles, artifact validation,
+target-local engine building, Docker/Compose workflows, the lower-level
+`benchmark_resolution_matrix.sh`, and the publication driver
+`scripts/benchmark_softwarex_matrix.py`. The driver validates profile digests
+and target identity before execution, runs registered build/test gates, captures
+the complete result schema, and writes the evidence package described below.
 
-The checked-in target profiles currently cover RTX 4070, RTX 5060 Laptop, and Jetson Orin Nano. RTX 3050 exact is a planned evaluation target without a checked-in target profile. The SoftwareX result schema is defined here, but the existing shell benchmark does not yet emit every required field; that is an automation TODO, not evidence.
+Checked-in target profiles cover RTX 4070, RTX 5060 Laptop, and Jetson Orin
+Nano. RTX 3050 exact remains blocked on a checked-in profile. A 2026-08-06
+preflight on the RTX 4070 also found that its profile records TensorRT 10.7
+while the current host and local engines use 10.9; the profile and all bundles
+must be reconciled and rebuilt from the current model-profile digest before a
+clean exact run.
+
+The driver is tested automation, not evidence by itself. A result package is
+complete only when it records a clean commit, current artifacts, registered and
+passing GPU gates, the requested matrix, a separate `--profile` collection
+pass, and the mandatory RTX 4070 Python reference comparison. Primary
+throughput and wall-time values always come from repetitions without optional
+profiling instrumentation.
 
 ## Evidence rule
 

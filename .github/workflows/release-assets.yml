@@ -1,9 +1,8 @@
 name: release-assets
 
-# Default repository automation assumes GitHub's standard hosted runners.
-# They can build and upload the generic x86_64 package family, but they do not
-# provide the reference GPU/Jetson environments required for support evidence or
-# Jetson packaging. Draft releases therefore remain unpublished until those
+# The generic self-hosted runner builds and uploads the x86_64 package family.
+# Reference GPU/Jetson environments remain separate requirements for support
+# evidence and Jetson packaging, so draft releases stay unpublished until those
 # external gates are completed and recorded.
 on:
   workflow_dispatch:
@@ -16,8 +15,8 @@ permissions:
   contents: write
 
 jobs:
-  build-hosted-x86_64:
-    runs-on: ubuntu-24.04
+  build-self-hosted-x86_64:
+    runs-on: self-hosted
     env:
       NVCR_TAG: ${{ inputs.tag }}
     steps:
@@ -35,23 +34,23 @@ jobs:
       - name: Install minimal CUDA/TensorRT compile dependencies
         run: ./scripts/ci/install_cuda_tensorrt.sh
 
-      - name: Configure hosted portable release build
+      - name: Configure self-hosted portable release build
         run: |
           set -euo pipefail
-          cmake -S . -B build-release-hosted -DCMAKE_BUILD_TYPE=Release -DNVCR_ENABLE_TENSORRT=ON -DNVCR_CUDA_ARCH_SET=portable -DNVCR_FETCH_DEPENDENCIES=ON -DNVCR_BUILD_TESTS=ON
+          cmake -S . -B build-release-self-hosted -DCMAKE_BUILD_TYPE=Release -DNVCR_ENABLE_TENSORRT=ON -DNVCR_CUDA_ARCH_SET=portable -DNVCR_FETCH_DEPENDENCIES=ON -DNVCR_BUILD_TESTS=ON
 
-      - name: Build and run hosted-safe tests
+      - name: Build and run portable tests
         run: |
           set -euo pipefail
-          cmake --build build-release-hosted --parallel
-          ctest --test-dir build-release-hosted --output-on-failure -R 'nvcr_(artifact_profiles|engine_catalog|smoke_tests|parser_fuzz_boundaries|rans_conformance)'
+          cmake --build build-release-self-hosted --parallel
+          ctest --test-dir build-release-self-hosted --output-on-failure -R 'nvcr_(artifact_profiles|engine_catalog|smoke_tests|parser_fuzz_boundaries|rans_conformance)'
 
       - name: Install, package, and verify the generic x86_64 archive
         run: |
           set -euo pipefail
           archive="$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-x86_64-nvidia.tar.gz"
           checksum="$archive.sha256"
-          cmake --install build-release-hosted --prefix "$RUNNER_TEMP/nvcr-install"
+          cmake --install build-release-self-hosted --prefix "$RUNNER_TEMP/nvcr-install"
           ./scripts/package_release.sh --version "${NVCR_TAG#v}" --platform linux-x86_64-nvidia --install-prefix "$RUNNER_TEMP/nvcr-install" --output-dir "$RUNNER_TEMP/nvcr-dist"
           test -f "$archive"
           test -f "$checksum"
@@ -71,13 +70,13 @@ jobs:
           gh release upload "$NVCR_TAG" "$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-x86_64-nvidia.tar.gz" "$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-x86_64-nvidia.tar.gz.sha256" --clobber
 
   manual-reference-gates:
-    needs: [build-hosted-x86_64]
-    runs-on: ubuntu-latest
+    needs: [build-self-hosted-x86_64]
+    runs-on: self-hosted
     steps:
       - name: Record remaining manual gates
         run: |
           cat <<'EOF' >>"$GITHUB_STEP_SUMMARY"
-          Draft release remains unpublished by design on standard GitHub-hosted runners.
+          Draft release remains unpublished until the target-specific gates pass.
 
           Remaining manual deliverables and gates:
           - run clean-room target validation on the recorded RTX 4070 reference target;

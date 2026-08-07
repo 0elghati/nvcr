@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   upload-engine-assets:
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     env:
       NVCR_ENGINE_ASSET_RELEASE: ${{ inputs.asset_release }}
       NVCR_ENGINE_RELEASE_ASSETS: ${{ inputs.engine_assets }}

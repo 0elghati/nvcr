@@ -17,6 +17,13 @@ Run a Release build only after the configured correctness and artifact tests pas
 
 Use the same input, profile, QP, frame count, and timing boundary for both runtimes. Do not turn one machine or one sequence into a general performance claim.
 
+Keep optional instrumentation outside primary timing. The SoftwareX driver
+always derives FPS, FPS variation, compatibility ratios, and total process wall
+time from repetitions without verbose per-frame output, quality calculation,
+process polling, or `nvidia-smi` polling. `--profile` adds separate repetitions
+for latency, PSNR, and memory. Never substitute profile-pass throughput for the
+clean-pass values.
+
 ## Current evidence
 
 The retained file [resolution-matrix.jsonl](../evidence/live-release-20260806/resolution-matrix.jsonl) is the latest local diagnostic summary. It predates this documentation cleanup and is not a clean v1 release result. The next run will replace it after the refactor branch is merged and the target is rebuilt.
@@ -25,14 +32,24 @@ Raw streams are local run products and are not part of the documentation set.
 
 ## Run the matrix
 
-The repository script is the source of the matrix command and options:
+The publication driver is the source of the matrix command, result schema, and
+completion state:
 
 ```bash
-scripts/benchmark_resolution_matrix.sh --help
+python3 scripts/benchmark_softwarex_matrix.py --help
 ```
 
-Its current output uses `nvcr.benchmark.resolution-matrix.v1`. The complete publication schema is `nvcr.softwarex.result.v1`; use the adapter described in [Result schema](experiments/result-schema.md) before treating rows as SoftwareX evidence.
+It writes `nvcr.softwarex.result.v1` rows and refuses to mark a package complete
+when `--profile`, a build/test gate, required metric, target/artifact identity,
+Python reference, or compatibility baseline is missing. Omitting `--profile`
+is the low-overhead performance-only mode and always leaves the package
+`partial`. The older
+`benchmark_resolution_matrix.sh` output uses
+`nvcr.benchmark.resolution-matrix.v1` and remains diagnostic.
 
-The publication run should cover QCIF, CIF, 360p, 540p, 720p, and 1080p; all-intra and normal I/P GOP cases; three measured repetitions; warm-up frames; payload size; PSNR-YUV; and a clean pinned-Python comparison where available.
+The publication run must cover QCIF, CIF, 360p, 720p, and 1080p, with 540p
+optional; all-intra and normal I/P GOP cases; three measured repetitions; one
+warm-up run; payload/BPP; PSNR-Y/U/V/YUV; latency; host/GPU memory; and a clean
+pinned-Python comparison for every RTX 4070 exact case.
 
 Energy is optional investigation data, not a v1 release blocker.
