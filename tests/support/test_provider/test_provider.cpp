@@ -1,9 +1,11 @@
 #include "test_provider.hpp"
 
+#include "nvcr/codec/backend.hpp"
 #include "nvcr/runtime/registry.hpp"
 
 #include <algorithm>
 #include <memory>
+#include <vector>
 
 namespace nvcr::test_support {
 namespace {
@@ -84,6 +86,59 @@ public:
     }
 };
 
+class TestProviderCodecBackend final : public codec::CodecBackend {
+public:
+    [[nodiscard]] Result<void> initialize(const RuntimeConfiguration&) override {
+        initialized_ = true;
+        return {};
+    }
+
+    [[nodiscard]] Result<codec::CodecEncodeResult> encode(
+        const Frame& frame,
+        FrameType,
+        const codec::SequenceStateView&) override {
+        if (!initialized_) {
+            return Error(ErrorCode::invalid_state, "test provider backend is not initialized", "test-provider");
+        }
+        auto reconstructed = Frame::copy_from(
+            frame.width(), frame.height(), frame.pixel_format(), frame.data(), frame.timestamp());
+        if (!reconstructed) return reconstructed.error();
+        return codec::CodecEncodeResult{
+            std::vector<std::byte>(frame.data().begin(), frame.data().end()),
+            std::move(reconstructed.value()),
+            {},
+            0U,
+        };
+    }
+
+    [[nodiscard]] Result<codec::CodecDecodeResult> decode(
+        std::span<const std::byte> payload,
+        FrameType,
+        Timestamp timestamp,
+        const codec::SequenceStateView&) override {
+        if (!initialized_) {
+            return Error(ErrorCode::invalid_state, "test provider backend is not initialized", "test-provider");
+        }
+        auto frame = Frame::copy_from(
+            4U, 2U, PixelFormat::yuv420p8, payload, timestamp);
+        if (!frame) return frame.error();
+        return codec::CodecDecodeResult{std::move(frame.value()), {}};
+    }
+
+    [[nodiscard]] Result<void> flush() override { return {}; }
+
+    void reset() noexcept override {}
+
+private:
+    bool initialized_{};
+};
+
+Result<codec::Components> make_test_provider_components(const RuntimeConfiguration&) {
+    codec::Components components;
+    components.codec = std::make_unique<TestProviderCodecBackend>();
+    return components;
+}
+
 }  // namespace
 
 void register_test_provider() {
@@ -104,6 +159,7 @@ void register_test_provider() {
         []() -> std::shared_ptr<provider::IExecutionProvider> {
             return std::make_shared<TestProvider>();
         },
+        make_test_provider_components,
     });
 }
 

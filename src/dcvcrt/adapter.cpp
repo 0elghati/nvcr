@@ -1,7 +1,6 @@
 #include "nvcr/dcvcrt/adapter.hpp"
 
 #include "nvcr/dcvcrt/backend.hpp"
-#include "nvcr/dcvcrt/tensorrt_backend.hpp"
 #include "nvcr/runtime/registry.hpp"
 
 #include <memory>
@@ -34,14 +33,11 @@ public:
     }
 
     [[nodiscard]] Result<codec::Components>
-    create_components(const RuntimeConfiguration&) override {
-        auto backend = make_tensorrt_backend();
-        if (!backend) {
-            return backend.error();
-        }
-        codec::Components components;
-        components.codec = std::move(backend.value());
-        return components;
+    create_components(
+        const RuntimeConfiguration& configuration,
+        const runtime::RuntimeServices& services) override {
+        register_execution_providers();
+        return services.create_components(configuration);
     }
 };
 

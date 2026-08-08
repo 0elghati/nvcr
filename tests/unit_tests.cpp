@@ -70,7 +70,8 @@ TEST(ConfigurationLoader, KeepsBitstreamModelIdSeparate) {
         std::ofstream output(path);
         ASSERT_TRUE(output);
         output << "model_id=internal-profile\n"
-               << "bitstream_model_id=public-stream\n";
+               << "bitstream_model_id=public-stream\n"
+               << "provider_id=onnxruntime\n";
     }
 
     auto configuration = nvcr::ConfigurationLoader::from_file(path);
@@ -80,6 +81,7 @@ TEST(ConfigurationLoader, KeepsBitstreamModelIdSeparate) {
     ASSERT_TRUE(configuration) << configuration.error().describe();
     EXPECT_EQ(configuration.value().model_id, "internal-profile");
     EXPECT_EQ(configuration.value().bitstream_model_id, "public-stream");
+    EXPECT_EQ(configuration.value().provider_id, "onnxruntime");
 }
 
 TEST(AccessUnitIO, RoundTripsAndRejectsUnsafeInputs) {
@@ -296,4 +298,3 @@ TEST(SessionInterfaces, ReceiveWithoutSendReturnsTryAgain) {
         code == nvcr::ErrorCode::dependency_unavailable)
         << "unexpected error code: " << nvcr::to_string(code);
 }
-

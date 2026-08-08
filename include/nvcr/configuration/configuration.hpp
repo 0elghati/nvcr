@@ -31,6 +31,7 @@ struct RuntimeConfiguration final {
     std::filesystem::path entropy_model_path;
     std::string model_id{"dcvcrt-cvpr2025"};
     std::string bitstream_model_id{"dcvcrt"};
+    std::string provider_id{"tensorrt"};
     CodecApiVersion codec_api_version{1};
     ProviderApiVersion provider_api_version{1};
     StreamFormatVersion stream_format_version{1, 0};
@@ -61,4 +62,3 @@ public:
 [[nodiscard]] std::string_view to_string(TensorRTExecutionMode mode) noexcept;
 
 }  // namespace nvcr
-

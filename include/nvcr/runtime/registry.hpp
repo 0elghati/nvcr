@@ -15,6 +15,7 @@
 #include "nvcr/codec/descriptor.hpp"
 #include "nvcr/codec/adapter.hpp"
 #include "nvcr/artifacts/resolver.hpp"
+#include "nvcr/configuration/configuration.hpp"
 #include "nvcr/provider/provider_api.hpp"
 
 #include <functional>
@@ -48,6 +49,10 @@ struct ProviderEntry {
     provider::ProviderCapabilities capabilities;
     // Factory creates a live provider instance on demand.
     std::function<std::shared_ptr<provider::IExecutionProvider>()> factory;
+    // Factory creates codec runtime components owned by this provider family.
+    // This keeps codec adapters from constructing backend-specific concrete
+    // types while preserving the current codec-level runtime boundary.
+    std::function<Result<codec::Components>(const RuntimeConfiguration&)> component_factory{};
 };
 
 // ---------------------------------------------------------------------------
@@ -115,6 +120,9 @@ public:
     resolve(
         const artifacts::Resolver& resolver,
         const artifacts::ArtifactRequest& request) const;
+
+    [[nodiscard]] Result<codec::Components>
+    create_components(const RuntimeConfiguration& configuration) const;
 
     [[nodiscard]] const Registry& registry() const noexcept { return registry_; }
     [[nodiscard]] std::string_view preferred_provider() const noexcept {

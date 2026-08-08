@@ -147,6 +147,22 @@ void runtime_services_contract() {
                    "mismatched tensor bindings map to invalid_argument");
         }
     }
+
+    nvcr::RuntimeConfiguration configuration;
+    configuration.provider_id = "test-cpu";
+    auto components = services.create_components(configuration);
+    expect(components.has_value(), "runtime services creates provider-owned codec components");
+    if (components) {
+        expect(components.value().codec != nullptr, "provider-owned components include a codec backend");
+    }
+
+    configuration.provider_id = "no-such-provider";
+    auto missing_components = services.create_components(configuration);
+    expect(!missing_components.has_value(), "runtime services rejects missing component provider");
+    if (!missing_components) {
+        expect(missing_components.error().code() == nvcr::ErrorCode::missing_provider,
+               "missing component provider maps to missing_provider");
+    }
 }
 
 nvcr::Result<nvcr::Frame> make_frame(std::byte seed) {
@@ -176,7 +192,10 @@ void codec_adapter_contract() {
     expect(frame.has_value(), "test contract frame is constructible");
     if (!frame) return;
 
-    auto components = adapter->create_components({});
+    nvcr::runtime::RuntimeServices services(
+        nvcr::runtime::Registry::instance(),
+        "test-cpu");
+    auto components = adapter->create_components({}, services);
     expect(components.has_value(), "test adapter creates codec components");
     if (!components) return;
     expect(components.value().codec != nullptr, "test adapter returns a codec backend");

@@ -15,6 +15,10 @@ using Components = codec::Components;
 // Safe to call multiple times; re-registration is idempotent.
 void register_codec();
 
+// Register built-in execution-provider entries available in this build.
+// Safe to call multiple times; re-registration is idempotent.
+void register_execution_providers();
+
 // Returns the DCVC-RT codec descriptor for callers that need it directly.
 [[nodiscard]] codec::CodecDescriptor codec_descriptor();
 

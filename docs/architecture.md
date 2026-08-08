@@ -34,19 +34,21 @@ application / CLI
 Public headers do not expose CUDA, TensorRT, or DCVC-RT implementation types.
 The static registry is intentional; v1 does not introduce a dynamic plugin ABI.
 
-The diagram describes the intended provider-mediated flow. The public provider,
-registry, resolver, and `RuntimeServices` contracts are implemented and covered
-with a deterministic test provider. The production handoff is still
-transitional: the DCVC-RT adapter currently constructs its TensorRT backend
-directly, while the registered TensorRT provider's `load` path returns
-`not_implemented`. Closing that handoff is remaining refactor work.
+The diagram describes the provider-mediated production flow. The public
+provider, registry, resolver, and `RuntimeServices` contracts are implemented
+and covered with a deterministic test provider. The DCVC-RT adapter requests
+provider-owned codec components through `RuntimeServices`; TensorRT is the only
+production provider registered today. The finer-grained model-component
+`IExecutionProvider::load` path is still transitional: TensorRT creates the
+current monolithic codec backend instead of exposing each plan as an independent
+executable component.
 
 ## Provider-mediated flow
 
 1. The application creates a runtime with a codec adapter and configuration.
-2. The adapter requests executable artifacts through `RuntimeServices`.
-3. The resolver selects a candidate using codec, model set, component, engine profile, provider, target, precision, version, digest, availability, and license status.
-4. The selected provider loads that artifact. It does not silently hand the request to another provider.
+2. The adapter requests provider-owned codec components through `RuntimeServices`.
+3. The selected provider creates the runtime components. It does not silently hand the request to another provider.
+4. Future component-level paths may use the resolver to select candidates by codec, model set, component, engine profile, provider, target, precision, version, digest, availability, and license status.
 5. Encoding and decoding update independent sequence state. An I-frame starts a GOP; P-frames require a reference.
 6. Reset clears state. Flush completes pending work and returns the session to its initial state.
 

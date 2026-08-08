@@ -142,4 +142,39 @@ Result<std::shared_ptr<provider::IExecutable>> RuntimeServices::resolve(
     return resolve(selected.value().candidate.artifact);
 }
 
+Result<codec::Components>
+RuntimeServices::create_components(const RuntimeConfiguration& configuration) const {
+    const std::string provider_id = configuration.provider_id.empty()
+        ? std::string(preferred_provider_id_)
+        : configuration.provider_id;
+    if (provider_id.empty()) {
+        return Error(
+            ErrorCode::missing_provider,
+            "configuration does not identify an execution provider",
+            "registry");
+    }
+
+    std::function<Result<codec::Components>(const RuntimeConfiguration&)> component_factory;
+    {
+        std::scoped_lock lock(registry_.mutex_);
+        const auto provider = std::find_if(
+            registry_.providers_.begin(), registry_.providers_.end(),
+            [&](const ProviderEntry& entry) { return entry.descriptor.id == provider_id; });
+        if (provider == registry_.providers_.end()) {
+            return Error(
+                ErrorCode::missing_provider,
+                "execution provider is not registered: " + provider_id,
+                "registry");
+        }
+        component_factory = provider->component_factory;
+    }
+    if (!component_factory) {
+        return Error(
+            ErrorCode::not_implemented,
+            "execution provider cannot create codec components: " + provider_id,
+            "registry");
+    }
+    return component_factory(configuration);
+}
+
 }  // namespace nvcr::runtime

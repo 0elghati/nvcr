@@ -36,7 +36,7 @@ Desktop compatibility bundles may match by compute capability when explicitly ca
 | YUV420P8 raw I/O | Implemented, target-gated |
 | Bounded `NVAU` v1/v2 parsing | Implemented and tested |
 | Static codec/provider registry | Implemented; test implementations exercise the boundary |
-| Production provider-mediated DCVC-RT loading | Transitional; DCVC-RT still constructs the TensorRT backend directly |
+| Production provider-mediated DCVC-RT loading | Implemented for provider-owned codec components; component-level executable split remains future work |
 | Artifact resolver and catalog loading | Implemented and tested |
 | INT8 | Experimental, not a release profile |
 | Additional codecs/providers | Future work |

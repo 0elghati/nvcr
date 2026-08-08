@@ -25,7 +25,7 @@ The CLI boundary is planar 8-bit YUV420. Other format enum values are not indepe
 
 ## Configuration
 
-Runtime configuration covers model and public bitstream IDs, device and engine selection, QP, GOP size, packet limits, memory policy, TensorRT execution mode, and diagnostic options. Configuration is checked before backend initialization.
+Runtime configuration covers model and public bitstream IDs, provider selection, device and engine selection, QP, GOP size, packet limits, memory policy, TensorRT execution mode, and diagnostic options. Configuration is checked before backend initialization.
 
 ## Codec and provider boundaries
 
@@ -33,11 +33,10 @@ Runtime configuration covers model and public bitstream IDs, device and engine s
 
 The registry is static in v1. `dcvcrt` and `tensorrt` are the only production entries. Test codec/provider entries exist for contract coverage.
 
-The API boundary is ahead of the production wiring: test providers execute
-through `RuntimeServices`, but DCVC-RT currently constructs its TensorRT backend
-directly and the registered TensorRT provider load path is a stub. Treat the
-provider-mediated production flow as refactor closeout work, not a completed
-support claim.
+DCVC-RT now asks `RuntimeServices` for provider-owned codec components, and the
+TensorRT provider owns construction of the current backend. The component-level
+`IExecutionProvider::load` path is still not split into independent model-stage
+executables.
 
 ## Errors
 
