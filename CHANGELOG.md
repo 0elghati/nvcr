@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/0elghati/nvcr/compare/v0.11.0...v0.12.0) (2026-08-08)
+
+
+### Features
+
+* isolate provider-managed runtime components ([#81](https://github.com/0elghati/nvcr/issues/81)) ([a1169ca](https://github.com/0elghati/nvcr/commit/a1169cacbbe3b8c3615244dbd882a22c83911514))
+
 ## [0.11.0](https://github.com/0elghati/nvcr/compare/v0.10.0...v0.11.0) (2026-08-07)
 
 
