@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/0elghati/nvcr/compare/v0.12.0...v0.13.0) (2026-08-08)
+
+
+### Features
+
+* **experiments:** new set of executions made on Jetson Orin machine ([#83](https://github.com/0elghati/nvcr/issues/83)) ([759c6c4](https://github.com/0elghati/nvcr/commit/759c6c466938cbbcf5be1032803aa4dc3bc33acd))
+
 ## [0.12.0](https://github.com/0elghati/nvcr/compare/v0.11.0...v0.12.0) (2026-08-08)
 
 
