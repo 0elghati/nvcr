@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-08-07
+Last reviewed: 2026-08-08
 
 ## Current position
 
@@ -19,8 +19,9 @@ This is development software, not a supported v1 release. A capability is implem
 
 ## Architecture work
 
-The extensible-runtime contracts have landed, but the production provider
-handoff is not complete.
+The extensible-runtime contracts have landed. Production DCVC-RT component
+creation now goes through provider management, but model-stage executable
+loading is not split out of the TensorRT backend yet.
 
 Landed:
 
@@ -30,28 +31,28 @@ Landed:
 - versioned `NVAU` format and stream specification;
 - artifact provenance, catalog loading, and typed resolver;
 - explicit separation of model components from provider engine profiles;
+- provider-selected codec component creation through `RuntimeServices`;
+- explicit runtime `provider_id` configuration and CLI `--provider` selection;
 - deterministic test codec/provider contracts;
 - CPU and TensorRT contract coverage.
 
-Refactor closeout:
+Remaining provider closeout:
 
-- pass `RuntimeServices` into the production DCVC-RT adapter and request
-  component executables through it;
-- replace the registered TensorRT provider's `not_implemented` load path with
-  production executable loading;
+- split the current TensorRT codec backend into provider-loaded model-component
+  executables when a second provider, such as ONNX Runtime, is added;
 - prove that route with provider-level and exact-target I/P/reset tests;
 - either make the component CMake targets own their implementations or document
   them strictly as interface/grouping targets.
 
-Today the working DCVC-RT path constructs `make_tensorrt_backend()` directly.
-That remains usable, but it does not yet prove the intended provider-mediated
-production architecture.
+Today the working DCVC-RT adapter no longer constructs `make_tensorrt_backend()`
+directly. TensorRT remains usable as the only production provider, and the
+lower-level factory remains available for direct TensorRT tests.
 
 ## Next phases
 
-1. **Refactor closeout:** route production DCVC-RT execution through
-   `RuntimeServices` and the TensorRT provider, then rerun the contract and
-   exact-target GPU suites.
+1. **Provider closeout:** rerun exact-target GPU suites through the
+   provider-owned TensorRT path, then split provider-loaded model components when
+   adding the next execution provider.
 2. **CI and package hardening:** wire the header-dependency check and installed
    external-consumer test into CI, run the Clang sanitizer/parser jobs, and
    verify release package licenses and excluded model/engine assets.
@@ -113,6 +114,23 @@ The 2026-08-06 repository audit, updated on 2026-08-07, established:
   ran against the install tree;
 - all 13 focused SoftwareX driver tests pass, including coverage that keeps
   profiled repetitions out of primary FPS and wall-time aggregates;
+- on 2026-08-08, `scripts/benchmark_resolution_matrix.sh` was syntax-checked
+  after aligning diagnostic JSONL output with the CSV/report overwrite behavior;
+- on 2026-08-08, `scripts/build_orin_exact_engines.sh` was added and
+  syntax/help checked as the Orin exact-engine rebuild wrapper; target-local
+  GPU execution still has to run on the Jetson;
+- on 2026-08-08, provider-managed DCVC-RT component creation landed:
+  `RuntimeConfiguration.provider_id`, `RuntimeServices::create_components`, the
+  DCVC-RT adapter's provider-owned construction path, the TensorRT provider
+  component factory, CLI `--provider`, and contract coverage for provider-owned
+  components;
+- after that provider-management change, a fresh GCC Release CPU build passed
+  all 11 tests, and a TensorRT-enabled Release build completed successfully;
+- the TensorRT-enabled tree passed 12 non-CUDA-manager tests with
+  `ctest --test-dir build-release --output-on-failure -E nvcr_cuda_ops`; the
+  full 13-test run failed only at `nvcr_cuda_ops` because this local environment
+  reported `NvRmMemInitNvmap failed`, so no target-local GPU execution claim is
+  made from that run;
 - a real RTX 4070 plan-only preflight previously failed before execution because
   the target version did not match detected TensorRT 10.9; the target and
   desktop build stack are now unified on TensorRT 10.9;

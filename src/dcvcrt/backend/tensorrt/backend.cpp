@@ -3605,7 +3605,7 @@ provider::ProviderDescriptor tensorrt_provider_descriptor() {
 
 namespace {
 
-class TensorRTProviderStub final : public provider::IExecutionProvider {
+class TensorRTProvider final : public provider::IExecutionProvider {
 public:
     [[nodiscard]] provider::ProviderDescriptor descriptor() const override {
         return tensorrt_provider_descriptor();
@@ -3629,10 +3629,18 @@ public:
         const provider::ArtifactDescriptor&) override {
         return Error(
             ErrorCode::not_implemented,
-            "TensorRT provider registry entry is not executable through this path",
+            "TensorRT component-level executable loading is not split from the codec backend yet",
             "dcvcrt.tensorrt");
     }
 };
+
+Result<codec::Components> make_tensorrt_components(const RuntimeConfiguration&) {
+    auto backend = make_tensorrt_backend();
+    if (!backend) return backend.error();
+    codec::Components components;
+    components.codec = std::move(backend.value());
+    return components;
+}
 
 }  // namespace
 
@@ -3647,8 +3655,9 @@ void register_tensorrt_provider() {
             .target_device = "cuda",
         },
         []() -> std::shared_ptr<provider::IExecutionProvider> {
-            return std::make_shared<TensorRTProviderStub>();
+            return std::make_shared<TensorRTProvider>();
         },
+        make_tensorrt_components,
     });
 }
 

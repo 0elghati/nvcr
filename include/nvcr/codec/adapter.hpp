@@ -7,6 +7,10 @@
 
 #include <memory>
 
+namespace nvcr::runtime {
+class RuntimeServices;
+}
+
 namespace nvcr::codec {
 
 // Transitional adapter boundary used to separate codec semantics from
@@ -22,7 +26,9 @@ public:
 
     // Creates runtime components for the given session configuration.
     [[nodiscard]] virtual Result<Components>
-    create_components(const RuntimeConfiguration& configuration) = 0;
+    create_components(
+        const RuntimeConfiguration& configuration,
+        const runtime::RuntimeServices& services) = 0;
 };
 
 }  // namespace nvcr::codec

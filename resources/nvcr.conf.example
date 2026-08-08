@@ -3,6 +3,7 @@ intra_engine_path=/opt/nvcr/models/dcvcrt
 predicted_engine_path=/opt/nvcr/models/dcvcrt
 entropy_model_path=/opt/nvcr/models/dcvcrt
 model_id=dcvcrt-cvpr2025
+provider_id=tensorrt
 device_id=0
 intra_qp=32
 gop_size=32
@@ -14,4 +15,3 @@ tensorrt_execution_mode=automatic
 allow_legacy_access_units=true
 verify_encoder_reconstruction=false
 enable_profiling=false
-

@@ -22,7 +22,7 @@ nvcr encode \
   -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32
 ```
 
-The CLI chooses an engine profile from the visible dimensions. Use `--engine-profile 720p` when an explicit profile is needed. Normal operation uses an I/P GOP; `--gop-size 1` is an all-intra development mode.
+The CLI chooses an engine profile from the visible dimensions. Use `--engine-profile 720p` when an explicit profile is needed. `--provider ID` selects the execution provider; `tensorrt` is the only production provider in this build. Normal operation uses an I/P GOP; `--gop-size 1` is an all-intra development mode.
 
 ## Decode
 

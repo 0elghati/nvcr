@@ -1,5 +1,4 @@
 #include <nvcr/dcvcrt/adapter.hpp>
-#include <nvcr/dcvcrt/tensorrt_backend.hpp>
 #include <nvcr/nvcr.hpp>
 
 #include <algorithm>
@@ -66,10 +65,11 @@ void usage(std::ostream& out) {
     out << "NVCR native encoder and decoder\n\n"
         << "Usage:\n"
         << "  nvcr encode -i INPUT.yuv -o OUTPUT.nvcr -s WIDTHxHEIGHT\n"
-        << "              [--backend NAME] [--engine-profile NAME] [--frames N] [--qp N]\n"
+        << "              [--provider ID] [--backend NAME] [--engine-profile NAME]\n"
+        << "              [--frames N] [--qp N]\n"
         << "              [--gop-size N] [-r FPS] [--engine-dir DIR]\n"
         << "  nvcr decode -i INPUT.nvcr -o OUTPUT.yuv [--quality-metrics REFERENCE.yuv]\n"
-        << "              [--backend NAME] [--engine-profile NAME] [--frames N]\n"
+        << "              [--provider ID] [--backend NAME] [--engine-profile NAME] [--frames N]\n"
         << "              [--device-id N] [--engine-dir DIR]\n"
         << "  nvcr codec list\n"
         << "  nvcr codec describe CODEC_ID\n"
@@ -86,6 +86,7 @@ void usage(std::ostream& out) {
         << "      --width N             Raw input width (encode only)\n"
         << "      --height N            Raw input height (encode only)\n"
         << "      --backend NAME        Installed backend selector (default: NVCR_BACKEND or default)\n"
+        << "      --provider ID         Execution provider id (default: tensorrt)\n"
         << "      --engine-profile NAME Installed engine profile, for example 720p\n"
         << "                            (default: inferred from encoded dimensions)\n"
         << "      --engine-dir DIR      Custom TensorRT engine and entropy asset directory\n"
@@ -202,7 +203,7 @@ fs::path resolve_engine_dir(
 
 void bootstrap_registry() {
     nvcr::dcvcrt::register_codec();
-    nvcr::dcvcrt::register_tensorrt_provider();
+    nvcr::dcvcrt::register_execution_providers();
 }
 
 int codec_list_command() {
@@ -478,6 +479,9 @@ bool parse_options(int argc, char* argv[], Options& options) {
     if (const char* backend = std::getenv("NVCR_BACKEND")) {
         if (*backend != '\0' && options.backend == "default") options.backend = backend;
     }
+    if (const char* provider = std::getenv("NVCR_PROVIDER")) {
+        if (*provider != '\0' && options.provider_id.empty()) options.provider_id = provider;
+    }
     if (const char* profile = std::getenv("NVCR_ENGINE_PROFILE")) {
         if (*profile != '\0' && options.engine_profile.empty()) options.engine_profile = profile;
     }
@@ -682,12 +686,17 @@ nvcr::Result<nvcr::Runtime> create_runtime(
     if (!adapter) return adapter.error();
     nvcr::RuntimeConfiguration configuration;
     configuration.intra_engine_path = engine_dir;
+    if (!options.provider_id.empty()) configuration.provider_id = options.provider_id;
     configuration.device_id = options.device_id;
     configuration.intra_qp = options.qp;
     configuration.gop_size = options.gop_size;
     configuration.enable_profiling = options.profile;
     configuration.log_level = options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
-    auto components = adapter.value()->create_components(configuration);
+    bootstrap_registry();
+    nvcr::runtime::RuntimeServices services(
+        nvcr::runtime::Registry::instance(),
+        configuration.provider_id);
+    auto components = adapter.value()->create_components(configuration, services);
     if (!components) return components.error();
     return nvcr::Runtime::create(configuration, std::move(components.value()));
 }

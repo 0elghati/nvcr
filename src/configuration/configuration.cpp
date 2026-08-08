@@ -87,6 +87,8 @@ Result<void> apply_setting(
         configuration.model_id = value;
     } else if (key == "bitstream_model_id") {
         configuration.bitstream_model_id = value;
+    } else if (key == "provider_id") {
+        configuration.provider_id = value;
     } else if (key == "device_id") {
         auto parsed = parse_integer<std::int32_t>(value, key);
         if (!parsed) return parsed.error();
@@ -193,6 +195,9 @@ Result<void> ConfigurationLoader::validate(const RuntimeConfiguration& configura
     if (!valid_identifier(configuration.bitstream_model_id)) {
         return Error(ErrorCode::invalid_argument, "invalid bitstream_model_id", "configuration");
     }
+    if (!valid_identifier(configuration.provider_id)) {
+        return Error(ErrorCode::invalid_argument, "invalid provider_id", "configuration");
+    }
     if (configuration.device_id < 0) {
         return Error(ErrorCode::invalid_argument, "device_id cannot be negative", "configuration");
     }
@@ -233,4 +238,3 @@ std::string_view to_string(TensorRTExecutionMode mode) noexcept {
 }
 
 }  // namespace nvcr
-

@@ -137,7 +137,9 @@ public:
     }
 
     [[nodiscard]] Result<codec::Components>
-    create_components(const RuntimeConfiguration&) override {
+    create_components(
+        const RuntimeConfiguration&,
+        const runtime::RuntimeServices&) override {
         codec::Components components;
         components.codec = std::make_unique<TestCodecBackend>();
         return components;
