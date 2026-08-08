@@ -23,7 +23,7 @@ public:
     [[nodiscard]] virtual CodecCapabilities capabilities() const = 0;
     [[nodiscard]] virtual OptionSchema encoder_options() const = 0;
     [[nodiscard]] virtual OptionSchema decoder_options() const = 0;
-ù
+
     // Creates runtime components for the given session configuration.
     [[nodiscard]] virtual Result<Components>
     create_components(
