@@ -68,7 +68,7 @@ repetitions. Add `--profile` for a publication package; it collects latency,
 PSNR, and memory in separate repetitions while preserving clean FPS and wall
 time. A run without the flag is intentionally performance-only and `partial`.
 
-For ordinary performance collection, use the lower-level resolution pipeline:
+For RAM-profiled diagnostic collection, use the lower-level resolution pipeline:
 
 ```bash
 scripts/benchmark_resolution_matrix.sh \
@@ -77,6 +77,8 @@ scripts/benchmark_resolution_matrix.sh \
   --gops "1 299" \
   --repetitions 3 \
   --warmup-frames 10 \
+  --profile-memory \
+  --memory-sample-ms 100 \
   --engine-root build/engines-rtx4070-exact-20260805 \
   --results-dir evidence/performance/rtx4070-qcif-720p \
   --output-dir /tmp/nvcr-performance-streams \
@@ -91,6 +93,11 @@ and so on) remain available for exceptions. The pipeline writes
 `summary.md` under `--results-dir`; the CSV and JSONL contain both every measured
 repetition and an `average` row. Each row includes codec payload bytes and
 `payload_bpp`, calculated as payload bits divided by `width * height * frames`.
+With `--profile-memory`, rows also include profiled process RAM
+(`peak_memory_mb`). On Jetson, `tegrastats` adds whole-system RAM pressure
+(`peak_system_memory_mb`) and the minimum largest free block
+(`min_largest_free_block_mb`) when available; `peak_gpu_memory_mb` is populated
+only on targets that expose per-process GPU memory through `nvidia-smi`.
 Result directories can be committed as interim
 experiment records, while encoded streams remain under `/tmp`.
 
