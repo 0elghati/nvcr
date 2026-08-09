@@ -146,7 +146,12 @@ def _records(value: Any) -> Iterator[dict[str, Any]]:
             yield from _records(child)
 
 
-def _row(path: Path, source_root: Path, record: dict[str, Any]) -> dict[str, Any]:
+def _row(
+    path: Path,
+    source_root: Path,
+    record: dict[str, Any],
+    hardware: str,
+) -> dict[str, Any]:
     match = RESULT_NAME.search(path.name)
     if match is None:
         raise ValueError(f"result filename does not match expected format: {path}")
@@ -157,7 +162,7 @@ def _row(path: Path, source_root: Path, record: dict[str, Any]) -> dict[str, Any
     width, height = resolution.split("x", 1)
     row: dict[str, Any] = {
         "schema": SCHEMA,
-        "hardware": "jetson-orin",
+        "hardware": hardware,
         "codec": "DCVC-RT",
         "operation": operation,
         "resolution": resolution,
@@ -197,7 +202,7 @@ def _row(path: Path, source_root: Path, record: dict[str, Any]) -> dict[str, Any
     return row
 
 
-def collect(source_root: Path) -> list[dict[str, Any]]:
+def collect(source_root: Path, hardware: str) -> list[dict[str, Any]]:
     paths = sorted(
         path for path in source_root.rglob("*.json")
         if path.name.endswith(("_encode.json", "_decode.json"))
@@ -213,7 +218,7 @@ def collect(source_root: Path) -> list[dict[str, Any]]:
         records = list(_records(payload))
         if len(records) != 1:
             raise ValueError(f"expected one result record in {path}, found {len(records)}")
-        rows.append(_row(path, source_root, records[0]))
+        rows.append(_row(path, source_root, records[0], hardware))
     return sorted(
         rows,
         key=lambda row: (
@@ -266,8 +271,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--hardware", default="jetson-orin")
     args = parser.parse_args()
-    rows = collect(args.source.expanduser().resolve())
+    rows = collect(args.source.expanduser().resolve(), args.hardware)
     write_dataset(rows, args.output)
     print(f"wrote {len(rows)} rows to {args.output}")
     return 0
