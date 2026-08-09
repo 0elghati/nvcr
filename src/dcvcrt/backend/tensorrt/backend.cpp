@@ -2721,7 +2721,7 @@ Result<CodecEncodeResult> encode_predicted(
         return Error(ErrorCode::invalid_state, "encoder device DPB is unavailable",
                      std::string(subsystem));
     }
-    const bool use_frame_reference = !device_dpb.feature || (state.frame_index % 32U) == 1U;
+    const bool use_frame_reference = !device_dpb.feature || (state.frame_index % 64U) == 1U;
     auto qp_result = video_qp(base_qp, state.frame_index);
     if (!qp_result) return qp_result.error();
     const auto qp = qp_result.value();

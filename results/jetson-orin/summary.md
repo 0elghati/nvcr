@@ -8,7 +8,7 @@ a release or support claim.
 
 | Runtime | Canonical data | SHA-256 | Coverage |
 |---|---|---|---|
-| NVCR R=64 | [`nvcr-r64/data/results.jsonl`](nvcr-r64/data/results.jsonl) | `4b8856b787cff4219aa8c06a0fdf6260cbfcb7393a70e8010b39b512f7532bfc` | 144 rows: six resolutions, GOP 1/30/100, encode/decode, three measured repetitions plus average rows |
+| NVCR R=64 | [`nvcr/data/results.jsonl`](nvcr/data/results.jsonl) | `4b8856b787cff4219aa8c06a0fdf6260cbfcb7393a70e8010b39b512f7532bfc` | 144 rows: six resolutions, GOP 1/30/100, encode/decode, three measured repetitions plus average rows |
 | Python | [`python/data/results.jsonl`](python/data/results.jsonl) | `475832bc54ce14a3e9f015b9a72cc02a01eb43b5aa95b09320e98fdf4441d4d4` | 37 rows: the same six sequences, GOPs, operations, and 100-frame count; one duplicate 360p GOP-1 encode key |
 
 The report selects Python's latest `source_timestamp` for duplicate keys. Both
