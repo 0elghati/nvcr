@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/0elghati/nvcr/compare/v0.14.0...v0.15.0) (2026-08-09)
+
+
+### Features
+
+* **results:** add runtime comparison report generator ([#88](https://github.com/0elghati/nvcr/issues/88)) ([bc8c806](https://github.com/0elghati/nvcr/commit/bc8c8060dc3c3199aa1e65969b812a8e8c06903d))
+
 ## [0.14.0](https://github.com/0elghati/nvcr/compare/v0.13.0...v0.14.0) (2026-08-09)
 
 
