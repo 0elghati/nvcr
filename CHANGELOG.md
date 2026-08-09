@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/0elghati/nvcr/compare/v0.13.0...v0.14.0) (2026-08-09)
+
+
+### Features
+
+* **experiments:** Ran experiments on RTX 4070 Desktop machine ([#86](https://github.com/0elghati/nvcr/issues/86)) ([395d08a](https://github.com/0elghati/nvcr/commit/395d08acf175bbaacb790104067ced147a83b167))
+
 ## [0.13.0](https://github.com/0elghati/nvcr/compare/v0.12.0...v0.13.0) (2026-08-08)
 
 
