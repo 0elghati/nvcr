@@ -122,6 +122,11 @@ if(NVCR_ENABLE_TENSORRT)
         string(MAKE_C_IDENTIFIER "${engine_profile_id}" profile_test_id)
         string(REGEX REPLACE "^_+" "" profile_test_id "${profile_test_id}")
         set(profile_test_suffix "_${profile_test_id}")
+        get_property(registered_profiles GLOBAL PROPERTY NVCR_TENSORRT_TEST_PROFILES)
+        if(engine_profile_id IN_LIST registered_profiles)
+            return()
+        endif()
+        set_property(GLOBAL APPEND PROPERTY NVCR_TENSORRT_TEST_PROFILES "${engine_profile_id}")
         add_test(NAME nvcr_tensorrt_engine_contracts${profile_test_suffix}
             COMMAND nvcr_tensorrt_engine_tests "${engine_dir}")
         add_test(NAME nvcr_tensorrt_ip_frame_roundtrip${profile_test_suffix}
