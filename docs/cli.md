@@ -9,9 +9,13 @@ Use the artifact client before running the CLI:
 ```bash
 nvcr-artifacts install
 nvcr-artifacts install --profile 720p
+nvcr-artifacts install --profile 360p 720p 1080p
 ```
 
 The installer selects a compatible target-local bundle from the rolling catalog. A missing or incompatible bundle is an error.
+Use one or more values after `--profile` to install a selected set of
+resolutions; the option can also be repeated. If omitted, all compatible
+profiles in the catalog are installed.
 
 ## Encode
 

@@ -895,12 +895,24 @@ def install_catalog_assets(
     return installed
 
 
+def flatten_profile_arguments(values: list[list[str]]) -> list[str]:
+    """Flatten profiles supplied in one or more --profile argument groups."""
+    return [profile for group in values for profile in group]
+
+
 def install_command(arguments: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="nvcr-artifacts install",
         description="Install the best compatible engines from the rolling NVCR asset catalog.",
     )
-    parser.add_argument("--profile", action="append", default=[])
+    parser.add_argument(
+        "--profile",
+        action="append",
+        nargs="+",
+        default=[],
+        metavar="PROFILE",
+        help="resolution profile(s) to install; may be repeated",
+    )
     parser.add_argument("--backend", default=os.environ.get("NVCR_BACKEND", "dcvcrt"))
     parser.add_argument("--device-id", type=int, default=0)
     parser.add_argument("--repo", default=os.environ.get("NVCR_REPO", DEFAULT_REPOSITORY))
@@ -955,7 +967,7 @@ def install_command(arguments: list[str]) -> int:
         asset_urls,
         identity,
         backend=args.backend,
-        requested_profiles=args.profile,
+        requested_profiles=flatten_profile_arguments(args.profile),
         engine_root=args.engine_root,
         token=token,
     )
