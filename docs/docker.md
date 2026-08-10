@@ -85,6 +85,13 @@ the `engine-install` service forwards it to the catalog client:
 docker compose -f docker/compose.x86_64.yaml run --rm --build engine-install
 ```
 
+To install only selected resolutions, pass profiles after the service command:
+
+```bash
+docker compose -f docker/compose.x86_64.yaml run --rm --build engine-install \
+  --profile 360p 720p 1080p
+```
+
 Run the equivalent command with `docker/compose.jetson.yaml` on Jetson. The
 `nvcr` and `test` services mount that volume read-only. Re-running
 `engine-install` refreshes the collection from the authoritative catalog.
