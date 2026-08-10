@@ -39,7 +39,10 @@ Build and inspect the current amd64 image locally:
 ```
 
 Publishing is deliberately guarded: the worktree must be clean and HEAD must
-exactly match `v$(cat version.txt)`.
+exactly match `v$(cat version.txt)`. Publishing the GitHub Release automatically
+starts both architecture-specific Docker Hub builds from that exact tag. The
+amd64 image runs on the labeled X64 self-hosted runner; the Jetson image runs
+natively on the labeled ARM64 Jetson self-hosted runner.
 
 ```bash
 docker login
@@ -53,10 +56,11 @@ docker login
 ./docker/publish.sh --push jetson
 ```
 
-The manual `publish-containers` GitHub workflow performs the same guarded
-release build. Configure `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository
-secrets. The Jetson job additionally requires a self-hosted runner labeled
-`jetson`; hosted x86_64 emulation is not used for that image.
+Configure `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets before
+publishing the first release. The `publish-containers` workflow retains a manual
+dispatch for retrying either architecture from an exact release tag. The Jetson
+job additionally requires a self-hosted runner labeled `Jetson`; hosted x86_64
+emulation is not used for that image.
 
 To consume a published amd64 image with Compose:
 
