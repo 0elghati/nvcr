@@ -1,0 +1,59 @@
+# syntax=docker/dockerfile:1.7
+
+# NVIDIA's signed JetPack 6.1 cross-compilation image contains the x86 host
+# tools, Jetson target filesystem, CUDA AArch64 libraries, and Bootlin GCC
+# toolchain. The image is intentionally versioned with the supported Orin
+# target rather than using a floating latest tag.
+FROM nvcr.io/nvidia/jetpack-linux-aarch64-crosscompile-x86:6.1 AS build
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG NVCR_VERSION
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        cmake \
+        git \
+        lbzip2 \
+        ninja-build \
+        pkg-config \
+        python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# The cross image ships these archives in /l4t. NVIDIA's documented JetPack 6
+# setup extracts them before invoking CMake.
+RUN set -eux; \
+    cd /l4t; \
+    cat targetfs.tbz2.* > targetfs.tbz2; \
+    tar -I lbzip2 -xf targetfs.tbz2; \
+    mkdir -p toolchain; \
+    tar -C toolchain -xf toolchain.tar.bz2
+
+ENV NVCR_JETSON_SYSROOT=/l4t/targetfs \
+    NVCR_JETSON_CROSS_PREFIX=/l4t/toolchain/aarch64--glibc--stable-2022.08-1/bin/aarch64-buildroot-linux-gnu- \
+    NVCR_CUDA_CROSS_ROOT=/usr/local/cuda
+
+COPY . /workspace/nvcr
+WORKDIR /workspace/nvcr
+
+RUN set -eux; \
+    cmake -S . -B /tmp/nvcr-build -G Ninja \
+        -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/jetson-aarch64.cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CUDA_ARCHITECTURES=87 \
+        -DCMAKE_EXE_LINKER_FLAGS="-Wl,--allow-shlib-undefined" \
+        -DCMAKE_INSTALL_PREFIX=/opt/nvcr \
+        -DNVCR_BUILD_TESTS=OFF \
+        -DNVCR_ENABLE_TENSORRT=ON \
+        -DNVCR_FETCH_DEPENDENCIES=ON; \
+    cmake --build /tmp/nvcr-build --parallel; \
+    cmake --install /tmp/nvcr-build; \
+    ./scripts/package_release.sh \
+        --version "${NVCR_VERSION}" \
+        --platform linux-aarch64-jetson-l4t36 \
+        --install-prefix /opt/nvcr \
+        --output-dir /workspace/dist
+
+FROM scratch AS artifact
+COPY --from=build /workspace/dist/ /

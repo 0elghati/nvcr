@@ -13,6 +13,7 @@ The runtime does not depend on Python. These scripts prepare artifacts, package 
 | `package_release.sh` | Create an engine-free binary package |
 | `package_engine_bundle.sh` | Package one validated target-local engine bundle |
 | `release_engine_assets.sh` | Stage and publish rolling engine assets |
+| `ci/check_jetson_cross_toolchain.sh` | Validate the x86-hosted Jetson cross-build environment |
 | `benchmark_softwarex_matrix.py` | Validate and run the publication matrix; write a complete evidence package |
 | `benchmark_resolution_matrix.sh` | Run the lower-level diagnostic resolution matrix |
 | `profile_energy.py` | Capture optional Jetson energy measurements |
@@ -48,6 +49,26 @@ Binary packages do not contain checkpoints, exported model assets, or TensorRT p
 ```
 
 Target-local engine bundles are published separately through the rolling `engine-assets` catalog after validation.
+
+The release workflow cross-compiles the Jetson binary automatically from
+x86_64 using NVIDIA's signed JetPack 6.1 cross-compilation image. For local
+cross-builds, an extracted JetPack/L4T root filesystem and CUDA cross toolkit
+can be supplied to `cmake/toolchains/jetson-aarch64.cmake`:
+
+```bash
+export NVCR_JETSON_SYSROOT=/opt/nvcr/sysroots/l4t-36.4
+export NVCR_JETSON_CROSS_PREFIX=/usr/bin/aarch64-linux-gnu-
+export NVCR_CUDA_CROSS_ROOT=/usr/local/cuda
+./scripts/ci/check_jetson_cross_toolchain.sh
+cmake -S . -B build-jetson-cross \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/jetson-aarch64.cmake \
+  -DCMAKE_BUILD_TYPE=Release -DNVCR_ENABLE_TENSORRT=ON \
+  -DNVCR_BUILD_TESTS=OFF
+```
+
+Cross compilation produces the package, but native Jetson execution remains a
+release validation gate. TensorRT engine plans are still built and validated on
+their target GPU.
 
 ## Evaluate
 

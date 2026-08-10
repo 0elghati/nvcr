@@ -49,9 +49,11 @@ fi
 case "$platform" in
 linux-x86_64-nvidia)
     target_profile="rtx4070-ubuntu2404.json"
+    expected_machine="Advanced Micro Devices X86-64"
     ;;
 linux-aarch64-jetson-l4t36)
     target_profile="orin-nano-l4t3647.json"
+    expected_machine="AArch64"
     ;;
 *)
     echo "unsupported release platform: $platform (expected linux-x86_64-nvidia or linux-aarch64-jetson-l4t36)" >&2
@@ -100,6 +102,15 @@ for required in "${required_files[@]}"; do
     fi
 done
 
+if ! command -v readelf >/dev/null 2>&1; then
+    echo "release packaging requires readelf to verify the ELF architecture" >&2
+    exit 1
+fi
+elf_machine="$(readelf -h "$package_root/bin/nvcr" | awk -F: '/^[[:space:]]*Machine:/ {gsub(/^[[:space:]]+/, "", $2); print $2; exit}')"
+if [[ "$elf_machine" != "$expected_machine" ]]; then
+    echo "release install has machine '$elf_machine', expected '$expected_machine' for $platform" >&2
+    exit 1
+fi
 forbidden="$(find "$package_root" -type f \( \
     -name '*.plan' -o -name '*.engine' -o -name '*.onnx' -o \
     -name '*.pth' -o -name '*.pth.tar' -o -name 'i_entropy.bin' -o \

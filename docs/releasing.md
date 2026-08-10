@@ -7,9 +7,11 @@ from being duplicated or renamed for every application release.
 ## Application binaries
 
 Release Please remains the version, changelog, and application-tag authority.
-The hosted release workflow builds the generic `linux-x86_64-nvidia` package and
-leaves the semver release in draft. The Jetson package and both reference-target
-evidence gates remain manual.
+The release workflow builds the x86_64 package on the generic self-hosted
+runner and cross-builds the AArch64 package from x86_64 using NVIDIA's pinned
+JetPack 6.1 cross image. Binary generation and upload do not require an ARM
+host. The packages are versioned together, but are not interchangeable
+binaries.
 
 Binary archive names remain versioned:
 
@@ -30,7 +32,8 @@ Before publishing an application release:
 5. confirm each archive contains `PACKAGE-MANIFEST.sha256` and no checkpoints,
    ONNX files, runtime model assets, or TensorRT plans.
 
-Build the Jetson archive on the validated Jetson target:
+For a local/manual reproduction, the archive can still be built from a native
+Jetson checkout:
 
 ```bash
 ./scripts/install_from_source.sh --build-type Release \
@@ -40,9 +43,13 @@ Build the Jetson archive on the validated Jetson target:
   --install-prefix "$PWD/install-release-jetson" --output-dir dist
 ```
 
-Hosted packaging is not reference-target evidence. Standard runners do not
-provide the RTX 4070 or Jetson runtime needed for target-local plan generation,
-full GPU tests, performance, memory, quality, or energy gates.
+The cross-build job uses NVIDIA's signed JetPack 6.1 x86 cross-compilation
+container from `docker/Dockerfile.jetson-cross`; no sysroot paths or manual
+runner variables are required. Package creation verifies the ELF machine type
+against the public platform label, so an x86 build cannot be mislabeled as the
+Jetson archive or vice versa. Native Jetson execution, TensorRT plan validation,
+and performance remain separate target-evidence gates and are not implied by
+successful package generation.
 
 ## Rolling engine assets
 
