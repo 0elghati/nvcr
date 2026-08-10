@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.2](https://github.com/0elghati/nvcr/compare/v0.15.1...v0.15.2) (2026-08-10)
+
+
+### Bug Fixes
+
+* **cd:** another attempt to fix CD pipeline for AArch64 ([#92](https://github.com/0elghati/nvcr/issues/92)) ([8954ed7](https://github.com/0elghati/nvcr/commit/8954ed7f96ef407a902f5fbd2399246ffbfcbbe5))
+
 ## [0.15.1](https://github.com/0elghati/nvcr/compare/v0.15.0...v0.15.1) (2026-08-10)
 
 
