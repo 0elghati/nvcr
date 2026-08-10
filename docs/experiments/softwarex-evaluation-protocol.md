@@ -65,7 +65,7 @@ ratios, or `total_wall_time_ms`.
 
 Run the primary tables with exact bundles for:
 
-- RTX 3050 exact, once a target profile and bundle exist;
+- RTX 3050 exact;
 - RTX 4070 exact;
 - RTX 5060 exact, currently represented by `rtx5060-laptop-ubuntu2404`;
 - Jetson Orin Nano exact, when the target is available.

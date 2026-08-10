@@ -29,7 +29,7 @@ The architecture is extensible, but only DCVC-RT and TensorRT are production imp
 
 ## What is not supported yet
 
-- A second production codec or execution provider.
+- Additional production codecs or execution runtimes/providers.
 - INT8 as a release profile.
 - Windows, macOS, CPU inference, or non-NVIDIA accelerators.
 - A stable C ABI.
@@ -41,6 +41,10 @@ The architecture is extensible, but only DCVC-RT and TensorRT are production imp
 
 ## Support rule
 
-A target is supported only after a clean Release build, artifact validation, I/P round trip, malformed-input checks, reference comparison, and target-specific performance run have passed. The next clean evidence run will be performed after the current refactor branch is merged.
+A target is supported only after a clean Release build, artifact validation, I/P
+round trip, malformed-input checks, reference comparison, and target-specific
+performance run have passed.
 
-Until then, describe the code as implemented and tested, not as a supported v1 release.
+Use the target profile and the evidence package to determine whether a target
+has met those requirements. A target profile or a successful build alone does
+not establish support.

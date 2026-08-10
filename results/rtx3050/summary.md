@@ -1,5 +1,8 @@
 # NVCR Performance Run
 
+This is diagnostic data from a local performance run. It is not release or
+target-support evidence.
+
 - Commit: 5aaeeba0c6722894f225dc02f186f9c2826deaf4
 - Dirty: true
 - Hardware: rtx3050

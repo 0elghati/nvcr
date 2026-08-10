@@ -28,7 +28,8 @@ Before publishing an application release:
 
 1. validate the exact tag on the RTX 4070 and required Jetson release track;
 2. run the registered GPU suites with target-local engines;
-3. record correctness/performance/resource evidence in `ROADMAP.md`;
+3. record correctness, performance, and resource evidence in the release
+   evidence package;
 4. build and verify both required binary archives;
 5. confirm each archive contains `PACKAGE-MANIFEST.sha256` and no checkpoints,
    ONNX files, runtime model assets, or TensorRT plans.
@@ -168,5 +169,5 @@ missing-metric, or otherwise partial packages remain diagnostics.
 
 Pull-request CI covers shell/Python/JSON/workflow validation, CPU tests on hosted
 x86_64 and arm64, and the hosted x86_64 CUDA/package smoke. Target publication
-still requires the registered GPU suites and roadmap evidence. A successful
-`trtexec` build or hosted package alone never completes M4.
+still requires the registered GPU suites and the complete release evidence
+package. A successful `trtexec` build or hosted package alone is not enough.

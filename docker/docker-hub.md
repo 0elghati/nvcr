@@ -6,14 +6,12 @@ platform families:
 - `amd64-cuda12.8-trt10.9`: linux/amd64, CUDA 12.8, TensorRT 10.9,
   CUDA helper kernels for the compiler-supported GPU architecture set; engines
   are selected from the catalog.
-- `amd64-cuda12.8-trt10.9`: linux/amd64, CUDA 12.8, TensorRT 10.9, desktop GPUs
-  runtime code.
 - `jetson-l4t36.4`: linux/arm64 Jetson, JetPack 6.1/L4T 36.4, SM 8.7
   runtime code.
 
 There is no shared `latest` tag because the CPU architecture, NVIDIA
 userspace, and TensorRT engine compatibility differ. Prefer immutable tags such
-as `0.7.0-amd64-cuda12.8-trt10.9`.
+as `0.16.0-amd64-cuda12.8-trt10.9`.
 
 The images contain the native Release runtime and rolling-catalog client, but no
 TensorRT plans, models, input video, or generated output. The architecture-

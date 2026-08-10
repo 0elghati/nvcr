@@ -1,10 +1,13 @@
 # Third-party integrations
 
-NVCR does not vendor dependencies by default.
+This directory contains third-party source, provenance records, and license
+notices used by NVCR.
 
-The original DCVC-RT native C++ entropy coder must be integrated here (or supplied
-as an external CMake target) behind `nvcr::dcvcrt::EntropyCoderAdapter`. Do not
-copy, translate, or reimplement its algorithms. Preserve its upstream license and
-history, ideally with a pinned Git submodule or FetchContent declaration once the
-authoritative upstream revision is selected.
+- `dcvc_rans/` contains the pinned native rANS sources used by the runtime.
+- `dcvc_rt/` records the pinned DCVC-RT source and checkpoint provenance. The
+  upstream checkout and checkpoints are obtained separately and are not vendored
+  here.
 
+Keep upstream source changes, licenses, notices, and pinned revisions documented
+with the relevant integration. Do not treat an upstream source license as
+permission to redistribute checkpoints or derived TensorRT assets.

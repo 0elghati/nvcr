@@ -102,11 +102,8 @@ the publication matrix were not run.
 
 ## 5. RTX 4070 exact
 
-The current checkout is blocked before this command can complete because the
-local 2026-08-05 bundles predate the current model-profile digest. The checked-in
-target and detected host now use TensorRT 10.9. First rebuild every bundle.
-
-Use a fresh directory for the strict preflight:
+Build or rebuild the target-local bundles before running the strict preflight.
+Use a fresh directory for the preflight:
 
 ```bash
 python3 scripts/benchmark_softwarex_matrix.py \
@@ -143,9 +140,7 @@ python3 scripts/benchmark_softwarex_matrix.py \
 
 ## 6. RTX 3050 exact
 
-This is blocked until
-`configs/targets/rtx3050-laptop-ubuntu2404.json` is created from the actual
-machine and exact bundles are rebuilt. Once present:
+Use the matching target profile and rebuild exact bundles on the target.
 
 Configure `build-release-rtx3050` with those five engine directories as in
 step 3, then run:

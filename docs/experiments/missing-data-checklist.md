@@ -47,15 +47,9 @@ Complete this list before calling a SoftwareX run complete.
 - [ ] Docker Hub namespace known only if images will be published.
 - [ ] GitHub token available only when private engine catalog assets require it.
 
-## Known blockers in this checkout
+## Before starting a run
 
-- [ ] Add the actual RTX 3050 Laptop target profile before running its exact row.
-- [x] Reconcile `rtx4070-ubuntu2404` with the detected TensorRT 10.9 reference
-  host.
-- [ ] Rebuild all selected engine bundles from the current model-profile digest;
-  the local 2026-08-05 RTX 4070 bundles predate it.
-- [ ] Produce pinned `nvcr.softwarex.python-reference.v1` rows for the
-  mandatory RTX 4070 comparison.
-- [ ] Add a Jetson GPU-memory sampler if `nvidia-smi` cannot provide the
-  required metric on the target.
-- [ ] Decide whether installer compatibility-policy flags are needed before publishing fallback assets.
+Confirm that every selected target profile, engine bundle, input sequence, and
+reference row belongs to the same experiment. Keep unresolved target access,
+artifact, licensing, or metric issues in the run package as `partial` rather
+than treating them as completed evidence.

@@ -70,9 +70,9 @@ After packaging an engine bundle, upload it to S3 and generate the
 
 ```bash
 ./scripts/stage_engine_release_asset.sh \
-  --version 0.3.0 \
-  --engine-dir build/engines/dcvcrt-v2 \
-  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/v0.3.0 \
+  --version 0.16.0 \
+  --engine-dir build/engines/dcvcrt-720p \
+  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/engine-assets \
   --aws-region eu-west-1 \
   --presign-expires 604800 \
   --asset-manifest dist/nvcr-engine-assets.txt

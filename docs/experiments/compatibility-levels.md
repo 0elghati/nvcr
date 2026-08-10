@@ -9,13 +9,11 @@ Exact means the bundle was built and validated for the named target profile. Thi
 Current examples:
 
 ```text
+rtx3050-laptop-ubuntu2404
 rtx4070-ubuntu2404
 rtx5060-laptop-ubuntu2404
 orin-nano-l4t3647
 ```
-
-The staged target needs the future
-`rtx3050-laptop-ubuntu2404` profile; it does not exist yet.
 
 ## Same compute capability
 
@@ -65,14 +63,14 @@ nvcr-engines-linux-amd64-smXX-dcvcrt-cvpr2025-720p.tar.gz
 nvcr-engines-linux-amd64-ampere-plus-dcvcrt-cvpr2025-720p.tar.gz
 ```
 
-The RTX 3050 name is reserved until its profile exists; replace `smXX` with
-the detected Blackwell SM before publication.
+The RTX 3050 name refers to the checked-in Laptop target profile. Replace
+`smXX` with the detected Blackwell SM before publishing a same-compute bundle.
 
 ## Selection policy
 
-The current catalog resolver ranks exact, same-compute, and Ampere-plus candidates. The current installer does not yet expose explicit `--allow-compatible` and `--allow-fallback` switches.
-
-Until those switches exist, publication scripts and experiment runbooks must select the intended compatibility class explicitly, record it in the result row, and refuse an unplanned fallback. Adding policy flags to the installer is an open automation task.
+The catalog resolver ranks exact, same-compute, and Ampere-plus candidates. The
+experiment driver requires the intended compatibility class to be selected
+explicitly and records it in every result row.
 
 The experiment driver never chooses a weaker class implicitly. Pass one of:
 
