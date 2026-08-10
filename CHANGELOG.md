@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.0](https://github.com/0elghati/nvcr/compare/v0.17.0...v0.18.0) (2026-08-10)
+
+
+### Features
+
+* **artifacts:** Multi profile installation ([#105](https://github.com/0elghati/nvcr/issues/105)) ([8540159](https://github.com/0elghati/nvcr/commit/8540159598a38ce2629efdc9184d14bc77d79384))
+
 ## [0.17.0](https://github.com/0elghati/nvcr/compare/v0.16.0...v0.17.0) (2026-08-10)
 
 
