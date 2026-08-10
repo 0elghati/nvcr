@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/0elghati/nvcr/compare/v0.16.0...v0.17.0) (2026-08-10)
+
+
+### Features
+
+* **ci:** Auto publish docker containers ([#102](https://github.com/0elghati/nvcr/issues/102)) ([70f6724](https://github.com/0elghati/nvcr/commit/70f6724aabb879ee4d7d92c5874354a1862c0bb7))
+
 ## [0.16.0](https://github.com/0elghati/nvcr/compare/v0.15.5...v0.16.0) (2026-08-10)
 
 
