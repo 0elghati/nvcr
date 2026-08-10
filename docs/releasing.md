@@ -33,6 +33,13 @@ Before publishing an application release:
 5. confirm each archive contains `PACKAGE-MANIFEST.sha256` and no checkpoints,
    ONNX files, runtime model assets, or TensorRT plans.
 
+Publishing the approved GitHub Release triggers `.github/workflows/publish-containers.yml`.
+It checks out the exact release tag and publishes the amd64 and Jetson runtime
+images to `${DOCKERHUB_USERNAME}/nvcr`, including provenance and SBOM
+attestations. Configure the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`
+repository secrets first. A manual workflow dispatch remains available for an
+architecture-specific retry without creating another release.
+
 For a local/manual reproduction, the archive can still be built from a native
 Jetson checkout:
 

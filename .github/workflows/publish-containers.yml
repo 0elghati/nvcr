@@ -1,6 +1,9 @@
 name: publish-containers
 
 on:
+  release:
+    types:
+      - published
   workflow_dispatch:
     inputs:
       tag:
@@ -20,21 +23,23 @@ on:
 permissions:
   contents: read
 
+env:
+  NVCR_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+
 concurrency:
-  group: publish-containers-${{ inputs.tag }}
+  group: publish-containers-${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
   cancel-in-progress: false
 
 jobs:
   publish-x86_64:
-    if: ${{ inputs.architecture == 'x86_64' || inputs.architecture == 'all' }}
-    runs-on: self-hosted
+    if: ${{ github.event_name == 'release' || inputs.architecture == 'x86_64' || inputs.architecture == 'all' }}
+    runs-on: [self-hosted, Linux, X64]
     env:
-      NVCR_TAG: ${{ inputs.tag }}
       NVCR_DOCKERHUB_REPOSITORY: ${{ secrets.DOCKERHUB_USERNAME }}/nvcr
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ env.NVCR_TAG }}
           fetch-depth: 0
 
       - name: Verify release source
@@ -51,18 +56,17 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and publish x86_64 runtime
-        run: ./docker/publish.sh --push x86_64
+        run: ./docker/publish.sh --push amd64-cuda12.8-trt10.9
 
   publish-jetson:
-    if: ${{ inputs.architecture == 'jetson' || inputs.architecture == 'all' }}
-    runs-on: [self-hosted, Linux, ARM64, jetson]
+    if: ${{ github.event_name == 'release' || inputs.architecture == 'jetson' || inputs.architecture == 'all' }}
+    runs-on: [self-hosted, Linux, ARM64, Jetson]
     env:
-      NVCR_TAG: ${{ inputs.tag }}
       NVCR_DOCKERHUB_REPOSITORY: ${{ secrets.DOCKERHUB_USERNAME }}/nvcr
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ env.NVCR_TAG }}
           fetch-depth: 0
 
       - name: Verify release source and native target
