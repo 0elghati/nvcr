@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/0elghati/nvcr/compare/v0.15.0...v0.15.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* **cd:** Craete Jetson (ARM) binary creation ([#90](https://github.com/0elghati/nvcr/issues/90)) ([070401a](https://github.com/0elghati/nvcr/commit/070401a2f4900507cdc7e9ac7c4fc5b75c13e1a1))
+
 ## [0.15.0](https://github.com/0elghati/nvcr/compare/v0.14.0...v0.15.0) (2026-08-09)
 
 
