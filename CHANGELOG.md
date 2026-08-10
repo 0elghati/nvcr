@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.5](https://github.com/0elghati/nvcr/compare/v0.15.4...v0.15.5) (2026-08-10)
+
+
+### Bug Fixes
+
+* **cd:** fix binary for jetson ([#98](https://github.com/0elghati/nvcr/issues/98)) ([a1f0a29](https://github.com/0elghati/nvcr/commit/a1f0a290cdbd0d632483cd88101025d2a1116862))
+
 ## [0.15.4](https://github.com/0elghati/nvcr/compare/v0.15.3...v0.15.4) (2026-08-10)
 
 

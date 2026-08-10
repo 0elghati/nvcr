@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 
 project(
     NVCR
-    VERSION 0.15.4 # x-release-please-version
+    VERSION 0.15.5 # x-release-please-version
     DESCRIPTION "Deployment-oriented runtime architecture for neural video codecs"
     LANGUAGES CXX)
 
