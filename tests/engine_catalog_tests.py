@@ -101,6 +101,52 @@ class DeviceTests(unittest.TestCase):
 
 
 class CatalogTests(unittest.TestCase):
+    def test_profile_arguments_accept_multiple_values_and_repetition(self) -> None:
+        self.assertEqual(
+            artifacts.flatten_profile_arguments([["360p", "720p"], ["1080p"]]),
+            ["360p", "720p", "1080p"],
+        )
+
+    def test_install_command_forwards_multiple_profiles(self) -> None:
+        release = {
+            "assets": [
+                {
+                    "name": artifacts.CATALOG_FILENAME,
+                    "browser_download_url": "https://example.invalid/catalog",
+                }
+            ]
+        }
+
+        def fake_download(_url: str, path: Path, _token: str | None) -> None:
+            path.write_text(
+                json.dumps({"schema": artifacts.CATALOG_SCHEMA, "assets": []}),
+                encoding="utf-8",
+            )
+
+        with mock.patch.object(
+            artifacts, "github_request_json", return_value=release
+        ), mock.patch.object(
+            artifacts, "download_file", side_effect=fake_download
+        ), mock.patch.object(
+            artifacts, "detect_device_identity", return_value=identity()
+        ), mock.patch.object(
+            artifacts, "install_catalog_assets", return_value=[]
+        ) as install:
+            result = artifacts.install_command(
+                [
+                    "--repo",
+                    "example/private",
+                    "--profile",
+                    "360p",
+                    "720p",
+                    "--profile",
+                    "1080p",
+                ]
+            )
+
+        self.assertEqual(result, 0)
+        self.assertEqual(install.call_args.kwargs["requested_profiles"], ["360p", "720p", "1080p"])
+
     def test_private_release_download_uses_asset_api(self) -> None:
         release = {
             "assets": [
