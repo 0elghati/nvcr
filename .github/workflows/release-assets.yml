@@ -85,6 +85,26 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      - name: Configure IPv4 BuildKit access to NVIDIA NGC
+        run: |
+          set -euo pipefail
+          builder=nvcr-jetson-ipv4
+          docker buildx rm "$builder" >/dev/null 2>&1 || true
+          docker buildx create \
+            --name "$builder" \
+            --driver docker-container \
+            --driver-opt network=host \
+            --use
+          docker buildx inspect "$builder" --bootstrap >/dev/null
+          buildkit_container="$(docker ps --filter "name=buildx_buildkit_${builder}" --format '{{.ID}}' | head -n1)"
+          test -n "$buildkit_container"
+          mapfile -t ngc_ipv4 < <(getent ahostsv4 nvcr.io | awk '{print $1}' | sort -u)
+          test "${#ngc_ipv4[@]}" -gt 0
+          for address in "${ngc_ipv4[@]}"; do
+            docker exec "$buildkit_container" sh -c "grep -q '[[:space:]]nvcr.io$' /etc/hosts || echo '$address nvcr.io' >> /etc/hosts"
+          done
+          echo "BUILDX_BUILDER=$builder" >>"$GITHUB_ENV"
+
       - name: Verify exact tagged x86 host source
         run: |
           set -euo pipefail
@@ -96,7 +116,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/nvcr-dist"
-          docker buildx build \
+          docker buildx build --builder "$BUILDX_BUILDER" \
             --build-arg "NVCR_VERSION=${NVCR_TAG#v}" \
             --file docker/Dockerfile.jetson-cross \
             --output "type=local,dest=$RUNNER_TEMP/nvcr-dist" \
