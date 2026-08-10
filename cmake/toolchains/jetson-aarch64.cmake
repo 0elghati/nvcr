@@ -53,7 +53,7 @@ set(CMAKE_CUDA_COMPILER "${NVCR_CUDA_CROSS_ROOT}/bin/nvcc" CACHE FILEPATH "CUDA 
 set(CMAKE_CUDA_HOST_COMPILER "${CMAKE_CXX_COMPILER}" CACHE FILEPATH "AArch64 compiler used by nvcc")
 set(CMAKE_CUDA_COMPILER_TARGET "aarch64-linux" CACHE STRING "CUDA target triple")
 set(CMAKE_CUDA_ARCHITECTURES "87" CACHE STRING "Jetson Orin CUDA architecture")
-set(CMAKE_CUDA_FLAGS_INIT "--target-dir aarch64-linux -Xcompiler=--sysroot=${NVCR_JETSON_SYSROOT}")
+set(CMAKE_CUDA_FLAGS_INIT "--target-directory aarch64-linux -Xcompiler=--sysroot=${NVCR_JETSON_SYSROOT}")
 
 set(CMAKE_FIND_ROOT_PATH
     "${NVCR_JETSON_SYSROOT}"
