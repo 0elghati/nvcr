@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/0elghati/nvcr/compare/v0.15.5...v0.16.0) (2026-08-10)
+
+
+### Features
+
+* **runner:** move to self-hosted runner for Jetson ([#100](https://github.com/0elghati/nvcr/issues/100)) ([cd3f5b6](https://github.com/0elghati/nvcr/commit/cd3f5b6e03435d2e6d463ded2db23f1db2090e99))
+
 ## [0.15.5](https://github.com/0elghati/nvcr/compare/v0.15.4...v0.15.5) (2026-08-10)
 
 
