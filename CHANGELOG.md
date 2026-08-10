@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.3](https://github.com/0elghati/nvcr/compare/v0.15.2...v0.15.3) (2026-08-10)
+
+
+### Bug Fixes
+
+* **cd:** add missing deps ([#94](https://github.com/0elghati/nvcr/issues/94)) ([73dcaec](https://github.com/0elghati/nvcr/commit/73dcaecef4054907573bdf1974534ebf332b2c9a))
+
 ## [0.15.2](https://github.com/0elghati/nvcr/compare/v0.15.1...v0.15.2) (2026-08-10)
 
 
