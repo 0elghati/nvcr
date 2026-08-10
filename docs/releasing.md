@@ -8,9 +8,10 @@ from being duplicated or renamed for every application release.
 
 Release Please remains the version, changelog, and application-tag authority.
 The release workflow builds the x86_64 package on the generic self-hosted
-runner and cross-builds the AArch64 package from x86_64 using NVIDIA's pinned
-JetPack 6.1 cross image. Binary generation and upload do not require an ARM
-host. The packages are versioned together, but are not interchangeable
+X64 runner and builds the AArch64 package natively on the labeled Jetson
+self-hosted runner. The Jetson job uses the target's installed JetPack CUDA and
+TensorRT stack, targets Orin SM 8.7, and runs the registered test suite before
+packaging. The packages are versioned together, but are not interchangeable
 binaries.
 
 Binary archive names remain versioned:
@@ -43,13 +44,13 @@ Jetson checkout:
   --install-prefix "$PWD/install-release-jetson" --output-dir dist
 ```
 
-The cross-build job uses NVIDIA's signed JetPack 6.1 x86 cross-compilation
-container from `docker/Dockerfile.jetson-cross`; no sysroot paths or manual
-runner variables are required. Package creation verifies the ELF machine type
-against the public platform label, so an x86 build cannot be mislabeled as the
-Jetson archive or vice versa. Native Jetson execution, TensorRT plan validation,
-and performance remain separate target-evidence gates and are not implied by
-successful package generation.
+The release workflow selects the Jetson with the
+`[self-hosted, Linux, ARM64, Jetson]` labels; after its one-time runner
+registration, no sysroot paths or cross-build container are required. Package
+creation verifies the ELF machine type against the public platform label, so an
+x86 build cannot be mislabeled as the Jetson archive or vice versa. The native
+job validates basic CUDA execution, while target-local TensorRT plan validation
+and performance remain separate target-evidence gates.
 
 ## Rolling engine assets
 

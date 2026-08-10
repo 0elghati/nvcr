@@ -1,9 +1,5 @@
 name: release-assets
 
-# Each native runner builds and uploads its own versioned ELF package family.
-# The CPU architecture, NVIDIA userspace, CUDA toolchain, and TensorRT ABI are
-# part of the package contract; the portable CUDA device-code setting does not
-# make x86_64 and AArch64 interchangeable.
 on:
   workflow_dispatch:
     inputs:
@@ -16,7 +12,7 @@ permissions:
 
 jobs:
   build-self-hosted-x86_64:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
     env:
       NVCR_TAG: ${{ inputs.tag }}
     steps:
@@ -24,8 +20,6 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
-
-      - uses: docker/setup-buildx-action@v3
 
       - name: Verify exact tagged source
         run: |
@@ -71,56 +65,67 @@ jobs:
         run: |
           gh release upload "$NVCR_TAG" "$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-x86_64-nvidia.tar.gz" "$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-x86_64-nvidia.tar.gz.sha256" --clobber
 
-  build-jetson-aarch64-cross:
-    # The NVIDIA JetPack cross image supplies the target sysroot and compiler;
-    # no architecture-specific host setup is required on this runner.
-    runs-on: self-hosted
+  build-jetson-aarch64:
+    runs-on: [self-hosted, Linux, ARM64, Jetson]
     env:
       NVCR_TAG: ${{ inputs.tag }}
+      NVCR_CMAKE_VERSION: 3.31.6
+      NVCR_CMAKE_AARCH64_SHA256: b4cc788d63112b2749b40627e719eb5d3b8ed8f00c36d77189f4019cfe64bc9e
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
 
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Configure IPv4 BuildKit access to NVIDIA NGC
+      - name: Verify exact tagged Jetson source and toolchain
         run: |
           set -euo pipefail
-          builder=nvcr-jetson-ipv4
-          docker buildx rm "$builder" >/dev/null 2>&1 || true
-          docker buildx create \
-            --name "$builder" \
-            --driver docker-container \
-            --driver-opt network=host \
-            --use
-          docker buildx inspect "$builder" --bootstrap >/dev/null
-          buildkit_container="$(docker ps --filter "name=buildx_buildkit_${builder}" --format '{{.ID}}' | head -n1)"
-          test -n "$buildkit_container"
-          mapfile -t ngc_ipv4 < <(getent ahostsv4 nvcr.io | awk '{print $1}' | sort -u)
-          test "${#ngc_ipv4[@]}" -gt 0
-          for address in "${ngc_ipv4[@]}"; do
-            docker exec "$buildkit_container" sh -c "grep -q '[[:space:]]nvcr.io$' /etc/hosts || echo '$address nvcr.io' >> /etc/hosts"
-          done
-          echo "BUILDX_BUILDER=$builder" >>"$GITHUB_ENV"
-
-      - name: Verify exact tagged x86 host source
-        run: |
-          set -euo pipefail
-          test "$(uname -m)" = x86_64
+          test "$(uname -m)" = aarch64
+          test -f /etc/nv_tegra_release
+          grep -Eq '^# R36([ .]|$)' /etc/nv_tegra_release
           test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$NVCR_TAG")"
           test "$(cat version.txt)" = "${NVCR_TAG#v}"
+          command -v python3 >/dev/null
+          ./scripts/detect_platform.sh
+          source ./scripts/detect_platform.sh
+          test "$NVCR_DETECT_PLATFORM" = jetson
+          test -n "$NVCR_DETECT_NVCC"
+          test -n "$NVCR_DETECT_TENSORRT_ROOT"
 
-      - name: Build the AArch64 package in NVIDIA's pinned cross image
+      - name: Provision pinned AArch64 CMake
+        run: |
+          set -euo pipefail
+          archive="cmake-${NVCR_CMAKE_VERSION}-linux-aarch64.tar.gz"
+          url="https://github.com/Kitware/CMake/releases/download/v${NVCR_CMAKE_VERSION}/${archive}"
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/$archive" "$url"
+          echo "$NVCR_CMAKE_AARCH64_SHA256  $RUNNER_TEMP/$archive" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/cmake-aarch64"
+          tar -xzf "$RUNNER_TEMP/$archive" \
+            --strip-components=1 \
+            -C "$RUNNER_TEMP/cmake-aarch64"
+          echo "$RUNNER_TEMP/cmake-aarch64/bin" >>"$GITHUB_PATH"
+
+      - name: Build, install, and test natively on Jetson Orin
+        run: |
+          set -euo pipefail
+          ./scripts/install_from_source.sh \
+            --build-type Release \
+            --build-dir "$RUNNER_TEMP/nvcr-build-jetson" \
+            --prefix "$RUNNER_TEMP/nvcr-install-jetson" \
+            --cuda-arch 87 \
+            --jobs 4 \
+            --run-tests \
+            --cmake-arg -DNVCR_FETCH_DEPENDENCIES=ON
+
+      - name: Package and verify the native Jetson archive
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/nvcr-dist"
-          docker buildx build --builder "$BUILDX_BUILDER" \
-            --build-arg "NVCR_VERSION=${NVCR_TAG#v}" \
-            --file docker/Dockerfile.jetson-cross \
-            --output "type=local,dest=$RUNNER_TEMP/nvcr-dist" \
-            .
+          ./scripts/package_release.sh \
+            --version "${NVCR_TAG#v}" \
+            --platform linux-aarch64-jetson-l4t36 \
+            --install-prefix "$RUNNER_TEMP/nvcr-install-jetson" \
+            --output-dir "$RUNNER_TEMP/nvcr-dist"
           archive="$RUNNER_TEMP/nvcr-dist/nvcr-v${NVCR_TAG#v}-linux-aarch64-jetson-l4t36.tar.gz"
           checksum="$archive.sha256"
           test -f "$archive"
@@ -134,15 +139,15 @@ jobs:
             exit 1
           fi
 
-      - name: Upload cross-built AArch64 archive to draft release
+      - name: Upload native Jetson AArch64 archive to draft release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "$NVCR_TAG" "$RUNNER_TEMP/nvcr-dist/nvcr-v${NVCR_TAG#v}-linux-aarch64-jetson-l4t36.tar.gz" "$RUNNER_TEMP/nvcr-dist/nvcr-v${NVCR_TAG#v}-linux-aarch64-jetson-l4t36.tar.gz.sha256" --clobber
 
   manual-reference-gates:
-    needs: [build-self-hosted-x86_64, build-jetson-aarch64-cross]
-    runs-on: self-hosted
+    needs: [build-self-hosted-x86_64, build-jetson-aarch64]
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Record remaining manual gates
         run: |
