@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.4](https://github.com/0elghati/nvcr/compare/v0.15.3...v0.15.4) (2026-08-10)
+
+
+### Bug Fixes
+
+* **cd:** pass Jetson sysroot correctly to nvcc cross-compilation ([#96](https://github.com/0elghati/nvcr/issues/96)) ([0732176](https://github.com/0elghati/nvcr/commit/073217618d3db6f2d09a27e023732697fd9975c3))
+
 ## [0.15.3](https://github.com/0elghati/nvcr/compare/v0.15.2...v0.15.3) (2026-08-10)
 
 
