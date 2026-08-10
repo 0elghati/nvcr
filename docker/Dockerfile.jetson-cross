@@ -4,7 +4,7 @@
 # tools, Jetson target filesystem, CUDA AArch64 libraries, and Bootlin GCC
 # toolchain. The image is intentionally versioned with the supported Orin
 # target rather than using a floating latest tag.
-FROM nvcr.io/nvidia/jetpack-linux-aarch64-crosscompile-x86:6.1 AS build
+FROM nvcr.io/nvidia/jetpack-linux-aarch64-crosscompile-x86:6.1 AS toolchain
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG NVCR_VERSION
@@ -38,6 +38,33 @@ ENV NVCR_JETSON_SYSROOT=/l4t/targetfs \
     NVCR_JETSON_CROSS_PREFIX=/l4t/toolchain/aarch64--glibc--stable-2022.08-1/bin/aarch64-buildroot-linux-gnu- \
     NVCR_CUDA_CROSS_ROOT=/usr/local/cuda
 
+# Keep this probe ahead of the source COPY and full project build. It verifies
+# the exact CUDA/CMake/sysroot/linker combination in seconds once the NVIDIA
+# image has been extracted, instead of discovering a broken cross toolchain at
+# the end of a release build.
+COPY cmake/toolchains/jetson-aarch64.cmake /tmp/nvcr-jetson-aarch64.cmake
+RUN set -eux; \
+    mkdir -p /tmp/nvcr-cuda-smoke; \
+    printf '%s\n' \
+        'cmake_minimum_required(VERSION 3.24)' \
+        'project(nvcr_cuda_cross_smoke LANGUAGES CXX CUDA)' \
+        'find_package(CUDAToolkit REQUIRED)' \
+        'add_executable(nvcr_cuda_cross_smoke main.cu)' \
+        'set_property(TARGET nvcr_cuda_cross_smoke PROPERTY CUDA_ARCHITECTURES 87)' \
+        'target_link_libraries(nvcr_cuda_cross_smoke PRIVATE CUDA::cudart)' \
+        > /tmp/nvcr-cuda-smoke/CMakeLists.txt; \
+    printf '%s\n' \
+        '#include <cuda_runtime.h>' \
+        '__global__ void nvcr_smoke_kernel() {}' \
+        'int main() { nvcr_smoke_kernel<<<1, 1>>>(); return 0; }' \
+        > /tmp/nvcr-cuda-smoke/main.cu; \
+    cmake -S /tmp/nvcr-cuda-smoke -B /tmp/nvcr-cuda-smoke-build -G Ninja \
+        -DCMAKE_TOOLCHAIN_FILE=/tmp/nvcr-jetson-aarch64.cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CUDA_ARCHITECTURES=87; \
+    cmake --build /tmp/nvcr-cuda-smoke-build --parallel
+
+FROM toolchain AS build
 COPY . /workspace/nvcr
 WORKDIR /workspace/nvcr
 
