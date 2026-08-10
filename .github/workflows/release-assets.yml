@@ -1,9 +1,9 @@
 name: release-assets
 
-# The generic self-hosted runner builds and uploads the x86_64 package family.
-# Reference GPU/Jetson environments remain separate requirements for support
-# evidence and Jetson packaging, so draft releases stay unpublished until those
-# external gates are completed and recorded.
+# Each native runner builds and uploads its own versioned ELF package family.
+# The CPU architecture, NVIDIA userspace, CUDA toolchain, and TensorRT ABI are
+# part of the package contract; the portable CUDA device-code setting does not
+# make x86_64 and AArch64 interchangeable.
 on:
   workflow_dispatch:
     inputs:
@@ -24,6 +24,8 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
+
+      - uses: docker/setup-buildx-action@v3
 
       - name: Verify exact tagged source
         run: |
@@ -69,8 +71,57 @@ jobs:
         run: |
           gh release upload "$NVCR_TAG" "$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-x86_64-nvidia.tar.gz" "$RUNNER_TEMP/nvcr-dist/nvcr-$NVCR_TAG-linux-x86_64-nvidia.tar.gz.sha256" --clobber
 
+  build-jetson-aarch64-cross:
+    # The NVIDIA JetPack cross image supplies the target sysroot and compiler;
+    # no architecture-specific host setup is required on this runner.
+    runs-on: self-hosted
+    env:
+      NVCR_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Verify exact tagged x86 host source
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$NVCR_TAG")"
+          test "$(cat version.txt)" = "${NVCR_TAG#v}"
+
+      - name: Build the AArch64 package in NVIDIA's pinned cross image
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/nvcr-dist"
+          docker buildx build \
+            --build-arg "NVCR_VERSION=${NVCR_TAG#v}" \
+            --file docker/Dockerfile.jetson-cross \
+            --output "type=local,dest=$RUNNER_TEMP/nvcr-dist" \
+            .
+          archive="$RUNNER_TEMP/nvcr-dist/nvcr-v${NVCR_TAG#v}-linux-aarch64-jetson-l4t36.tar.gz"
+          checksum="$archive.sha256"
+          test -f "$archive"
+          test -f "$checksum"
+          (cd "$RUNNER_TEMP/nvcr-dist" && sha256sum -c "$(basename "$checksum")")
+          archive_list="$RUNNER_TEMP/nvcr-archive-list.txt"
+          tar -tzf "$archive" >"$archive_list"
+          grep -qx "nvcr-v${NVCR_TAG#v}-linux-aarch64-jetson-l4t36/PACKAGE-MANIFEST.sha256" "$archive_list"
+          if grep -Eq '(\.plan|\.engine|\.onnx|\.pth(\.tar)?)$|/(i|p)_(entropy|quant)\.bin$|/engine_manifest\.json$|/engine\.sha256$' "$archive_list"; then
+            echo "release archive contains forbidden model or engine assets" >&2
+            exit 1
+          fi
+
+      - name: Upload cross-built AArch64 archive to draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$NVCR_TAG" "$RUNNER_TEMP/nvcr-dist/nvcr-v${NVCR_TAG#v}-linux-aarch64-jetson-l4t36.tar.gz" "$RUNNER_TEMP/nvcr-dist/nvcr-v${NVCR_TAG#v}-linux-aarch64-jetson-l4t36.tar.gz.sha256" --clobber
+
   manual-reference-gates:
-    needs: [build-self-hosted-x86_64]
+    needs: [build-self-hosted-x86_64, build-jetson-aarch64-cross]
     runs-on: self-hosted
     steps:
       - name: Record remaining manual gates
@@ -81,7 +132,6 @@ jobs:
           Remaining manual deliverables and gates:
           - run clean-room target validation on the recorded RTX 4070 reference target;
           - run clean-room target validation on the recorded Jetson Orin Nano reference target;
-          - build and upload the `linux-aarch64-jetson-l4t36` archive on the validated Jetson target;
           - record correctness, performance, memory, and energy evidence in `ROADMAP.md`;
           - publish the draft release manually only after the required release-track gates pass.
           EOF

@@ -40,6 +40,8 @@ jobs:
               - 'examples/**'
               - 'third_party/**'
               - 'tools/**'
+              - 'docker/**'
+              - 'cmake/toolchains/**'
               - 'scripts/**'
               - '.github/workflows/ci.yml'
             release_surface:
@@ -55,6 +57,8 @@ jobs:
               - 'examples/**'
               - 'third_party/**'
               - 'tools/**'
+              - 'docker/**'
+              - 'cmake/toolchains/**'
               - 'scripts/**'
               - '.github/workflows/ci.yml'
               - '.github/workflows/release-assets.yml'
