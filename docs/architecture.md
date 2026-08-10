@@ -58,4 +58,7 @@ A TensorRT bundle is target-local and must pass manifest and checksum validation
 
 ## Current limits
 
-The runtime API is usable but not ABI-frozen. Plane/stride ownership, a stable public session API, a C ABI, additional codecs, FFmpeg, and standard container mapping remain future work. See [Scope and support](scope-and-support.md) and [the accepted ADRs](adr/ADR-001-codec-provider-separation.md).
+The runtime API is usable but not ABI-frozen. Plane/stride ownership, a stable
+public session API, additional execution runtimes, additional codecs, a C ABI,
+FFmpeg, and standard container mapping remain future work. See [Scope and
+support](scope-and-support.md) and [the accepted ADRs](adr/ADR-001-codec-provider-separation.md).

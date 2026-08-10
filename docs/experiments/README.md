@@ -25,7 +25,7 @@ The claim is narrow: NVCR provides a reproducible native runtime around this one
 6. [Missing-data checklist](missing-data-checklist.md)
 7. [Input manifest example](softwarex-inputs.example.json)
 
-## Current state
+## What the tools provide
 
 The repository has device detection, target profiles, artifact validation,
 target-local engine building, Docker/Compose workflows, the lower-level
@@ -33,12 +33,6 @@ target-local engine building, Docker/Compose workflows, the lower-level
 `scripts/benchmark_softwarex_matrix.py`. The driver validates profile digests
 and target identity before execution, runs registered build/test gates, captures
 the complete result schema, and writes the evidence package described below.
-
-Checked-in target profiles cover RTX 4070, RTX 5060 Laptop, and Jetson Orin
-Nano. RTX 3050 exact remains blocked on a checked-in profile. A 2026-08-06
-preflight on the RTX 4070 found that the host and local engines use TensorRT
-10.9; the target profile now uses the same stack, while all bundles must still
-be rebuilt from the current model-profile digest before a clean exact run.
 
 The driver is tested automation, not evidence by itself. A result package is
 complete only when it records a clean commit, current artifacts, registered and

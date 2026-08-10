@@ -2,16 +2,17 @@
 
 This page is the short support matrix. The detailed product boundary is in [Scope and support](scope-and-support.md).
 
-## Current target profiles
+## Target profiles
 
-| Profile | Platform | Engine requirement | Status |
+| Profile | Platform | Engine requirement |
 |---|---|---|---|
-| `rtx3050-laptop-ubuntu2404` | Linux x86_64, RTX 3050 Laptop, SM detected on target | Exact target-local plans | Profile absent; staged assets are not validated evidence |
-| `rtx4070-ubuntu2404` | Linux x86_64, RTX 4070, SM 8.9 | Exact TensorRT 10.9 and target-local plans | Blocked: local bundles predate the current model profile |
-| `rtx5060-laptop-ubuntu2404` | Linux x86_64, RTX 5060 Laptop, SM 12.0 in current profile | Exact TensorRT version and target-local plans | Profile exists; validation pending |
-| `orin-nano-l4t3647` | Linux aarch64, Jetson Orin Nano, SM 8.7 | Exact TensorRT and CUDA runtime, target-local plans | Validation pending after refactor rerun |
+| `rtx3050-laptop-ubuntu2404` | Linux x86_64, RTX 3050 Laptop | Exact target-local plans |
+| `rtx4070-ubuntu2404` | Linux x86_64, RTX 4070, SM 8.9 | Exact TensorRT 10.9 and target-local plans |
+| `rtx5060-laptop-ubuntu2404` | Linux x86_64, RTX 5060 Laptop | Exact target-local plans and TensorRT version |
+| `orin-nano-l4t3647` | Linux aarch64, Jetson Orin Nano, SM 8.7 | Exact TensorRT and CUDA runtime, target-local plans |
 
-Other NVIDIA Linux systems may build and run, but they are not support targets until they have a target profile and clean evidence.
+The profiles identify validation targets. A profile does not by itself mean
+that the target has passed the support gates.
 
 The complete exact/same-compute/Ampere-plus experiment rules are in [Hardware targets](experiments/hardware-targets.md) and [Compatibility levels](experiments/compatibility-levels.md).
 

@@ -42,7 +42,7 @@ Binary packages do not contain checkpoints, exported model assets, or TensorRT p
 
 ```bash
 ./scripts/package_release.sh \
-  --version 0.3.0 \
+  --version 0.16.0 \
   --platform linux-x86_64-nvidia \
   --install-prefix /path/to/install \
   --output-dir dist
@@ -50,10 +50,9 @@ Binary packages do not contain checkpoints, exported model assets, or TensorRT p
 
 Target-local engine bundles are published separately through the rolling `engine-assets` catalog after validation.
 
-The release workflow cross-compiles the Jetson binary automatically from
-x86_64 using NVIDIA's signed JetPack 6.1 cross-compilation image. For local
-cross-builds, an extracted JetPack/L4T root filesystem and CUDA cross toolkit
-can be supplied to `cmake/toolchains/jetson-aarch64.cmake`:
+The release workflow builds the Jetson binary natively on a Jetson runner. For
+local cross-builds, an extracted JetPack/L4T root filesystem and CUDA cross
+toolkit can be supplied to `cmake/toolchains/jetson-aarch64.cmake`:
 
 ```bash
 export NVCR_JETSON_SYSROOT=/opt/nvcr/sysroots/l4t-36.4

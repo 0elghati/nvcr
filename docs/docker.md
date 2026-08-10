@@ -65,7 +65,7 @@ emulation is not used for that image.
 To consume a published amd64 image with Compose:
 
 ```bash
-export NVCR_X86_64_IMAGE="omarelghati/nvcr:0.7.0-amd64-cuda12.8-trt10.9"
+export NVCR_X86_64_IMAGE="omarelghati/nvcr:0.16.0-amd64-cuda12.8-trt10.9"
 export NVCR_INPUT_DIR="/path/to/yuv-input"
 export NVCR_OUTPUT_DIR="/path/to/nvcr-output"
 
@@ -289,11 +289,11 @@ docker compose -f docker/compose.jetson.yaml run --rm --build nvcr --help
 ```
 
 The public `l4t-jetpack:r36.4.0` base supplies the JetPack 6.1 CUDA 12.6 and
-TensorRT 10.3 userspace. The reference target remains the newer recorded
-`orin-nano-l4t3647` host. A successful image build is therefore development
-convenience, not target-support evidence; run the complete registered GPU suite
-and the roadmap protocol on that host. The NVIDIA runtime must expose `/dev/nvmap`
-and the required `/dev/nvhost-*` devices or CUDA tests cannot pass.
+TensorRT 10.3 userspace. A successful image build does not by itself establish
+target support. Run the registered GPU suite and the [evaluation
+protocol](experiments/README.md) on the native target. The NVIDIA runtime must
+expose `/dev/nvmap` and the required `/dev/nvhost-*` devices or CUDA tests
+cannot pass.
 
 ## Dev Containers
 

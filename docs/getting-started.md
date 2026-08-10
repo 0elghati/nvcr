@@ -1,10 +1,36 @@
 # Getting started
 
-There are two useful starting points: a CPU build for the public contracts, or a native TensorRT build for DCVC-RT.
+The [project overview](../README.md) is the quickest path for installation and
+basic use. This page covers source checkouts, model preparation, and native
+testing.
 
-## CPU build
+## Prebuilt installation
 
-Requirements: CMake 3.24+, a C++20 compiler, and a standard Linux development environment.
+On a Linux NVIDIA system, the installer downloads the binary and compatible
+TensorRT engine profiles:
+
+```bash
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+  https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
+export PATH="$HOME/.local/nvcr/bin:$PATH"
+```
+
+See [Compatibility](compatibility.md) if the installer cannot find a matching
+engine bundle.
+
+## Build from source
+
+For a native TensorRT build, use Linux with CMake 3.24 or newer, a C++20
+compiler, CUDA, and TensorRT:
+
+```bash
+cmake -S . -B build-release \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DNVCR_ENABLE_TENSORRT=ON
+cmake --build build-release --parallel
+```
+
+For the CPU library and contract tests only:
 
 ```bash
 cmake -S . -B build-cpu \
@@ -14,22 +40,11 @@ cmake --build build-cpu --parallel
 ctest --test-dir build-cpu --output-on-failure
 ```
 
-This covers parsing, rANS, configuration, artifact identity, and the test codec/provider. It does not encode DCVC-RT frames.
+## Prepare model and engine files
 
-## TensorRT build
-
-Use the CUDA and TensorRT versions named by the target profile. Build engines on the machine that will run them; TensorRT plans are not portable between GPU models or TensorRT runtimes.
-
-```bash
-cmake -S . -B build-release \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DNVCR_ENABLE_TENSORRT=ON
-cmake --build build-release --parallel
-```
-
-## Prepare a target
-
-NVCR does not ship checkpoints, exported model assets, or plans. Obtain the pinned checkpoints under their applicable terms, then run the artifact front end with a local DCVC-RT checkout:
+NVCR does not ship checkpoints, exported model files, or TensorRT plans. The
+offline preparation environment needs PyTorch, ONNX, and ONNXScript. Use the
+artifact front end with the pinned DCVC-RT checkout and a target profile:
 
 ```bash
 ./scripts/nvcr_artifacts.py prepare \
@@ -42,20 +57,19 @@ NVCR does not ship checkpoints, exported model assets, or plans. Obtain the pinn
   --python /path/to/python
 ```
 
-The offline Python environment needs `torch`, `onnx`, and `onnxscript`. Python is not a runtime dependency.
-
-Validate both stages before use:
+Validate both outputs before use:
 
 ```bash
 ./scripts/nvcr_artifacts.py validate build/models/dcvcrt --json
 ./scripts/nvcr_artifacts.py validate build/engines/dcvcrt-720p --json
 ```
 
-The exact source, checkpoint, target, and bundle rules are in [Model and engine preparation](dcvcrt-artifacts.md).
+The complete source, checkpoint, target, and bundle rules are in [Model and
+engine preparation](dcvcrt-artifacts.md).
 
 ## Run the CLI
 
-The CLI uses planar 8-bit YUV420:
+The CLI reads and writes planar 8-bit YUV420:
 
 ```bash
 ./build-release/cli/nvcr encode \
@@ -66,17 +80,13 @@ The CLI uses planar 8-bit YUV420:
   -i output.nvcr -o reconstructed.yuv
 ```
 
-An installed package can fetch a compatible binary and engine set with the convenience installer:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
-```
-
-Use [Compatibility](compatibility.md) before treating a target as supported, and [Docker](docker.md) for the architecture-specific test images.
+See the [command line reference](cli.md) for engine installation, quality
+metrics, and diagnostic options.
 
 ## Full native test run
 
-Configure CMake with a complete target-local engine collection. Then build and run:
+To run the complete configured test suite, provide a target-local collection of
+engine profiles:
 
 ```bash
 cmake -S . -B build-release-clean \
@@ -88,4 +98,5 @@ cmake --build build-release-clean --parallel
 ctest --test-dir build-release-clean --output-on-failure
 ```
 
-The registered test list is the authority for what that configuration actually exercised.
+The registered test list is the authority for what that configuration
+exercised.

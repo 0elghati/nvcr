@@ -24,12 +24,6 @@ process polling, or `nvidia-smi` polling. `--profile` adds separate repetitions
 for latency, PSNR, and memory. Never substitute profile-pass throughput for the
 clean-pass values.
 
-## Current evidence
-
-The retained file [resolution-matrix.jsonl](../evidence/live-release-20260806/resolution-matrix.jsonl) is the latest local diagnostic summary. It predates this documentation cleanup and is not a clean v1 release result. The next run will replace it after the refactor branch is merged and the target is rebuilt.
-
-Raw streams are local run products and are not part of the documentation set.
-
 ## Run the matrix
 
 The publication driver is the source of the matrix command, result schema, and

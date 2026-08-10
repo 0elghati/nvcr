@@ -283,4 +283,4 @@ compatibility claim is backed by evidence.
   boundary.
 - [`docs/scope-and-support.md`](scope-and-support.md) defines which behavior is
   supported by the current release track.
-- [`ROADMAP.md`](../ROADMAP.md) records the implementation and evidence gates.
+- [`docs/releasing.md`](releasing.md) describes the release and evidence gates.

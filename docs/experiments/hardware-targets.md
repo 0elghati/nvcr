@@ -13,12 +13,12 @@ Record the JSON with the run metadata. It includes OS, architecture, GPU name, c
 
 ## Exact targets
 
-| Requested target | Actual target/profile today | Expected family | State |
+| Requested target | Profile | Expected family |
 |---|---|---|---|
-| RTX 3050 exact | No checked-in profile | Usually SM 8.6 | Blocked: add a profile for the actual staged Laptop target and validate it |
-| RTX 4070 exact | `rtx4070-ubuntu2404` | SM 8.9 | Blocked: current host/local engines must be rebuilt from the current model profile |
-| RTX 5060 exact | `rtx5060-laptop-ubuntu2404` | Detect exact Blackwell SM | Profile exists for the Laptop GPU; do not rename it to a generic RTX 5060 target |
-| Jetson Orin Nano exact | `orin-nano-l4t3647` | SM 8.7 | Profile exists; validation is incomplete |
+| RTX 3050 exact | `rtx3050-laptop-ubuntu2404` | Detect the target SM |
+| RTX 4070 exact | `rtx4070-ubuntu2404` | SM 8.9 |
+| RTX 5060 exact | `rtx5060-laptop-ubuntu2404` | Detect the target SM |
+| Jetson Orin Nano exact | `orin-nano-l4t3647` | SM 8.7 |
 
 The target profile is part of the experiment identity. It binds the OS/platform, GPU family, CUDA, TensorRT, compiler expectations, and FP16 precision. The detected values and the profile must agree before an exact run is accepted.
 
@@ -48,10 +48,8 @@ hardware_compatibility
 ## Practical rules
 
 - Exact artifacts are the primary SoftwareX evidence.
-- RTX 3050 cannot be claimed until `configs/targets/` contains a matching profile and a complete engine set has passed validation.
-- RTX 4070 exact cannot be claimed until the checked-in TensorRT identity is
-  reconciled with the actual 10.9 host and the complete engine set is rebuilt
-  from the current model profile.
+- Each target requires a matching profile and a complete engine set that has
+  passed validation before it can be claimed as exact evidence.
 - The RTX 5060 profile currently names the Laptop GPU. Detect the real SM on the target and add a separate profile if a different RTX 5060 device is evaluated.
 - Jetson/L4T uses exact target-local engines only.
 - Do not copy desktop plans to Jetson or Jetson plans to desktop.
