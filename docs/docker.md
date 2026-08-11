@@ -4,6 +4,7 @@ Choose one complete platform guide:
 
 - [Jetson Orin / L4T 36.4](docker-jetson.md)
 - [x86_64 Linux / NVIDIA GPU](docker-x86_64.md)
+- [Windows host with Docker Desktop and WSL 2](docker-windows.md)
 
 There is no shared image because the CPU architecture and NVIDIA userspace
 differ. TensorRT engines also remain target-specific.
@@ -25,6 +26,10 @@ Images contain the runtime and catalog installer, but no engines, models,
 datasets, or output. The platform guide installs engines once into the managed
 volume and uses Xiph's `akiyo_qcif.yuv` example.
 
+The Windows guide runs the Linux/amd64 image from WSL 2 through Docker
+Desktop. It is a containerized Linux execution path, not native Windows
+support.
+
 The `latest-*` tags are architecture-qualified rolling aliases. Pin an
-immutable image tag such as `0.18.0-amd64-cuda12.8-trt10.9` when reproducing a
+immutable image tag such as `0.19.1-amd64-cuda12.8-trt10.9` when reproducing a
 specific release. There is intentionally no shared unqualified `latest` tag.

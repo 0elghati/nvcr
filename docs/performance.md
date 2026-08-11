@@ -60,3 +60,27 @@ warm-up run; payload/BPP; PSNR-Y/U/V/YUV; latency; host/GPU memory; and a clean
 pinned-Python comparison for every RTX 4070 exact case.
 
 Energy is optional investigation data, not a v1 release blocker.
+
+## Direct Docker benchmark
+
+The native diagnostic matrix can be run inside a pulled x86_64 runtime image
+without Docker Compose:
+
+```bash
+scripts/benchmark_docker.sh \
+  --image omarelghati/nvcr:0.19.1-amd64-cuda12.8-trt10.9 \
+  --input-dir /data/nvcr/yuv \
+  --engine-volume nvcr-engines \
+  --results-dir evidence/performance/rtx4070-docker \
+  --hardware rtx4070-docker \
+  -- \
+  --resolutions "qcif cif 360p 720p 1080p" \
+  --frames 300 --qp 32 --gops "1 299" --repetitions 3
+```
+
+The launcher performs `docker pull`, mounts the input directory read-only, the
+engine volume read-only, and evidence/output directories as writable mounts.
+Rows contain codec-reported throughput plus process wall-time throughput,
+which includes container process startup and is the metric to compare against
+the native run. The launcher defaults to container user `0:0` for NVIDIA
+device compatibility; pull an immutable image tag when retaining evidence.

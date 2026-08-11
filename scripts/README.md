@@ -16,6 +16,7 @@ The runtime does not depend on Python. These scripts prepare artifacts, package 
 | `ci/check_jetson_cross_toolchain.sh` | Validate the x86-hosted Jetson cross-build environment |
 | `benchmark_softwarex_matrix.py` | Validate and run the publication matrix; write a complete evidence package |
 | `benchmark_resolution_matrix.sh` | Run the lower-level diagnostic resolution matrix |
+| `benchmark_docker.sh` | Pull an NVCR runtime image and run the same diagnostic matrix with `docker run` |
 | `profile_energy.py` | Capture optional Jetson energy measurements |
 
 ## Prepare and validate
@@ -105,6 +106,33 @@ scripts/benchmark_resolution_matrix.sh \
   --output-dir /tmp/nvcr-performance-streams \
   --hardware rtx4070
 ```
+
+For the equivalent pulled Docker runtime, use the direct Docker launcher. It
+records the resolved image identity and adds full process wall-time throughput
+to the same diagnostic rows:
+
+```bash
+scripts/benchmark_docker.sh \
+  --image omarelghati/nvcr:0.19.1-amd64-cuda12.8-trt10.9 \
+  --input-dir /data/nvcr/yuv \
+  --engine-volume nvcr-engines \
+  --results-dir evidence/performance/rtx4070-docker \
+  --hardware rtx4070-docker \
+  -- \
+  --resolutions "qcif 720p" \
+  --frames 300 \
+  --gops "1 299" \
+  --repetitions 3 \
+  --warmup-frames 10
+```
+
+The named engine volume must contain bundles installed for the same GPU,
+CUDA, and TensorRT runtime. Add `--install-profiles "qcif 720p"` to install
+those profiles before the measured run. Compare native and Docker results by
+`process_throughput_fps`; codec throughput remains useful for diagnosing
+runtime-only changes. The launcher defaults to container user `0:0` for
+NVIDIA device compatibility; use `--user UID:GID` only when non-root access is
+known to work on the target.
 
 With the standard sibling layout, `--engine-root` resolves each selected label
 to `dcvcrt-<resolution>` under that directory. The existing per-resolution

@@ -46,7 +46,7 @@ not count as additional production codecs/providers or performance baselines.
 | TensorRT provider path | Implemented | Keep provider-owned boundary explicit; split model stages only with a new production integration |
 | Binary and container packaging | Implemented | Complete license, provenance, and clean-package checks |
 | Exact-target artifacts | In progress | Produce current warning-free profile sets and target-local evidence |
-| Reproducible evaluation | In progress | Complete exact matrices and pinned Python comparisons |
+| Reproducible evaluation | In progress | Complete exact native and direct-Docker matrices plus pinned Python comparisons |
 | Compatibility classes | Experimental | Compare against complete exact baselines |
 | Public C++ API/ABI | Transitional | Freeze only after ownership and compatibility contracts are accepted |
 
