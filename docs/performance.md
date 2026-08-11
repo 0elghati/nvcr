@@ -84,3 +84,11 @@ Rows contain codec-reported throughput plus process wall-time throughput,
 which includes container process startup and is the metric to compare against
 the native run. The launcher defaults to container user `0:0` for NVIDIA
 device compatibility; pull an immutable image tag when retaining evidence.
+
+## Current comparison and portability boundary
+
+The benchmark comparison is based on bare-metal Linux measurements. The RTX
+3050 and RTX 5060 Docker benchmark runs are portability checks: they verify
+that the pulled Linux/amd64 runtime and target-local TensorRT bundles execute
+on those GPUs. They are not additional bare-metal performance baselines, and
+their Docker FPS must not be pooled with the bare-metal Linux comparison.

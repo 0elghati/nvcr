@@ -316,6 +316,14 @@ scripts/benchmark_docker.sh \
 Use `process_throughput_fps` for the native-versus-Docker comparison. The
 codec-reported FPS is retained separately for runtime diagnostics.
 
+### Evidence boundary
+
+The reported performance comparison uses bare-metal Linux measurements. The
+RTX 3050 and RTX 5060 Docker benchmark runs are portability checks only; they
+confirm container/runtime and target-local TensorRT-bundle execution on those
+GPUs. Do not present those Docker runs as additional bare-metal baselines or
+pool their FPS with the bare-metal Linux comparison.
+
 ## 12. Accept the package
 
 Open `run-summary.json`, `test-summary.json`, `failures.jsonl`, and
