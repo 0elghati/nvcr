@@ -55,4 +55,4 @@ class NvcrReleaseAssetsStack(cdk.Stack):
 
         CfnOutput(self, "BucketName", value=bucket.bucket_name)
         CfnOutput(self, "BucketRegion", value=release_region)
-        CfnOutput(self, "ExampleS3Uri", value=f"s3://{bucket.bucket_name}/v0.3.0/")
+        CfnOutput(self, "ExampleS3Uri", value=f"s3://{bucket.bucket_name}/releases/")

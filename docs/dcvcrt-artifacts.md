@@ -4,9 +4,11 @@ NVCR v1 prepares exactly one profile: `dcvcrt-cvpr2025`. It does not convert
 arbitrary PyTorch models. Preparation is offline; deployed NVCR does not load
 Python, PyTorch, or checkpoint files.
 
-NVCR releases ship no checkpoints, ONNX graphs, entropy/quant assets, or TensorRT
-plans. Users obtain the checkpoints under their applicable terms and build all
-derived bundles locally.
+Generic NVCR releases ship no checkpoints, ONNX graphs, entropy/quant assets,
+or TensorRT plans. Compatible validated engine bundles may be installed from
+the separate public rolling catalog. Users of targets without a catalog match
+obtain checkpoints under their applicable terms and build derived bundles
+locally.
 
 ## Bound source and checkpoints
 
@@ -168,9 +170,9 @@ hard failures; do not bypass this check by mixing files from separate exports.
 Never copy an RTX plan to Orin, or an engine across a different GPU model,
 CUDA/TensorRT runtime, or model export. Rebuild on the final target.
 
-If engine bundles are retained internally for CI or reviewer convenience, store
-them under `dcvcrt-cvpr2025/<target-profile>/<engine-profile>/` rather than by
-resolution name alone.
+Store retained engine bundles under
+`dcvcrt-cvpr2025/<target-profile>/<engine-profile>/` rather than by resolution
+name alone.
 
 For the rolling GitHub engine release, package a validated bundle as:
 
@@ -191,10 +193,10 @@ The archive contains one `dcvcrt/` engine bundle plus
 not part of the generic `linux-x86_64-nvidia` or `linux-aarch64-jetson-l4t36`
 binary packages.
 
-If a future reviewer-convenience path adds compatibility-mode discrete-GPU
-engines, treat them as a separate non-default engine class and record the chosen
-compatibility mode in the engine manifest and support docs. Jetson/L4T is not
-part of that portability path; build Jetson engines on the final target.
+Compatibility-mode discrete-GPU engines are a separate non-default engine class.
+Record the selected compatibility mode in the engine manifest and support docs.
+Jetson/L4T is not part of that portability path; build Jetson engines on the
+final target.
 
 Catalog installation never invokes the TensorRT builder. It selects the most
 specialized published compatible bundle for each requested profile (exact

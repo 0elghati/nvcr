@@ -18,6 +18,7 @@ The current product boundary is:
 - Planar 8-bit YUV420 input and output.
 - Stateful I/P GOP operation, reset, flush, and bounded access units.
 - Offline checkpoint/model export and target-local engine preparation.
+- Separate public-catalog installation of validated compatible engine bundles.
 
 The pinned upstream source and checkpoint identities are maintained in [Model and engine preparation](dcvcrt-artifacts.md) and `configs/models/dcvcrt-cvpr2025.json`.
 
@@ -29,22 +30,21 @@ The architecture is extensible, but only DCVC-RT and TensorRT are production imp
 
 ## What is not supported yet
 
-- Additional production codecs or execution runtimes/providers.
+- A second production codec or execution provider.
 - INT8 as a release profile.
 - Windows, macOS, CPU inference, or non-NVIDIA accelerators.
 - A stable C ABI.
 - FFmpeg or standard container integration.
 - Universal TensorRT-plan portability.
-- Redistribution of checkpoints, exported model assets, or TensorRT plans.
+- Checkpoints or exported model assets in generic NVCR packages.
+- TensorRT plans embedded in generic cross-target packages.
 
 `NVCR` and `NVCS` are development file wrappers. `NVAU` is the codec access-unit contract; it is not an MP4, Matroska, or upstream DCVC-RT container.
 
 ## Support rule
 
-A target is supported only after a clean Release build, artifact validation, I/P
-round trip, malformed-input checks, reference comparison, and target-specific
-performance run have passed.
+A target is supported only after a clean Release build, artifact validation,
+I/P round trip, malformed-input checks, reference comparison, and
+target-specific performance run have passed.
 
-Use the target profile and the evidence package to determine whether a target
-has met those requirements. A target profile or a successful build alone does
-not establish support.
+Until then, describe the code as implemented and tested, not as a supported v1 release.

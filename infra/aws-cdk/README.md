@@ -1,4 +1,4 @@
-# NVCR AWS release-asset staging bucket
+# NVCR release-asset transfer infrastructure
 
 This CDK app creates one private S3 bucket used only as temporary staging for
 large release assets before they are copied into GitHub Releases. The bucket is
@@ -70,15 +70,13 @@ After packaging an engine bundle, upload it to S3 and generate the
 
 ```bash
 ./scripts/stage_engine_release_asset.sh \
-  --version 0.16.0 \
   --engine-dir build/engines/dcvcrt-720p \
-  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/engine-assets \
+  --s3-uri s3://nvcr-release-assets-<aws-account-id>-eu-west-1/releases \
   --aws-region eu-west-1 \
   --presign-expires 604800 \
   --asset-manifest dist/nvcr-engine-assets.txt
 ```
 
-Then pass the generated file to the GitHub Actions upload workflow or paste its
-contents into the workflow-dispatch form. GitHub Actions downloads with the
-presigned HTTPS URL, validates the archive, and uploads the final assets to the
-GitHub Release.
+The generated file is the input to the engine-release automation, which
+downloads through the presigned HTTPS URL, validates the archive, and publishes
+the final asset to the GitHub Release.

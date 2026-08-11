@@ -4,18 +4,26 @@ These pages describe the software that exists in this repository. The short vers
 
 ## Start here
 
-1. [Project overview](../README.md)
+1. [Scope and support](scope-and-support.md)
 2. [Getting started](getting-started.md)
-3. [Command line](cli.md)
-4. [Docker](docker.md)
-5. [Compatibility](compatibility.md)
-6. [Scope and support](scope-and-support.md)
-7. [Model and engine preparation](dcvcrt-artifacts.md)
-8. [Architecture](architecture.md)
-9. [C++ API](reference.md)
-10. [Bitstream and access units](bitstream.md)
-11. [Performance protocol](performance.md)
+3. [Architecture](architecture.md)
+4. [Model and engine preparation](dcvcrt-artifacts.md)
+5. [CLI](cli.md)
+6. [Bitstream and access units](bitstream.md)
+7. [C++ API](reference.md)
+8. [Compatibility](compatibility.md)
+9. [Performance protocol](performance.md)
+10. [SoftwareX experiment protocol](experiments/README.md)
+11. [Docker overview](docker.md)
+    - [Jetson Orin](docker-jetson.md)
+    - [x86_64 NVIDIA](docker-x86_64.md)
 12. [Release policy](releasing.md)
+
+## Distribution and licensing
+
+- [Asset distribution policy](../ASSET_DISTRIBUTION_POLICY.md)
+- [Model and checkpoint licensing](../MODEL_LICENSES.md)
+- [Third-party notices](../THIRD_PARTY_NOTICES.md)
 
 ## Contracts
 
@@ -29,7 +37,15 @@ These pages describe the software that exists in this repository. The short vers
 ## Current boundary
 
 NVCR currently has one production execution path: DCVC-RT with the TensorRT
-backend. The static registry, provider API, and artifact resolver support that
-path, but no second production codec or provider exists.
+backend. Production component creation is provider-mediated through
+`RuntimeServices`; TensorRT remains the only production provider, and its
+component implementation remains monolithic. No second production codec or
+provider exists.
 
-The release is Linux-only, FP16-only, and target-local for TensorRT engines. Checkpoints, exported model assets, and plans are excluded from generic packages.
+The release is Linux-only and FP16-only. Checkpoints, exported model assets,
+and plans are excluded from generic packages; validated compatible engines are
+installed separately from the public rolling catalog or built on the target.
+
+The latest machine-readable performance matrix is kept under `../evidence/`.
+Its recorded completion status determines whether it is publication evidence
+or a diagnostic result.
