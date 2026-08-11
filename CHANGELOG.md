@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0](https://github.com/0elghati/nvcr/compare/v0.20.0...v0.21.0) (2026-08-11)
+
+
+### Features
+
+* docker windows for benchmark ([#121](https://github.com/0elghati/nvcr/issues/121)) ([109d8b6](https://github.com/0elghati/nvcr/commit/109d8b6405fd7e6254b0b613cbb3703ea4c95d86))
+
 ## [0.20.0](https://github.com/0elghati/nvcr/compare/v0.19.1...v0.20.0) (2026-08-11)
 
 
