@@ -1,19 +1,21 @@
-# NVCR
+# NVCR — Neural Video Codec Runtime
 
-NVCR is a native C++ runtime architecture for neural video codecs.
+Neural video codecs like DCVC-RT are usually shipped as research code: a
+Python reference implementation tied to one model checkpoint and one
+inference stack. NVCR is our attempt at the systems layer that's missing
+around that research code, so a learned codec can be operated the way a
+regular video codec is operated: stateful encoder/decoder sessions, clean
+codec-adapter and execution-provider boundaries, target-aware artifact
+selection, and a bounded, versioned access-unit format. NVCR is not a new
+compression model, and it's not just a C++ port of DCVC-RT.
 
-It provides the systems layer needed to operate learned codecs through
-stateful encoder and decoder sessions, codec-adapter and execution-provider
-contracts, target-aware artifact selection, and bounded, versioned neural-codec
-access units. NVCR is neither a new compression model nor merely a C++ port of
-DCVC-RT.
-
-The first complete production vertical is DCVC-RT through TensorRT FP16 on
-Linux/NVIDIA targets. That vertical validates the architecture end to end; it
-does not define the long-term boundary of NVCR. The architecture is
-codec-extensible, but DCVC-RT is currently the only production codec and
-TensorRT is currently the only production provider. The deterministic test
-codec and CPU provider are conformance fixtures, not additional products.
+Right now the only complete production vertical is DCVC-RT running through
+TensorRT FP16 on Linux/NVIDIA targets. That vertical is what proves the
+architecture actually works end to end, but it isn't the ceiling — the design
+is meant to be codec-extensible, DCVC-RT and TensorRT are just the first
+codec and provider we've finished. The deterministic test codec and CPU
+provider that ship alongside them are conformance fixtures for the test
+suite, not additional products.
 
 ## What NVCR provides
 
