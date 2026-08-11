@@ -14,9 +14,10 @@
   "updateRemoteUserUID": true,
   "workspaceFolder": "/workspace/nvcr",
   "mounts": [
-    "source=nvcr-jetson-build,target=/workspace/nvcr/build-devcontainer,type=volume"
+    "source=nvcr-jetson-build,target=/workspace/nvcr/build-devcontainer,type=volume",
+    "source=nvcr-aws,target=/home/nvcr/.aws,type=volume"
   ],
-  "postCreateCommand": "sudo chown -R nvcr:nvcr build-devcontainer && cmake -S . -B build-devcontainer -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=87 -DNVCR_ENABLE_TENSORRT=ON",
+  "postCreateCommand": "sudo mkdir -p \"$HOME/.aws\" && sudo chown -R nvcr:nvcr \"$HOME/.aws\" build-devcontainer && cmake -S . -B build-devcontainer -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=87 -DNVCR_ENABLE_TENSORRT=ON",
   "customizations": {
     "vscode": {
       "extensions": [
