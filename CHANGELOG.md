@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/0elghati/nvcr/compare/v0.19.0...v0.19.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* **docker:** removed AWS cli v2 ([#117](https://github.com/0elghati/nvcr/issues/117)) ([e01f4a4](https://github.com/0elghati/nvcr/commit/e01f4a412a5925bcb5423afa7711e25deaa303f4))
+
 ## [0.19.0](https://github.com/0elghati/nvcr/compare/v0.18.2...v0.19.0) (2026-08-11)
 
 
