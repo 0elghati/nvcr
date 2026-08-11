@@ -1,51 +1,82 @@
-# Documentation
+# Documentation map
 
-These pages describe the software that exists in this repository. The short version is on the [project overview](../README.md); this page is the map.
+NVCR is a native runtime architecture for neural video codecs. The first
+complete production vertical is DCVC-RT with TensorRT FP16 on Linux/NVIDIA
+targets. Start with the canonical [identity and scope](identity-and-scope.md)
+when a document or claim needs architectural context.
 
-## Start here
+## New users
 
-1. [Scope and support](scope-and-support.md)
-2. [Getting started](getting-started.md)
-3. [Architecture](architecture.md)
-4. [Model and engine preparation](dcvcrt-artifacts.md)
-5. [CLI](cli.md)
-6. [Bitstream and access units](bitstream.md)
-7. [C++ API](reference.md)
-8. [Compatibility](compatibility.md)
-9. [Performance protocol](performance.md)
-10. [SoftwareX experiment protocol](experiments/README.md)
-11. [Docker overview](docker.md)
-    - [Jetson Orin](docker-jetson.md)
-    - [x86_64 NVIDIA](docker-x86_64.md)
-12. [Release policy](releasing.md)
+- [Getting started](getting-started.md)
+- [CLI](cli.md)
+- [Docker overview](docker.md)
+  - [x86_64 NVIDIA](docker-x86_64.md)
+  - [Jetson Orin](docker-jetson.md)
+- [Compatibility and target support](compatibility.md)
 
-## Distribution and licensing
+## Runtime and architecture
 
+- [Identity and scope](identity-and-scope.md)
+- [Architecture](architecture.md)
+- [C++ API reference](reference.md)
+- [Scope and support](scope-and-support.md)
+- [Architecture decisions](adr/ADR-001-codec-provider-separation.md)
+
+## Codec and provider developers
+
+- [Extending NVCR](extending-nvcr.md)
+- [DCVC-RT integration](dcvcrt-integration.md)
+- [Conformance levels](adr/ADR-005-conformance-levels.md)
+
+## Artifacts and deployment
+
+- [DCVC-RT model and engine preparation](dcvcrt-artifacts.md)
+- [Compatibility classes](experiments/compatibility-levels.md)
+- [Release policy](releasing.md)
+- [Docker overview](docker.md)
+
+## Streams and access units
+
+- [Bitstream and access-unit contract](bitstream.md)
+- [Elementary stream specification](spec/nvcr-elementary-stream-v1.md)
+- [Neural access-unit envelope direction](neural-bitstream-envelope.md)
+
+## Validation and reproducibility
+
+- [Performance protocol](performance.md)
+- [Reproducible experiments](experiments/README.md)
+- [Evaluation protocol](experiments/evaluation-protocol.md)
+- [Runbook](experiments/runbook.md)
+- [Result schema](experiments/result-schema.md)
+- [Missing-data checklist](experiments/missing-data-checklist.md)
+
+## Release and governance
+
+- [Roadmap](../ROADMAP.md)
+- [Contributing](../CONTRIBUTING.md)
+- [Support](../SUPPORT.md)
+- [Security](../SECURITY.md)
+- [Citation](../CITATION.cff)
 - [Asset distribution policy](../ASSET_DISTRIBUTION_POLICY.md)
 - [Model and checkpoint licensing](../MODEL_LICENSES.md)
 - [Third-party notices](../THIRD_PARTY_NOTICES.md)
 
-## Contracts
+## Current production integration
 
-- [DCVC-RT integration](dcvcrt-integration.md)
-- [Neural codec envelope direction](neural-bitstream-envelope.md)
-- [Elementary stream specification](spec/nvcr-elementary-stream-v1.md)
-- [Architecture decisions](adr/ADR-001-codec-provider-separation.md)
-- [SoftwareX experiment protocol](experiments/README.md)
-- [SoftwareX executable runbook](experiments/runbook.md)
+The only production codec/provider pair is DCVC-RT/TensorRT. The test codec
+and CPU provider are deterministic conformance fixtures. TensorRT's public
+provider contract is implemented, but its production path currently creates a
+provider-owned monolithic DCVC-RT backend; independent loading of every model
+stage through `IExecutable` remains transitional work.
 
-## Current boundary
+## Reproducibility and review path
 
-NVCR currently has one production execution path: DCVC-RT with the TensorRT
-backend. Production component creation is provider-mediated through
-`RuntimeServices`; TensorRT remains the only production provider, and its
-component implementation remains monolithic. No second production codec or
-provider exists.
-
-The release is Linux-only and FP16-only. Checkpoints, exported model assets,
-and plans are excluded from generic packages; validated compatible engines are
-installed separately from the public rolling catalog or built on the target.
-
-The latest machine-readable performance matrix is kept under `../evidence/`.
-Its recorded completion status determines whether it is publication evidence
-or a diagnostic result.
+1. [Identity and scope](identity-and-scope.md)
+2. [Architecture](architecture.md)
+3. [Getting started](getting-started.md)
+4. [Extension contracts](extending-nvcr.md)
+5. [Stream specification](spec/nvcr-elementary-stream-v1.md)
+6. [Artifact and release model](dcvcrt-artifacts.md)
+7. [Evaluation protocol](experiments/evaluation-protocol.md)
+8. [Evidence package](reproducibility/claims-and-evidence.md)
+9. [License and citation](reproducibility/code-metadata.md)

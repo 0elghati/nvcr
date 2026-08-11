@@ -1,7 +1,10 @@
-# NVCR Elementary Stream Specification (v1)
+# NVCR Elementary Stream Specification (v1/v2)
 
 Status: implemented specification; covered by format and parser tests
-Scope: documents the existing NVAU v1 and NVAU v2 wire formats without changing bytes.
+Scope: documents the existing `NVAU` v1 and `NVAU` v2 wire formats without changing bytes.
+
+The filename is retained for link compatibility. It originated when v1 was the
+only format; this specification now documents both implemented versions.
 
 ## 1. Byte order and primitive widths
 

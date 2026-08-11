@@ -47,7 +47,7 @@ hardware_compatibility
 
 ## Practical rules
 
-- Exact artifacts are the primary SoftwareX evidence.
+- Exact artifacts are the primary publication evidence.
 - RTX 3050 cannot be claimed until the registered profile matches live
   detection and a complete engine set has passed validation.
 - RTX 4070 exact cannot be claimed until the complete engine set is rebuilt

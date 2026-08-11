@@ -1,4 +1,4 @@
-# SoftwareX runbook
+# Reproducible evaluation runbook
 
 Run from a clean repository root on the machine named by the target profile.
 Do not substitute another GPU, invent an input, or reuse an engine after any
@@ -16,11 +16,11 @@ PSNR, and memory in separate repetitions after all primary timing. Omitting the
 flag is useful while tuning, but the resulting package remains `partial`.
 
 `scripts/benchmark_resolution_matrix.sh` remains a lower-level diagnostic. Its
-rows are not SoftwareX evidence.
+rows are diagnostic and are not publication evidence.
 
 ## 1. Supply local inputs
 
-Start from [softwarex-inputs.example.json](softwarex-inputs.example.json) and
+Start from [inputs.example.json](inputs.example.json) and
 create a local manifest using schema `nvcr.softwarex.inputs.v1`. Every entry
 must identify a real planar YUV420P8 file, dimensions, frame rate, fixed frame
 count, profile, sequence ID, and redistribution status.
@@ -30,8 +30,8 @@ and `1080p`. `540p` is optional. Keep the manifest and raw YUV outside Git when
 the source license requires it.
 
 ```bash
-export NVCR_SOFTWAREX_INPUTS=/data/nvcr/softwarex-inputs.json
-python3 -m json.tool "$NVCR_SOFTWAREX_INPUTS"
+export NVCR_EVALUATION_INPUTS=/data/nvcr/evaluation-inputs.json
+python3 -m json.tool "$NVCR_EVALUATION_INPUTS"
 python3 scripts/nvcr_device.py > /tmp/nvcr-device.json
 git rev-parse HEAD
 git status --short
@@ -107,8 +107,8 @@ Use a fresh directory for the preflight:
 
 ```bash
 python3 scripts/benchmark_softwarex_matrix.py \
-  --output-dir /tmp/nvcr-softwarex-rtx4070-preflight \
-  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --output-dir /tmp/nvcr-evaluation-rtx4070-preflight \
+  --inputs "$NVCR_EVALUATION_INPUTS" \
   --target-profile configs/targets/rtx4070-ubuntu2404.json \
   --engine-root "$ENGINE_ROOT" \
   --profiles qcif cif 360p 720p 1080p \
@@ -123,8 +123,8 @@ Python rows are mandatory for every requested case:
 
 ```bash
 python3 scripts/benchmark_softwarex_matrix.py \
-  --output-dir "evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-rtx4070" \
-  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --output-dir "evidence/evaluation-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-rtx4070" \
+  --inputs "$NVCR_EVALUATION_INPUTS" \
   --target-profile configs/targets/rtx4070-ubuntu2404.json \
   --engine-root "$ENGINE_ROOT" \
   --build-dir build-release \
@@ -148,8 +148,8 @@ step 3, then run:
 ```bash
 export ENGINE_ROOT="$PWD/build/engines-rtx3050-exact"
 python3 scripts/benchmark_softwarex_matrix.py \
-  --output-dir "evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-rtx3050" \
-  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --output-dir "evidence/evaluation-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-rtx3050" \
+  --inputs "$NVCR_EVALUATION_INPUTS" \
   --target-profile configs/targets/rtx3050-laptop-ubuntu2404.json \
   --engine-root "$ENGINE_ROOT" \
   --build-dir build-release-rtx3050 \
@@ -174,8 +174,8 @@ directories as in step 3, then run:
 ```bash
 export ENGINE_ROOT="$PWD/build/engines-rtx5060-laptop-exact"
 python3 scripts/benchmark_softwarex_matrix.py \
-  --output-dir "evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-rtx5060" \
-  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --output-dir "evidence/evaluation-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-rtx5060" \
+  --inputs "$NVCR_EVALUATION_INPUTS" \
   --target-profile configs/targets/rtx5060-laptop-ubuntu2404.json \
   --engine-root "$ENGINE_ROOT" \
   --build-dir build-release-rtx5060 \
@@ -198,8 +198,8 @@ step 3, then run:
 ```bash
 export ENGINE_ROOT="$PWD/build/engines-orin-nano-exact"
 python3 scripts/benchmark_softwarex_matrix.py \
-  --output-dir "evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-orin" \
-  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --output-dir "evidence/evaluation-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-orin" \
+  --inputs "$NVCR_EVALUATION_INPUTS" \
   --target-profile configs/targets/orin-nano-l4t3647.json \
   --engine-root "$ENGINE_ROOT" \
   --build-dir build-release-jetson \
@@ -232,8 +232,8 @@ export ENGINE_ROOT="$PWD/build/engines-linux-amd64-sm89"
   --trtexec "$TRTEXEC"
 
 python3 scripts/benchmark_softwarex_matrix.py \
-  --output-dir "evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-sm89" \
-  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --output-dir "evidence/evaluation-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-sm89" \
+  --inputs "$NVCR_EVALUATION_INPUTS" \
   --target-profile "$TARGET_PROFILE" \
   --engine-root "$ENGINE_ROOT" \
   --build-dir build-release-sm89 \
@@ -265,8 +265,8 @@ export ENGINE_ROOT="$PWD/build/engines-linux-amd64-ampere-plus"
   --trtexec "$TRTEXEC"
 
 python3 scripts/benchmark_softwarex_matrix.py \
-  --output-dir "evidence/softwarex-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-ampere-plus" \
-  --inputs "$NVCR_SOFTWAREX_INPUTS" \
+  --output-dir "evidence/evaluation-$(date +%Y%m%d)-$(git rev-parse --short HEAD)-ampere-plus" \
+  --inputs "$NVCR_EVALUATION_INPUTS" \
   --target-profile "$TARGET_PROFILE" \
   --engine-root "$ENGINE_ROOT" \
   --build-dir build-release-ampere-plus \

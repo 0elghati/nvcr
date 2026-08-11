@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+title: "NVCR: Native runtime architecture for neural video codecs"
+abstract: >-
+  NVCR provides a native C++ runtime architecture for neural video codecs,
+  including stateful sessions, codec/provider contracts, target-aware artifact
+  resolution, bounded access units, and reproducible validation tooling.
+authors:
+  - family-names: "El Ghati"
+    given-names: "Omar"
+  - family-names: "Alaoui-Fdili"
+    given-names: "Othmane"
+  - family-names: "Elghati"
+    given-names: "Hossam"
+  - family-names: "Alioua"
+    given-names: "Nawal"
+  - family-names: "Bouarifi"
+    given-names: "Walid"
+repository-code: https://github.com/0elghati/nvcr
+license: MIT
+version: 0.18.0
+preferred-citation:
+  type: software
+  title: "NVCR: Native runtime architecture for neural video codecs"
+  authors:
+    - family-names: "El Ghati"
+      given-names: "Omar"
+    - family-names: "Alaoui-Fdili"
+      given-names: "Othmane"
+    - family-names: "Elghati"
+      given-names: "Hossam"
+    - family-names: "Alioua"
+      given-names: "Nawal"
+    - family-names: "Bouarifi"
+      given-names: "Walid"
+  year: 2026
+  version: "TO BE FROZEN FOR SUBMISSION"
+  url: https://github.com/0elghati/nvcr
+  note: "SoftwareX DOI: TO BE ASSIGNED AFTER PUBLICATION"

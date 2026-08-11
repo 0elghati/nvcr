@@ -1,6 +1,10 @@
-# DCVC-RT integration
+# The first production codec integration: DCVC-RT
 
-DCVC-RT is NVCR's first and only production codec adapter. It owns GOP decisions, model-component meaning, entropy state, codec-private payloads, and frame/feature references. TensorRT is an execution provider, not part of the codec identity.
+DCVC-RT is NVCR's first complete production codec integration, not the identity
+of NVCR. The adapter owns GOP decisions, model-component meaning, entropy state,
+codec-private payloads, and frame/feature references. TensorRT is an execution
+provider, not part of the codec identity. NVCR core owns sessions, registry and
+services, artifact selection, and bounded access-unit framing.
 
 ## Initialization
 
@@ -16,14 +20,17 @@ An I-frame starts a GOP. P-frames require a valid reference. The encoder reports
 
 ## Payload and compatibility
 
-The native rANS coder and `NVI1`/`NVP1` payload layouts are NVCR implementation details. They are carried inside the bounded `NVAU` contract and are not claimed to be upstream Python bitstreams.
+The native rANS coder and `NVI1`/`NVP1` payload layouts are DCVC-RT adapter
+implementation details. They are carried inside the bounded `NVAU` contract and
+are not claimed to be upstream Python bitstreams.
 
 Python is an offline export and reference-conformance dependency. Cross-runtime payload compatibility remains unclaimed until clean bidirectional golden tests pass.
 
 ## Current limits
 
 Production component creation is provider-mediated through `RuntimeServices`.
-TensorRT still creates the codec backend as one provider-owned component rather
-than exposing each model stage as an independent executable. Stable public
+TensorRT creates the codec backend as one provider-owned monolithic component
+rather than exposing each model stage as an independent executable through
+`IExecutionProvider::load`; that split is transitional. Stable public
 plane/stride ownership, additional production providers, complete target
 performance evidence, and the final v1 release gate remain future work.

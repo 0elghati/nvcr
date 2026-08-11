@@ -4,7 +4,7 @@ Each experiment row is one JSON object in a JSONL file. Required rows use schema
 
 The existing `benchmark_resolution_matrix.sh` writes
 `nvcr.benchmark.resolution-matrix.v1` rows with useful timing and PSNR fields,
-but it does not satisfy this complete SoftwareX schema. Do not silently treat
+but it does not satisfy the complete publication schema. Do not silently treat
 those rows as publication-ready; use `benchmark_softwarex_matrix.py`.
 
 `scripts/benchmark_softwarex_matrix.py` is the schema-producing driver. It

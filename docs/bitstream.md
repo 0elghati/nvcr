@@ -1,14 +1,16 @@
 # Bitstream and access-unit contracts
 
-NVCR v1 separates the codec access unit from application/container metadata.
+The current NVCR stream contract separates the codec access unit from
+application/container metadata.
 All integers below are little-endian.
 
-The current access unit is the DCVC-RT-shaped first version of a broader NVCR
-direction: a common neural codec access-unit envelope with codec-specific
-payload sections. The design direction is documented in
-[Unified neural codec bitstream envelope](neural-bitstream-envelope.md). This
-page documents the implemented `NVAU` v1 syntax and the explicit experimental
-`NVAU` v2 sectioned envelope.
+`NVAU` is NVCR's bounded codec access-unit contract. Version 1 is the narrow
+DCVC-RT-shaped production/default representation; version 2 is the implemented
+generalized sectioned representation. The learned payload remains codec-private
+and is not an upstream DCVC-RT interchange format. The design direction is documented in
+[Neural codec access-unit envelope direction](neural-bitstream-envelope.md).
+This page documents the implemented `NVAU` v1 syntax and the generalized
+sectioned `NVAU` v2 envelope.
 
 ## Codec access unit: `NVAU` version 1
 
@@ -49,8 +51,8 @@ DCVC-RT streams.
 
 ## Sectioned codec access unit: `NVAU` version 2
 
-`NVAU` version 2 is the NVCR-side envelope intended for future NVIF/container
-mapping. It keeps codec samples independent of file/container concerns while
+`NVAU` version 2 is an implemented NVCR-side sectioned envelope that can be
+mapped to future NVIF or standard-container work. It keeps codec samples independent of file/container concerns while
 adding codec identity, ordering, dependency, and typed-section metadata. The
 current runtime can parse v1 and v2 access units. `AccessUnitIO::serialize` still
 writes v1 for compatibility; `AccessUnitIO::serialize_sectioned` writes v2.
@@ -147,7 +149,7 @@ records:
 | Packet size | `u64` | following packet length |
 | Packet | variable | one `NVCR` packet |
 
-`NVCR`/`NVCS` are application development formats. They are not the v1 codec
+`NVCR`/`NVCS` are application/development formats. They are not the v1 codec
 access-unit promise, an upstream DCVC-RT container, MP4, Matroska, or FFmpeg
 integration, and no pre-v1 backward-compatibility promise is made. Temporary
 legacy raw `NVI1`/`NVP1` decode can be enabled per session only for isolated

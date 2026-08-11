@@ -106,7 +106,7 @@
 
 * added RTX3050 profile ([#74](https://github.com/0elghati/nvcr/issues/74)) ([975a150](https://github.com/0elghati/nvcr/commit/975a150ba2fa55e8d41ffbe77eaefbafb1d562e1))
 * artifact resolver provenance ([#68](https://github.com/0elghati/nvcr/issues/68)) ([4c0cf69](https://github.com/0elghati/nvcr/commit/4c0cf69ee6ccce621e11d36dcffeeb8110b013c9))
-* softwarex evidence automation ([#73](https://github.com/0elghati/nvcr/issues/73)) ([fb80dca](https://github.com/0elghati/nvcr/commit/fb80dca933491de794c23bb93970908a062bcf61))
+* evaluation evidence automation ([#73](https://github.com/0elghati/nvcr/issues/73)) ([fb80dca](https://github.com/0elghati/nvcr/commit/fb80dca933491de794c23bb93970908a062bcf61))
 
 
 ### Bug Fixes
@@ -204,61 +204,61 @@
 * Project restructure ([#22](https://github.com/0elghati/nvcr/issues/22)) ([2417a79](https://github.com/0elghati/nvcr/commit/2417a79bf76ff718853d2919e0f295b828b74754))
 * **runtime:** add scoped artifact validation and access-unit workflow ([#18](https://github.com/0elghati/nvcr/issues/18)) ([e6b8666](https://github.com/0elghati/nvcr/commit/e6b8666e3b02ea629fc5274b7a2b828d2d2d261e))
 
-## [0.2.3](https://github.com/0elghati/nvrc/compare/v0.2.2...v0.2.3) (2026-07-22)
+## [0.2.3](https://github.com/0elghati/nvcr/compare/v0.2.2...v0.2.3) (2026-07-22)
 
 
 ### Bug Fixes
 
-* **ci:** pin transitive TensorRT apt dependencies ([#16](https://github.com/0elghati/nvrc/issues/16)) ([16bda86](https://github.com/0elghati/nvrc/commit/16bda867bed1e6696c428adb333fad588a6d1f84))
+* **ci:** pin transitive TensorRT apt dependencies ([#16](https://github.com/0elghati/nvcr/issues/16)) ([16bda86](https://github.com/0elghati/nvcr/commit/16bda867bed1e6696c428adb333fad588a6d1f84))
 
-## [0.2.2](https://github.com/0elghati/nvrc/compare/v0.2.1...v0.2.2) (2026-07-22)
-
-
-### Bug Fixes
-
-* **ci:** release binary runtime deps ([#14](https://github.com/0elghati/nvrc/issues/14)) ([c3eec5c](https://github.com/0elghati/nvrc/commit/c3eec5c159f00fb697782e957d9379f7d77790c5))
-
-## [0.2.1](https://github.com/0elghati/nvrc/compare/v0.2.0...v0.2.1) (2026-07-22)
+## [0.2.2](https://github.com/0elghati/nvcr/compare/v0.2.1...v0.2.2) (2026-07-22)
 
 
 ### Bug Fixes
 
-* **ci:** Pass repository path to fix release please issue ([#12](https://github.com/0elghati/nvrc/issues/12)) ([9c6d135](https://github.com/0elghati/nvrc/commit/9c6d13522d7949b86d158c02f68899d77e944910))
+* **ci:** release binary runtime deps ([#14](https://github.com/0elghati/nvcr/issues/14)) ([c3eec5c](https://github.com/0elghati/nvcr/commit/c3eec5c159f00fb697782e957d9379f7d77790c5))
 
-## [0.2.0](https://github.com/0elghati/nvrc/compare/v0.1.0...v0.2.0) (2026-07-22)
+## [0.2.1](https://github.com/0elghati/nvcr/compare/v0.2.0...v0.2.1) (2026-07-22)
+
+
+### Bug Fixes
+
+* **ci:** Pass repository path to fix release please issue ([#12](https://github.com/0elghati/nvcr/issues/12)) ([9c6d135](https://github.com/0elghati/nvcr/commit/9c6d13522d7949b86d158c02f68899d77e944910))
+
+## [0.2.0](https://github.com/0elghati/nvcr/compare/v0.1.0...v0.2.0) (2026-07-22)
 
 
 ### Features
 
-* document portable binary platform in quick start ([#9](https://github.com/0elghati/nvrc/issues/9)) ([ab1297a](https://github.com/0elghati/nvrc/commit/ab1297a410596797db28ac13ce5bda0826583a30))
+* document portable binary platform in quick start ([#9](https://github.com/0elghati/nvcr/issues/9)) ([ab1297a](https://github.com/0elghati/nvcr/commit/ab1297a410596797db28ac13ce5bda0826583a30))
 
 
 ### Bug Fixes
 
-* add GitHub About section description ([#7](https://github.com/0elghati/nvrc/issues/7)) ([0e7759a](https://github.com/0elghati/nvrc/commit/0e7759abe60568b7050ecc12548b2193449373b3))
-* **ci:** release please fix ([#11](https://github.com/0elghati/nvrc/issues/11)) ([86b0125](https://github.com/0elghati/nvrc/commit/86b01253ca6a28e38165cbcfd54a273496322711))
+* add GitHub About section description ([#7](https://github.com/0elghati/nvcr/issues/7)) ([0e7759a](https://github.com/0elghati/nvcr/commit/0e7759abe60568b7050ecc12548b2193449373b3))
+* **ci:** release please fix ([#11](https://github.com/0elghati/nvcr/issues/11)) ([86b0125](https://github.com/0elghati/nvcr/commit/86b01253ca6a28e38165cbcfd54a273496322711))
 
-## [0.1.0](https://github.com/0elghati/nvrc/compare/v0.1.0...v0.1.0) (2026-07-22)
+## [0.1.0](https://github.com/0elghati/nvcr/compare/v0.1.0...v0.1.0) (2026-07-22)
 
 
 ### Bug Fixes
 
-* add GitHub About section description ([#7](https://github.com/0elghati/nvrc/issues/7)) ([0e7759a](https://github.com/0elghati/nvrc/commit/0e7759abe60568b7050ecc12548b2193449373b3))
+* add GitHub About section description ([#7](https://github.com/0elghati/nvcr/issues/7)) ([0e7759a](https://github.com/0elghati/nvcr/commit/0e7759abe60568b7050ecc12548b2193449373b3))
 
-## [0.1.0](https://github.com/0elghati/nvrc/compare/v0.1.0...v0.1.0) (2026-07-22)
+## [0.1.0](https://github.com/0elghati/nvcr/compare/v0.1.0...v0.1.0) (2026-07-22)
 
 
 ### Features
 
-* **build:** auto-detect CUDA/TensorRT toolchain and add portable multi-arch option ([f3d2984](https://github.com/0elghati/nvrc/commit/f3d2984799beeecd1cfc78fd619355fde38985ea))
-* **dcvcrt:** implement TensorRT P-frame backend with device-stamped engine manifests ([02efea6](https://github.com/0elghati/nvrc/commit/02efea67e0a47fcae310b92f94da2cbf19ddf45a))
-* **scripts:** add one-command install and platform auto-detection helpers ([d0f8b20](https://github.com/0elghati/nvrc/commit/d0f8b20fbc54e2f1bf03b530553311330f63d7e3))
-* **scripts:** auto-tune DCVC-RT artifact pipeline and remove hardcoded paths ([1ed3ce2](https://github.com/0elghati/nvrc/commit/1ed3ce2338a3f7c1c114484de4422f7211a729f5))
+* **build:** auto-detect CUDA/TensorRT toolchain and add portable multi-arch option ([f3d2984](https://github.com/0elghati/nvcr/commit/f3d2984799beeecd1cfc78fd619355fde38985ea))
+* **dcvcrt:** implement TensorRT P-frame backend with device-stamped engine manifests ([02efea6](https://github.com/0elghati/nvcr/commit/02efea67e0a47fcae310b92f94da2cbf19ddf45a))
+* **scripts:** add one-command install and platform auto-detection helpers ([d0f8b20](https://github.com/0elghati/nvcr/commit/d0f8b20fbc54e2f1bf03b530553311330f63d7e3))
+* **scripts:** auto-tune DCVC-RT artifact pipeline and remove hardcoded paths ([1ed3ce2](https://github.com/0elghati/nvcr/commit/1ed3ce2338a3f7c1c114484de4422f7211a729f5))
 
 
 ### Bug Fixes
 
-* bootstrap initial release-please PR ([#3](https://github.com/0elghati/nvrc/issues/3)) ([f99491e](https://github.com/0elghati/nvrc/commit/f99491e06760f24be765e53c6635bba5223b4e5e))
+* bootstrap initial release-please PR ([#3](https://github.com/0elghati/nvcr/issues/3)) ([f99491e](https://github.com/0elghati/nvcr/commit/f99491e06760f24be765e53c6635bba5223b4e5e))
 
 ## Changelog
 
