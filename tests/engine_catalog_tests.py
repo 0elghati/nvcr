@@ -117,7 +117,7 @@ class CatalogTests(unittest.TestCase):
             ]
         }
 
-        def fake_download(_url: str, path: Path, _token: str | None) -> None:
+        def fake_download(_url: str, path: Path) -> None:
             path.write_text(
                 json.dumps({"schema": artifacts.CATALOG_SCHEMA, "assets": []}),
                 encoding="utf-8",
@@ -135,7 +135,7 @@ class CatalogTests(unittest.TestCase):
             result = artifacts.install_command(
                 [
                     "--repo",
-                    "example/private",
+                    "example/public",
                     "--profile",
                     "360p",
                     "720p",
@@ -147,14 +147,13 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(install.call_args.kwargs["requested_profiles"], ["360p", "720p", "1080p"])
 
-    def test_private_release_download_uses_asset_api(self) -> None:
+    def test_public_release_download_uses_browser_url(self) -> None:
         release = {
             "assets": [
                 {
                     "name": artifacts.CATALOG_FILENAME,
-                    "url": "https://api.github.com/repos/example/private/releases/assets/1",
                     "browser_download_url": (
-                        "https://github.com/example/private/releases/download/"
+                        "https://github.com/example/public/releases/download/"
                         "engine-assets/catalog"
                     ),
                 }
@@ -162,17 +161,14 @@ class CatalogTests(unittest.TestCase):
         }
         catalog = {"schema": artifacts.CATALOG_SCHEMA, "assets": []}
 
-        def fake_download(url: str, path: Path, token: str | None) -> None:
+        def fake_download(url: str, path: Path) -> None:
             self.assertEqual(
                 url,
-                "https://api.github.com/repos/example/private/releases/assets/1",
+                "https://github.com/example/public/releases/download/engine-assets/catalog",
             )
-            self.assertEqual(token, "secret")
             path.write_text(json.dumps(catalog), encoding="utf-8")
 
-        with mock.patch.dict(
-            artifacts.os.environ, {"GH_TOKEN": "secret"}, clear=False
-        ), mock.patch.object(
+        with mock.patch.object(
             artifacts, "github_request_json", return_value=release
         ), mock.patch.object(
             artifacts, "download_file", side_effect=fake_download
@@ -181,7 +177,7 @@ class CatalogTests(unittest.TestCase):
         ), mock.patch.object(
             artifacts, "install_catalog_assets", return_value=[]
         ):
-            result = artifacts.install_command(["--repo", "example/private"])
+            result = artifacts.install_command(["--repo", "example/public"])
         self.assertEqual(result, 0)
 
     def test_catalog_schema_and_exact_match(self) -> None:
@@ -346,7 +342,7 @@ class CatalogTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, mock.patch.object(
             artifacts,
             "download_file",
-            side_effect=lambda _url, path, _token: path.write_bytes(payload),
+            side_effect=lambda _url, path: path.write_bytes(payload),
         ) as download, mock.patch.object(
             artifacts, "extract_engine_archive", side_effect=fake_extract
         ), mock.patch.object(
@@ -462,7 +458,7 @@ class CatalogTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, mock.patch.object(
             artifacts,
             "download_file",
-            side_effect=lambda _url, path, _token: path.write_bytes(payload),
+            side_effect=lambda _url, path: path.write_bytes(payload),
         ) as download, mock.patch.object(
             artifacts, "extract_engine_archive", side_effect=fake_extract
         ), mock.patch.object(
@@ -482,7 +478,7 @@ class CatalogTests(unittest.TestCase):
     def test_hash_failure_precedes_extraction(self) -> None:
         candidate = entry("720p")
         with tempfile.TemporaryDirectory() as temporary, mock.patch.object(
-            artifacts, "download_file", side_effect=lambda _url, path, _token: path.write_bytes(b"bad")
+            artifacts, "download_file", side_effect=lambda _url, path: path.write_bytes(b"bad")
         ):
             with self.assertRaisesRegex(artifacts.ValidationError, "size mismatch"):
                 artifacts.install_catalog_assets(

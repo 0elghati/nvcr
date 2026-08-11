@@ -95,15 +95,10 @@ fi
 download_dir="$(mktemp -d "${TMPDIR:-/tmp}/nvcr-install.XXXXXX")"
 trap 'rm -rf -- "$download_dir"' EXIT
 api_url="https://api.github.com/repos/$repo/releases"
-curl_headers=()
-github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-if [[ -n "$github_token" ]]; then
-    curl_headers=(-H "Authorization: Bearer $github_token")
-fi
 
 if [[ "$tag" == latest ]]; then
     release_json="$download_dir/latest.json"
-    curl -fsSL "${curl_headers[@]}" "$api_url/latest" -o "$release_json"
+    curl -fsSL "$api_url/latest" -o "$release_json"
     tag="$(python3 - "$release_json" <<'PY_RELEASE_TAG'
 import json
 import sys
@@ -112,7 +107,7 @@ PY_RELEASE_TAG
 )"
 else
     release_json="$download_dir/release.json"
-    curl -fsSL "${curl_headers[@]}" "$api_url/tags/$tag" -o "$release_json"
+    curl -fsSL "$api_url/tags/$tag" -o "$release_json"
 fi
 
 if [[ ! "$tag" =~ ^[0-9A-Za-z._+-]+$ || "$tag" == *..* ]]; then
