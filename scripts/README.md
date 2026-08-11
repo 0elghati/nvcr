@@ -7,7 +7,7 @@ The runtime does not depend on Python. These scripts prepare artifacts, package 
 | Script | Use |
 |---|---|
 | `nvcr_artifacts.py` | Install, prepare, build, inspect, and validate model/engine bundles |
-| `install.sh` | Install a Linux binary and compatible engine profiles |
+| `install.sh` | Install a Linux binary; all compatible profiles by default, or selected `--profile` values |
 | `install_from_source.sh` | Build and test a local source checkout |
 | `detect_platform.sh` | Inspect CUDA, TensorRT, GPU, and target properties |
 | `package_release.sh` | Create an engine-free binary package |
