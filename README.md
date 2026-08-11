@@ -42,6 +42,8 @@ nvcr-artifacts install --profile qcif
 nvcr --help
 ```
 
+For containerized installation, see the [Docker documentation](docs/docker.md).
+
 NVCR reads and writes headerless planar 8-bit YUV420, so dimensions and frame
 rate must be supplied for raw input:
 
@@ -115,7 +117,7 @@ standard containers, and universal TensorRT-plan portability remain outside
 the current release boundary. `.nvcr`, `NVCR`, and `NVCS` are development or
 application wrappers, not standard multimedia containers.
 
-## Citation, license, and support
+## License
 
 NVCR source is MIT-licensed. Model checkpoints, exported model assets, engine
 plans, and datasets have separate terms and are excluded from generic packages;
@@ -123,5 +125,11 @@ see [the asset policy](ASSET_DISTRIBUTION_POLICY.md),
 [model licensing](MODEL_LICENSES.md), and
 [third-party notices](THIRD_PARTY_NOTICES.md).
 
-Use [CITATION.cff](CITATION.cff) for the current software citation and
-[SUPPORT.md](SUPPORT.md) for usage, reproducibility, bug, and security routes.
+## Support
+
+Use [SUPPORT.md](SUPPORT.md) for usage, reproducibility, bug, and security
+routes.
+
+## Citation
+
+Use [CITATION.cff](CITATION.cff) for the current software citation.
