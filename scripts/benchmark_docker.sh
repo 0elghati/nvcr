@@ -8,7 +8,8 @@ image="${NVCR_DOCKER_IMAGE:-omarelghati/nvcr:${nvcr_version}-amd64-cuda12.8-trt1
 engine_volume="${NVCR_DOCKER_ENGINE_VOLUME:-nvcr-engines}"
 input_dir="${NVCR_DOCKER_INPUT_DIR:-$repo_root/datasets}"
 results_dir="${NVCR_DOCKER_RESULTS_DIR:-$repo_root/evidence/performance/docker-$timestamp}"
-output_dir="${NVCR_DOCKER_OUTPUT_DIR:-/tmp/nvcr-docker-benchmark-$timestamp}"
+output_dir="${NVCR_DOCKER_OUTPUT_DIR:-$repo_root/evidence/performance/docker-$timestamp/streams}"
+host_repo_dir="${NVCR_DOCKER_HOST_REPO_DIR:-}"
 hardware="${NVCR_DOCKER_HARDWARE:-}"
 container_user="${NVCR_DOCKER_USER:-0:0}"
 install_profiles=""
@@ -28,7 +29,8 @@ Launcher options:
   --engine-volume NAME|DIR   Named Docker volume or host engine directory
   --input-dir DIR            Host directory containing benchmark YUV inputs
   --results-dir DIR          Host directory for JSONL, CSV, and Markdown output
-  --output-dir DIR           Host directory for temporary encoded streams
+    --output-dir DIR           Host directory for temporary encoded streams
+    --host-repo-dir DIR        Docker-daemon-visible repository path (auto-detected)
   --hardware LABEL           Stable hardware label in result rows
   --user UID:GID             Container user (default: 0:0 for NVIDIA access)
   --install-profiles LIST    Install profiles into the engine volume before running
@@ -40,6 +42,10 @@ All options after '--' are passed to scripts/benchmark_resolution_matrix.sh,
 for example:
 
   --frames 300 --qp 32 --gops "1 8" --resolutions "qcif 720p" --repetitions 3
+
+The launcher always writes matrix results to the mounted results directory and
+temporary streams to the mounted output directory. Use the launcher options
+above for host paths; matrix output paths after '--' are overridden.
 
 The engine volume must already contain target-local dcvcrt-<profile> bundles,
 unless --install-profiles is supplied. Pull an immutable image tag for a
@@ -54,6 +60,7 @@ while (($#)); do
         --input-dir) input_dir="$2"; shift 2 ;;
         --results-dir) results_dir="$2"; shift 2 ;;
         --output-dir) output_dir="$2"; shift 2 ;;
+        --host-repo-dir) host_repo_dir="$2"; shift 2 ;;
         --hardware) hardware="$2"; shift 2 ;;
         --user) container_user="$2"; shift 2 ;;
         --install-profiles) install_profiles="$2"; shift 2 ;;
@@ -76,6 +83,56 @@ mkdir -p "$results_dir" "$output_dir"
 input_dir="$(cd "$input_dir" && pwd)"
 results_dir="$(cd "$results_dir" && pwd)"
 output_dir="$(cd "$output_dir" && pwd)"
+
+if [[ -z "$host_repo_dir" ]]; then
+    host_repo_dir="$(docker inspect "$(hostname)" \
+        --format '{{range .Mounts}}{{if eq .Destination "/workspace/nvcr"}}{{.Source}}{{end}}{{end}}' \
+        2>/dev/null || true)"
+fi
+[[ -n "$host_repo_dir" ]] || host_repo_dir="$repo_root"
+
+docker_host_path() {
+    local path="$1"
+    if [[ "$path" == "$repo_root" ]]; then
+        printf '%s' "$host_repo_dir"
+    elif [[ "$path" == "$repo_root/"* ]]; then
+        printf '%s/%s' "$host_repo_dir" "${path#"$repo_root/"}"
+    else
+        printf '%s' "$path"
+    fi
+}
+
+docker_input_dir="$(docker_host_path "$input_dir")"
+docker_results_dir="$(docker_host_path "$results_dir")"
+docker_output_dir="$(docker_host_path "$output_dir")"
+docker_engine_volume="$(docker_host_path "$engine_volume")"
+if [[ "$host_repo_dir" != "$repo_root" ]]; then
+    echo "Docker daemon repository path: $host_repo_dir" >&2
+fi
+if [[ "$docker_output_dir" == "$output_dir" && "$host_repo_dir" != "$repo_root" ]]; then
+    echo "benchmark_docker: output directory is not visible to the Docker daemon: $output_dir" >&2
+    echo "Set --output-dir under $repo_root or provide --host-repo-dir for the daemon host." >&2
+    exit 2
+fi
+
+input_mount=(--mount "type=bind,source=$docker_input_dir,target=/input,readonly")
+results_mount=(--mount "type=bind,source=$docker_results_dir,target=/results")
+output_mount=(--mount "type=bind,source=$docker_output_dir,target=/output")
+repo_mount=(--mount "type=bind,source=$host_repo_dir,target=/workspace/nvcr,readonly")
+if [[ "$docker_engine_volume" == "$engine_volume" ]]; then
+    engine_install_mount=(-v "$engine_volume:/opt/nvcr/engines")
+    engine_runtime_mount=(-v "$engine_volume:/opt/nvcr/engines:ro")
+else
+    engine_install_mount=(--mount "type=bind,source=$docker_engine_volume,target=/opt/nvcr/engines")
+    engine_runtime_mount=(--mount "type=bind,source=$docker_engine_volume,target=/opt/nvcr/engines,readonly")
+fi
+engine_container_root=/opt/nvcr/engines
+if [[ -d "$engine_volume" && ! -d "$engine_volume/dcvcrt-qcif" ]]; then
+    nested_engine_dirs=("$engine_volume"/*)
+    if (( ${#nested_engine_dirs[@]} == 1 )) && [[ -d "${nested_engine_dirs[0]}/dcvcrt-qcif" ]]; then
+        engine_container_root="/opt/nvcr/engines/$(basename "${nested_engine_dirs[0]}")"
+    fi
+fi
 
 commit="$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || true)"
 [[ -n "$commit" ]] || commit=unknown
@@ -107,7 +164,7 @@ done
 
 if [[ -n "$install_profiles" ]]; then
     install_command=(docker run --rm "${gpu_args[@]}" \
-        -v "$engine_volume:/opt/nvcr/engines" \
+        "${engine_install_mount[@]}" \
         --entrypoint /opt/nvcr/bin/nvcr-artifacts)
     if [[ -n "${GH_TOKEN:-}" ]]; then
         install_command+=(-e "GH_TOKEN=$GH_TOKEN")
@@ -138,12 +195,12 @@ container_env=(
     -e "NVCR_BENCH_COMMIT=$commit"
     -e "NVCR_BENCH_DIRTY=$dirty"
     -e "NVCR_BENCH_HARDWARE=$hardware"
-    -e NVCR_BENCH_QCIF_ENGINE_DIR=/opt/nvcr/engines/dcvcrt-qcif
-    -e NVCR_BENCH_CIF_ENGINE_DIR=/opt/nvcr/engines/dcvcrt-cif
-    -e NVCR_BENCH_360P_ENGINE_DIR=/opt/nvcr/engines/dcvcrt-360p
-    -e NVCR_BENCH_540P_ENGINE_DIR=/opt/nvcr/engines/dcvcrt-540p
-    -e NVCR_BENCH_720P_ENGINE_DIR=/opt/nvcr/engines/dcvcrt-720p
-    -e NVCR_BENCH_1080P_ENGINE_DIR=/opt/nvcr/engines/dcvcrt-1080p
+    -e "NVCR_BENCH_QCIF_ENGINE_DIR=$engine_container_root/dcvcrt-qcif"
+    -e "NVCR_BENCH_CIF_ENGINE_DIR=$engine_container_root/dcvcrt-cif"
+    -e "NVCR_BENCH_360P_ENGINE_DIR=$engine_container_root/dcvcrt-360p"
+    -e "NVCR_BENCH_540P_ENGINE_DIR=$engine_container_root/dcvcrt-540p"
+    -e "NVCR_BENCH_720P_ENGINE_DIR=$engine_container_root/dcvcrt-720p"
+    -e "NVCR_BENCH_1080P_ENGINE_DIR=$engine_container_root/dcvcrt-1080p"
 )
 
 echo "Running Docker benchmark: image=$image digest=$image_digest" >&2
@@ -153,10 +210,15 @@ exec docker run --rm "${gpu_args[@]}" \
     --user "$container_user" \
     --entrypoint /bin/bash \
     "${container_env[@]}" \
-    -v "$engine_volume:/opt/nvcr/engines:ro" \
-    -v "$input_dir:/input:ro" \
-    -v "$results_dir:/results" \
-    -v "$output_dir:/output" \
-    -v "$repo_root:/workspace/nvcr:ro" \
+    "${engine_runtime_mount[@]}" \
+    "${input_mount[@]}" \
+    "${results_mount[@]}" \
+    "${output_mount[@]}" \
+    "${repo_mount[@]}" \
     -w /workspace/nvcr \
-    "$image" scripts/benchmark_resolution_matrix.sh "${matrix_args[@]}"
+    "$image" scripts/benchmark_resolution_matrix.sh "${matrix_args[@]}" \
+    --output-dir /output \
+    --results-dir /results \
+    --jsonl /results/results.jsonl \
+    --csv /results/results.csv \
+    --report /results/summary.md
