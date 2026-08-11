@@ -12,7 +12,7 @@ when a document or claim needs architectural context.
 - [Docker overview](docker.md)
   - [x86_64 NVIDIA](docker-x86_64.md)
   - [Jetson Orin](docker-jetson.md)
-  - [Windows host with Docker Desktop and WSL 2](docker-windows.md)
+  - [Windows host (WSL 2 or native PowerShell)](docker-windows.md)
 - [Compatibility and target support](compatibility.md)
 
 ## Runtime and architecture
