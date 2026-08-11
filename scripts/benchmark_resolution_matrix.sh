@@ -221,6 +221,11 @@ select_engine() {
     if [[ -z "$directory" && -n "$engine_root" ]]; then
         if [[ -d "$engine_root/dcvcrt-$label" ]]; then
             directory="$engine_root/dcvcrt-$label"
+        elif [[ -d "$engine_root/profiles/dcvcrt/$label" ]]; then
+            # nvcr-artifacts install links canonical bundles here, not dcvcrt-<profile>.
+            directory="$engine_root/profiles/dcvcrt/$label"
+        elif [[ -d "$engine_root/profiles/dcvcrt/$label-fp16" ]]; then
+            directory="$engine_root/profiles/dcvcrt/$label-fp16"
         else
             directory="$engine_root/$label"
         fi

@@ -13,6 +13,11 @@ Runs the NVCR Docker resolution matrix from a Windows host checkout.
 
 Use -SkipPull to use an image already present locally. Use -MatrixArgs to pass
 options to scripts/benchmark_resolution_matrix.sh.
+
+Before running, the launcher checks the engine volume for the profiles named
+in -MatrixArgs' --resolutions (or the matrix default) and installs any that
+are missing from the rolling asset catalog. Use -InstallProfiles to force a
+specific list, or -NoInstall to skip this check entirely.
 #>
 [CmdletBinding()]
 param(
@@ -24,6 +29,7 @@ param(
     [string]$Hardware = "",
     [string]$ContainerUser = "0:0",
     [string]$InstallProfiles = "",
+    [switch]$NoInstall,
     [string]$HostRepoDir = "",
     [switch]$SkipPull,
     [string[]]$MatrixArgs = @()
@@ -95,6 +101,13 @@ if ($engineIsHostDirectory -and -not (Test-Path (Join-Path $engineSource "dcvcrt
     }
 }
 
+$engineRuntimeMountArgs = @()
+if ($engineIsHostDirectory) {
+    $engineRuntimeMountArgs += @("--mount", "type=bind,source=$engineSource,target=/opt/nvcr/engines,readonly")
+} else {
+    $engineRuntimeMountArgs += @("-v", "$EngineVolume`:/opt/nvcr/engines:ro")
+}
+
 $commit = (& git -C $repoRoot rev-parse HEAD 2>$null | Select-Object -First 1)
 if ([string]::IsNullOrWhiteSpace($commit)) {
     $commit = "unknown"
@@ -122,6 +135,36 @@ if ($MatrixArgs.Count -gt 0 -and $MatrixArgs[0] -eq "--") {
     $MatrixArgs = @($MatrixArgs | Select-Object -Skip 1)
 }
 
+function Test-EngineProfile {
+    param([Parameter(Mandatory = $true)][string]$ProfileName)
+
+    $testArgs = @("run", "--rm") + $engineRuntimeMountArgs + @(
+        "--entrypoint", "/bin/bash",
+        $Image,
+        "-c",
+        "test -f '$engineContainerRoot/dcvcrt-$ProfileName/engine_manifest.json' -o " +
+            "-f '$engineContainerRoot/profiles/dcvcrt/$ProfileName/engine_manifest.json'"
+    )
+    & docker @testArgs | Out-Null
+    return $LASTEXITCODE -eq 0
+}
+
+if (-not $NoInstall -and [string]::IsNullOrWhiteSpace($InstallProfiles)) {
+    $matrixResolutions = "qcif cif 720p 1080p"
+    for ($index = 0; $index -lt $MatrixArgs.Count; $index++) {
+        if ($MatrixArgs[$index] -eq "--resolutions" -and ($index + 1) -lt $MatrixArgs.Count) {
+            $matrixResolutions = $MatrixArgs[$index + 1]
+        }
+    }
+    $missingProfiles = @($matrixResolutions -split "\s+" | Where-Object { $_ } | Where-Object { -not (Test-EngineProfile $_) })
+    if ($missingProfiles.Count -gt 0) {
+        Write-Host "Engine profiles not found in $EngineVolume, installing: $($missingProfiles -join ' ')"
+        $InstallProfiles = $missingProfiles -join " "
+    } else {
+        Write-Host "Engine profiles already installed: $matrixResolutions"
+    }
+}
+
 if (-not [string]::IsNullOrWhiteSpace($InstallProfiles)) {
     $installArgs = @("run", "--rm", "--gpus", "all")
     if ($engineIsHostDirectory) {
@@ -137,7 +180,7 @@ if (-not [string]::IsNullOrWhiteSpace($InstallProfiles)) {
         $Image,
         "install",
         "--engine-root",
-        "/opt/nvcr/engines"
+        $engineContainerRoot
     )
     if ($InstallProfiles -eq "all") {
         $installArgs += "--all"
@@ -163,7 +206,8 @@ $containerEnv = @(
     "NVIDIA_VISIBLE_DEVICES=all",
     "NVCR_BIN=/opt/nvcr/bin/nvcr",
     "NVCR_BENCH_DATA_ROOT=/input",
-    "NVCR_BENCH_ENGINE_ROOT=/opt/nvcr/engines",
+    "NVCR_BENCH_ENGINE_ROOT=$engineContainerRoot",
+    "NVCR_ENGINE_ROOT=$engineContainerRoot",
     "NVCR_BENCH_OUTPUT_DIR=/output",
     "NVCR_BENCH_RESULTS_DIR=/results",
     "NVCR_BENCH_EXECUTION_MODE=docker",
@@ -172,13 +216,7 @@ $containerEnv = @(
     "NVCR_BENCH_COMMIT=$commit",
     "NVCR_BENCH_DIRTY=$($dirty.ToString().ToLowerInvariant())",
     "NVCR_BENCH_HARDWARE=$Hardware",
-    "NVCR_BENCH_MEMORY_PROFILER=/workspace/nvcr/scripts/profile_memory_command.py",
-    "NVCR_BENCH_QCIF_ENGINE_DIR=$engineContainerRoot/dcvcrt-qcif",
-    "NVCR_BENCH_CIF_ENGINE_DIR=$engineContainerRoot/dcvcrt-cif",
-    "NVCR_BENCH_360P_ENGINE_DIR=$engineContainerRoot/dcvcrt-360p",
-    "NVCR_BENCH_540P_ENGINE_DIR=$engineContainerRoot/dcvcrt-540p",
-    "NVCR_BENCH_720P_ENGINE_DIR=$engineContainerRoot/dcvcrt-720p",
-    "NVCR_BENCH_1080P_ENGINE_DIR=$engineContainerRoot/dcvcrt-1080p"
+    "NVCR_BENCH_MEMORY_PROFILER=/workspace/nvcr/scripts/profile_memory_command.py"
 )
 
 $dockerArgs = @("run", "--rm", "--gpus", "all", "--user", $ContainerUser, "--entrypoint", "/bin/bash")
@@ -189,11 +227,7 @@ if ($env:GH_TOKEN) {
     $dockerArgs += @("-e", "GH_TOKEN=$($env:GH_TOKEN)")
 }
 
-if ($engineIsHostDirectory) {
-    $dockerArgs += @("--mount", "type=bind,source=$engineSource,target=/opt/nvcr/engines,readonly")
-} else {
-    $dockerArgs += @("-v", "$EngineVolume`:/opt/nvcr/engines:ro")
-}
+$dockerArgs += $engineRuntimeMountArgs
 $dockerArgs += @(
     "--mount", "type=bind,source=$InputDir,target=/input,readonly",
     "--mount", "type=bind,source=$ResultsDir,target=/results",
