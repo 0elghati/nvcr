@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.2](https://github.com/0elghati/nvcr/compare/v0.18.1...v0.18.2) (2026-08-11)
+
+
+### Bug Fixes
+
+* **docs:** add README citation and Docker links ([#112](https://github.com/0elghati/nvcr/issues/112)) ([e344d71](https://github.com/0elghati/nvcr/commit/e344d7153e6fd7ed5b18907fddc26afaee8eddea))
+
 ## [0.18.1](https://github.com/0elghati/nvcr/compare/v0.18.0...v0.18.1) (2026-08-11)
 
 
