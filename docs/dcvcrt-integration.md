@@ -20,13 +20,10 @@ The native rANS coder and `NVI1`/`NVP1` payload layouts are NVCR implementation 
 
 Python is an offline export and reference-conformance dependency. Cross-runtime payload compatibility remains unclaimed until clean bidirectional golden tests pass.
 
-## Implementation boundary
+## Current limits
 
-Production component creation goes through `RuntimeServices` and the TensorRT
-provider. The lower-level TensorRT factory remains available for direct
-provider tests. TensorRT currently creates the DCVC-RT backend as one provider
-owned implementation; splitting individual model stages into separate
-executables is reserved for a future provider.
-
-Target support still depends on validated target-local bundles and the release
-gates described in [Scope and support](scope-and-support.md).
+Production component creation is provider-mediated through `RuntimeServices`.
+TensorRT still creates the codec backend as one provider-owned component rather
+than exposing each model stage as an independent executable. Stable public
+plane/stride ownership, additional production providers, complete target
+performance evidence, and the final v1 release gate remain future work.

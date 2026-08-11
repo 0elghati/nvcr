@@ -7,7 +7,7 @@ The runtime does not depend on Python. These scripts prepare artifacts, package 
 | Script | Use |
 |---|---|
 | `nvcr_artifacts.py` | Install, prepare, build, inspect, and validate model/engine bundles |
-| `install.sh` | Install a Linux binary and compatible engine profiles |
+| `install.sh` | Install a Linux binary; all compatible profiles by default, or selected `--profile` values |
 | `install_from_source.sh` | Build and test a local source checkout |
 | `detect_platform.sh` | Inspect CUDA, TensorRT, GPU, and target properties |
 | `package_release.sh` | Create an engine-free binary package |
@@ -42,7 +42,7 @@ Binary packages do not contain checkpoints, exported model assets, or TensorRT p
 
 ```bash
 ./scripts/package_release.sh \
-  --version 0.16.0 \
+  --version "$(cat version.txt)" \
   --platform linux-x86_64-nvidia \
   --install-prefix /path/to/install \
   --output-dir dist
@@ -50,9 +50,10 @@ Binary packages do not contain checkpoints, exported model assets, or TensorRT p
 
 Target-local engine bundles are published separately through the rolling `engine-assets` catalog after validation.
 
-The release workflow builds the Jetson binary natively on a Jetson runner. For
-local cross-builds, an extracted JetPack/L4T root filesystem and CUDA cross
-toolkit can be supplied to `cmake/toolchains/jetson-aarch64.cmake`:
+Release automation builds the Jetson archive natively on an AArch64 Jetson
+host. An x86-hosted cross-build remains available for compile
+validation when an extracted JetPack/L4T root filesystem and CUDA cross toolkit
+are supplied to `cmake/toolchains/jetson-aarch64.cmake`:
 
 ```bash
 export NVCR_JETSON_SYSROOT=/opt/nvcr/sysroots/l4t-36.4
@@ -118,8 +119,8 @@ With `--profile-memory`, rows also include profiled process RAM
 (`peak_system_memory_mb`) and the minimum largest free block
 (`min_largest_free_block_mb`) when available; `peak_gpu_memory_mb` is populated
 only on targets that expose per-process GPU memory through `nvidia-smi`.
-Result directories can be committed as interim
-experiment records, while encoded streams remain under `/tmp`.
+Compact result directories may be retained as diagnostic evidence, while
+encoded streams remain under `/tmp`.
 
 Use `--resolutions "360p"` or any other supported label to collect one
 resolution. Use `--hardware` to keep labels stable across machines; otherwise

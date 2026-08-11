@@ -15,11 +15,10 @@ services:
     entrypoint: ["/opt/nvcr/bin/nvcr-artifacts"]
     command: ["install", "--engine-root", "/opt/nvcr/engines"]
     environment:
-      GH_TOKEN: ${GH_TOKEN:-}
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       NVIDIA_VISIBLE_DEVICES: all
     volumes:
-      - ${NVCR_ENGINE_ROOT:-engine-assets}:/opt/nvcr/engines
+      - engine-assets:/opt/nvcr/engines
 
   test:
     image: nvcr-test:rtx4070
@@ -37,7 +36,7 @@ services:
       NVIDIA_VISIBLE_DEVICES: all
       NVCR_TEST_ENGINE_PROFILE: ${NVCR_TEST_ENGINE_PROFILE:-qcif}
     volumes:
-      - ${NVCR_ENGINE_ROOT:-engine-assets}:/opt/nvcr/engines:ro
+      - engine-assets:/opt/nvcr/engines:ro
       - test-build:/test-build
 
   nvcr:
@@ -54,11 +53,10 @@ services:
     environment:
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       NVIDIA_VISIBLE_DEVICES: all
-      NVCR_ENGINE_ROOT: /opt/nvcr/engines
     user: ${NVCR_HOST_UID:-0}:${NVCR_HOST_GID:-0}
     working_dir: /output
     volumes:
-      - ${NVCR_ENGINE_ROOT:-engine-assets}:/opt/nvcr/engines:ro
+      - engine-assets:/opt/nvcr/engines:ro
       - ${NVCR_INPUT_DIR:-..}:/input:ro
       - ${NVCR_OUTPUT_DIR:-..}:/output
 

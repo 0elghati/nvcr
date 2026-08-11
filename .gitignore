@@ -66,6 +66,7 @@ venv
 /assets/
 
 # Generated engine bundles and packaged/report artifacts
+/dist/
 *.zip
 *.sarif
 # AWS CDK local output

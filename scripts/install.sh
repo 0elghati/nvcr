@@ -19,13 +19,13 @@ Usage: install.sh [options]
 
 Installs the matching semver'd NVCR binary package, then delegates exact GPU,
 CUDA, and TensorRT engine selection to 'nvcr-artifacts install'. If no profile
-is selected, every compatible profile in the rolling catalog is installed.
+is selected, every compatible published profile is installed.
 
 Options:
   --repo OWNER/REPO       GitHub repository (default: $repo)
   --tag TAG               Binary release tag, or "latest" (default: latest)
   --backend NAME          Backend to install (default: $backend)
-  --profile NAME          Install one resolution profile; may be repeated
+  --profile NAME [...]    Install one or more profiles; may be repeated
   --device-id N           CUDA device used for engine matching (default: 0)
   --asset-release TAG     Rolling engine release tag (default: $asset_release)
   --prefix DIR            NVCR binary install prefix (default: $prefix)
@@ -44,7 +44,17 @@ while (($#)); do
     --repo) repo="$2"; shift 2 ;;
     --tag) tag="$2"; shift 2 ;;
     --backend) backend="$2"; shift 2 ;;
-    --profile) profiles+=("$2"); shift 2 ;;
+    --profile)
+        shift
+        if (($# == 0)) || [[ "$1" == -* ]]; then
+            echo "nvcr-install: --profile requires at least one profile" >&2
+            exit 2
+        fi
+        while (($#)) && [[ "$1" != -* ]]; do
+            profiles+=("$1")
+            shift
+        done
+        ;;
     --engine-profile)
         echo "nvcr-install: warning: --engine-profile is deprecated; use --profile" >&2
         profiles+=("$2")
@@ -95,15 +105,10 @@ fi
 download_dir="$(mktemp -d "${TMPDIR:-/tmp}/nvcr-install.XXXXXX")"
 trap 'rm -rf -- "$download_dir"' EXIT
 api_url="https://api.github.com/repos/$repo/releases"
-curl_headers=()
-github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-if [[ -n "$github_token" ]]; then
-    curl_headers=(-H "Authorization: Bearer $github_token")
-fi
 
 if [[ "$tag" == latest ]]; then
     release_json="$download_dir/latest.json"
-    curl -fsSL "${curl_headers[@]}" "$api_url/latest" -o "$release_json"
+    curl -fsSL "$api_url/latest" -o "$release_json"
     tag="$(python3 - "$release_json" <<'PY_RELEASE_TAG'
 import json
 import sys
@@ -112,7 +117,7 @@ PY_RELEASE_TAG
 )"
 else
     release_json="$download_dir/release.json"
-    curl -fsSL "${curl_headers[@]}" "$api_url/tags/$tag" -o "$release_json"
+    curl -fsSL "$api_url/tags/$tag" -o "$release_json"
 fi
 
 if [[ ! "$tag" =~ ^[0-9A-Za-z._+-]+$ || "$tag" == *..* ]]; then
@@ -139,7 +144,7 @@ download_asset() {
         echo "nvcr-install: binary release $tag does not contain asset: $name" >&2
         exit 1
     fi
-    curl -fL "${curl_headers[@]}" "$url" -o "$download_dir/$name"
+    curl -fL "$url" -o "$download_dir/$name"
 }
 
 echo "Installing NVCR $tag for $package_family"

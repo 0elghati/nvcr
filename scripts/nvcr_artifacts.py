@@ -17,8 +17,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+from urllib.request import Request, urlopen
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 SOURCE_ROOT = SCRIPT_DIRECTORY.parent
@@ -642,14 +641,12 @@ def cuda_runtime_compatible(entry: dict[str, Any], identity: dict[str, Any]) -> 
     )
 
 
-def github_request_json(url: str, token: str | None = None) -> dict[str, Any]:
+def github_request_json(url: str) -> dict[str, Any]:
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "nvcr-artifacts",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
     try:
         with urlopen(Request(url, headers=headers), timeout=60) as response:
             document = json.load(response)
@@ -660,35 +657,11 @@ def github_request_json(url: str, token: str | None = None) -> dict[str, Any]:
     return document
 
 
-class _NoRedirectHandler(HTTPRedirectHandler):
-    def redirect_request(
-        self,
-        request: Request,
-        file_pointer: Any,
-        code: int,
-        message: str,
-        headers: Any,
-        new_url: str,
-    ) -> None:
-        return None
-
-
-def download_file(url: str, destination: Path, token: str | None = None) -> None:
+def download_file(url: str, destination: Path) -> None:
     headers = {"Accept": "application/octet-stream", "User-Agent": "nvcr-artifacts"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
     try:
         request = Request(url, headers=headers)
-        if token and urlparse(url).hostname == "api.github.com":
-            try:
-                response = build_opener(_NoRedirectHandler).open(request, timeout=1800)
-            except HTTPError as error:
-                location = error.headers.get("Location")
-                if error.code in (301, 302, 303, 307, 308) and location:
-                    return download_file(location, destination)
-                raise
-        else:
-            response = urlopen(request, timeout=1800)
+        response = urlopen(request, timeout=1800)
         with response:
             with destination.open("wb") as output:
                 shutil.copyfileobj(response, output, length=1024 * 1024)
@@ -779,7 +752,6 @@ def install_catalog_assets(
     backend: str,
     requested_profiles: list[str],
     engine_root: Path,
-    token: str | None = None,
 ) -> list[str]:
     ranked = [
         (rank, entry)
@@ -848,7 +820,7 @@ def install_catalog_assets(
             temporary_root = Path(temporary)
             archive = temporary_root / filename
             print(f"Downloading {filename}")
-            download_file(url, archive, token)
+            download_file(url, archive)
             if archive.stat().st_size != entry["size_bytes"]:
                 raise ValidationError(f"downloaded size mismatch: {filename}")
             if sha256(archive) != entry["sha256"]:
@@ -935,26 +907,24 @@ def install_command(arguments: list[str]) -> int:
         raise ValidationError(f"invalid GitHub repository: {args.repo}")
     if not SAFE_IDENTIFIER.fullmatch(args.asset_release):
         raise ValidationError(f"invalid engine asset release: {args.asset_release}")
-    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     api_url = f"https://api.github.com/repos/{args.repo}/releases/tags/{args.asset_release}"
-    release = github_request_json(api_url, token)
+    release = github_request_json(api_url)
     release_assets = release.get("assets")
     if not isinstance(release_assets, list):
         raise ValidationError("GitHub engine release has no asset list")
-    download_url_field = "url" if token else "browser_download_url"
     asset_urls = {
-        item["name"]: item[download_url_field]
+        item["name"]: item["browser_download_url"]
         for item in release_assets
         if isinstance(item, dict)
         and isinstance(item.get("name"), str)
-        and isinstance(item.get(download_url_field), str)
+        and isinstance(item.get("browser_download_url"), str)
     }
     catalog_url = asset_urls.get(CATALOG_FILENAME)
     if not catalog_url:
         raise ValidationError(f"rolling release is missing {CATALOG_FILENAME}")
     with tempfile.TemporaryDirectory(prefix="nvcr-catalog-") as temporary:
         catalog_path = Path(temporary) / CATALOG_FILENAME
-        download_file(catalog_url, catalog_path, token)
+        download_file(catalog_url, catalog_path)
         catalog = load_json(catalog_path)
     entries = validate_catalog(catalog)
     try:
@@ -969,7 +939,6 @@ def install_command(arguments: list[str]) -> int:
         backend=args.backend,
         requested_profiles=flatten_profile_arguments(args.profile),
         engine_root=args.engine_root,
-        token=token,
     )
     print("Installed engine profiles: " + ", ".join(installed))
     return 0

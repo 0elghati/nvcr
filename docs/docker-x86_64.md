@@ -1,0 +1,92 @@
+# Docker on x86_64 NVIDIA GPUs
+
+For Linux x86_64 with Docker and NVIDIA Container Toolkit.
+
+## Install
+
+```bash
+docker run --rm --gpus all \
+  nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
+
+docker pull omarelghati/nvcr:amd64-cuda12.8-trt10.9
+
+docker run --rm --gpus all \
+  -v nvcr-engines:/opt/nvcr/engines \
+  --entrypoint /opt/nvcr/bin/nvcr-artifacts \
+  omarelghati/nvcr:amd64-cuda12.8-trt10.9 install \
+    --engine-root /opt/nvcr/engines --profile qcif
+```
+
+Docker creates `nvcr-engines` automatically. The image already uses
+`/opt/nvcr/engines` by default.
+
+## Prepare Akiyo QCIF
+
+NVCR expects headerless 8-bit YUV420. Convert Xiph's 176x144, 300-frame Akiyo
+Y4M file:
+
+```bash
+export NVCR_DATASET_DIR="/absolute/path/to/yuv-dataset"
+export NVCR_OUTPUT_DIR="/absolute/path/to/nvcr-output"
+mkdir -p "$NVCR_DATASET_DIR" "$NVCR_OUTPUT_DIR"
+
+curl -fL https://media.xiph.org/video/derf/y4m/akiyo_qcif.y4m \
+  -o "$NVCR_DATASET_DIR/akiyo_qcif.y4m"
+ffmpeg -i "$NVCR_DATASET_DIR/akiyo_qcif.y4m" \
+  -pix_fmt yuv420p -f rawvideo \
+  "$NVCR_DATASET_DIR/akiyo_qcif.yuv"
+```
+
+Other inputs: [Xiph Derf](https://media.xiph.org/video/derf/) and the
+[UVG HD YUV420 dataset](https://tie-ultravideo.rd.tuni.fi/dataset.html). Check
+each dataset's license; UVG is CC BY-NC.
+
+## Encode and decode
+
+```bash
+docker run --rm --gpus all --user "$(id -u):$(id -g)" \
+  -v nvcr-engines:/opt/nvcr/engines:ro \
+  -v "$NVCR_DATASET_DIR:/input:ro" \
+  -v "$NVCR_OUTPUT_DIR:/output" \
+  omarelghati/nvcr:amd64-cuda12.8-trt10.9 encode \
+    -i /input/akiyo_qcif.yuv -o /output/akiyo_qcif.nvcr \
+    -s 176x144 -r 29.97 --frames 4 --gop-size 2 --qp 32
+
+docker run --rm --gpus all --user "$(id -u):$(id -g)" \
+  -v nvcr-engines:/opt/nvcr/engines:ro \
+  -v "$NVCR_OUTPUT_DIR:/output" \
+  omarelghati/nvcr:amd64-cuda12.8-trt10.9 decode \
+    -i /output/akiyo_qcif.nvcr \
+    -o /output/akiyo_qcif_reconstructed.yuv
+```
+
+| Host storage | Container path | Mode |
+|---|---|---|
+| `nvcr-engines` volume | `/opt/nvcr/engines` | read-only when running |
+| `$NVCR_DATASET_DIR` | `/input` | read-only |
+| `$NVCR_OUTPUT_DIR` | `/output` | writable |
+
+Use `/input/akiyo_qcif.yuv` inside the container. If CUDA fails after the
+`nvidia-smi` check, add:
+
+```bash
+--device /dev/nvidia-uvm --device /dev/nvidia-uvm-tools
+```
+
+## Compose or local build
+
+From a source checkout:
+
+```bash
+export NVCR_X86_64_IMAGE="omarelghati/nvcr:amd64-cuda12.8-trt10.9"
+export NVCR_INPUT_DIR="$NVCR_DATASET_DIR"
+export NVCR_OUTPUT_DIR
+docker compose -f docker/compose.x86_64.yaml run --rm engine-install \
+  install --engine-root /opt/nvcr/engines --profile qcif
+
+docker build --platform linux/amd64 --target runtime \
+  -f docker/Dockerfile.x86_64 -t nvcr:desktop .
+```
+
+Build engines on the GPU and TensorRT runtime that will execute them; do not
+reuse Jetson or another GPU's plans.

@@ -1,6 +1,7 @@
 # Performance
 
-This page defines the measurement protocol. It is intentionally short: numbers belong in the latest machine-readable run, not in a growing diary.
+This page defines the measurement protocol. Reported numbers come from the
+machine-readable result set rather than an accumulating narrative log.
 
 The SoftwareX matrix, target records, result schema, and run commands live in [docs/experiments](experiments/README.md).
 
@@ -23,6 +24,16 @@ time from repetitions without verbose per-frame output, quality calculation,
 process polling, or `nvidia-smi` polling. `--profile` adds separate repetitions
 for latency, PSNR, and memory. Never substitute profile-pass throughput for the
 clean-pass values.
+
+## Current evidence
+
+The retained file
+[resolution-matrix.jsonl](../evidence/live-release-20260806/resolution-matrix.jsonl)
+is a diagnostic matrix, not a complete SoftwareX result package. Use its
+recorded commit, artifact identity, status, and error fields when interpreting
+the rows; do not promote it to a release baseline.
+
+Raw streams are local run products and are not part of the documentation set.
 
 ## Run the matrix
 

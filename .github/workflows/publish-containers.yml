@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Exact release tag, for example v0.5.1
+        description: Exact release tag, for example v0.18.0
         required: true
         type: string
       architecture:

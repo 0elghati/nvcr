@@ -1,6 +1,7 @@
 # SoftwareX experiments
 
-This directory is the working protocol for the NVCR SoftwareX evaluation. It is deliberately separate from the short product documentation.
+This directory defines the reproducible NVCR SoftwareX evaluation protocol. It
+is separate from the shorter product and usage documentation.
 
 The evaluation covers the first complete NVCR vertical:
 
@@ -25,7 +26,7 @@ The claim is narrow: NVCR provides a reproducible native runtime around this one
 6. [Missing-data checklist](missing-data-checklist.md)
 7. [Input manifest example](softwarex-inputs.example.json)
 
-## What the tools provide
+## Current state
 
 The repository has device detection, target profiles, artifact validation,
 target-local engine building, Docker/Compose workflows, the lower-level
@@ -33,6 +34,13 @@ target-local engine building, Docker/Compose workflows, the lower-level
 `scripts/benchmark_softwarex_matrix.py`. The driver validates profile digests
 and target identity before execution, runs registered build/test gates, captures
 the complete result schema, and writes the evidence package described below.
+
+Checked-in target profiles cover RTX 3050 Laptop, RTX 4070, RTX 5060 Laptop,
+and Jetson Orin Nano. A target row becomes publication evidence only after live
+identity detection, current artifact validation, registered GPU gates, and the
+complete protocol pass. The RTX 4070 profile uses TensorRT 10.9; its exact
+bundles must be rebuilt from the current model-profile digest before a clean
+publication run.
 
 The driver is tested automation, not evidence by itself. A result package is
 complete only when it records a clean commit, current artifacts, registered and

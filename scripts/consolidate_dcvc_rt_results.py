@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 
-DEFAULT_SOURCE = Path("/home/oelghati/DCVC-RT/runner/dcvc_rt/gop")
+DEFAULT_SOURCE = Path("DCVC-RT/runner/dcvc_rt/gop")
 DEFAULT_OUTPUT = Path("results/jetson-orin/python/data")
 SCHEMA = "nvcr.python-dcvc-rt.gop.v1"
 

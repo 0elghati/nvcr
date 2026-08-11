@@ -35,7 +35,7 @@ LFB_RE = re.compile(r"\(lfb\s+([0-9]+)x([0-9]+)([KMG]B)\)")
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True, help="Final consolidated JSON report")
-    parser.add_argument("--data-root", type=Path, default=Path("/home/oelghati/datasets"))
+    parser.add_argument("--data-root", type=Path, default=ROOT / "datasets")
     parser.add_argument(
         "--engine-root",
         type=Path,

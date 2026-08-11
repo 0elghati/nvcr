@@ -1,6 +1,7 @@
 # Model and checkpoint licensing
 
-Status: review required before redistribution.
+Status: checkpoint redistribution is unresolved; engine bundles require a
+separate, recorded review.
 
 ## Pinned DCVC-RT model set
 
@@ -33,11 +34,17 @@ unresolved.
 Exported ONNX graphs, entropy/quant assets, and TensorRT plans are derived from
 the pinned model set. Their redistribution status depends on the upstream model
 terms, checkpoint terms, target/runtime terms, and any applicable dataset or
-vendor restrictions. They are excluded from generic NVCR binary packages.
+vendor restrictions. They are excluded from generic NVCR binary packages. A
+TensorRT engine bundle may be published only as a separate asset after the
+review and release gate in `ASSET_DISTRIBUTION_POLICY.md` passes for that
+bundle. This file does not grant blanket redistribution permission for derived
+assets.
 
 ## Decision rule
 
-Until an explicit license review records permission and required notices, model
-checkpoints and derived model/engine assets are treated as restricted to local
-validation. Release automation must fail or exclude them rather than infer a
-permission from a URL, filename, or source-code license.
+Model checkpoints, ONNX graphs, entropy/quant assets, and other model exports
+remain restricted to local validation until an explicit review records
+permission and required notices. An engine bundle remains restricted unless its
+separate publication review records the applicable model, checkpoint, runtime,
+and vendor terms. Release automation must fail or exclude an unreviewed asset
+rather than infer permission from a URL, filename, or source-code license.
