@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.1](https://github.com/0elghati/nvcr/compare/v0.18.0...v0.18.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* **docs:** document release-worthy commits ([#110](https://github.com/0elghati/nvcr/issues/110)) ([7c701f9](https://github.com/0elghati/nvcr/commit/7c701f9a4481c29eaf2d26d014632e8f25891d48))
+
 ## [0.18.0](https://github.com/0elghati/nvcr/compare/v0.17.0...v0.18.0) (2026-08-10)
 
 
