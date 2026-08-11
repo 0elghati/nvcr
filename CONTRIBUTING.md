@@ -30,3 +30,13 @@ production-supported until its target and evidence gates pass.
 Update the relevant identity, scope, API, extension, stream, artifact, and
 reproducibility and evidence documentation with the change. Keep implementation facts,
 conformance fixtures, transitional paths, and roadmap work explicitly separate.
+
+## Release-aware commits
+
+Release Please runs after changes reach `main` and creates the next draft
+release pull request from release-worthy Conventional Commits. Use `fix:` for
+a patch release and `feat:` for a minor release; use a `BREAKING CHANGE:`
+footer only when the public contract requires a major release. `docs:`,
+`chore:`, and other non-user-facing commit types do not advance the application
+version. A release-worthy documentation correction should therefore use
+`fix(docs): ...` when it changes the public contract or user guidance.
