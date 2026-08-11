@@ -134,7 +134,7 @@ download_asset() {
         echo "nvcr-install: binary release $tag does not contain asset: $name" >&2
         exit 1
     fi
-    curl -fL "${curl_headers[@]}" "$url" -o "$download_dir/$name"
+    curl -fL "$url" -o "$download_dir/$name"
 }
 
 echo "Installing NVCR $tag for $package_family"
