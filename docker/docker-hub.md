@@ -9,9 +9,23 @@ platform families:
 - `jetson-l4t36.4`: linux/arm64 Jetson, JetPack 6.1/L4T 36.4, SM 8.7
   runtime code.
 
-There is no shared `latest` tag because the CPU architecture, NVIDIA
-userspace, and TensorRT engine compatibility differ. Prefer immutable tags such
-as `0.18.0-amd64-cuda12.8-trt10.9`.
+Each platform publishes an immutable version tag, a family rolling tag, and an
+explicit architecture-qualified rolling tag:
+
+```text
+0.18.0-amd64-cuda12.8-trt10.9
+amd64-cuda12.8-trt10.9
+latest-amd64-cuda12.8-trt10.9
+0.18.0-jetson-l4t36.4
+jetson-l4t36.4
+latest-jetson-l4t36.4
+```
+
+Use the `latest-*` tag for ordinary installation documentation and pin the
+version tag when reproducing a specific release. There is intentionally no
+shared unqualified `latest` tag because the CPU architecture, NVIDIA userspace,
+and TensorRT engine compatibility differ. The shorter family tag remains as a
+backward-compatible rolling alias.
 
 The images contain the native Release runtime and rolling-catalog client, but no
 TensorRT plans, models, input video, or generated output. The architecture-

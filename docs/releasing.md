@@ -29,6 +29,22 @@ Each application archive must:
   datasets, and generated streams;
 - retain all required licenses and notices.
 
+## Container images
+
+When Release Please creates a draft release, the release workflow dispatches
+both the native package build and the container publication workflow. The
+container workflow builds the exact release tag on the matching self-hosted
+architecture and publishes three tags per platform family:
+
+- an immutable application-version tag for reproducibility;
+- a family rolling tag for compatibility with existing users; and
+- an explicit `latest-*` rolling tag used by the Docker installation guides.
+
+There is no shared unqualified `latest` tag because x86_64 NVIDIA and Jetson
+images have different architectures and NVIDIA userspace. Container
+publication requires the Docker Hub credentials and both target runners; a
+failed target job must be repaired before treating the release as complete.
+
 A native package can be reproduced with:
 
 ```bash
