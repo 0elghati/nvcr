@@ -34,7 +34,6 @@ RUN sed -i 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g; s|http://s
         python3-venv \
         shellcheck \
         sudo \
-        unzip \
     && apt-get install -y --no-install-recommends \
         "libnvinfer-headers-dev=${TENSORRT_PACKAGE_VERSION}" \
         "libnvinfer-bin=${TENSORRT_PACKAGE_VERSION}" \
@@ -44,10 +43,6 @@ RUN sed -i 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g; s|http://s
         "libnvinfer-vc-plugin10=${TENSORRT_PACKAGE_VERSION}" \
         "libnvinfer10=${TENSORRT_PACKAGE_VERSION}" \
         "libnvonnxparsers10=${TENSORRT_PACKAGE_VERSION}" \
-    && curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip \
-    && unzip -q /tmp/awscliv2.zip -d /tmp \
-    && /tmp/aws/install \
-    && rm -rf /tmp/aws /tmp/awscliv2.zip \
     && tensorrt_soname="$(find /usr/lib/x86_64-linux-gnu -maxdepth 1 -name 'libnvinfer.so.*' -print | sort -V | tail -n1)" \
     && test -n "${tensorrt_soname}" \
     && ln -sf "${tensorrt_soname}" /usr/local/lib/libnvinfer.so \
@@ -83,8 +78,7 @@ RUN set -eux; \
     echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}"; \
     chmod 0440 "/etc/sudoers.d/${USERNAME}"; \
     mkdir -p /workspace/nvcr; \
-    mkdir -p "/home/${USERNAME}/.aws"; \
-    chown "${USERNAME}:${USERNAME}" /workspace/nvcr "/home/${USERNAME}/.aws"
+    chown "${USERNAME}:${USERNAME}" /workspace/nvcr
 
 USER ${USERNAME}
 WORKDIR /workspace/nvcr
