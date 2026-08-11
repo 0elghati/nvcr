@@ -5,12 +5,12 @@ For JetPack 6.1 / L4T 36.4. Run these commands on the Jetson.
 ## Install
 
 ```bash
-docker pull omarelghati/nvcr:jetson-l4t36.4
+docker pull omarelghati/nvcr:latest-jetson-l4t36.4
 
 docker run --rm --runtime=nvidia --gpus all --network=host \
   -v nvcr-engines:/opt/nvcr/engines \
   --entrypoint /opt/nvcr/bin/nvcr-artifacts \
-  omarelghati/nvcr:jetson-l4t36.4 install \
+  omarelghati/nvcr:latest-jetson-l4t36.4 install \
     --engine-root /opt/nvcr/engines --profile qcif
 ```
 
@@ -48,7 +48,7 @@ docker run --rm --runtime=nvidia --gpus all --network=host \
   -v nvcr-engines:/opt/nvcr/engines:ro \
   -v "$NVCR_DATASET_DIR:/input:ro" \
   -v "$NVCR_OUTPUT_DIR:/output" \
-  omarelghati/nvcr:jetson-l4t36.4 encode \
+  omarelghati/nvcr:latest-jetson-l4t36.4 encode \
     -i /input/akiyo_qcif.yuv -o /output/akiyo_qcif.nvcr \
     -s 176x144 -r 29.97 --frames 4 --gop-size 2 --qp 32
 
@@ -56,7 +56,7 @@ docker run --rm --runtime=nvidia --gpus all --network=host \
   --user "$(id -u):$(id -g)" \
   -v nvcr-engines:/opt/nvcr/engines:ro \
   -v "$NVCR_OUTPUT_DIR:/output" \
-  omarelghati/nvcr:jetson-l4t36.4 decode \
+  omarelghati/nvcr:latest-jetson-l4t36.4 decode \
     -i /output/akiyo_qcif.nvcr \
     -o /output/akiyo_qcif_reconstructed.yuv
 ```
@@ -76,7 +76,7 @@ it and correct output ownership afterward.
 From a source checkout:
 
 ```bash
-export NVCR_JETSON_IMAGE="omarelghati/nvcr:jetson-l4t36.4"
+export NVCR_JETSON_IMAGE="omarelghati/nvcr:latest-jetson-l4t36.4"
 export NVCR_INPUT_DIR="$NVCR_DATASET_DIR"
 export NVCR_OUTPUT_DIR
 docker compose -f docker/compose.jetson.yaml run --rm engine-install \

@@ -6,8 +6,8 @@ usage() {
 Usage: docker/publish.sh [--load|--push] <amd64-cuda12.8-trt10.9|jetson>
 
 Builds one architecture-specific NVCR runtime image. --load imports it into the
-local Docker daemon (default). --push publishes both immutable-version and
-runtime-family tags to Docker Hub.
+local Docker daemon (default). --push publishes immutable-version, runtime-
+family, and architecture-qualified rolling tags to Docker Hub.
 
 Environment:
   NVCR_DOCKERHUB_REPOSITORY  Docker Hub repository (default: omarelghati/nvcr)
@@ -103,7 +103,11 @@ esac
 
 docker_tags=()
 for suffix in "${tag_suffixes[@]}"; do
-    docker_tags+=("$repository:$version-$suffix" "$repository:$suffix")
+    docker_tags+=(
+        "$repository:$version-$suffix"
+        "$repository:$suffix"
+        "$repository:latest-$suffix"
+    )
 done
 
 tag_args=()

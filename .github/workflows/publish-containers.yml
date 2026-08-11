@@ -1,13 +1,10 @@
 name: publish-containers
 
 on:
-  release:
-    types:
-      - published
   workflow_dispatch:
     inputs:
       tag:
-        description: Exact release tag, for example v0.18.0
+        description: Exact Release Please tag, for example v0.18.0
         required: true
         type: string
       architecture:
@@ -24,15 +21,15 @@ permissions:
   contents: read
 
 env:
-  NVCR_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+  NVCR_TAG: ${{ inputs.tag }}
 
 concurrency:
-  group: publish-containers-${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+  group: publish-containers-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
   publish-x86_64:
-    if: ${{ github.event_name == 'release' || inputs.architecture == 'x86_64' || inputs.architecture == 'all' }}
+    if: ${{ inputs.architecture == 'x86_64' || inputs.architecture == 'all' }}
     runs-on: [self-hosted, Linux, X64]
     env:
       NVCR_DOCKERHUB_REPOSITORY: ${{ secrets.DOCKERHUB_USERNAME }}/nvcr
@@ -59,7 +56,7 @@ jobs:
         run: ./docker/publish.sh --push amd64-cuda12.8-trt10.9
 
   publish-jetson:
-    if: ${{ github.event_name == 'release' || inputs.architecture == 'jetson' || inputs.architecture == 'all' }}
+    if: ${{ inputs.architecture == 'jetson' || inputs.architecture == 'all' }}
     runs-on: [self-hosted, Linux, ARM64, Jetson]
     env:
       NVCR_DOCKERHUB_REPOSITORY: ${{ secrets.DOCKERHUB_USERNAME }}/nvcr

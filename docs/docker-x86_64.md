@@ -8,12 +8,12 @@ For Linux x86_64 with Docker and NVIDIA Container Toolkit.
 docker run --rm --gpus all \
   nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
 
-docker pull omarelghati/nvcr:amd64-cuda12.8-trt10.9
+docker pull omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9
 
 docker run --rm --gpus all \
   -v nvcr-engines:/opt/nvcr/engines \
   --entrypoint /opt/nvcr/bin/nvcr-artifacts \
-  omarelghati/nvcr:amd64-cuda12.8-trt10.9 install \
+  omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9 install \
     --engine-root /opt/nvcr/engines --profile qcif
 ```
 
@@ -48,14 +48,14 @@ docker run --rm --gpus all --user "$(id -u):$(id -g)" \
   -v nvcr-engines:/opt/nvcr/engines:ro \
   -v "$NVCR_DATASET_DIR:/input:ro" \
   -v "$NVCR_OUTPUT_DIR:/output" \
-  omarelghati/nvcr:amd64-cuda12.8-trt10.9 encode \
+  omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9 encode \
     -i /input/akiyo_qcif.yuv -o /output/akiyo_qcif.nvcr \
     -s 176x144 -r 29.97 --frames 4 --gop-size 2 --qp 32
 
 docker run --rm --gpus all --user "$(id -u):$(id -g)" \
   -v nvcr-engines:/opt/nvcr/engines:ro \
   -v "$NVCR_OUTPUT_DIR:/output" \
-  omarelghati/nvcr:amd64-cuda12.8-trt10.9 decode \
+  omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9 decode \
     -i /output/akiyo_qcif.nvcr \
     -o /output/akiyo_qcif_reconstructed.yuv
 ```
@@ -78,7 +78,7 @@ Use `/input/akiyo_qcif.yuv` inside the container. If CUDA fails after the
 From a source checkout:
 
 ```bash
-export NVCR_X86_64_IMAGE="omarelghati/nvcr:amd64-cuda12.8-trt10.9"
+export NVCR_X86_64_IMAGE="omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9"
 export NVCR_INPUT_DIR="$NVCR_DATASET_DIR"
 export NVCR_OUTPUT_DIR
 docker compose -f docker/compose.x86_64.yaml run --rm engine-install \

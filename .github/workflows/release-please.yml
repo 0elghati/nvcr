@@ -24,10 +24,22 @@ jobs:
           manifest-file: .release-please-manifest.json
 
       # GitHub API-created draft releases do not trigger downstream workflows,
-      # so dispatch `release-assets.yml` directly when a release is created.
+      # so dispatch the release asset and container workflows directly when a
+      # release is created.
       - name: Trigger self-hosted release asset build
         if: ${{ steps.release.outputs.release_created == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh workflow run release-assets.yml --repo "${{ github.repository }}" --ref main -f tag="${{ steps.release.outputs.tag_name }}"
+
+      - name: Trigger container image publication
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run publish-containers.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            -f tag="${{ steps.release.outputs.tag_name }}" \
+            -f architecture=all
