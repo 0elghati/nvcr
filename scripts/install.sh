@@ -11,7 +11,6 @@ asset_release="${NVCR_ENGINE_ASSET_RELEASE:-engine-assets}"
 device_id=0
 run_tests=0
 install_engines=1
-install_all_profiles=0
 profiles=()
 
 usage() {
@@ -19,15 +18,14 @@ usage() {
 Usage: install.sh [options]
 
 Installs the matching semver'd NVCR binary package, then delegates exact GPU,
-CUDA, and TensorRT engine selection to 'nvcr-artifacts install'. The default
-engine profile is qcif; select others explicitly.
+CUDA, and TensorRT engine selection to 'nvcr-artifacts install'. If no profile
+is selected, every compatible published profile is installed.
 
 Options:
   --repo OWNER/REPO       GitHub repository (default: $repo)
   --tag TAG               Binary release tag, or "latest" (default: latest)
   --backend NAME          Backend to install (default: $backend)
   --profile NAME [...]    Install one or more profiles; may be repeated
-  --all-profiles          Install every compatible published profile
   --device-id N           CUDA device used for engine matching (default: 0)
   --asset-release TAG     Rolling engine release tag (default: $asset_release)
   --prefix DIR            NVCR binary install prefix (default: $prefix)
@@ -57,7 +55,6 @@ while (($#)); do
             shift
         done
         ;;
-    --all-profiles) install_all_profiles=1; shift ;;
     --engine-profile)
         echo "nvcr-install: warning: --engine-profile is deprecated; use --profile" >&2
         profiles+=("$2")
@@ -81,14 +78,6 @@ while (($#)); do
         ;;
     esac
 done
-
-if ((install_all_profiles)) && ((${#profiles[@]})); then
-    echo "nvcr-install: --all-profiles cannot be combined with --profile" >&2
-    exit 2
-fi
-if ((install_engines)) && ((!install_all_profiles)) && ((${#profiles[@]} == 0)); then
-    profiles=(qcif)
-fi
 
 for command in curl tar sha256sum python3; do
     if ! command -v "$command" >/dev/null 2>&1; then

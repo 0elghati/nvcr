@@ -102,10 +102,10 @@ esac
     def profiles_from_arguments(arguments: list[str]) -> list[str]:
         return [arguments[index + 1] for index, value in enumerate(arguments) if value == "--profile"]
 
-    def test_default_installs_qcif_only(self) -> None:
+    def test_default_forwards_no_profile_filter(self) -> None:
         result, arguments = self.run_installer()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.profiles_from_arguments(arguments), ["qcif"])
+        self.assertEqual(self.profiles_from_arguments(arguments), [])
 
     def test_profile_accepts_multiple_values_and_repetition(self) -> None:
         result, arguments = self.run_installer(
@@ -114,15 +114,10 @@ esac
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.profiles_from_arguments(arguments), ["qcif", "720p", "1080p"])
 
-    def test_all_profiles_forwards_no_filter(self) -> None:
-        result, arguments = self.run_installer("--all-profiles")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.profiles_from_arguments(arguments), [])
-
-    def test_all_profiles_rejects_profile_filter(self) -> None:
-        result, _ = self.run_installer("--all-profiles", "--profile", "720p")
+    def test_profile_requires_a_value(self) -> None:
+        result, _ = self.run_installer("--profile")
         self.assertEqual(result.returncode, 2)
-        self.assertIn("cannot be combined", result.stderr)
+        self.assertIn("requires at least one profile", result.stderr)
 
 
 if __name__ == "__main__":

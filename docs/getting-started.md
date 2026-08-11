@@ -75,7 +75,8 @@ The CLI uses planar 8-bit YUV420:
   -i output.nvcr -o reconstructed.yuv
 ```
 
-The native installer defaults to QCIF. Select one or more required profiles:
+The native installer defaults to all compatible profiles. To limit downloads,
+select one or more profiles:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh \
