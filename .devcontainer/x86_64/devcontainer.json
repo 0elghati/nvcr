@@ -18,9 +18,10 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/nvcr,type=bind,consistency=cached",
   "workspaceFolder": "/workspace/nvcr",
   "mounts": [
-    "source=nvcr-x86-build,target=/workspace/nvcr/build-devcontainer,type=volume"
+    "source=nvcr-x86-build,target=/workspace/nvcr/build-devcontainer,type=volume",
+    "source=nvcr-aws,target=/home/nvcr/.aws,type=volume"
   ],
-  "postCreateCommand": "sudo chown -R nvcr:nvcr build-devcontainer && cmake -S . -B build-devcontainer -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=89 -DNVCR_ENABLE_TENSORRT=ON",
+  "postCreateCommand": "sudo mkdir -p \"$HOME/.aws\" && sudo chown -R nvcr:nvcr \"$HOME/.aws\" build-devcontainer && cmake -S . -B build-devcontainer -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CUDA_ARCHITECTURES=89 -DNVCR_ENABLE_TENSORRT=ON",
   "customizations": {
     "vscode": {
       "extensions": [
