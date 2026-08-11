@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.0](https://github.com/0elghati/nvcr/compare/v0.18.2...v0.19.0) (2026-08-11)
+
+
+### Features
+
+* **ci:** automate rolling Docker release tags ([#114](https://github.com/0elghati/nvcr/issues/114)) ([68bfe71](https://github.com/0elghati/nvcr/commit/68bfe7121b462991151e0c5ac9e2d5878405e5aa))
+
+
+### Bug Fixes
+
+* **assets:** Fix 5060 engine bundles ([#116](https://github.com/0elghati/nvcr/issues/116)) ([9d8de35](https://github.com/0elghati/nvcr/commit/9d8de3503c9558180582b21c29e797e2258c4410))
+
 ## [0.18.2](https://github.com/0elghati/nvcr/compare/v0.18.1...v0.18.2) (2026-08-11)
 
 
