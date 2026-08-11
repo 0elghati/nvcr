@@ -298,6 +298,32 @@ container, pass both `--container-image` and its immutable
 must mount inputs and engines read-only and evidence output writable. Container
 userspace must match the engine TensorRT identity.
 
+For the lower-level direct Docker benchmark, pull and run the same runtime
+image through `scripts/benchmark_docker.sh`:
+
+```bash
+scripts/benchmark_docker.sh \
+  --image omarelghati/nvcr:0.19.1-amd64-cuda12.8-trt10.9 \
+  --input-dir /data/nvcr/yuv \
+  --engine-volume nvcr-engines \
+  --results-dir evidence/performance/rtx4070-docker \
+  --hardware rtx4070-docker \
+  -- \
+  --resolutions "qcif cif 360p 720p 1080p" \
+  --frames 300 --qp 32 --gops "1 299" --repetitions 3
+```
+
+Use `process_throughput_fps` for the native-versus-Docker comparison. The
+codec-reported FPS is retained separately for runtime diagnostics.
+
+### Evidence boundary
+
+The reported performance comparison uses bare-metal Linux measurements. The
+RTX 3050 and RTX 5060 Docker benchmark runs are portability checks only; they
+confirm container/runtime and target-local TensorRT-bundle execution on those
+GPUs. Do not present those Docker runs as additional bare-metal baselines or
+pool their FPS with the bare-metal Linux comparison.
+
 ## 12. Accept the package
 
 Open `run-summary.json`, `test-summary.json`, `failures.jsonl`, and

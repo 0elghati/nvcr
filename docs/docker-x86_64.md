@@ -90,3 +90,29 @@ docker build --platform linux/amd64 --target runtime \
 
 Build engines on the GPU and TensorRT runtime that will execute them; do not
 reuse Jetson or another GPU's plans.
+
+## Direct Docker benchmark
+
+After the engine volume contains the matching target-local bundles, run the
+same diagnostic matrix used by the native Linux workflow:
+
+```bash
+scripts/benchmark_docker.sh \
+  --image omarelghati/nvcr:0.19.1-amd64-cuda12.8-trt10.9 \
+  --input-dir "$NVCR_DATASET_DIR" \
+  --engine-volume nvcr-engines \
+  --results-dir "$NVCR_OUTPUT_DIR/benchmark-docker" \
+  --hardware rtx4070-docker \
+  -- \
+  --resolutions "qcif 720p" --frames 300 --qp 32 \
+  --gops "1 299" --repetitions 3 --warmup-frames 10
+```
+
+This command pulls the image before running `docker run`; it does not use
+Docker Compose. Add `--install-profiles "qcif 720p"` when the named volume is
+empty and the image can access the private engine-assets release through
+`GH_TOKEN`. The result directory records the pulled image identity and process
+wall-time throughput for comparison with native Linux results. The launcher
+uses container user `0:0` by default because some NVIDIA Container Toolkit
+setups reject CUDA device access for UID 1000; override with `--user UID:GID`
+when non-root GPU access is validated on the target.
