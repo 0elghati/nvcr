@@ -75,10 +75,11 @@ The CLI uses planar 8-bit YUV420:
   -i output.nvcr -o reconstructed.yuv
 ```
 
-An installed package can fetch a compatible binary and engine set with the convenience installer:
+The native installer defaults to QCIF. Select one or more required profiles:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh \
+  | bash -s -- --profile qcif 720p
 ```
 
 Use [Compatibility](compatibility.md) before treating a target as supported.

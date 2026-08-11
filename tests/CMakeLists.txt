@@ -7,6 +7,9 @@ if(Python3_Interpreter_FOUND)
         NAME nvcr_engine_catalog
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/engine_catalog_tests.py")
     add_test(
+        NAME nvcr_native_installer
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/install_script_tests.py")
+    add_test(
         NAME nvcr_softwarex_driver
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/softwarex_driver_tests.py")
 else()

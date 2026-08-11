@@ -6,8 +6,8 @@ with TensorRT FP16. It is development software, not yet a supported v1 release.
 ## Install
 
 Requirements: an NVIDIA GPU and driver, Python 3, `curl`, `tar`, and
-`sha256sum`. The installer downloads the current binary and compatible engine
-profiles:
+`sha256sum`. The installer downloads the current binary and the QCIF engine by
+default:
 
 ```bash
 curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
@@ -22,8 +22,10 @@ Install selected profiles only:
 ```bash
 curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
   https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh \
-  | bash -s -- --profile qcif --profile 720p
+  | bash -s -- --profile qcif 720p
 ```
+
+Use `--all-profiles` only when every compatible published profile is needed.
 
 If no compatible engine is published, follow [model and engine
 preparation](docs/dcvcrt-artifacts.md). TensorRT plans remain tied to their GPU

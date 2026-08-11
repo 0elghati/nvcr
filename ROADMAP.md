@@ -52,7 +52,8 @@ Verified implementation evidence includes CPU tests, TensorRT Release builds,
 provider-selection contracts, package-consumer checks, focused SoftwareX
 driver tests, and exact Orin validation through 720p. The public documentation
 audit also passed link, shell-snippet, Compose, credential, and local-path
-checks.
+checks. Native installer tests cover default, selected multi-profile, and
+explicit all-profile installation.
 
 ## Next action
 
