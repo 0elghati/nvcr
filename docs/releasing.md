@@ -1,9 +1,10 @@
 # Packaging and release policy
 
-NVCR publishes application packages and target-compatible TensorRT engine
-bundles separately. Application versions follow semantic versioning. Engine
-bundles use a rolling catalog because unchanged target-local plans do not need
-to be duplicated for every application version.
+NVCR publishes the native runtime architecture's application packages and the
+current DCVC-RT/TensorRT target-compatible engine bundles separately.
+Application versions follow semantic versioning. Engine bundles use a rolling
+catalog because unchanged target-local plans do not need to be duplicated for
+every application version.
 
 ## Application packages
 
@@ -45,6 +46,14 @@ A native package can be reproduced with:
 
 Use `linux-aarch64-jetson-l4t36` for a package built natively on the supported
 Jetson family.
+
+## Compatibility and provenance
+
+Release metadata must keep software/API, artifact-schema, provider-runtime,
+hardware-target, stream-format, codec-payload, and application/container
+compatibility claims separate. Record the exact thing that was validated; a
+portable host binary, CUDA fat binary, catalog entry, and TensorRT plan are
+different claims. See [Compatibility](compatibility.md).
 
 ## Engine catalog
 
@@ -91,12 +100,12 @@ Uploading the catalog last ensures that installers cannot select an incomplete
 update. A local archive, successful upload, or plan-only load does not by itself
 establish publication or target support.
 
-## SoftwareX evidence package
+## Reproducible evaluation evidence package
 
 The evaluation driver writes a package such as:
 
 ```text
-evidence/softwarex-YYYYMMDD-<shortcommit>/
+evidence/evaluation-YYYYMMDD-<shortcommit>/
   README.md
   commands.md
   environment.json
@@ -124,4 +133,4 @@ Dirty, partial, plan-only, skipped, or missing-metric packages remain
 diagnostic.
 
 See the [result schema](experiments/result-schema.md) and
-[SoftwareX runbook](experiments/runbook.md) for the executable protocol.
+[evaluation runbook](experiments/runbook.md) for the executable protocol.

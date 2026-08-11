@@ -1,16 +1,28 @@
-# SoftwareX evaluation protocol
+# Reproducible evaluation protocol
 
 ## Purpose
 
-The evaluation validates the first complete NVCR runtime implementation:
+The evaluation has two linked parts. Architecture-level tests validate the
+runtime contracts; the production matrix validates the first complete codec /
+provider vertical:
+
+```text
+architecture contracts -> sessions, registry/services, artifacts, NVAU parser
+production vertical    -> DCVC-RT adapter -> TensorRT FP16 -> Linux/NVIDIA
+```
+
+The production evaluation validates:
 
 ```text
 DCVC-RT codec semantics -> TensorRT execution -> C++20 runtime -> NVAU access units
 ```
 
-It must show native encode/decode, stateful I/P GOP operation, reproducible artifact preparation and validation, target-aware selection, containerized build/test/run workflows, correctness and robustness, useful runtime performance, and quality comparable to the pinned Python DCVC-RT reference.
+It must show native encode/decode, stateful I/P GOP operation, reproducible
+artifact preparation and validation, target-aware selection, containerized
+build/test/run workflows, correctness and robustness, useful runtime
+performance, and quality comparable to the pinned Python DCVC-RT reference.
 
-Energy is optional downstream research. It is not a SoftwareX v1 gate.
+Energy is optional downstream research and is not a release gate.
 
 ## Scope
 
@@ -23,13 +35,18 @@ Use:
 - target-local or explicitly classified compatibility bundles;
 - the pinned upstream source and checkpoint hashes in [dcvcrt-artifacts.md](../dcvcrt-artifacts.md).
 
+The deterministic test codec and CPU provider are used for architecture
+conformance only. They are not performance baselines or additional production
+verticals. Energy is optional downstream research data unless a separate
+controlled protocol elevates it.
+
 Do not describe the result as a universal runtime, a multi-codec product, or a Python-compatible bitstream unless a separate test proves that claim.
 
 ## Automation contract
 
 Use `scripts/benchmark_softwarex_matrix.py` for publication rows. Its input is
 a local JSON manifest using `nvcr.softwarex.inputs.v1`; start from
-[the example](softwarex-inputs.example.json). For every selected profile the
+[the example](inputs.example.json). For every selected profile the
 driver:
 
 1. detects the GPU/runtime and validates it against the test target profile;
@@ -134,7 +151,7 @@ Do not claim bit-exact or payload interchangeability without bidirectional cross
 
 ## Acceptance gates
 
-An exact target is ready for a SoftwareX table only when source build, artifact
+An exact target is ready for a publication table only when source build, artifact
 validation, engine contract tests, I-frame round trip, I/P round trip,
 reset/reuse, malformed-input rejection, the clean performance pass, and the
 separate `--profile` metrics all pass.
@@ -155,7 +172,7 @@ packages are diagnostic records.
 Use one directory per clean run:
 
 ```text
-evidence/softwarex-YYYYMMDD-<shortcommit>/
+evidence/evaluation-YYYYMMDD-<shortcommit>/
   README.md
   commands.md
   environment.json

@@ -1,6 +1,9 @@
 # Getting started
 
-There are two useful starting points: a CPU build for the public contracts, or a native TensorRT build for DCVC-RT.
+NVCR is the runtime architecture; DCVC-RT/TensorRT is the current production
+vertical. There are two useful starting points: a CPU build for public
+contracts and conformance fixtures, or a native TensorRT build for production
+codec execution.
 
 ## CPU build
 

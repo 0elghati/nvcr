@@ -3,7 +3,9 @@
 This page defines the measurement protocol. Reported numbers come from the
 machine-readable result set rather than an accumulating narrative log.
 
-The SoftwareX matrix, target records, result schema, and run commands live in [docs/experiments](experiments/README.md).
+The publication matrix, target records, result schema, and run commands live in [docs/experiments](experiments/README.md). The matrix is evidence for both
+architecture-level gates and the DCVC-RT/TensorRT production vertical; CPU
+fixture results do not establish production performance.
 
 ## Rules
 
@@ -18,7 +20,7 @@ Run a Release build only after the configured correctness and artifact tests pas
 
 Use the same input, profile, QP, frame count, and timing boundary for both runtimes. Do not turn one machine or one sequence into a general performance claim.
 
-Keep optional instrumentation outside primary timing. The SoftwareX driver
+Keep optional instrumentation outside primary timing. The publication-matrix driver
 always derives FPS, FPS variation, compatibility ratios, and total process wall
 time from repetitions without verbose per-frame output, quality calculation,
 process polling, or `nvidia-smi` polling. `--profile` adds separate repetitions
@@ -29,7 +31,7 @@ clean-pass values.
 
 The retained file
 [resolution-matrix.jsonl](../evidence/live-release-20260806/resolution-matrix.jsonl)
-is a diagnostic matrix, not a complete SoftwareX result package. Use its
+is a diagnostic matrix, not a complete publication result package. Use its
 recorded commit, artifact identity, status, and error fields when interpreting
 the rows; do not promote it to a release baseline.
 

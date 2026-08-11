@@ -1,6 +1,9 @@
 # Command line
 
-The `nvcr` CLI reads and writes planar 8-bit YUV420. Encode and decode are separate commands; runtime commands do not download or build engines.
+The `nvcr` CLI is an application over the NVCR runtime architecture. The
+current production path is DCVC-RT with TensorRT. It reads and writes planar
+8-bit YUV420; encode and decode are separate commands, and runtime commands do
+not download or build engines.
 
 ## Install engines
 

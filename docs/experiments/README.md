@@ -1,7 +1,8 @@
-# SoftwareX experiments
+# Reproducible experiments
 
-This directory defines the reproducible NVCR SoftwareX evaluation protocol. It
-is separate from the shorter product and usage documentation.
+This directory defines the reproducible NVCR evaluation protocol. It
+is separate from the shorter product and usage documentation and evaluates both
+architecture-level runtime claims and the first production vertical.
 
 The evaluation covers the first complete NVCR vertical:
 
@@ -14,17 +15,24 @@ stream layer:        bounded NVAU access units
 pixels:              planar YUV420P8
 ```
 
-The claim is narrow: NVCR provides a reproducible native runtime around this one codec/provider pair. It is not a claim of universal NVIDIA support, multi-codec production support, or Python bitstream compatibility.
+The production claim is narrow: NVCR provides a reproducible native runtime
+around this one codec/provider pair. Architecture-level evidence additionally
+covers session lifecycle, delayed output, registration, provider mediation,
+artifact resolution, bounded parsing, and malformed rejection. This is not a
+claim of universal NVIDIA support, multi-codec production support, or Python
+bitstream compatibility.
 
 ## Read in this order
 
-1. [SoftwareX evaluation protocol](softwarex-evaluation-protocol.md)
+1. [Evaluation protocol](evaluation-protocol.md)
 2. [Hardware targets](hardware-targets.md)
 3. [Compatibility levels](compatibility-levels.md)
 4. [Result schema](result-schema.md)
 5. [Runbook](runbook.md)
 6. [Missing-data checklist](missing-data-checklist.md)
-7. [Input manifest example](softwarex-inputs.example.json)
+7. [Input manifest example](inputs.example.json)
+
+The reviewer-facing claim matrix is in [../reproducibility/claims-and-evidence.md](../reproducibility/claims-and-evidence.md).
 
 ## Current state
 

@@ -1,6 +1,12 @@
-# Model and engine preparation
+# Model and engine preparation for the first production vertical
 
-NVCR v1 prepares exactly one profile: `dcvcrt-cvpr2025`. It does not convert
+This page documents the current DCVC-RT/TensorRT production vertical; it is
+not the definition of the NVCR runtime architecture. The artifact workflow
+binds a codec adapter and model set to a provider, engine profile, target,
+runtime, digest, and licensing decision.
+
+The current production artifact workflow prepares exactly one model profile:
+`dcvcrt-cvpr2025`. It does not convert
 arbitrary PyTorch models. Preparation is offline; deployed NVCR does not load
 Python, PyTorch, or checkpoint files.
 

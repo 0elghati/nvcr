@@ -1,9 +1,14 @@
-# Unified neural codec bitstream envelope
+# Neural codec access-unit envelope direction
 
-NVCR is intended to become a unified runtime for neural video codecs. The
-bitstream design follows that goal by standardizing the outer access-unit
-contract while allowing each codec backend to keep the payload syntax required by
-its model.
+NVCR already implements a bounded codec access-unit contract. This page records
+the architectural direction for extending that contract across neural codecs;
+it does not turn the current development wrapper into a standard container or
+claim that multiple production codecs already exist. `NVAU` v1 is the narrow
+DCVC-RT-shaped representation and `NVAU` v2 is the implemented generalized
+sectioned representation.
+
+The design keeps a common outer access-unit contract while allowing each codec
+adapter to keep the payload syntax required by its model.
 
 The design choice is deliberately close to the way mature media stacks separate
 containers, samples, and codec elementary streams. A common file or stream format
@@ -27,8 +32,8 @@ research implementations.
   internals across the public runtime boundary.
 - Make access units inspectable, bounded, and rejectable before backend
   execution.
-- Provide a clean path to future FFmpeg, Matroska, MP4, and interchange-format
-  mappings.
+- Leave a clean architectural path for future FFmpeg, Matroska, MP4, and
+  interchange-format mappings; none of those integrations is current support.
 - Avoid designing a final universal neural video standard before multiple codec
   families have been integrated and tested.
 
@@ -115,11 +120,11 @@ Required common fields:
 | Section table | Locate bounded typed payload and side-data sections. |
 | Integrity field | Detect malformed or corrupted access units before backend execution. |
 
-The current `NVAU` version 1 already contains a narrow subset of this model for
-the DCVC-RT backend: model identity, dimensions, frame type, effective QP, reset
-state, and bounded payload length. The next design step is to generalize that
-contract without breaking the current separation between access units and
-application/container metadata.
+The current `NVAU` version 1 contains a narrow subset of this model for the
+DCVC-RT backend: model identity, dimensions, frame type, effective QP, reset
+state, and bounded payload length. `NVAU` v2 implements the sectioned form. The
+remaining work is integration and validation across additional codec families,
+not a claim that those families are already production-supported.
 
 ## Sections
 

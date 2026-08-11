@@ -81,7 +81,7 @@ python3 scripts/benchmark_softwarex_matrix.py --help
 It validates target and artifact identities, drives the Release build and
 registered CPU/GPU gates, records metrics, and writes the documented evidence
 layout. Start with
-[the input example](../docs/experiments/softwarex-inputs.example.json) and
+[the input example](../docs/experiments/inputs.example.json) and
 [runbook](../docs/experiments/runbook.md).
 
 The default path keeps optional instrumentation out of performance
@@ -125,7 +125,7 @@ encoded streams remain under `/tmp`.
 Use `--resolutions "360p"` or any other supported label to collect one
 resolution. Use `--hardware` to keep labels stable across machines; otherwise
 the pipeline records the first `nvidia-smi` GPU name, falling back to the host
-name. These diagnostic rows are intentionally separate from the SoftwareX
+name. These diagnostic rows are intentionally separate from the publication
 publication driver and can be aggregated after all hardware runs exist.
 
 `benchmark_resolution_matrix.sh` emits the diagnostic schema

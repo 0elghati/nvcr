@@ -1,6 +1,6 @@
 # Missing-data checklist
 
-Complete this list before calling a SoftwareX run complete.
+Complete this list before calling a publication run complete.
 
 ## Inputs and permissions
 
