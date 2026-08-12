@@ -164,20 +164,23 @@ Regenerate a Python-versus-NVCR comparison from two retained JSONL files:
 ```bash
 python3 scripts/consolidate_runtime_results.py \
   --python results/rtx4070/python/data/results.jsonl \
-  --nvcr results/rtx4070/nvcr/data/results.jsonl \
+  --nvcr results/rtx4070/nvcr/results.jsonl \
   --comparable-gop 1 \
+  --comparable-gop 30 \
+  --comparable-gop 100 \
   --nvcr-frame-overhead-bytes 58 \
   --python-reference-reset 64 \
-  --nvcr-reference-reset 32 \
+  --nvcr-reference-reset 64 \
   --nvcr-checkout-state dirty \
   --output results/rtx4070/summary.generated.md
 ```
 
 The retained RTX 4070 comparison subtracts 58 fixed bytes per access unit: the
 32-byte NVAU v1 header, six-byte `dcvcrt` codec identifier, and 20-byte
-DCVC-RT private payload header. Only GOP 1 is selected because the retained
-Python and NVCR feature-reference reset intervals differ. Use other values only
-when the matching source revision and retained evidence establish them.
+DCVC-RT private payload header. All three GOPs are selected because the
+retained Python and NVCR runs both use a 64-frame feature-reference reset
+interval. Use other values only when the matching source revision and
+retained evidence establish them.
 
 Compare `summary.generated.md` with the retained `summary.md`, then remove the
 generated file. Verify the summary and hashes before replacing a retained

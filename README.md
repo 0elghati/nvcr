@@ -86,39 +86,52 @@ resolution, with the matching configuration named beside it.
 
 This is the inter-coded comparison point. The strongest recorded FPS comes from
 GOP 100 at every resolution, and the linked report keeps GOP 30 visible too.
+"Python" is Microsoft's official DCVC-RT reference implementation, run at the
+same QP and GOP so its reconstruction quality (PSNR) and compressed size (BPP,
+bits per pixel) can be compared directly against NVCR's own measured PSNR/BPP
+and throughput.
 
-| Resolution | Best inter-coded GOP | Encode FPS | Decode FPS |
-|---|---:|---:|---:|
-| QCIF | 100 | 248.052 | 254.457 |
-| CIF | 100 | 103.946 | 106.835 |
-| 360p | 100 | 49.607 | 54.628 |
-| 540p | 100 | 22.527 | 25.112 |
-| 720p | 100 | 12.749 | 14.467 |
-| 1080p | 100 | 5.830 | 6.566 |
+| Resolution | Encode FPS | Decode FPS | NVCR PSNR | NVCR BPP | Python PSNR | Python BPP |
+|---|---:|---:|---:|---:|---:|---:|
+| QCIF | 248.052 | 254.457 | 37.922 | 0.013570 | 38.241 | 0.013516 |
+| CIF | 103.946 | 106.835 | 34.775 | 0.021574 | 34.872 | 0.021428 |
+| 360p | 49.607 | 54.628 | 34.697 | 0.025051 | 34.931 | 0.025091 |
+| 540p | 22.527 | 25.112 | 35.692 | 0.019467 | 35.935 | 0.019452 |
+| 720p | 12.749 | 14.467 | 40.358 | 0.006146 | 40.702 | 0.006081 |
+| 1080p | 5.830 | 6.566 | 36.325 | 0.012927 | 36.488 | 0.012919 |
 
 The full report keeps the entropy comparison and the per-GOP FPS table.
 [Results](results/jetson-orin/summary.md)
 
 ### RTX 4070
 
-This is the all-intra comparison point for the entropy check, and the linked
+This is an inter-coded comparison point, like Jetson Orin above. The linked
 report also shows the strongest inter-coded FPS per resolution. The strongest
-recorded FPS comes from GOP 100 at every resolution.
+recorded FPS comes from GOP 100 at every resolution. "Python" is Microsoft's
+official DCVC-RT reference implementation, run at the same QP and GOP so its
+reconstruction quality (PSNR) and compressed size (BPP, bits per pixel) can be
+compared directly against NVCR's own measured PSNR/BPP and throughput.
 
-| Resolution | Best inter-coded GOP | Encode FPS | Decode FPS |
-|---|---:|---:|---:|
-| QCIF | 100 | 915.816 | 1030.706 |
-| CIF | 100 | 580.303 | 605.420 |
-| 360p | 100 | 417.027 | 398.613 |
-| 540p | 100 | 227.894 | 211.146 |
-| 720p | 100 | 102.091 | 106.922 |
-| 1080p | 100 | 50.323 | 51.641 |
+| Resolution | Encode FPS | Decode FPS | NVCR PSNR | NVCR BPP | Python PSNR | Python BPP |
+|---:|---:|---:|---:|---:|---:|---:|
+| QCIF | 957.692 | 1021.886 | 38.018 | 0.013564 | 38.209 | 0.013185 |
+| CIF | 576.553 | 606.987 | 34.740 | 0.021488 | 34.858 | 0.021358 |
+| 360p | 408.543 | 399.723 | 34.690 | 0.025029 | 34.915 | 0.025131 |
+| 540p | 225.741 | 211.098 | 35.700 | 0.019471 | 35.920 | 0.019431 |
+| 720p | 102.380 | 107.388 | 40.371 | 0.006164 | 40.710 | 0.006080 |
+| 1080p | 50.303 | 51.689 | 36.325 | 0.012938 | 36.484 | 0.012898 |
 
-The full report keeps the all-intra comparison context and the per-GOP FPS table. [Results](results/rtx4070/summary.md)
+The full report keeps the entropy comparison and the per-GOP FPS table. [Results](results/rtx4070/summary.md)
 
 ### RTX 5060
 
-Portability run across QCIF to 1080p and GOP 1/8/265. [Results](results/rtx5060/summary.md)
+The RTX 4070 and Jetson Orin results above are the main measurement points.
+To check that NVCR is not tied to one specific GPU, the same NVCR build was
+also installed and run unmodified on an RTX 5060, a different GPU architecture
+from either of those two. It correctly encoded and decoded every resolution
+from QCIF to 1080p across GOP settings 1, 8, and 265 on that new hardware,
+with no code changes. This is a portability check, not a third performance
+comparison. [Results](results/rtx5060/summary.md)
 
 ### RTX 3050
 

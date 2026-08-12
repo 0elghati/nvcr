@@ -7,7 +7,7 @@ per-resolution, per-GOP NVCR encode/decode FPS.
 | Target | Status | Coverage | What the report shows |
 |---|---|---|---|
 | [Jetson Orin](jetson-orin/) | Complete | Six resolutions, QP 32, GOP 1/30/100, 100 frames | Inter-coded comparison and throughput |
-| [RTX 4070](rtx4070/) | Complete | Six resolutions, QP 32, GOP 1/30/100, 100 frames | All-intra comparison and throughput |
+| [RTX 4070](rtx4070/) | Complete | Six resolutions, QP 32, GOP 1/30/100, 100 frames | Inter-coded comparison and throughput |
 | [RTX 5060](rtx5060/) | Portability complete | QCIF through 1080p, QP 63, GOP 1/8/265 | Portability coverage and throughput |
 | [RTX 3050](rtx3050/) | Placeholder | Future completion target | [Retained configuration reference](rtx3050/summary.md) |
 
