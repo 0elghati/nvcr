@@ -1,114 +1,83 @@
-# Architecture
+# NVCR architecture
 
-NVCR is a native runtime architecture for neural video codecs. Its purpose is
-to make stateful learned codecs usable as systems software while keeping codec
-semantics, execution technology, artifact provenance, and stream framing at
-separate ownership boundaries.
+NVCR turns a learned video-compression model into a native codec application.
+The model supplies compression behaviour; NVCR supplies the runtime, GPU
+execution, engine selection, bitstream handling, and delivery surfaces around
+it.
 
-```text
-                         Runtime plane
- application / CLI -> Runtime -> session -> codec adapter
-                                      |           |
-                                      |     RuntimeServices
-                                      |           |
-                         registry <---+-----------+
-                                      |
-                         execution provider
+## Runtime map
 
-                         Artifact plane
- model profile -> provider/engine profile -> target profile
-                                      |
-                          catalog -> resolver -> hashes/license
-
-                         Stream plane
- application mapping -> packet -> bounded NVAU -> codec-private payload
+```mermaid
+flowchart LR
+    App[C++ application or nvcr CLI] --> Runtime[NVCR runtime]
+    Runtime --> Sessions[Encoder and decoder sessions]
+    Sessions --> Codec[DCVC-RT codec adapter<br/>I/P state and native rANS]
+    Codec --> Provider[TensorRT provider<br/>CUDA execution and TensorRT plans]
+    Registry[Codec and provider registry] --> Runtime
+    Catalog[Public engine catalog] --> Resolver[Artifact resolver]
+    Resolver --> Provider
+    Provider --> GPU[NVIDIA GPU]
 ```
 
-## Runtime plane
+The runtime owns the application-facing session lifecycle. The DCVC-RT adapter
+owns codec state and entropy coding. The TensorRT provider owns GPU execution.
+The resolver selects an engine that matches the active target before the
+provider starts work.
 
-The runtime plane contains the application-facing `Frame` and `Packet` values,
-`Runtime`, encoder/decoder session contracts, codec adapters, the static
-registry, and `RuntimeServices`.
+## Data flow
 
-| Boundary | Responsibility |
-|---|---|
-| `Runtime` and sessions | Stateful send/receive behavior, flush, drain, reset, statistics, and serialized access to mutable codec state |
-| Codec adapter | Codec descriptor/capabilities, option schemas, frame-type/GOP semantics, codec state, entropy meaning, and codec-private payloads |
-| Registry | Static discovery and registration of codecs and providers; no dynamic plugin ABI in the current release track |
-| `RuntimeServices` | Provider-mediated component creation and resolver-selected executable lookup |
-| Execution provider | Artifact loading, tensor bindings, synchronization, device execution, and provider-specific errors |
-
-The public provider headers do not expose CUDA, TensorRT, or DCVC-RT types.
-`ICodecAdapter` and `IExecutionProvider` are implemented contracts; production
-component creation is currently provider-mediated through
-`ProviderEntry::component_factory`.
-
-## Artifact plane
-
-The artifact plane identifies and qualifies executable assets:
-
-```text
-codec ID + model set + provider + component + engine profile + target
-precision + API/manifest versions + runtime + digest + license status
-                                      |
-                             catalog candidates
-                                      |
-                             resolver ranking
+```mermaid
+flowchart LR
+    Raw[Raw YUV frames] --> Encode[Encode session]
+    Encode --> Adapter[DCVC-RT adapter]
+    Adapter --> Engine[TensorRT engine]
+    Engine --> AccessUnit[NVAU access units]
+    AccessUnit --> Decode[Decode session]
+    Decode --> Adapter2[DCVC-RT adapter]
+    Adapter2 --> Engine2[TensorRT engine]
+    Engine2 --> Output[Reconstructed YUV frames]
 ```
 
-`ArtifactDescriptor` describes a resolved executable. `Catalog` reads the
-versioned engine catalog. `Resolver` rejects mismatched codec/model/provider,
-precision, API or manifest versions, architecture, target, runtime, digest,
-availability, and license policy, then ranks exact, same-compute, and explicit
-Ampere-plus candidates. A target profile is an input to this process, not proof
-of support.
+`NVAU` is NVCR's bounded, versioned access-unit format. It carries the codec,
+model, ordering, dependency, and payload information needed by the decoder; the
+learned payload itself remains DCVC-RT-specific.
 
-## Stream plane
+## Engine selection
 
-The stream plane separates codec access units from application or container
-metadata:
-
-```text
-application/container mapping -> Packet -> NVAU elementary stream unit
-                                               |
-                                  codec-private payload sections
+```mermaid
+flowchart LR
+    Detect[Detect GPU, CUDA, and TensorRT] --> Match[Match catalog entries]
+    Match --> Exact[Exact target engine]
+    Match --> SameSM[Same compute-capability engine]
+    Match --> Broad[Ampere-and-newer engine]
+    Exact --> Install[Install selected bundle]
+    SameSM --> Install
+    Broad --> Install
+    Install --> Run[TensorRT provider runs NVCR]
 ```
 
-`NVAU` v1 is the narrow DCVC-RT-shaped production/default representation.
-`NVAU` v2 is an implemented generalized sectioned representation. Both are
-bounded and versioned; malformed input is rejected before backend execution.
-The learned payload remains codec-private. `NVCR` and `NVCS` are development
-or application wrappers, not standard multimedia containers. Container tracks,
-timestamps, indexes, audio, and subtitles remain outside the current stream
-contract.
+NVCR prefers an exact engine. Desktop targets can use a published matching
+compute-capability or broader compatibility bundle when available; Jetson uses
+exact-target engines.
 
-## Implemented versus future boundaries
+## Repository map
 
-| Class | Current meaning |
-|---|---|
-| Architecture contract | Runtime sessions, codec/provider interfaces, registry/services, artifact identity/resolution, and bounded access units |
-| Conformance implementation | Deterministic test codec and CPU provider used by tests for delayed output, provider calls, tensor binding, errors, reset, and malformed input |
-| Supported integration | DCVC-RT adapter, native rANS, and TensorRT FP16 provider-owned backend for validated Linux/NVIDIA targets |
-| Transitional/future | Independent component-level TensorRT `IExecutable` loading, additional production codecs/providers, INT8 release profile, FFmpeg, standard containers, stable C ABI, and ABI freeze |
+```mermaid
+flowchart TB
+    Repo[NVCR repository]
+    Repo --> Public[include/nvcr<br/>Public C++ API]
+    Repo --> RuntimeSrc[src<br/>Runtime, codec, provider, bitstream]
+    Repo --> CLI[cli<br/>The nvcr command]
+    Repo --> Tools[scripts<br/>Install, artifacts, validation]
+    Repo --> Tests[tests<br/>Contracts and regression tests]
+    Repo --> Docs[docs<br/>Guides and technical reference]
+    Repo --> Results[results<br/>Target execution results]
+    Public --> RuntimeSrc
+    RuntimeSrc --> CLI
+    RuntimeSrc --> Tests
+    Tools --> Results
+```
 
-## Current production flow
-
-1. The CLI or C++ application selects DCVC-RT and a provider configuration.
-2. The adapter requests provider-owned runtime components through
-   `RuntimeServices`.
-3. TensorRT validates and owns the target-local engine bundle, CUDA work, and
-   codec backend state.
-4. The runtime drives I/P sequence state and emits bounded `NVAU` access units.
-5. The decoder validates stream identity and payload bounds before updating its
-   independent reference state.
-
-The current TensorRT production path creates one provider-owned monolithic
-DCVC-RT backend. It does not independently load every neural model stage
-through the lower-level `IExecutionProvider::load` interface; that split is
-transitional work and is not a current production claim.
-
-## Stability
-
-The public API and ABI are not frozen. Pin the NVCR revision, codec/provider
-identities, stream format, model set, and artifact manifest when integrating.
-See [scope and support](scope-and-support.md) for the support evidence rule.
+For the public C++ surface, see the [API reference](reference.md). For the
+DCVC-RT implementation, see [DCVC-RT integration](dcvcrt-integration.md). For
+the access-unit format, see [Bitstreams and access units](bitstream.md).

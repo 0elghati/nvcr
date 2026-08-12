@@ -19,9 +19,9 @@ as a native codec.
 - Versioned `NVAU` access units that carry codec, model, ordering, and payload
   information.
 - Native packages, Docker images, a CLI, and reproducible validation tools for
-## Run NVCR on Linux
+  Linux desktop and Jetson systems.
 
-## Run on Linux
+## Run NVCR on Linux
 
 The default path is a native Linux installation on Ubuntu 24.04 x86_64 with an
 NVIDIA GPU supported by the public engine catalog, CUDA 12.8, and TensorRT 10.9.
@@ -82,12 +82,15 @@ reconstruction is not expected to be byte-identical to the input.
 NVCR has been executed on the following NVIDIA targets. The completed results
 are retained in the repository and establish the current deployment set.
 
-| Target | Status | Result |
-|---|---|---|
-| Jetson Orin | Complete | DCVC-RT comparison over six resolutions, GOP 1/30/100, and 100 frames; NVCR entropy rate is within −0.16% to +1.07% of the reference, with a +0.21% median. [Results](results/jetson-orin/summary.md) |
-| RTX 4070 | Complete | DCVC-RT comparison over six resolutions and 100 frames; all-intra entropy rate is within −0.12% to +0.30% of the reference, with a +0.23% median. [Results](results/rtx4070/summary.md) |
-| RTX 5060 | Portability complete | NVCR has been exercised across QCIF to 1080p and GOP 1/8/265. [Results](results/rtx5060/summary.md) |
-| RTX 3050 | Placeholder | Retained as a future completion target; it is not part of the current validated set. |
+| Target | Status | Measured NVCR FPS (encode / decode) | Result |
+|---|---|---:|---|
+| Jetson Orin | Complete | 2.50–248.05 / 3.18–254.46 | DCVC-RT comparison over six resolutions, GOP 1/30/100, and 100 frames; NVCR entropy rate is within −0.16% to +1.07% of the reference, with a +0.21% median. [Results](results/jetson-orin/summary.md) |
+| RTX 4070 | Complete | 16.54–915.82 / 18.09–1030.71 | DCVC-RT comparison over six resolutions and 100 frames; all-intra entropy rate is within −0.12% to +0.30% of the reference, with a +0.23% median. [Results](results/rtx4070/summary.md) |
+| RTX 5060 | Portability complete | 11.67–427.64 / 13.93–451.54 | NVCR has been exercised across QCIF to 1080p and GOP 1/8/265. [Results](results/rtx5060/summary.md) |
+| RTX 3050 | Placeholder | — | Retained as a future completion target; it is not part of the current validated set. |
+
+Each range covers the recorded resolutions and GOPs for that target. The linked
+reports contain the per-resolution and per-GOP FPS values.
 
 These results show the value of NVCR: the DCVC-RT compression method is carried
 into a native runtime that runs on both desktop and Jetson targets, with engines
@@ -109,16 +112,15 @@ See [Installation](docs/installation.md) for package and container details,
 
 ## Architecture
 
-```text
-Application / CLI
-        |
-        v
-NVCR runtime and stateful sessions
-        |
-        +-- codec adapter: DCVC-RT semantics, I/P state, native entropy coding
-        +-- execution provider: TensorRT plans and CUDA execution
-        +-- artifact resolver: models, engines, targets, and runtime identity
-        +-- access units: bounded, versioned NVAU framing
+```mermaid
+flowchart LR
+    App[Application or nvcr CLI] --> Runtime[NVCR runtime]
+    Runtime --> Codec[DCVC-RT codec adapter]
+    Codec --> Provider[TensorRT provider]
+    Provider --> GPU[NVIDIA GPU]
+    Catalog[Engine catalog] --> Resolver[Artifact resolver]
+    Resolver --> Provider
+    Codec --> Bitstream[NVAU access units]
 ```
 
 The current TensorRT provider owns the DCVC-RT backend. See

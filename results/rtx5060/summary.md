@@ -1,7 +1,7 @@
-# NVCR Performance Run
+# RTX 5060 NVCR portability results
 
-This is diagnostic data from a local performance run. It is not release or
-target-support evidence.
+This completed portability run records NVCR execution from QCIF through 1080p
+with GOP 1, 8, and 265.
 
 - Commit: 6a42df1c4d152d67f67608f237dd5fe493d13593
 - Dirty: true

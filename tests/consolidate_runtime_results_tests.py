@@ -109,14 +109,13 @@ class RuntimeResultValidationTests(unittest.TestCase):
             nvcr_checkout_state="dirty",
         )
         self.assertIn("| QCIF | 1 | 0.160000 | 0.157828 | -1.36% |", report)
-        self.assertNotIn("| QCIF | 30 |", report)
+        self.assertNotIn("| QCIF | 30 | 0.160000 |", report)
         self.assertIn("Python records a 64-frame feature-reference reset", report)
         self.assertIn("NVCR as 32 frames", report)
         self.assertIn("inter-coded GOPs 30 are excluded", report)
-        self.assertIn("canonical JSONL records `nvcr_dirty=false`", report)
-        self.assertIn("classifies the NVCR checkout as dirty", report)
+        self.assertIn("## NVCR throughput", report)
+        self.assertIn("| QCIF | 1 | 500.000 | 500.000 |", report)
         self.assertNotIn("Python FPS", report)
-        self.assertNotIn("NVCR FPS", report)
         self.assertNotIn("PSNR delta", report)
 
     def test_report_rejects_inter_comparison_with_reset_mismatch(self) -> None:
@@ -130,11 +129,14 @@ class RuntimeResultValidationTests(unittest.TestCase):
     def test_report_requires_overhead_for_selected_gop(self) -> None:
         with self.assertRaisesRegex(ValueError, "require --nvcr-frame-overhead-bytes"):
             self.build_synthetic_report(comparable_gops=(1,))
+    def test_default_report_keeps_nvcr_throughput_visible(self) -> None:
 
-    def test_default_report_omits_cross_runtime_numeric_tables(self) -> None:
         report = self.build_synthetic_report()
+
         self.assertIn("contains no cross-runtime rate table", report)
-        self.assertNotIn("| QCIF |", report)
+        self.assertNotIn("| Resolution | GOP | Python inner-bitstream BPP |", report)
+        self.assertIn("## NVCR throughput", report)
+        self.assertIn("| QCIF | 1 | 500.000 | 500.000 |", report)
         self.assertNotIn("Python FPS", report)
         self.assertNotIn("PSNR delta", report)
 

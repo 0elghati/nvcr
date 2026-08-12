@@ -37,7 +37,6 @@ those workflows.
 - [Bitstreams and access units](bitstream.md)
 - [Elementary-stream specification](spec/nvcr-elementary-stream-v1.md)
 - [Extension guide](extending-nvcr.md)
-- [Architecture decisions](adr/ADR-001-codec-provider-separation.md)
 
 The public C++ API/ABI is transitional. Integrations should retain the NVCR
 revision, codec/provider IDs, stream version, and artifact manifest identity.

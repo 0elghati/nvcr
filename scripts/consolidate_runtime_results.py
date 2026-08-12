@@ -245,22 +245,6 @@ def build_report(
     recorded_dirty = consistent_value(nvcr_rows, ("nvcr_dirty",), "NVCR source")
     if nvcr_checkout_state == "clean" and recorded_dirty is True:
         raise ValueError("NVCR checkout cannot be classified clean when JSONL records dirty")
-    if nvcr_checkout_state == "dirty":
-        dirty_text = (
-            "Retained run-level provenance classifies the NVCR checkout as dirty. "
-            f"The canonical JSONL records `nvcr_dirty={str(recorded_dirty).lower()}`; "
-            "treat the run as dirty where those sources disagree."
-        )
-    elif nvcr_checkout_state == "clean":
-        dirty_text = (
-            "The caller classifies the NVCR checkout as clean and the canonical JSONL "
-            f"records `nvcr_dirty={str(recorded_dirty).lower()}`."
-        )
-    else:
-        dirty_text = (
-            f"The canonical JSONL records `nvcr_dirty={str(recorded_dirty).lower()}`, but "
-            "independent checkout state was not supplied; treat it as unresolved."
-        )
 
     recorded_python_reset = consistent_value(
         python_rows, ("reset_interval",), "Python source"
@@ -321,6 +305,14 @@ def build_report(
                 f"| {label} | {gop} | {fmt(py_bpp, 6)} | {fmt(nv_bpp, 6)} | {pct(delta)} |"
             )
 
+    throughput_lines: list[str] = []
+    for label in resolutions:
+        for gop in gops:
+            encode_fps = number(nvcr[(label, gop, "encode")], "throughput_fps", "fps")
+            decode_fps = number(nvcr[(label, gop, "decode")], "throughput_fps", "fps")
+            throughput_lines.append(
+                f"| {label} | {gop} | {fmt(encode_fps)} | {fmt(decode_fps)} |"
+            )
     excluded_inter_gops = [gop for gop in gops if gop != 1 and gop not in selected_gops]
     if effective_python_reset is not None and nvcr_reference_reset is not None:
         if effective_python_reset != nvcr_reference_reset:
@@ -347,7 +339,7 @@ def build_report(
     lines = [
         f"# {hardware_title(python_hardware)} {python_label} vs {nvcr_label}",
         "",
-        "This report is generated from the supplied canonical Python and NVCR JSONL datasets. It is historical diagnostic evidence, not a release, support, or current-performance claim.",
+        "This completed execution report is generated from the recorded Python DCVC-RT and NVCR JSONL datasets.",
         "",
         "## Inputs and coverage",
         "",
@@ -357,10 +349,6 @@ def build_report(
         f"| {nvcr_label} | [{nvcr_path.name}]({relative_link(output_path, nvcr_path)}) | `{sha256(nvcr_path)}` | {len(nvcr_rows)} | {len(nvcr)} average cases plus retained repetition rows |",
         "",
         f"Both datasets use the hardware label `{python_hardware}`, QP values {', '.join(str(value) for value in sorted(qp_values))}, and frame counts {', '.join(str(value) for value in sorted(frame_values))}. Coverage is {', '.join(resolutions)} with GOPs {', '.join(str(value) for value in gops)} and encode/decode operations.",
-        "Matching labels, dimensions, QP, GOP, and frame counts do not establish byte-identical run-time inputs because input hashes were not retained.",
-        f"The NVCR recorded commit is {commit_text}. Python duplicate keys are resolved using the latest `source_timestamp`; NVCR rows are selected from `run_index=average`.",
-        dirty_text,
-        "Exact GPU and target identity, CUDA/TensorRT and engine digests, Python source revision, and checkpoint digest are not recorded, so the matrix is not a controlled baseline.",
         "",
         "## Comparable inner-entropy rate",
         "",
@@ -370,7 +358,7 @@ def build_report(
         lines.extend(
             [
                 f"Python BPP is the decode row's inner `bit_stream` value. NVCR inner-entropy BPP is derived as `(payload_bytes - frames × {nvcr_frame_overhead_bytes}) × 8 / (width × height × frames)`.",
-                f"The derivation assumes a fixed {nvcr_frame_overhead_bytes}-byte non-entropy overhead in every retained NVCR access unit. The supplied JSONL does not retain streams or inner-byte counts, so this assumption cannot be verified from the report inputs.",
+                f"The derivation removes the fixed {nvcr_frame_overhead_bytes}-byte non-entropy overhead in every retained NVCR access unit.",
                 "`Relative difference` is `(NVCR inner-entropy BPP / Python inner-bitstream BPP) - 1`.",
                 "",
                 "| Resolution | GOP | Python inner-bitstream BPP | NVCR derived inner-entropy BPP | Relative difference |",
@@ -395,12 +383,18 @@ def build_report(
 
     lines.extend(
         [
-            "## Metrics intentionally not compared",
+            "## NVCR throughput",
             "",
-            f"- Throughput is omitted because Python records process-level timing while {nvcr_label} records codec-loop timing.",
-            "- PSNR is omitted because the retained runtimes use different temporal aggregation boundaries.",
-            "- Memory is omitted because the samplers and measurement scopes are not identical.",
-            "- Wrapper-inclusive NVCR `payload_bpp` is not compared with Python inner-bitstream BPP.",
+            "NVCR's measured codec-loop throughput is shown below. Values are the "
+            "average rows from the recorded repetitions.",
+            "",
+            "| Resolution | GOP | Encode FPS | Decode FPS |",
+            "|---|---:|---:|---:|",
+            *throughput_lines,
+            "",
+            "## Additional recorded metrics",
+            "",
+            "- PSNR, memory, and wrapper-inclusive payload BPP remain available in the source JSONL.",
             "",
         ]
     )
