@@ -20,8 +20,9 @@ by the selected path.
 
 - Linux x86_64.
 - Docker Engine.
-- NVIDIA Container Toolkit and a driver compatible with the image's CUDA
-  userspace.
+- NVIDIA Container Toolkit with the `nvidia` runtime configured, and a driver
+  compatible with the image's CUDA userspace. Confirm that `docker info`
+  lists the `nvidia` runtime.
 - A discrete NVIDIA GPU for which the public catalog contains a compatible
   QCIF engine.
 - Python 3 and network access.
@@ -30,11 +31,15 @@ Verify the host-to-container GPU path:
 
 ```bash
 docker version
-docker run --rm --gpus all \
+docker run --rm --runtime=nvidia \
   nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
 ```
 
 Do not continue until the container lists the intended GPU.
+
+The Linux commands below use the configured NVIDIA runtime because that is the
+NVCR container path validated on the documented host. Docker's `--gpus all`
+form is an alternative; use one form consistently throughout this procedure.
 
 ### Resolve the runtime image
 
@@ -101,7 +106,7 @@ published QCIF bundle into a persistent volume:
 ```bash
 docker volume create nvcr-engines
 
-docker run --rm --gpus all \
+docker run --rm --runtime=nvidia \
   --volume nvcr-engines:/opt/nvcr/engines \
   --entrypoint /opt/nvcr/bin/nvcr-artifacts \
   "$NVCR_IMAGE_REF" \
@@ -125,11 +130,11 @@ The image entrypoint is `nvcr`, so commands after the image name begin with
 the NVCR subcommand:
 
 ```bash
-docker run --rm --gpus all "$NVCR_IMAGE_REF" codec list
-docker run --rm --gpus all "$NVCR_IMAGE_REF" codec describe dcvc-rt
-docker run --rm --gpus all "$NVCR_IMAGE_REF" provider list
-docker run --rm --gpus all "$NVCR_IMAGE_REF" provider describe tensorrt
-docker run --rm --gpus all "$NVCR_IMAGE_REF" \
+docker run --rm --runtime=nvidia "$NVCR_IMAGE_REF" codec list
+docker run --rm --runtime=nvidia "$NVCR_IMAGE_REF" codec describe dcvc-rt
+docker run --rm --runtime=nvidia "$NVCR_IMAGE_REF" provider list
+docker run --rm --runtime=nvidia "$NVCR_IMAGE_REF" provider describe tensorrt
+docker run --rm --runtime=nvidia "$NVCR_IMAGE_REF" \
   compatibility check --codec dcvc-rt --provider tensorrt
 ```
 
@@ -139,14 +144,14 @@ TensorRT initialization perform the target/runtime checks.
 ### Encode, decode, and verify
 
 ```bash
-docker run --rm --gpus all \
+docker run --rm --runtime=nvidia \
   --volume nvcr-engines:/opt/nvcr/engines:ro \
   --mount "type=bind,source=$NVCR_WORK_DIR,target=/work" \
   "$NVCR_IMAGE_REF" encode \
   -i /work/input.yuv -o /work/output.nvcr \
   -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32 --verbose
 
-docker run --rm --gpus all \
+docker run --rm --runtime=nvidia \
   --volume nvcr-engines:/opt/nvcr/engines:ro \
   --mount "type=bind,source=$NVCR_WORK_DIR,target=/work" \
   "$NVCR_IMAGE_REF" decode \

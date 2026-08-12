@@ -1,13 +1,16 @@
 # NVCR documentation
 
-Use [First run](first-run.md) for the canonical installation and validation
-workflow. The pages below provide deeper technical or platform-specific
-material without repeating that workflow.
+Use the root [Linux native procedure](../README.md#run-nvcr-on-linux) for the
+shortest installed encode/decode path. [First run](first-run.md) contains the
+complete Docker, Windows, Jetson, and CPU validation procedures. The remaining
+pages provide deeper technical or platform-specific material without repeating
+those workflows.
 
 ## Start here
 
-- [First run](first-run.md): Linux Docker, Windows Docker Desktop, Jetson
-  native, and CPU contract validation.
+- [Linux native run](../README.md#run-nvcr-on-linux)
+- [First run](first-run.md): Linux Docker, Windows Docker Desktop, Jetson native,
+  and CPU contract validation.
 - [Installation](installation.md): select a release delivery method and record
   its resolved identity.
 - [Troubleshooting](troubleshooting.md): diagnose GPU, runtime, artifact, input,

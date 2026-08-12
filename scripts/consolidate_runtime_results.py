@@ -134,10 +134,42 @@ def matrix_keys(keys: set[tuple[str, int, str]]) -> list[tuple[str, int, str]]:
     return sorted(keys, key=lambda key: (resolution_key(key[0]), key[1], key[2]))
 
 
-def cv(values: list[float]) -> float | None:
-    if len(values) < 2 or statistics.mean(values) == 0:
-        return None
-    return statistics.stdev(values) / statistics.mean(values)
+def positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("expected a positive integer")
+    return parsed
+
+
+def nonnegative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("expected a non-negative integer")
+    return parsed
+
+
+def nvcr_inner_bpp(row: dict[str, Any], frame_overhead_bytes: int) -> float:
+    dimension = str(row.get("size", ""))
+    try:
+        width_text, height_text = dimension.split("x", 1)
+        width = int(width_text)
+        height = int(height_text)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"invalid NVCR size for inner-BPP calculation: {dimension}") from error
+
+    frames = number(row, "frames", "frame_num")
+    payload_bytes = number(row, "payload_bytes")
+    if width <= 0 or height <= 0 or frames is None or frames <= 0:
+        raise ValueError(f"invalid NVCR dimensions or frame count for {dimension}")
+    if payload_bytes is None:
+        raise ValueError(f"NVCR row for {dimension} has no payload_bytes")
+
+    entropy_bytes = payload_bytes - frame_overhead_bytes * frames
+    if entropy_bytes < 0:
+        raise ValueError(
+            f"NVCR payload_bytes is smaller than the selected fixed overhead for {dimension}"
+        )
+    return entropy_bytes * 8.0 / (width * height * frames)
 
 
 def hardware_title(value: str) -> str:
@@ -171,9 +203,15 @@ def build_report(
     nvcr_rows: list[dict[str, Any]],
     python_label: str,
     nvcr_label: str,
+    *,
+    comparable_gops: tuple[int, ...] = (),
+    nvcr_frame_overhead_bytes: int | None = None,
+    python_reference_reset: int | None = None,
+    nvcr_reference_reset: int | None = None,
+    nvcr_checkout_state: str = "unresolved",
 ) -> str:
     python = choose_python(python_rows)
-    nvcr, repetitions = choose_nvcr_averages(nvcr_rows)
+    nvcr, _repetitions = choose_nvcr_averages(nvcr_rows)
     validate_matrix(python, nvcr)
 
     python_hardware = hardware(python_rows, "Python source")
@@ -202,89 +240,170 @@ def build_report(
     commit_values = {row.get("nvcr_commit") for row in nvcr_rows if row.get("nvcr_commit")}
     commit_text = ", ".join(f"`{value}`" for value in sorted(commit_values)) or "not recorded"
 
-    decode_lines = []
-    decode_deltas = []
-    for key in matrix_keys({key for key in keys if key[2] == "decode"}):
-        label, gop, _ = key
-        py = python[key]
-        nr = nvcr[key]
-        py_fps = number(py, "fps")
-        nv_fps = number(nr, "throughput_fps")
-        py_bpp = number(py, "ave_all_frame_bpp")
-        nv_bpp = number(nr, "payload_bpp")
-        py_psnr = number(py, "ave_all_frame_psnr", "ave_all_frame_psnr_y")
-        nv_psnr = number(nr, "psnr_yuv")
-        bpp_delta = nv_bpp / py_bpp - 1 if py_bpp and nv_bpp is not None else None
-        psnr_delta = nv_psnr - py_psnr if nv_psnr is not None and py_psnr is not None else None
-        if psnr_delta is not None:
-            decode_deltas.append((key, psnr_delta))
-        decode_lines.append(
-            f"| {label} | {gop} | {fmt(py_fps)} | {fmt(nv_fps)} | {fmt(py_bpp, 6)} | {fmt(nv_bpp, 6)} | {pct(bpp_delta)} | {fmt(py_psnr)} | {fmt(nv_psnr)} | {fmt(psnr_delta)} |"
+    if nvcr_checkout_state not in {"clean", "dirty", "unresolved"}:
+        raise ValueError(f"unsupported NVCR checkout state: {nvcr_checkout_state}")
+    recorded_dirty = consistent_value(nvcr_rows, ("nvcr_dirty",), "NVCR source")
+    if nvcr_checkout_state == "clean" and recorded_dirty is True:
+        raise ValueError("NVCR checkout cannot be classified clean when JSONL records dirty")
+    if nvcr_checkout_state == "dirty":
+        dirty_text = (
+            "Retained run-level provenance classifies the NVCR checkout as dirty. "
+            f"The canonical JSONL records `nvcr_dirty={str(recorded_dirty).lower()}`; "
+            "treat the run as dirty where those sources disagree."
+        )
+    elif nvcr_checkout_state == "clean":
+        dirty_text = (
+            "The caller classifies the NVCR checkout as clean and the canonical JSONL "
+            f"records `nvcr_dirty={str(recorded_dirty).lower()}`."
+        )
+    else:
+        dirty_text = (
+            f"The canonical JSONL records `nvcr_dirty={str(recorded_dirty).lower()}`, but "
+            "independent checkout state was not supplied; treat it as unresolved."
         )
 
-    encode_by_resolution = []
-    for label in resolutions:
-        py_values = [number(python[(label, gop, "encode")], "fps") for gop in gops]
-        nv_values = [number(nvcr[(label, gop, "encode")], "throughput_fps") for gop in gops]
-        encode_by_resolution.append(
-            f"| {label} | {' / '.join(fmt(value) for value in py_values)} | {' / '.join(fmt(value) for value in nv_values)} |"
+    recorded_python_reset = consistent_value(
+        python_rows, ("reset_interval",), "Python source"
+    )
+    if recorded_python_reset is not None:
+        recorded_python_reset = int(recorded_python_reset)
+    if (
+        python_reference_reset is not None
+        and recorded_python_reset is not None
+        and python_reference_reset != recorded_python_reset
+    ):
+        raise ValueError(
+            "explicit Python reference reset does not match the value recorded in JSONL"
+        )
+    effective_python_reset = python_reference_reset or recorded_python_reset
+
+    selected_gops = tuple(sorted(set(comparable_gops)))
+    missing_gops = sorted(set(selected_gops) - set(gops))
+    if missing_gops:
+        raise ValueError(f"selected comparable GOPs are absent from the matrix: {missing_gops}")
+    if selected_gops and nvcr_frame_overhead_bytes is None:
+        raise ValueError("comparable GOPs require --nvcr-frame-overhead-bytes")
+    if nvcr_frame_overhead_bytes is not None and not selected_gops:
+        raise ValueError("--nvcr-frame-overhead-bytes requires at least one --comparable-gop")
+    if nvcr_frame_overhead_bytes is not None and nvcr_frame_overhead_bytes < 0:
+        raise ValueError("NVCR frame overhead must be non-negative")
+
+    inter_gops = [gop for gop in selected_gops if gop != 1]
+    if inter_gops and (
+        effective_python_reset is None or nvcr_reference_reset is None
+    ):
+        raise ValueError(
+            "inter-coded GOP comparison requires explicit Python and NVCR reference-reset policy"
+        )
+    if inter_gops and effective_python_reset != nvcr_reference_reset:
+        raise ValueError(
+            "inter-coded GOP comparison requires matching Python and NVCR reference-reset policy"
         )
 
-    mean_psnr = statistics.mean(value for _, value in decode_deltas) if decode_deltas else None
-    median_psnr = statistics.median(value for _, value in decode_deltas) if decode_deltas else None
-    within = sum(abs(value) <= 0.2 for _, value in decode_deltas)
-    largest = sorted(decode_deltas, key=lambda item: abs(item[1]), reverse=True)[:2]
-    largest_text = ", ".join(f"{key[0]} GOP {key[1]} (`{value:+.3f} dB`)" for key, value in largest)
+    rate_lines: list[str] = []
+    rate_deltas: list[float] = []
+    if selected_gops:
+        assert nvcr_frame_overhead_bytes is not None
+        selected_keys = {
+            key
+            for key in keys
+            if key[2] == "decode" and key[1] in selected_gops
+        }
+        for key in matrix_keys(selected_keys):
+            label, gop, _ = key
+            py_bpp = number(python[key], "ave_all_frame_bpp")
+            if py_bpp is None or py_bpp <= 0:
+                raise ValueError(f"Python decode row has no positive inner BPP for {key}")
+            nv_bpp = nvcr_inner_bpp(nvcr[key], nvcr_frame_overhead_bytes)
+            delta = nv_bpp / py_bpp - 1.0
+            rate_deltas.append(delta)
+            rate_lines.append(
+                f"| {label} | {gop} | {fmt(py_bpp, 6)} | {fmt(nv_bpp, 6)} | {pct(delta)} |"
+            )
 
-    encode_cvs = [cv([number(row, "throughput_fps") for row in repetitions[key] if number(row, "throughput_fps") is not None]) for key in keys if key[2] == "encode"]
-    decode_cvs = [cv([number(row, "throughput_fps") for row in repetitions[key] if number(row, "throughput_fps") is not None]) for key in keys if key[2] == "decode"]
-    encode_cvs = [value for value in encode_cvs if value is not None]
-    decode_cvs = [value for value in decode_cvs if value is not None]
+    excluded_inter_gops = [gop for gop in gops if gop != 1 and gop not in selected_gops]
+    if effective_python_reset is not None and nvcr_reference_reset is not None:
+        if effective_python_reset != nvcr_reference_reset:
+            reset_text = (
+                f"Python records a {effective_python_reset}-frame feature-reference reset "
+                f"interval; the caller identifies NVCR as {nvcr_reference_reset} frames. "
+                "Because the inter-reference policies differ, inter-coded GOPs "
+                f"{', '.join(str(gop) for gop in excluded_inter_gops)} are excluded. "
+                "GOP 1 is all-intra and does not exercise that policy."
+            )
+        else:
+            reset_text = (
+                "Python and NVCR are identified with the same "
+                f"{effective_python_reset}-frame feature-reference reset interval. Only "
+                "the explicitly selected GOPs are reported."
+            )
+    else:
+        reset_text = (
+            "The feature-reference reset policy is not fully identified. Inter-coded GOPs "
+            f"{', '.join(str(gop) for gop in excluded_inter_gops) or 'in this matrix'} are "
+            "not treated as directly comparable."
+        )
 
     lines = [
         f"# {hardware_title(python_hardware)} {python_label} vs {nvcr_label}",
         "",
-        "This report is generated from the supplied canonical Python and NVCR JSONL datasets. It is diagnostic evidence, not a release or target-support claim.",
+        "This report is generated from the supplied canonical Python and NVCR JSONL datasets. It is historical diagnostic evidence, not a release, support, or current-performance claim.",
         "",
         "## Inputs and coverage",
         "",
         "| Runtime | Canonical data | SHA-256 | Rows | Coverage |",
         "|---|---|---|---:|---|",
         f"| {python_label} | [{python_path.name}]({relative_link(output_path, python_path)}) | `{sha256(python_path)}` | {len(python_rows)} | {len(python)} comparison cases |",
-        f"| {nvcr_label} | [{nvcr_path.name}]({relative_link(output_path, nvcr_path)}) | `{sha256(nvcr_path)}` | {len(nvcr_rows)} | {len(nvcr)} average cases; repetition rows used for stability |",
+        f"| {nvcr_label} | [{nvcr_path.name}]({relative_link(output_path, nvcr_path)}) | `{sha256(nvcr_path)}` | {len(nvcr_rows)} | {len(nvcr)} average cases plus retained repetition rows |",
         "",
-        f"Both datasets use hardware `{python_hardware}`, QP values {', '.join(str(value) for value in sorted(qp_values))}, and frame counts {', '.join(str(value) for value in sorted(frame_values))}. Coverage is {', '.join(resolutions)} with GOPs {', '.join(str(value) for value in gops)} and encode/decode operations.",
-        f"The NVCR recorded commit is {commit_text}. Python duplicate keys are resolved using the latest `source_timestamp`; NVCR comparison rows are selected from `run_index=average`.",
+        f"Both datasets use the hardware label `{python_hardware}`, QP values {', '.join(str(value) for value in sorted(qp_values))}, and frame counts {', '.join(str(value) for value in sorted(frame_values))}. Coverage is {', '.join(resolutions)} with GOPs {', '.join(str(value) for value in gops)} and encode/decode operations.",
+        "Matching labels, dimensions, QP, GOP, and frame counts do not establish byte-identical run-time inputs because input hashes were not retained.",
+        f"The NVCR recorded commit is {commit_text}. Python duplicate keys are resolved using the latest `source_timestamp`; NVCR rows are selected from `run_index=average`.",
+        dirty_text,
+        "Exact GPU and target identity, CUDA/TensorRT and engine digests, Python source revision, and checkpoint digest are not recorded, so the matrix is not a controlled baseline.",
         "",
-        "## Decode comparison",
-        "",
-        f"Python reports process FPS and average all-frame quality. {nvcr_label} reports codec-loop FPS and YUV PSNR. These timing boundaries differ, so FPS values are descriptive and are not a controlled speedup measurement.",
-        "",
-        "`BPP delta` is `(NVCR BPP / Python BPP) - 1`. `PSNR delta` is NVCR PSNR minus Python PSNR.",
-        "",
-        "| Resolution | GOP | Python FPS | NVCR FPS | Python BPP | NVCR BPP | BPP delta | Python PSNR | NVCR PSNR | PSNR delta |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
-        *decode_lines,
-        "",
-        f"Across the {len(decode_deltas)} decode cases, the mean PSNR delta is `{fmt(mean_psnr)} dB`, the median delta is `{fmt(median_psnr)} dB`, and {within} cases are within `0.2 dB`. The largest quality gaps are {largest_text}.",
-        "",
-        "## Encode comparison",
-        "",
-        f"Values are ordered GOP {' / '.join(str(gop) for gop in gops)}.",
-        "",
-        "| Resolution | Python FPS | NVCR FPS |",
-        "|---|---:|---:|",
-        *encode_by_resolution,
-        "",
-        f"The median coefficient of variation across NVCR repetitions is {fmt(statistics.median(encode_cvs) * 100 if encode_cvs else None, 2)}% for encode throughput and {fmt(statistics.median(decode_cvs) * 100 if decode_cvs else None, 2)}% for decode throughput.",
-        "",
-        "## Assessment",
-        "",
-        "This matrix is suitable for diagnostic comparison only. Differences in timing boundaries, samplers, and runtime measurement paths mean the FPS and memory values must not be presented as controlled acceleration or efficiency claims. BPP and PSNR differences should be investigated before claiming cross-runtime compression equivalence.",
-        "",
-        "Memory measurements are available in the NVCR rows and are omitted from the numeric comparison because the Python and NVCR samplers and timing boundaries are not identical.",
+        "## Comparable inner-entropy rate",
         "",
     ]
+    if rate_lines:
+        assert nvcr_frame_overhead_bytes is not None
+        lines.extend(
+            [
+                f"Python BPP is the decode row's inner `bit_stream` value. NVCR inner-entropy BPP is derived as `(payload_bytes - frames × {nvcr_frame_overhead_bytes}) × 8 / (width × height × frames)`.",
+                f"The derivation assumes a fixed {nvcr_frame_overhead_bytes}-byte non-entropy overhead in every retained NVCR access unit. The supplied JSONL does not retain streams or inner-byte counts, so this assumption cannot be verified from the report inputs.",
+                "`Relative difference` is `(NVCR inner-entropy BPP / Python inner-bitstream BPP) - 1`.",
+                "",
+                "| Resolution | GOP | Python inner-bitstream BPP | NVCR derived inner-entropy BPP | Relative difference |",
+                "|---|---:|---:|---:|---:|",
+                *rate_lines,
+                "",
+                f"Across these {len(rate_deltas)} explicitly selected cases, the relative-difference range is {pct(min(rate_deltas))} to {pct(max(rate_deltas))}; the median is {pct(statistics.median(rate_deltas))}.",
+                "",
+                reset_text,
+                "",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "No GOP was explicitly selected as comparable, so this report contains no cross-runtime rate table.",
+                "",
+                reset_text,
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            "## Metrics intentionally not compared",
+            "",
+            f"- Throughput is omitted because Python records process-level timing while {nvcr_label} records codec-loop timing.",
+            "- PSNR is omitted because the retained runtimes use different temporal aggregation boundaries.",
+            "- Memory is omitted because the samplers and measurement scopes are not identical.",
+            "- Wrapper-inclusive NVCR `payload_bpp` is not compared with Python inner-bitstream BPP.",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -295,6 +414,34 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path, help="Output summary.md")
     parser.add_argument("--python-label", default="Python DCVC-RT")
     parser.add_argument("--nvcr-label", default="NVCR")
+    parser.add_argument(
+        "--comparable-gop",
+        action="append",
+        default=[],
+        type=positive_int,
+        help="GOP explicitly approved for same-boundary rate comparison; repeat as needed",
+    )
+    parser.add_argument(
+        "--nvcr-frame-overhead-bytes",
+        type=nonnegative_int,
+        help="fixed per-frame bytes to subtract from NVCR payload_bytes",
+    )
+    parser.add_argument(
+        "--python-reference-reset",
+        type=positive_int,
+        help="Python feature-reference reset interval when absent from JSONL",
+    )
+    parser.add_argument(
+        "--nvcr-reference-reset",
+        type=positive_int,
+        help="NVCR feature-reference reset interval for comparability validation",
+    )
+    parser.add_argument(
+        "--nvcr-checkout-state",
+        choices=("clean", "dirty", "unresolved"),
+        default="unresolved",
+        help="run-level checkout classification independent of the JSONL field",
+    )
     args = parser.parse_args()
 
     python_path = args.python.expanduser().resolve()
@@ -308,6 +455,11 @@ def main() -> int:
         load_jsonl(nvcr_path),
         args.python_label,
         args.nvcr_label,
+        comparable_gops=tuple(args.comparable_gop),
+        nvcr_frame_overhead_bytes=args.nvcr_frame_overhead_bytes,
+        python_reference_reset=args.python_reference_reset,
+        nvcr_reference_reset=args.nvcr_reference_reset,
+        nvcr_checkout_state=args.nvcr_checkout_state,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(report, encoding="utf-8")

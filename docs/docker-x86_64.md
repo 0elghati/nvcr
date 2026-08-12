@@ -9,7 +9,7 @@ encode/decode procedure is in
 
 - Linux x86_64.
 - Docker Engine.
-- NVIDIA Container Toolkit.
+- NVIDIA Container Toolkit with the `nvidia` runtime configured.
 - A working NVIDIA driver compatible with CUDA 12.8 userspace.
 - A discrete NVIDIA GPU supported by a published engine compatibility class.
 
@@ -18,12 +18,17 @@ Check the host and container independently:
 ```bash
 nvidia-smi
 docker version
-docker run --rm --gpus all \
+docker info --format '{{ json .Runtimes }}'
+docker run --rm --runtime=nvidia \
   nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
 ```
 
 Both NVIDIA queries must name the intended GPU. Resolve driver or container
 runtime failures before diagnosing NVCR.
+
+These Linux commands use the configured NVIDIA runtime because that is the
+NVCR container path validated on the documented host. Docker's `--gpus all`
+form is an alternative; use one form consistently while diagnosing a failure.
 
 ## Select and identify the image
 
@@ -47,8 +52,8 @@ image.
 The entrypoint is already `nvcr`:
 
 ```bash
-docker run --rm --gpus all "$NVCR_IMAGE_REF" codec list
-docker run --rm --gpus all "$NVCR_IMAGE_REF" provider list
+docker run --rm --runtime=nvidia "$NVCR_IMAGE_REF" codec list
+docker run --rm --runtime=nvidia "$NVCR_IMAGE_REF" provider list
 ```
 
 ## Engine storage and selection
@@ -58,7 +63,7 @@ one persistent volume:
 
 ```bash
 docker volume create nvcr-engines
-docker run --rm --gpus all \
+docker run --rm --runtime=nvidia \
   --volume nvcr-engines:/opt/nvcr/engines \
   --entrypoint /opt/nvcr/bin/nvcr-artifacts \
   "$NVCR_IMAGE_REF" \
@@ -90,7 +95,7 @@ engine for the target.
 Mount `nvcr-engines` read-only during execution:
 
 ```bash
-docker run --rm --gpus all \
+docker run --rm --runtime=nvidia \
   --volume nvcr-engines:/opt/nvcr/engines:ro \
   "$NVCR_IMAGE_REF" codec list
 ```

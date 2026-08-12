@@ -45,8 +45,9 @@ not count as additional production codecs/providers or performance baselines.
 | Runtime and stream contracts | Implemented | Maintain parser, reset, flush, delayed-output, and I/P coverage |
 | TensorRT provider path | Implemented | Keep provider-owned boundary explicit; split model stages only with a new production integration |
 | Binary and container packaging | Implemented | Complete license, provenance, and clean-package checks |
-| Public documentation and onboarding | Implemented | Keep latest-release examples, role-based navigation, platform workflows, and documentation checks current |
+| Public documentation and onboarding | Implemented | Keep the project identity, contributions, reference comparisons, latest-release examples, and platform workflows current |
 | CLI and artifact-client build identity | Follow-up | Add `nvcr --version` and `nvcr-artifacts --version`, and reconcile the legacy `current_software_version` constant; until then use package manifests, source revisions, or OCI metadata |
+| Linux container GPU injection | Follow-up | Validate and document configured `nvidia` runtime, Docker `--gpus`, and CDI paths across supported Docker and NVIDIA Container Toolkit versions |
 | Exact-target artifacts | In progress | Produce current warning-free profile sets and target-local evidence |
 | Reproducible evaluation | In progress | Complete exact native and direct-Docker matrices plus pinned Python comparisons |
 | Compatibility classes | Experimental | Compare against complete exact baselines |

@@ -8,7 +8,8 @@ container digest with any bug report or result.
 
 | Host | Recommended delivery | Boundary |
 |---|---|---|
-| Linux x86_64 with an NVIDIA GPU | [Architecture-qualified Docker image](docker-x86_64.md) | Linux/amd64 container and catalog-selected engine |
+| Linux x86_64 with an NVIDIA GPU | [Native package and Linux run](../README.md#run-nvcr-on-linux) | Host CUDA/TensorRT runtime and catalog-selected engine |
+| Linux x86_64 with an isolated userspace | [Architecture-qualified Docker image](docker-x86_64.md) | Linux/amd64 container and catalog-selected engine |
 | Windows 11 with an NVIDIA GPU | [The same Linux image through Docker Desktop/WSL 2](docker-windows.md) | Container execution; no native Windows binary |
 | Jetson Orin | [Native AArch64 package](docker-jetson.md) | JetPack/L4T package and exact-target engine |
 | CPU-only Linux | [Source build](first-run.md#cpu-only-contract-validation) | Contract tests; no DCVC-RT inference |
@@ -19,9 +20,10 @@ or a registered target as supported execution.
 
 ## Native Linux package
 
-The native installer supports Linux x86_64 and Linux AArch64. It requires
-`curl`, `tar`, `sha256sum`, and Python 3. The host must already provide
-the NVIDIA driver and CUDA/TensorRT runtime expected by the selected package.
+The native installer supports the Ubuntu 24.04 x86_64 package baseline and
+Jetson AArch64 on L4T 36. It requires `curl`, `tar`, `sha256sum`, Python 3,
+and network access. The host must already provide the NVIDIA driver and
+CUDA/TensorRT runtime expected by the selected package.
 
 Resolve GitHub's latest stable release, fetch the installer from that exact
 tag, and pass the same tag to the installer:
@@ -36,7 +38,7 @@ printf 'NVCR release: %s\n' "$NVCR_RELEASE"
 curl -fsSLo /tmp/nvcr-install.sh \
   "https://raw.githubusercontent.com/0elghati/nvcr/${NVCR_RELEASE}/scripts/install.sh"
 bash /tmp/nvcr-install.sh \
-  --tag "$NVCR_RELEASE" --profile qcif --run-tests
+  --tag "$NVCR_RELEASE" --profile qcif
 ```
 
 The installer:

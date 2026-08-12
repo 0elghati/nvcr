@@ -39,7 +39,7 @@ overriding that entrypoint:
 
 ```bash
 docker volume create nvcr-engines
-docker run --rm --gpus all \
+docker run --rm --runtime=nvidia \
   --volume nvcr-engines:/opt/nvcr/engines \
   --entrypoint /opt/nvcr/bin/nvcr-artifacts \
   "$NVCR_IMAGE_REF" \

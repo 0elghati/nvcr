@@ -17,13 +17,17 @@ Container examples use `NVCR_IMAGE`. Set it to the current image selected in
 ```bash
 nvidia-smi
 docker info
-docker run --rm --gpus all \
+docker run --rm --runtime=nvidia \
   --entrypoint nvidia-smi \
   "$NVCR_IMAGE"
 ```
 
 **Fix.** Repair the driver, Docker Engine/Desktop WSL2 backend, and NVIDIA
-Container Toolkit. On Windows, also try `wsl.exe nvidia-smi`.
+Container Toolkit. On Linux, confirm that `docker info` lists the `nvidia`
+runtime and use the documented `--runtime=nvidia` form consistently.
+`--gpus all` is an alternative Docker GPU-selection form, not an NVCR
+requirement. On Windows, use the `--gpus all` commands in the Windows guide
+and also try `wsl.exe nvidia-smi`.
 
 **Do not.** Debug codec, provider, or artifact behavior until the container can
 name the expected GPU.
@@ -40,7 +44,7 @@ a CUDA context. The container may have stale UVM device mappings.
 
 ```bash
 stat -c '%t:%T %n' /dev/nvidia-uvm /dev/nvidia-uvm-tools
-docker run --rm --gpus all --entrypoint sh "$NVCR_IMAGE" -lc \
+docker run --rm --runtime=nvidia --entrypoint sh "$NVCR_IMAGE" -lc \
   "stat -c '%t:%T %n' /dev/nvidia-uvm /dev/nvidia-uvm-tools"
 ```
 
@@ -62,7 +66,7 @@ requested operation.
 **Check.** Pass only a subcommand:
 
 ```bash
-docker run --rm --gpus all "$NVCR_IMAGE" codec list
+docker run --rm "$NVCR_IMAGE" codec list
 ```
 
 **Fix.** Override the entrypoint when invoking the artifact client:
