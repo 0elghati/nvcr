@@ -1,7 +1,7 @@
-# Jetson Orin Python DCVC-RT vs NVCR R=64
+# Jetson Orin: inter-coded comparison and FPS
 
-This completed Jetson Orin run compares the NVCR 64-frame feature-reference
-cadence against the current pinned Python DCVC-RT data.
+This completed Jetson Orin report compares NVCR against the Python DCVC-RT
+reference and keeps the inter-coded FPS results visible.
 
 ## Inputs and coverage
 
@@ -63,7 +63,7 @@ run used 2.2% to 10.0% more entropy at GOP 30 and 4.8% to 21.7% more at GOP
 
 The quality table records NVCR and Python values for every resolution and GOP.
 
-## Reported throughput
+## FPS results
 
 The table reports the recorded NVCR codec-loop FPS alongside the Python process
 FPS for each case. NVCR values are means of three measured repetitions.

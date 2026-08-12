@@ -1,6 +1,6 @@
-# RTX 4070 Python DCVC-RT vs NVCR
+# RTX 4070: all-intra comparison and FPS
 
-This completed execution report is generated from the recorded Python DCVC-RT and NVCR JSONL datasets.
+This completed report compares NVCR against the Python DCVC-RT reference and keeps the all-intra FPS results visible.
 
 ## Inputs and coverage
 
@@ -30,9 +30,9 @@ Across these 6 explicitly selected cases, the relative-difference range is -0.12
 
 Python records a 64-frame feature-reference reset interval; the caller identifies NVCR as 32 frames. Because the inter-reference policies differ, inter-coded GOPs 30, 100 are excluded. GOP 1 is all-intra and does not exercise that policy.
 
-## NVCR throughput
+## FPS results
 
-NVCR's measured codec-loop throughput is shown below. Values are the average rows from the recorded repetitions.
+NVCR's measured codec-loop FPS is shown below. Values are the average rows from the recorded repetitions.
 
 | Resolution | GOP | Encode FPS | Decode FPS |
 |---|---:|---:|---:|
