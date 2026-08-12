@@ -79,23 +79,51 @@ reconstruction is not expected to be byte-identical to the input.
 ## Results
 
 NVCR has been executed on the following NVIDIA targets. The completed results
-are retained in the repository and show where NVCR is already usable today.
+are retained in the repository and show the strongest measured FPS for each
+resolution, with the matching configuration named beside it.
 
-| Target | Status | Measured NVCR FPS (encode / decode) | What the run shows |
-|---|---|---:|---|
-| Jetson Orin | Complete | 2.50–248.05 / 3.18–254.46 | DCVC-RT comparison on the inter-coded GOP 30 and 100 runs across six resolutions and 100 frames. NVCR entropy rate stays within −0.16% to +1.07% of the reference, with a +0.21% median. [Results](results/jetson-orin/summary.md) |
-| RTX 4070 | Complete | 16.54–915.82 / 18.09–1030.71 | DCVC-RT comparison on the all-intra GOP 1 runs across six resolutions and 100 frames. NVCR inner entropy rate stays within −0.12% to +0.30% of the reference, with a +0.23% median. [Results](results/rtx4070/summary.md) |
-| RTX 5060 | Portability complete | 11.67–427.64 / 13.93–451.54 | Portability run across QCIF to 1080p and GOP 1/8/265. [Results](results/rtx5060/summary.md) |
-| RTX 3050 | Placeholder | — | Reserved as a future completion target. |
+### Jetson Orin
 
-Each range covers the recorded resolutions and GOPs for that target. The linked
-reports keep the full per-resolution and per-GOP FPS tables.
+This is the inter-coded comparison point. The strongest recorded FPS comes from
+GOP 100 at every resolution, and the linked report keeps GOP 30 visible too.
 
-These results show the value of NVCR: the DCVC-RT compression method is carried
-into a native runtime that runs on both desktop and Jetson targets, with engines
-selected for the active platform rather than bundled as a one-off setup.
+| Resolution | Best inter-coded GOP | Encode FPS | Decode FPS |
+|---|---:|---:|---:|
+| QCIF | 100 | 248.052 | 254.457 |
+| CIF | 100 | 103.946 | 106.835 |
+| 360p | 100 | 49.607 | 54.628 |
+| 540p | 100 | 22.527 | 25.112 |
+| 720p | 100 | 12.749 | 14.467 |
+| 1080p | 100 | 5.830 | 6.566 |
 
-## Other ways to run NVCR
+The full report keeps the entropy comparison and the per-GOP FPS table.
+[Results](results/jetson-orin/summary.md)
+
+### RTX 4070
+
+This is the all-intra comparison point for the entropy check, and the linked
+report also shows the strongest inter-coded FPS per resolution. The strongest
+recorded FPS comes from GOP 100 at every resolution.
+
+| Resolution | Best inter-coded GOP | Encode FPS | Decode FPS |
+|---|---:|---:|---:|
+| QCIF | 100 | 915.816 | 1030.706 |
+| CIF | 100 | 580.303 | 605.420 |
+| 360p | 100 | 417.027 | 398.613 |
+| 540p | 100 | 227.894 | 211.146 |
+| 720p | 100 | 102.091 | 106.922 |
+| 1080p | 100 | 50.323 | 51.641 |
+
+The full report keeps the all-intra comparison context and the per-GOP FPS table. [Results](results/rtx4070/summary.md)
+
+### RTX 5060
+
+Portability run across QCIF to 1080p and GOP 1/8/265. [Results](results/rtx5060/summary.md)
+
+### RTX 3050
+
+Reserved as a future completion target.
+
 
 | Environment | Procedure |
 |---|---|
@@ -153,7 +181,7 @@ outside the current release.
 
 ## Acknowledgements
 
-NVCR's first codec integration builds on DCVC-RT, introduced by Zhaoyang Jia,
+NVCR's first codec integration is with the DCVC-RT, introduced by Zhaoyang Jia,
 Bin Li, Jiahao Li, Wenxuan Xie, Linfeng Qi, Houqiang Li, and Yan Lu in
 [*Towards Practical Real-Time Neural Video Compression*](https://openaccess.thecvf.com/content/CVPR2025/html/Jia_Towards_Practical_Real-Time_Neural_Video_Compression_CVPR_2025_paper.html),
 and on the reference implementation and model lineage released through the

@@ -13,10 +13,10 @@ per-resolution, per-GOP NVCR encode/decode FPS.
 
 ## Reading the results
 
-- Throughput is the recorded NVCR codec-loop encode/decode FPS. It is shown in
-  every completed target report.
-- Jetson Orin highlights the inter-coded comparison. RTX 4070 highlights the
-  all-intra comparison.
+- Throughput is the recorded NVCR codec-loop encode/decode FPS. The target
+  reports call out the strongest FPS per resolution and keep the full per-GOP
+  tables below them.
+- Jetson Orin and RTX 4070 both keep the inter-coded throughput visible.
 - JSONL is the recorded source data; CSV and Markdown summaries are derived
   views.
 

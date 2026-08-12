@@ -30,6 +30,19 @@ Across these 6 explicitly selected cases, the relative-difference range is -0.12
 
 Python records a 64-frame feature-reference reset interval; the caller identifies NVCR as 32 frames. Because the inter-reference policies differ, inter-coded GOPs 30, 100 are excluded. GOP 1 is all-intra and does not exercise that policy.
 
+## Strongest inter-coded FPS by resolution
+
+The strongest recorded FPS in the inter-coded runs comes from GOP 100 at every resolution. GOP 30 remains visible in the full table below.
+
+| Resolution | Best inter-coded GOP | Encode FPS | Decode FPS |
+|---|---:|---:|---:|
+| QCIF | 100 | 915.816 | 1030.706 |
+| CIF | 100 | 580.303 | 605.420 |
+| 360p | 100 | 417.027 | 398.613 |
+| 540p | 100 | 227.894 | 211.146 |
+| 720p | 100 | 102.091 | 106.922 |
+| 1080p | 100 | 50.323 | 51.641 |
+
 ## FPS results
 
 NVCR's measured codec-loop FPS is shown below. Values are the average rows from the recorded repetitions.

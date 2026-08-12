@@ -63,6 +63,19 @@ run used 2.2% to 10.0% more entropy at GOP 30 and 4.8% to 21.7% more at GOP
 
 The quality table records NVCR and Python values for every resolution and GOP.
 
+## Strongest inter-coded FPS by resolution
+
+The strongest recorded FPS in the inter-coded runs comes from GOP 100 at every resolution. GOP 30 remains visible in the full table below.
+
+| Resolution | Best inter-coded GOP | Encode FPS | Decode FPS |
+|---|---:|---:|---:|
+| QCIF | 100 | 248.052 | 254.457 |
+| CIF | 100 | 103.946 | 106.835 |
+| 360p | 100 | 49.607 | 54.628 |
+| 540p | 100 | 22.527 | 25.112 |
+| 720p | 100 | 12.749 | 14.467 |
+| 1080p | 100 | 5.830 | 6.566 |
+
 ## FPS results
 
 The table reports the recorded NVCR codec-loop FPS alongside the Python process
