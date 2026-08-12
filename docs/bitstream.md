@@ -1,16 +1,17 @@
-# Bitstream and access-unit contracts
+# Bitstream and access units
 
-The current NVCR stream contract separates the codec access unit from
-application/container metadata.
-All integers below are little-endian.
+Most NVCR users do not need this page to encode or decode video. It is the
+reference for developers who need to inspect, parse, or transport an NVCR
+stream.
 
-`NVAU` is NVCR's bounded codec access-unit contract. Version 1 is the narrow
-DCVC-RT-shaped production/default representation; version 2 is the implemented
-generalized sectioned representation. The learned payload remains codec-private
-and is not an upstream DCVC-RT interchange format. The design direction is documented in
-[Neural codec access-unit envelope direction](neural-bitstream-envelope.md).
-This page documents the implemented `NVAU` v1 syntax and the generalized
-sectioned `NVAU` v2 envelope.
+NVCR writes compressed video as bounded access units called `NVAU`. Each unit
+identifies the codec and carries the compressed payload. NVCR uses `NVAU` to
+keep codec data separate from application or container metadata. All integers
+in the layouts below are little-endian.
+
+Version 1 is the current stream format. Version 2 is a more general envelope
+that the runtime can also read. Neither version is an upstream DCVC-RT stream
+or a standard multimedia container.
 
 ## Codec access unit: `NVAU` version 1
 

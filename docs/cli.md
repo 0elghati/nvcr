@@ -1,8 +1,9 @@
 # Command line
 
-The `nvcr` CLI exposes the current supported end-to-end DCVC-RT/TensorRT
-integration and runtime discovery. It reads and writes planar 8-bit YUV420.
-Runtime commands never download or build engines.
+Use the `nvcr` command to discover the installed codec and provider, then
+encode or decode planar 8-bit YUV420 video. Install a compatible engine first:
+commands that run the codec use that local engine and never download or build
+one automatically.
 
 ## Help and build identity
 

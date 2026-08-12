@@ -1,18 +1,17 @@
 # First run
 
-This page contains the canonical first-run procedures. Each path selects the
-latest stable delivery for its platform, records the resolved identity, uses
-only the QCIF engine profile, generates four deterministic 176x144 YUV420P8
-frames, inspects the runtime, and verifies an encode/decode result.
+Choose the section for your platform and follow it from top to bottom. Each
+procedure installs the current release, records what was installed, creates a
+small sample video, and verifies that NVCR can encode and decode it.
 
-The expected raw size is:
+The sample contains four 176x144 YUV420 frames. Its expected size is:
 
 ```text
 176 x 144 x 3 / 2 x 4 = 152064 bytes
 ```
 
-For repeatable reports, retain the resolved release tag or OCI digest printed
-by the selected path.
+Keep the resolved release tag or container digest if you later report a problem
+or repeat the run.
 
 ## Linux x86_64 with an NVIDIA GPU and Docker
 

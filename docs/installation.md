@@ -1,22 +1,21 @@
 # Installation
 
-General users should install the latest stable release available for their
-platform. Resolve that release once and retain its immutable tag, checksum, or
-container digest with any bug report or result.
+Choose the path that matches your machine. The native Linux route in the
+[README](../README.md#run-nvcr-on-linux) is the default. Other paths use the
+latest stable release for the selected platform and record its version,
+checksum, or image digest so the installation can be identified later.
 
-## Choose a delivery method
-
-| Host | Recommended delivery | Boundary |
+| Host | Recommended path | What you need |
 |---|---|---|
-| Linux x86_64 with an NVIDIA GPU | [Native package and Linux run](../README.md#run-nvcr-on-linux) | Host CUDA/TensorRT runtime and catalog-selected engine |
-| Linux x86_64 with an isolated userspace | [Architecture-qualified Docker image](docker-x86_64.md) | Linux/amd64 container and catalog-selected engine |
-| Windows 11 with an NVIDIA GPU | [The same Linux image through Docker Desktop/WSL 2](docker-windows.md) | Container execution; no native Windows binary |
-| Jetson Orin | [Native AArch64 package](docker-jetson.md) | JetPack/L4T package and exact-target engine |
-| CPU-only Linux | [Source build](first-run.md#cpu-only-contract-validation) | Contract tests; no DCVC-RT inference |
-| Contributor workstation | [Contributing](../CONTRIBUTING.md) | Current `main` revision |
+| Linux x86_64 with an NVIDIA GPU | [Native package and Linux run](../README.md#run-nvcr-on-linux) | Host CUDA/TensorRT runtime and a compatible engine. |
+| Linux x86_64 with an isolated userspace | [Docker image](docker-x86_64.md) | Linux/amd64 container and a compatible engine. |
+| Windows 11 with an NVIDIA GPU | [Docker Desktop/WSL 2](docker-windows.md) | Linux container execution; no native Windows binary. |
+| Jetson Orin | [Native AArch64 package](docker-jetson.md) | JetPack/L4T package and matching Jetson engine. |
+| CPU-only Linux | [Source build](first-run.md#cpu-only-contract-validation) | Runtime tests only; no neural inference. |
+| Contributor workstation | [Contributing](../CONTRIBUTING.md) | Current source revision. |
 
-Read [Compatibility](compatibility.md) before interpreting a successful build
-or a registered target as supported execution.
+Use [Compatibility](compatibility.md) when you need to check whether a GPU and
+runtime can use a published engine.
 
 ## Native Linux package
 

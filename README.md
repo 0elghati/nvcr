@@ -1,25 +1,24 @@
 # NVCR — Neural Video Codec Runtime
 
-NVCR is a native C++ runtime for deploying neural video codecs. It provides the
-parts around the learned model that a usable codec needs: encoder and decoder
-sessions, GPU execution, target-specific TensorRT engines, a bounded bitstream,
-a command-line tool, packages, and containers.
+NVCR is a native C++ runtime for running neural video codecs as usable
+applications. It gives a learned compression method the parts it needs in
+practice: encode and decode sessions, GPU execution, compatible inference
+engines, a portable bitstream, a command-line tool, packages, and containers.
 
-The first NVCR integration is
-[DCVC-RT](https://github.com/microsoft/DCVC), running with TensorRT FP16 and
-native rANS entropy coding on NVIDIA Linux systems. DCVC-RT supplies the learned
-compression method; NVCR makes it practical to build, run, package, and validate
-as a native codec.
+[DCVC-RT](https://github.com/microsoft/DCVC) is NVCR's first codec integration.
+It provides the learned compression method and models. NVCR provides the
+runtime around it, so the same architecture can later host other codecs and
+execution providers.
 
-## What NVCR contributes
+## What NVCR provides
 
-- A C++20 codec runtime with stateful encode, decode, flush, and reset APIs.
-- A clean boundary between codec logic and GPU execution providers.
-- Catalog-based model and TensorRT-engine selection for the active GPU/runtime.
-- Versioned `NVAU` access units that carry codec, model, ordering, and payload
-  information.
-- Native packages, Docker images, a CLI, and reproducible validation tools for
-  Linux desktop and Jetson systems.
+- A C++ runtime that manages stateful video encoding and decoding.
+- Separate codec and execution-provider boundaries, so codec logic is not tied
+  to one GPU backend.
+- Automatic selection of the compatible model and TensorRT engine for the
+  current GPU and installed runtime.
+- `NVAU`, NVCR's versioned access-unit format for carrying compressed video.
+- Native packages, Docker images, a CLI, and tested Linux and Jetson workflows.
 
 ## Run NVCR on Linux
 
@@ -115,18 +114,20 @@ See [Installation](docs/installation.md) for package and container details,
 ```mermaid
 flowchart LR
     App[Application or nvcr CLI] --> Runtime[NVCR runtime]
-    Runtime --> Codec[DCVC-RT codec adapter]
-    Codec --> Provider[TensorRT provider]
-    Provider --> GPU[NVIDIA GPU]
+    Runtime --> Codec[Codec integration]
+    Codec --> Provider[Execution provider]
+    Provider --> Hardware[NVIDIA hardware]
     Catalog[Engine catalog] --> Resolver[Artifact resolver]
     Resolver --> Provider
-    Codec --> Bitstream[NVAU access units]
+    Runtime --> NVAU[NVAU access units]
+    DCVCRT[DCVC-RT<br/>current codec] -.-> Codec
+    TensorRT[TensorRT<br/>current provider] -.-> Provider
 ```
 
-The current TensorRT provider owns the DCVC-RT backend. See
-[Architecture](docs/architecture.md), [DCVC-RT integration](docs/dcvcrt-integration.md),
-and [Bitstreams and access units](docs/bitstream.md) for the implementation
-details.
+DCVC-RT is the first codec integration; TensorRT is the current execution
+provider. NVCR keeps these boundaries separate so later codecs and providers
+can use the same runtime. See [Architecture](docs/architecture.md) for the
+data flow and extension points.
 
 ## Current scope
 

@@ -2,25 +2,18 @@
 
 ## Purpose
 
-The evaluation has two linked parts. Architecture-level tests validate the
-runtime contracts; the target matrix validates the supported codec/provider
-integration:
+The evaluation has two parts: core runtime tests and target execution with the
+current codec/provider pair.
 
 ```text
-architecture contracts -> sessions, registry/services, artifacts, NVAU parser
-current supported integration -> DCVC-RT adapter -> TensorRT FP16 -> Linux/NVIDIA
+Core runtime: sessions, registry, engines, and NVAU parsing
+Target execution: NVCR runtime -> DCVC-RT codec integration -> TensorRT FP16 -> Linux/NVIDIA
 ```
 
-The target evaluation validates:
-
-```text
-DCVC-RT codec semantics -> TensorRT execution -> C++20 runtime -> NVAU access units
-```
-
-It must show native encode/decode, stateful I/P GOP operation, reproducible
-artifact preparation and validation, target-aware selection, containerized
-build/test/run workflows, correctness and robustness, useful runtime
-performance, and quality comparable to the pinned Python DCVC-RT reference.
+A target evaluation records native encode/decode, stateful I/P operation,
+engine preparation and validation, target selection, container workflows,
+correctness, throughput, quality, and memory against the pinned Python DCVC-RT
+reference.
 
 Energy is optional downstream research and is not a release gate.
 

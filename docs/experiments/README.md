@@ -1,20 +1,18 @@
 # Reproducible evaluation
 
-This directory defines NVCR's detailed evaluation protocol. It supplements the
-end-user guides and evaluates both runtime architecture contracts and the
-supported end-to-end integration:
+This directory describes how NVCR evaluation runs are prepared and recorded.
+It is for people preparing or assessing recorded evaluations; use [First run](../first-run.md) for an
+installation procedure.
+
+The current evaluated path is:
 
 ```text
-DCVC-RT codec adapter -> TensorRT FP16 provider -> Linux/NVIDIA target
+NVCR runtime -> DCVC-RT codec integration -> TensorRT provider -> Linux/NVIDIA target
 ```
 
-The supported scope is narrow. Architecture checks cover session
-lifecycle, delayed output, registration, provider mediation, artifact
-resolution, bounded parsing, and malformed-input rejection. Target evaluation
-adds current target-local artifacts, native I/P execution, quality, rate,
-performance, memory, and reference comparison. It does not establish universal
-NVIDIA support, multiple supported codecs/providers, or Python payload
-interchangeability.
+The protocol checks runtime behaviour as well as target execution: session
+lifecycle, engine selection, encode/decode, quality, rate, throughput, and
+memory. It records exactly which target and engine were used.
 
 ## Read in this order
 

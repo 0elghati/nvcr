@@ -1,22 +1,18 @@
 # NVCR documentation
 
-Use the root [Linux native procedure](../README.md#run-nvcr-on-linux) for the
-shortest installed encode/decode path. [First run](first-run.md) contains the
-complete Docker, Windows, Jetson, and CPU validation procedures. The remaining
-pages provide deeper technical or platform-specific material without repeating
-those workflows.
+Start with the path that matches your machine. Every guide begins by explaining
+what it is for before asking you to run commands.
 
 ## Start here
 
-- [Linux native run](../README.md#run-nvcr-on-linux)
-- [First run](first-run.md): Linux Docker, Windows Docker Desktop, Jetson native,
-  and CPU contract validation.
-- [Installation](installation.md): select a release delivery method and record
-  its resolved identity.
-- [Troubleshooting](troubleshooting.md): diagnose GPU, runtime, artifact, input,
-  and container failures.
-- [Scope and support](scope-and-support.md): current implementation and support
-  boundaries.
+- [Linux native run](../README.md#run-nvcr-on-linux): the default installed
+  encode/decode path.
+- [First run](first-run.md): Docker on Linux, Docker Desktop on Windows, Jetson,
+  and CPU-only validation.
+- [Installation](installation.md): choose a package or container and record the
+  resolved version or image digest.
+- [Troubleshooting](troubleshooting.md): solve GPU, runtime, engine, input, and
+  container problems.
 
 ## Use NVCR
 
@@ -28,9 +24,9 @@ those workflows.
 - [Compatibility](compatibility.md)
 - [Model and engine artifacts](dcvcrt-artifacts.md)
 
-## Understand and integrate NVCR
+## Understand NVCR
 
-- [Identity and scope](identity-and-scope.md)
+- [What NVCR is](identity-and-scope.md)
 - [Architecture](architecture.md)
 - [C++ API](reference.md)
 - [DCVC-RT integration](dcvcrt-integration.md)
@@ -38,21 +34,14 @@ those workflows.
 - [Elementary-stream specification](spec/nvcr-elementary-stream-v1.md)
 - [Extension guide](extending-nvcr.md)
 
-The public C++ API/ABI is transitional. Integrations should retain the NVCR
-revision, codec/provider IDs, stream version, and artifact manifest identity.
-
-## Build and contribute
+## Build, measure, and contribute
 
 - [Building from source](building-from-source.md)
+- [Performance and benchmarking](performance.md)
+- [Execution results](../results/README.md)
 - [Contributing](../CONTRIBUTING.md)
 - [Packaging and releases](releasing.md)
-- [Roadmap](../ROADMAP.md)
-
-## Benchmark and validate
-
-- [Performance and benchmarking](performance.md)
-- [Experiment protocol](experiments/README.md)
-- [Retained results](../results/README.md)
+- [Project roadmap](../ROADMAP.md)
 
 ## Project policies
 

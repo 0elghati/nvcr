@@ -1,36 +1,33 @@
-# The first production codec integration: DCVC-RT
+# DCVC-RT integration
 
-DCVC-RT is NVCR's first complete production codec integration, not the identity
-of NVCR. The adapter owns GOP decisions, model-component meaning, entropy state,
-codec-private payloads, and frame/feature references. TensorRT is an execution
-provider, not part of the codec identity. NVCR core owns sessions, registry and
-services, artifact selection, and bounded access-unit framing.
+DCVC-RT is NVCR's first codec integration. This page explains how it fits into
+NVCR; it is not the definition of NVCR itself. NVCR provides the runtime,
+engine selection, and stream handling. DCVC-RT provides the learned compression
+logic. TensorRT is the current execution provider.
 
-## Initialization
+## What happens when a session starts
 
-A session selects a model profile, target-local engine directory, device, QP, GOP, memory policy, and TensorRT execution mode. Before deserialization, NVCR validates the bundle schema, model and target identity, precision, runtime versions, required files, and checksums.
+NVCR chooses the requested model profile, finds a compatible engine for the
+machine, and then checks the bundle before loading it. The user-facing tool is
+`nvcr-artifacts`. The exporters and builders under `scripts/backends/dcvcrt/`
+are source-maintainer tools, not a normal installation path.
 
-The supported artifact front end is `scripts/nvcr_artifacts.py`. The backend-specific exporters and builders under `scripts/backends/dcvcrt/` are implementation helpers, not separate user workflows.
+## How frames are handled
 
-## Frame paths
+An I-frame starts a group of pictures. Later P-frames use the previous decoded
+state. DCVC-RT performs learned-model processing with TensorRT and uses native
+rANS entropy coding. Reset clears the stored reference state; flush finishes
+pending work and resets the session.
 
-The I path runs image analysis, hyperprior, spatial priors, synthesis, and native rANS. The P path runs temporal/reference adaptation, analysis, hyperprior, temporal and spatial priors, synthesis, state updates, and native rANS.
+## Stream compatibility
 
-An I-frame starts a GOP. P-frames require a valid reference. The encoder reports the effective QP used by the access unit. Reset clears references; flush completes work and resets the session.
-
-## Payload and compatibility
-
-The native rANS coder and `NVI1`/`NVP1` payload layouts are DCVC-RT adapter
-implementation details. They are carried inside the bounded `NVAU` contract and
-are not claimed to be upstream Python bitstreams.
-
-Python is an offline export and reference-conformance dependency. Cross-runtime payload compatibility remains unclaimed until clean bidirectional golden tests pass.
+NVCR carries DCVC-RT data inside its bounded `NVAU` access-unit format. The
+internal rANS, `NVI1`, and `NVP1` layouts are implementation details. NVCR does
+not claim that its streams are byte-compatible with the upstream Python
+implementation.
 
 ## Current limits
 
-Production component creation is provider-mediated through `RuntimeServices`.
-TensorRT creates the codec backend as one provider-owned monolithic component
-rather than exposing each model stage as an independent executable through
-`IExecutionProvider::load`; that split is transitional. Stable public
-plane/stride ownership, additional production providers, complete target
-performance evidence, and the final v1 release gate remain future work.
+TensorRT currently creates the DCVC-RT backend as one provider-owned component.
+Additional production codecs and providers, stable public plane/stride
+ownership, and a final v1 release remain future work.
