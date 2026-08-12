@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.0](https://github.com/0elghati/nvcr/compare/v0.21.0...v0.22.0) (2026-08-11)
+
+
+### Features
+
+* auto detect & download profile files before running benchmark ([#123](https://github.com/0elghati/nvcr/issues/123)) ([27f6077](https://github.com/0elghati/nvcr/commit/27f60770890c3c86dd7f0076604b5563404cf006))
+
 ## [0.21.0](https://github.com/0elghati/nvcr/compare/v0.20.0...v0.21.0) (2026-08-11)
 
 
