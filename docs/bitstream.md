@@ -86,7 +86,7 @@ The fixed header is followed by codec ID, codec profile ID, model ID, dependency
 indexes, section table entries, and then section payloads in table order. IDs use
 the same portable ASCII character set as v1 model IDs. These are stream-facing
 identities: they describe the codec family and public decoder contract, not the
-private checkpoint or publication label used to build TensorRT artifacts.
+private checkpoint or internal build label used to create TensorRT artifacts.
 
 Each section table entry is 16 bytes:
 

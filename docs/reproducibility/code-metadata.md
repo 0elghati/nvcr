@@ -1,28 +1,24 @@
 # Code metadata
 
-This is a living inventory for the release and publication metadata table.
-Values that depend on the evaluated release are intentionally not fabricated.
-
-| Field | Current value |
+| Field | Value |
 |---|---|
-| Software | NVCR, native runtime architecture for neural video codecs |
-| Current code version | `0.18.0` in `version.txt`; evaluated submission version: `TO BE FROZEN FOR SUBMISSION` |
-| Permanent evaluated release link | `TO BE FROZEN FOR SUBMISSION` |
-| Reproducible evidence/capsule link | `TO BE FROZEN FOR SUBMISSION` |
+| Software | NVCR, native C++ runtime architecture for neural video codecs |
 | Repository | https://github.com/0elghati/nvcr |
-| Legal code license | MIT; see `LICENSE` |
-| Version control | Git, hosted on GitHub |
-| Languages | C++20, CUDA, Python 3, CMake, Bash, YAML, Dockerfile |
-| Core tools/services | CMake, CTest, CUDA, TensorRT, Docker/Compose, GitHub Actions |
-| Compilation requirements | CMake 3.24+, C++20 compiler; CUDA/TensorRT for the production vertical |
-| Operating environments | CPU contract tests on Linux development environments; production evidence currently Linux x86_64 or aarch64 NVIDIA targets |
-| Dependencies | Threads; optional spdlog; CUDA/TensorRT for production; Python tooling for artifact/evidence workflows |
-| Developer documentation | `docs/README.md`, architecture, API, extension, stream, artifact, and experiment guides |
-| Support contact | `TO BE FINALIZED FOR SUBMISSION`; use repository issue/support route meanwhile |
-| Current production codec/provider | DCVC-RT adapter / TensorRT FP16 |
-| Conformance fixtures | Deterministic test codec / CPU provider |
+| Current release | [Latest release](https://github.com/0elghati/nvcr/releases/latest); the exact version is recorded in `version.txt` |
+| Development identity | Commit from `git rev-parse HEAD` plus dirty state |
+| Source license | MIT; see [`LICENSE`](../../LICENSE) |
+| Languages | C++20, CUDA, Python 3, CMake, Bash, PowerShell, YAML, Dockerfile |
+| Build tools | CMake 3.24+, CTest, a C++20 compiler; CUDA and TensorRT for GPU execution |
+| Supported codec/provider | DCVC-RT with TensorRT FP16 on qualified Linux/NVIDIA targets |
+| Conformance fixtures | Deterministic test codec and CPU provider |
+| Public API/ABI | Pre-v1 and not frozen |
+| Support | [`SUPPORT.md`](../../SUPPORT.md); security reports follow [`SECURITY.md`](../../SECURITY.md) |
+
+Every retained GPU result must additionally record the platform, GPU, CUDA and
+TensorRT versions, engine identity, input digest, command, and timing and byte
+boundaries. Container results must record the resolved image digest.
 
 The pinned DCVC-RT source/model identities and redistribution restrictions are
-recorded in [DCVC-RT artifacts](../dcvcrt-artifacts.md), `MODEL_LICENSES.md`,
-and `ASSET_DISTRIBUTION_POLICY.md`. A source-code license does not grant
-checkpoint or derived-engine redistribution permission.
+documented in [DCVC-RT artifacts](../dcvcrt-artifacts.md),
+[`MODEL_LICENSES.md`](../../MODEL_LICENSES.md), and
+[`ASSET_DISTRIBUTION_POLICY.md`](../../ASSET_DISTRIBUTION_POLICY.md).

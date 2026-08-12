@@ -14,7 +14,9 @@ The runtime does not depend on Python. These scripts prepare artifacts, package 
 | `package_engine_bundle.sh` | Package one validated target-local engine bundle |
 | `release_engine_assets.sh` | Stage and publish rolling engine assets |
 | `ci/check_jetson_cross_toolchain.sh` | Validate the x86-hosted Jetson cross-build environment |
-| `benchmark_softwarex_matrix.py` | Validate and run the publication matrix; write a complete evidence package |
+| `generate_sample_yuv.py` | Generate deterministic planar YUV420P8 functional-validation input |
+| `check_documentation_consistency.py` | Check citation versions, local Markdown links, public prose, paths, and obvious secrets |
+| `benchmark_softwarex_matrix.py` | Validate and run the controlled evaluation matrix; write a complete evidence package |
 | `benchmark_resolution_matrix.sh` | Run the lower-level diagnostic resolution matrix |
 | `benchmark_docker.sh` | Pull an NVCR runtime image and run the same diagnostic matrix with `docker run` |
 | `profile_energy.py` | Capture optional Jetson energy measurements |
@@ -73,7 +75,7 @@ their target GPU.
 
 ## Evaluate
 
-Use the schema-producing driver for publication work:
+Use the schema-producing driver for controlled evaluation:
 
 ```bash
 python3 scripts/benchmark_softwarex_matrix.py --help
@@ -86,7 +88,7 @@ layout. Start with
 [runbook](../docs/experiments/runbook.md).
 
 The default path keeps optional instrumentation out of performance
-repetitions. Add `--profile` for a publication package; it collects latency,
+repetitions. Add `--profile` for a complete evidence package; it collects latency,
 PSNR, and memory in separate repetitions while preserving clean FPS and wall
 time. A run without the flag is intentionally performance-only and `partial`.
 
@@ -107,13 +109,14 @@ scripts/benchmark_resolution_matrix.sh \
   --hardware rtx4070
 ```
 
-For the equivalent pulled Docker runtime, use the direct Docker launcher. It
-records the resolved image identity and adds full process wall-time throughput
-to the same diagnostic rows:
+For the equivalent Docker runtime, first resolve the current platform image as
+described in [Installation](../docs/installation.md), then use the direct
+launcher. It records the image identity and adds full process wall-time
+throughput to the same diagnostic rows:
 
 ```bash
 scripts/benchmark_docker.sh \
-  --image omarelghati/nvcr:0.19.1-amd64-cuda12.8-trt10.9 \
+  --image "$NVCR_IMAGE_REF" \
   --input-dir /data/nvcr/yuv \
   --engine-volume nvcr-engines \
   --results-dir evidence/performance/rtx4070-docker \
@@ -139,9 +142,12 @@ to `dcvcrt-<resolution>` under that directory. The existing per-resolution
 input and engine options (`--qcif-input`, `--720p-input`, `--qcif-engine-dir`,
 and so on) remain available for exceptions. The pipeline writes
 `results.jsonl`, `results.csv`, and
-`summary.md` under `--results-dir`; the CSV and JSONL contain both every measured
-repetition and an `average` row. Each row includes codec payload bytes and
-`payload_bpp`, calculated as payload bits divided by `width * height * frames`.
+`summary.md` under `--results-dir`; the CSV and JSONL contain both every
+measured repetition and an `average` row. Each row includes `payload_bytes`,
+the serialized `NVAU` access-unit bytes, and `payload_bpp`, calculated as
+those bytes times eight divided by
+`width * height * frames`. This boundary includes the NVAU header but excludes
+outer `PacketIO` and `NVCS` file framing.
 With `--profile-memory`, rows also include profiled process RAM
 (`peak_memory_mb`). On Jetson, `tegrastats` adds whole-system RAM pressure
 (`peak_system_memory_mb`) and the minimum largest free block
@@ -153,11 +159,14 @@ encoded streams remain under `/tmp`.
 Use `--resolutions "360p"` or any other supported label to collect one
 resolution. Use `--hardware` to keep labels stable across machines; otherwise
 the pipeline records the first `nvidia-smi` GPU name, falling back to the host
-name. These diagnostic rows are intentionally separate from the publication
-publication driver and can be aggregated after all hardware runs exist.
+name. These diagnostic rows are intentionally separate from the strict evaluation
+driver and can be aggregated after all hardware runs exist.
 
 `benchmark_resolution_matrix.sh` emits the diagnostic schema
 `nvcr.benchmark.resolution-matrix.v1`; it is designed for this collection stage
-and is not itself a publication-readiness gate.
+and does not by itself establish a controlled performance result.
 
-For target-specific details, read [Getting started](../docs/getting-started.md), [Model and engine preparation](../docs/dcvcrt-artifacts.md), [Performance](../docs/performance.md), and [Release policy](../docs/releasing.md).
+For target-specific details, read [First run](../docs/first-run.md),
+[Model and engine preparation](../docs/dcvcrt-artifacts.md),
+[Performance](../docs/performance.md), and
+[Release policy](../docs/releasing.md).

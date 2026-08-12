@@ -5,7 +5,7 @@ Date: 2026-08-06
 
 ## Context
 
-NVCR needs precise language for compatibility and conformance claims in docs and paper framing.
+NVCR needs precise language for compatibility and conformance claims in public documentation.
 
 ## Decision
 

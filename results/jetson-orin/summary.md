@@ -8,7 +8,7 @@ a release or support claim.
 
 | Runtime | Canonical data | SHA-256 | Coverage |
 |---|---|---|---|
-| NVCR R=64 | [`nvcr/data/results.jsonl`](nvcr/data/results.jsonl) | `4b8856b787cff4219aa8c06a0fdf6260cbfcb7393a70e8010b39b512f7532bfc` | 144 rows: six resolutions, GOP 1/30/100, encode/decode, three measured repetitions plus average rows |
+| NVCR R=64 | [`nvcr/data/results.jsonl`](nvcr/data/results.jsonl) | `a1e536861b30d699d7395df4ba0117cfce433d4ffe6eee759c363bc05bdba0f5` | 144 rows: six resolutions, GOP 1/30/100, encode/decode, three measured repetitions plus average rows |
 | Python | [`python/data/results.jsonl`](python/data/results.jsonl) | `475832bc54ce14a3e9f015b9a72cc02a01eb43b5aa95b09320e98fdf4441d4d4` | 37 rows: the same six sequences, GOPs, operations, and 100-frame count; one duplicate 360p GOP-1 encode key |
 
 The report selects Python's latest `source_timestamp` for duplicate keys. Both
@@ -22,15 +22,20 @@ memory profiling. It therefore remains diagnostic.
 
 ## Entropy payload and reconstruction quality
 
-NVCR entropy BPP was obtained by parsing every retained measured `.nvcr`
-stream and stripping the sequence container, record length, PacketIO, NVAU,
-and inner DCVC-RT payload headers. All three NVCR repetitions have identical
-rANS byte counts in every case. Python BPP is its decode row's inner
-`bit_stream` BPP.
+NVCR entropy BPP was derived by parsing each measured `.nvcr` stream before
+the raw streams were removed, stripping the sequence container, record length,
+PacketIO, NVAU, and inner DCVC-RT payload headers. Only this Markdown summary
+retains the derived rANS byte counts; neither the JSONL nor the repository
+retains the stream bytes or inner-byte fields, so those values cannot be
+independently regenerated from this repository. All three
+NVCR repetitions record identical rANS byte counts in every case. Python BPP
+is its decode row's inner `bit_stream` BPP.
 
 `BPP delta` is `(NVCR rANS BPP / Python bitstream BPP) - 1`. `R=64 vs R=32`
-shows the change from the superseded native run. PSNR delta is NVCR PSNR-YUV
-minus Python average all-frame PSNR.
+shows the change from the superseded native run. Only the derived R=32 deltas
+are retained; the underlying R=32 rows are not tracked and serve as historical
+diagnostic context. PSNR delta is NVCR PSNR-YUV minus Python average all-frame
+PSNR.
 
 | Resolution | GOP | NVCR rANS BPP | Python BPP | BPP delta | R=64 vs R=32 | NVCR PSNR | Python PSNR | PSNR delta |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|

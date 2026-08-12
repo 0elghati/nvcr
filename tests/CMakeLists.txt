@@ -10,6 +10,16 @@ if(Python3_Interpreter_FOUND)
         NAME nvcr_native_installer
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/install_script_tests.py")
     add_test(
+        NAME nvcr_onboarding_tools
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/onboarding_tools_tests.py")
+    add_test(
+        NAME nvcr_documentation_consistency
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/scripts/check_documentation_consistency.py"
+            --root
+            "${PROJECT_SOURCE_DIR}")
+    add_test(
         NAME nvcr_softwarex_driver
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/softwarex_driver_tests.py")
 else()

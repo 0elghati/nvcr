@@ -1,137 +1,165 @@
-# NVCR — Neural Video Codec Runtime
+# NVCR
 
-Neural video codecs like DCVC-RT are usually shipped as research code: a
-Python reference implementation tied to one model checkpoint and one
-inference stack. NVCR is our attempt at the systems layer that's missing
-around that research code, so a learned codec can be operated the way a
-regular video codec is operated: stateful encoder/decoder sessions, clean
-codec-adapter and execution-provider boundaries, target-aware artifact
-selection, and a bounded, versioned access-unit format. NVCR is not a new
-compression model, and it's not just a C++ port of DCVC-RT.
+NVCR is a native C++ runtime architecture for neural video codecs.
 
-Right now the only complete production vertical is DCVC-RT running through
-TensorRT FP16 on Linux/NVIDIA targets. That vertical is what proves the
-architecture actually works end to end, but it isn't the ceiling — the design
-is meant to be codec-extensible, DCVC-RT and TensorRT are just the first
-codec and provider we've finished. The deterministic test codec and CPU
-provider that ship alongside them are conformance fixtures for the test
-suite, not additional products.
+It provides stateful encoder and decoder sessions, separates codec semantics
+from execution-provider mechanics, resolves target-specific artifacts, and
+carries codec output in bounded, versioned access units. NVCR is neither a
+compression model nor only a C++ port of one model implementation.
 
-## What NVCR provides
+The current supported end-to-end integration is DCVC-RT with TensorRT FP16 on
+NVIDIA Linux systems. The deterministic codec and CPU provider are conformance
+fixtures used to test the runtime contracts.
 
-- Native C++20 runtime and stateful encoder/decoder session contracts.
-- `send`/`receive`, flush, drain, reset, statistics, and structured errors.
-- Codec adapters separated from execution-provider mechanics.
-- Static codec/provider discovery and provider-mediated runtime services.
-- Artifact descriptors, catalogs, compatibility ranking, hashes, and license
-  restrictions.
-- Bounded `NVAU` v1 and generalized sectioned `NVAU` v2 access units.
-- A DCVC-RT adapter with native entropy coding and TensorRT FP16 execution.
-- CLI, CMake package, target-local artifact tooling, Docker images, and
-  reproducible evaluation tooling.
+## Contents
 
-## Install and run the current production vertical
+- [Choose a path](#choose-a-path)
+- [Quick start](#quick-start)
+- [Capabilities](#capabilities)
+- [Architecture](#architecture)
+- [Current support](#current-support)
+- [Documentation](#documentation)
+- [Current limitations](#current-limitations)
 
-The binary installer selects compatible engine profiles from the rolling
-catalog. Generic packages do not contain checkpoints, exported model assets,
-TensorRT plans, or datasets.
+## Choose a path
 
-```bash
-curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/0elghati/nvcr/main/scripts/install.sh | bash
-export PATH="$HOME/.local/nvcr/bin:$PATH"
-nvcr-artifacts install --profile qcif
-nvcr --help
-```
+| Environment or goal | Recommended path | Scope |
+|---|---|---|
+| Linux x86_64 with an NVIDIA GPU | [Docker on Linux](docs/docker-x86_64.md) | Released DCVC-RT/TensorRT runtime |
+| Windows 11 with an NVIDIA GPU | [Docker Desktop and WSL 2](docs/docker-windows.md) | Linux container execution from Windows |
+| Jetson Orin | [Native Jetson installation](docs/docker-jetson.md) | AArch64 package and exact-target engines |
+| Linux without a supported GPU | [CPU contract validation](docs/first-run.md#cpu-only-contract-validation) | Runtime and format contracts; no neural inference |
+| Build or modify NVCR | [Contributing](CONTRIBUTING.md) | Source build and contributor checks |
 
-For containerized installation, see the [Docker documentation](docs/docker.md).
+The [first-run guide](docs/first-run.md) contains the canonical installation,
+runtime inspection, encode, decode, and validation commands for every supported
+entry path.
 
-NVCR reads and writes headerless planar 8-bit YUV420, so dimensions and frame
-rate must be supplied for raw input:
+## Quick start
+
+For Linux x86_64, use the architecture-qualified rolling image. Resolve it once
+to an immutable digest before running NVCR:
 
 ```bash
-nvcr encode -i input.yuv -o output.nvcr \
-  -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32
-nvcr decode -i output.nvcr -o reconstructed.yuv
+export NVCR_IMAGE="omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9"
+docker pull "$NVCR_IMAGE"
+
+export NVCR_IMAGE_REF="$(
+  docker image inspect "$NVCR_IMAGE" --format '{{ index .RepoDigests 0 }}'
+)"
+docker image inspect "$NVCR_IMAGE" \
+  --format 'version={{ index .Config.Labels "org.opencontainers.image.version" }} revision={{ index .Config.Labels "org.opencontainers.image.revision" }} digest={{ index .RepoDigests 0 }}'
 ```
 
-If no compatible engine is published, follow [model and engine preparation](docs/dcvcrt-artifacts.md).
-TensorRT plans are target- and runtime-specific; a matching configuration file
-is not evidence that a target is supported.
+`NVCR_IMAGE_REF` is immutable for the resolved image. Record the printed
+version, source revision, and digest in bug reports or results.
 
-## Build from source
-
-CPU-only contract build:
+Install only the QCIF engine required by the reference workflow, then inspect
+the registered runtime:
 
 ```bash
-cmake -S . -B build-cpu -DCMAKE_BUILD_TYPE=Release \
-  -DNVCR_ENABLE_TENSORRT=OFF
-cmake --build build-cpu --parallel
-ctest --test-dir build-cpu --output-on-failure
+docker volume create nvcr-engines
+
+docker run --rm --gpus all \
+  --volume nvcr-engines:/opt/nvcr/engines \
+  --entrypoint /opt/nvcr/bin/nvcr-artifacts \
+  "$NVCR_IMAGE_REF" \
+  install --profile qcif --engine-root /opt/nvcr/engines
+
+docker run --rm --gpus all "$NVCR_IMAGE_REF" codec list
+docker run --rm --gpus all "$NVCR_IMAGE_REF" codec describe dcvc-rt
+docker run --rm --gpus all "$NVCR_IMAGE_REF" provider list
+docker run --rm --gpus all "$NVCR_IMAGE_REF" provider describe tensorrt
+docker run --rm --gpus all "$NVCR_IMAGE_REF" \
+  compatibility check --codec dcvc-rt --provider tensorrt
 ```
 
-Native production build, on a machine with the required CUDA/TensorRT stack:
+Continue with [First run](docs/first-run.md#linux-x86_64-with-an-nvidia-gpu-and-docker)
+to generate a deterministic input and complete the encode/decode validation.
 
-```bash
-cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release \
-  -DNVCR_ENABLE_TENSORRT=ON
-cmake --build build-release --parallel
+There is intentionally no architecture-neutral `latest` image. NVIDIA
+desktop and Jetson images have different architectures and userspace
+requirements.
+
+## Capabilities
+
+- C++20 runtime and stateful encoder/decoder session contracts.
+- Explicit codec-adapter and execution-provider boundaries.
+- Static codec and provider discovery.
+- Target-aware artifact catalogs, compatibility ranking, hashes, and policy.
+- Bounded `NVAU` v1 and sectioned v2 access units.
+- DCVC-RT integration with native entropy coding and TensorRT FP16 execution.
+- CLI, CMake package, native archives, containers, and validation tooling.
+
+## Architecture
+
+```text
+Application / CLI
+        |
+        v
+NVCR runtime and session contracts
+        |
+        +-- codec adapter: DCVC-RT semantics and state
+        |
+        +-- execution provider: TensorRT and CUDA execution
+        |
+        +-- artifact resolver: model, profile, target, and digest identity
+        |
+        +-- access units: bounded NVAU framing
 ```
 
-## Supported and validated targets
+The runtime architecture is codec-extensible. DCVC-RT and TensorRT are the
+first supported codec/provider pair, not the long-term boundary of NVCR. See
+[Architecture](docs/architecture.md) and [Identity and scope](docs/identity-and-scope.md).
 
-Current target profiles cover RTX 3050 Laptop, RTX 4070, RTX 5060 Laptop, and
-Jetson Orin Nano. A target profile describes an artifact request; it is not a
-support claim. Support requires a clean Release build, validated target-local
-artifacts, runtime round trips, registered tests, and the applicable evidence
-gates. See [scope and support](docs/scope-and-support.md) and
-[compatibility](docs/compatibility.md).
+## Current support
+
+- Linux x86_64 containers and native packages for NVIDIA discrete GPUs.
+- Native AArch64 packages for Jetson Orin on the documented JetPack/L4T family.
+- Windows as a host for the Linux x86_64 container through Docker Desktop and
+  WSL 2.
+- CPU-only builds for portable contract and conformance validation.
+
+A target profile or successful compilation is not by itself a support claim.
+The selected engine must match the GPU compatibility class, CUDA runtime,
+TensorRT runtime, model profile, and manifest identities. See
+[Compatibility](docs/compatibility.md) and
+[Scope and support](docs/scope-and-support.md).
+
+The [latest stable release](https://github.com/0elghati/nvcr/releases/latest)
+is the default for general installation. Reproducible reports must retain the
+resolved release tag or container digest.
 
 ## Documentation
 
-- [Identity and scope](docs/identity-and-scope.md)
-- [Getting started](docs/getting-started.md)
-- [Architecture](docs/architecture.md)
-- [Extending NVCR](docs/extending-nvcr.md)
-- [C++ API reference](docs/reference.md)
-- [Streams and access units](docs/bitstream.md)
-- [DCVC-RT production integration](docs/dcvcrt-integration.md)
+- [First run](docs/first-run.md)
 - [Documentation map](docs/README.md)
-- [Reproducibility and review path](docs/reproducibility/README.md)
+- [Command line](docs/cli.md)
+- [C++ API](docs/reference.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Performance and benchmarking](docs/performance.md)
+- [Retained results](results/README.md)
 - [Roadmap](ROADMAP.md)
-
-## Reproducing the evaluation
-
-The executable protocol is in [docs/experiments](docs/experiments/README.md),
-and the reviewer-facing claim matrix is in
-[docs/reproducibility/claims-and-evidence.md](docs/reproducibility/claims-and-evidence.md).
-Only a clean, complete result package with current artifact identities,
-registered gates, profiling metrics, and required pinned-reference rows is
-publication evidence. Retained partial or diagnostic results are not a release
-baseline.
 
 ## Current limitations
 
-NVCR is not yet a supported v1 release. The current production boundary is
-Linux/NVIDIA with DCVC-RT and TensorRT FP16. The public API is not ABI-frozen;
-additional production codecs/providers, INT8 release support, FFmpeg,
-standard containers, and universal TensorRT-plan portability remain outside
-the current release boundary. `.nvcr`, `NVCR`, and `NVCS` are development or
-application wrappers, not standard multimedia containers.
+NVCR is pre-v1. The C++ API/ABI and application wrappers are not frozen. The
+current supported boundary does not include native Windows or macOS
+execution, CPU neural inference, INT8 release support, FFmpeg integration,
+standard multimedia containers, arbitrary TensorRT-plan portability, or
+additional supported codec/provider integrations.
 
-## License
+`.nvcr`, `NVCR`, and `NVCS` are development or application wrappers, not
+standard multimedia containers.
 
-NVCR source is MIT-licensed. Model checkpoints, exported model assets, engine
-plans, and datasets have separate terms and are excluded from generic packages;
-see [the asset policy](ASSET_DISTRIBUTION_POLICY.md),
-[model licensing](MODEL_LICENSES.md), and
+## License, citation, and support
+
+NVCR source is MIT-licensed. Model checkpoints, exported model assets,
+TensorRT plans, and datasets have separate terms and are excluded from generic
+packages. Review the [asset policy](ASSET_DISTRIBUTION_POLICY.md),
+[model terms](MODEL_LICENSES.md), and
 [third-party notices](THIRD_PARTY_NOTICES.md).
 
-## Support
-
-Use [SUPPORT.md](SUPPORT.md) for usage, reproducibility, bug, and security
-routes.
-
-## Citation
-
-Use [CITATION.cff](CITATION.cff) for the current software citation.
+Use [CITATION.cff](CITATION.cff) for citation metadata,
+[SUPPORT.md](SUPPORT.md) for usage and bug-report guidance, and
+[SECURITY.md](SECURITY.md) for security reporting.

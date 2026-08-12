@@ -21,7 +21,7 @@ only format; this specification now documents both implemented versions.
 
 Unknown versions must be rejected with malformed-stream behavior.
 
-## 3. NVAU v1 layout (legacy)
+## 3. NVAU v1 layout (current narrow/default)
 
 Fixed header fields after magic/version:
 

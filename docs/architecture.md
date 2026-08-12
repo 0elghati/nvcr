@@ -88,7 +88,7 @@ contract.
 |---|---|
 | Architecture contract | Runtime sessions, codec/provider interfaces, registry/services, artifact identity/resolution, and bounded access units |
 | Conformance implementation | Deterministic test codec and CPU provider used by tests for delayed output, provider calls, tensor binding, errors, reset, and malformed input |
-| Production implementation | DCVC-RT adapter, native rANS, and TensorRT FP16 provider-owned backend on validated Linux/NVIDIA targets |
+| Supported integration | DCVC-RT adapter, native rANS, and TensorRT FP16 provider-owned backend for validated Linux/NVIDIA targets |
 | Transitional/future | Independent component-level TensorRT `IExecutable` loading, additional production codecs/providers, INT8 release profile, FFmpeg, standard containers, stable C ABI, and ABI freeze |
 
 ## Current production flow

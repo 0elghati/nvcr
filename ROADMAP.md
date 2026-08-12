@@ -7,8 +7,8 @@ Last reviewed: 2026-08-11
 NVCR is a native C++ runtime architecture for neural video codecs. The product
 direction is a reusable systems layer for stateful codec sessions, execution
 providers, target-aware artifacts, bounded access units, and reproducible
-validation. It is codec-extensible, but the current production vertical is
-DCVC-RT through TensorRT FP16 on Linux/NVIDIA targets.
+validation. It is codec-extensible, but the current supported
+end-to-end integration is DCVC-RT through TensorRT FP16 on Linux/NVIDIA targets.
 
 ## Completed runtime foundations
 
@@ -23,7 +23,7 @@ DCVC-RT through TensorRT FP16 on Linux/NVIDIA targets.
 - CLI, CMake package, native installer, Docker/Compose surfaces, and evidence
   generation tooling.
 
-## Current production vertical
+## Current supported end-to-end integration
 
 ```text
 DCVC-RT codec adapter -> TensorRT FP16 provider -> Linux/NVIDIA targets
@@ -38,13 +38,15 @@ through `IExecutionProvider::load` remains transitional.
 The deterministic test codec and CPU provider are conformance fixtures. They do
 not count as additional production codecs/providers or performance baselines.
 
-## Current release-readiness work
+## Current work
 
 | Area | Status | Remaining gate |
 |---|---|---|
 | Runtime and stream contracts | Implemented | Maintain parser, reset, flush, delayed-output, and I/P coverage |
 | TensorRT provider path | Implemented | Keep provider-owned boundary explicit; split model stages only with a new production integration |
 | Binary and container packaging | Implemented | Complete license, provenance, and clean-package checks |
+| Public documentation and onboarding | Implemented | Keep latest-release examples, role-based navigation, platform workflows, and documentation checks current |
+| CLI and artifact-client build identity | Follow-up | Add `nvcr --version` and `nvcr-artifacts --version`, and reconcile the legacy `current_software_version` constant; until then use package manifests, source revisions, or OCI metadata |
 | Exact-target artifacts | In progress | Produce current warning-free profile sets and target-local evidence |
 | Reproducible evaluation | In progress | Complete exact native and direct-Docker matrices plus pinned Python comparisons |
 | Compatibility classes | Experimental | Compare against complete exact baselines |

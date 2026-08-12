@@ -1,118 +1,131 @@
-# Docker on x86_64 NVIDIA GPUs
+# Docker on Linux x86_64
 
-For Linux x86_64 with Docker and NVIDIA Container Toolkit.
+This guide covers the host, image, storage, and engine requirements for running
+NVCR on a Linux x86_64 system with a discrete NVIDIA GPU. The complete
+encode/decode procedure is in
+[First run](first-run.md#linux-x86_64-with-an-nvidia-gpu-and-docker).
 
-## Install
+## Host requirements
+
+- Linux x86_64.
+- Docker Engine.
+- NVIDIA Container Toolkit.
+- A working NVIDIA driver compatible with CUDA 12.8 userspace.
+- A discrete NVIDIA GPU supported by a published engine compatibility class.
+
+Check the host and container independently:
 
 ```bash
+nvidia-smi
+docker version
 docker run --rm --gpus all \
   nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
+```
 
-docker pull omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9
+Both NVIDIA queries must name the intended GPU. Resolve driver or container
+runtime failures before diagnosing NVCR.
 
+## Select and identify the image
+
+Use the Linux/amd64 rolling alias for general installation, then retain its
+immutable digest:
+
+```bash
+export NVCR_IMAGE="omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9"
+docker pull "$NVCR_IMAGE"
+
+export NVCR_IMAGE_REF="$(
+  docker image inspect "$NVCR_IMAGE" --format '{{ index .RepoDigests 0 }}'
+)"
+docker image inspect "$NVCR_IMAGE" \
+  --format 'version={{ index .Config.Labels "org.opencontainers.image.version" }} revision={{ index .Config.Labels "org.opencontainers.image.revision" }} digest={{ index .RepoDigests 0 }}'
+```
+
+Use `NVCR_IMAGE_REF` for the run. There is no unqualified NVCR `latest`
+image.
+
+The entrypoint is already `nvcr`:
+
+```bash
+docker run --rm --gpus all "$NVCR_IMAGE_REF" codec list
+docker run --rm --gpus all "$NVCR_IMAGE_REF" provider list
+```
+
+## Engine storage and selection
+
+Runtime images do not include TensorRT plans. Install the required profile into
+one persistent volume:
+
+```bash
+docker volume create nvcr-engines
 docker run --rm --gpus all \
-  -v nvcr-engines:/opt/nvcr/engines \
+  --volume nvcr-engines:/opt/nvcr/engines \
   --entrypoint /opt/nvcr/bin/nvcr-artifacts \
-  omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9 install \
-    --engine-root /opt/nvcr/engines --profile qcif
+  "$NVCR_IMAGE_REF" \
+  install --profile qcif --engine-root /opt/nvcr/engines
 ```
 
-Docker creates `nvcr-engines` automatically. The image already uses
-`/opt/nvcr/engines` by default.
+The public catalog is anonymous. The installer validates the detected
+operating system, architecture, GPU, CUDA runtime, TensorRT version, archive
+hash, and bundle manifest.
 
-## Prepare Akiyo QCIF
+For a desktop GPU, selection is automatic:
 
-NVCR expects headerless 8-bit YUV420. Convert Xiph's 176x144, 300-frame Akiyo
-Y4M file:
+1. exact device;
+2. same compute capability; and
+3. Ampere-plus, if an applicable broad bundle has been published.
+
+Same-compute bundles are not interchangeable across SM classes. An SM 8.9
+bundle applies only to SM 8.9 devices; an SM 12.0 bundle applies only to
+SM 12.0 devices. Ampere-plus is a broader discrete-GPU fallback, not an
+optimized or universal plan. Jetson does not participate in either desktop
+fallback class.
+
+If installation reports no compatible bundle, retain the complete detected
+identity. The catalog has already considered every published accepted class;
+do not rename another GPU's plan or bypass its manifest. Follow
+[Model and engine preparation](dcvcrt-artifacts.md) to build and validate an
+engine for the target.
+
+Mount `nvcr-engines` read-only during execution:
 
 ```bash
-export NVCR_DATASET_DIR="/absolute/path/to/yuv-dataset"
-export NVCR_OUTPUT_DIR="/absolute/path/to/nvcr-output"
-mkdir -p "$NVCR_DATASET_DIR" "$NVCR_OUTPUT_DIR"
-
-curl -fL https://media.xiph.org/video/derf/y4m/akiyo_qcif.y4m \
-  -o "$NVCR_DATASET_DIR/akiyo_qcif.y4m"
-ffmpeg -i "$NVCR_DATASET_DIR/akiyo_qcif.y4m" \
-  -pix_fmt yuv420p -f rawvideo \
-  "$NVCR_DATASET_DIR/akiyo_qcif.yuv"
+docker run --rm --gpus all \
+  --volume nvcr-engines:/opt/nvcr/engines:ro \
+  "$NVCR_IMAGE_REF" codec list
 ```
 
-Other inputs: [Xiph Derf](https://media.xiph.org/video/derf/) and the
-[UVG HD YUV420 dataset](https://tie-ultravideo.rd.tuni.fi/dataset.html). Check
-each dataset's license; UVG is CC BY-NC.
+## Input and output mounts
 
-## Encode and decode
+NVCR reads headerless planar YUV420P8. Use absolute host paths and distinct
+read/write intent:
 
-```bash
-docker run --rm --gpus all --user "$(id -u):$(id -g)" \
-  -v nvcr-engines:/opt/nvcr/engines:ro \
-  -v "$NVCR_DATASET_DIR:/input:ro" \
-  -v "$NVCR_OUTPUT_DIR:/output" \
-  omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9 encode \
-    -i /input/akiyo_qcif.yuv -o /output/akiyo_qcif.nvcr \
-    -s 176x144 -r 29.97 --frames 4 --gop-size 2 --qp 32
-
-docker run --rm --gpus all --user "$(id -u):$(id -g)" \
-  -v nvcr-engines:/opt/nvcr/engines:ro \
-  -v "$NVCR_OUTPUT_DIR:/output" \
-  omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9 decode \
-    -i /output/akiyo_qcif.nvcr \
-    -o /output/akiyo_qcif_reconstructed.yuv
+```text
+host input directory  -> /input   (read-only)
+host output directory -> /output  (writable)
+engine volume         -> /opt/nvcr/engines (read-only at runtime)
 ```
 
-| Host storage | Container path | Mode |
-|---|---|---|
-| `nvcr-engines` volume | `/opt/nvcr/engines` | read-only when running |
-| `$NVCR_DATASET_DIR` | `/input` | read-only |
-| `$NVCR_OUTPUT_DIR` | `/output` | writable |
+The first-run workflow uses one work directory and creates its output files on
+the host before the container writes them. This avoids broad ownership changes.
+Do not add an arbitrary `--user` mapping unless that user has access to the
+NVIDIA capability nodes.
 
-Use `/input/akiyo_qcif.yuv` inside the container. If CUDA fails after the
-`nvidia-smi` check, add:
+## Compose and development images
 
-```bash
---device /dev/nvidia-uvm --device /dev/nvidia-uvm-tools
-```
+The checked-in Compose file and Dockerfile are source-tree tooling for
+contributors and controlled local builds. They are not required to run the
+published image. If Compose is used, set `NVCR_X86_64_IMAGE` to the resolved
+image reference and invoke one-shot commands with `docker compose run --rm`;
+do not use `docker compose up` for the CLI.
 
-## Compose or local build
+A source-built image must not be described as a released image merely because
+its build argument contains a release-looking version. Retain its source
+revision and local tag separately.
 
-From a source checkout:
+## Next step
 
-```bash
-export NVCR_X86_64_IMAGE="omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9"
-export NVCR_INPUT_DIR="$NVCR_DATASET_DIR"
-export NVCR_OUTPUT_DIR
-docker compose -f docker/compose.x86_64.yaml run --rm engine-install \
-  install --engine-root /opt/nvcr/engines --profile qcif
-
-docker build --platform linux/amd64 --target runtime \
-  -f docker/Dockerfile.x86_64 -t nvcr:desktop .
-```
-
-Build engines on the GPU and TensorRT runtime that will execute them; do not
-reuse Jetson or another GPU's plans.
-
-## Direct Docker benchmark
-
-After the engine volume contains the matching target-local bundles, run the
-same diagnostic matrix used by the native Linux workflow:
-
-```bash
-scripts/benchmark_docker.sh \
-  --image omarelghati/nvcr:0.19.1-amd64-cuda12.8-trt10.9 \
-  --input-dir "$NVCR_DATASET_DIR" \
-  --engine-volume nvcr-engines \
-  --results-dir "$NVCR_OUTPUT_DIR/benchmark-docker" \
-  --hardware rtx4070-docker \
-  -- \
-  --resolutions "qcif 720p" --frames 300 --qp 32 \
-  --gops "1 299" --repetitions 3 --warmup-frames 10
-```
-
-This command pulls the image before running `docker run`; it does not use
-Docker Compose. Add `--install-profiles "qcif 720p"` when the named volume is
-empty and the image can access the private engine-assets release through
-`GH_TOKEN`. The result directory records the pulled image identity and process
-wall-time throughput for comparison with native Linux results. The launcher
-uses container user `0:0` by default because some NVIDIA Container Toolkit
-setups reject CUDA device access for UID 1000; override with `--user UID:GID`
-when non-root GPU access is validated on the target.
+Run the canonical
+[Linux functional validation](first-run.md#linux-x86_64-with-an-nvidia-gpu-and-docker).
+For CUDA, artifact, mount, or output failures, use
+[Troubleshooting](troubleshooting.md).

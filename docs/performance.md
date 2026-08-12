@@ -1,94 +1,181 @@
-# Performance
+# Performance and benchmarking
 
-This page defines the measurement protocol. Reported numbers come from the
-machine-readable result set rather than an accumulating narrative log.
+NVCR separates functional validation, measurements from one environment,
+controlled comparisons, and regeneration of retained summaries. Use the
+workflow whose measurement boundary matches the claim being evaluated.
 
-The publication matrix, target records, result schema, and run commands live in [docs/experiments](experiments/README.md). The matrix is evidence for both
-architecture-level gates and the DCVC-RT/TensorRT production vertical; CPU
-fixture results do not establish production performance.
+## Functional round-trip validation
 
-## Rules
+Follow [First run](first-run.md) to verify installation, artifact selection,
+encode, decode, and raw-output sizing. That short input is a functional check;
+it is not a throughput measurement.
 
-Run a Release build only after the configured correctness and artifact tests pass. Record:
+## Environment-specific measurements
 
-- commit, target profile, engine/profile digests, and command;
-- OS, compiler, driver or JetPack, CUDA, TensorRT, GPU, power mode, and clocks;
-- sequence, format, dimensions, frame count, QP, GOP pattern, and reset pattern;
-- warm-up count, repetitions, timing boundaries, and statistic;
-- encode/decode throughput, latency, memory, payload size, and reconstruction quality;
-- the matching pinned-Python command and tolerance when comparing runtimes.
-
-Use the same input, profile, QP, frame count, and timing boundary for both runtimes. Do not turn one machine or one sequence into a general performance claim.
-
-Keep optional instrumentation outside primary timing. The publication-matrix driver
-always derives FPS, FPS variation, compatibility ratios, and total process wall
-time from repetitions without verbose per-frame output, quality calculation,
-process polling, or `nvidia-smi` polling. `--profile` adds separate repetitions
-for latency, PSNR, and memory. Never substitute profile-pass throughput for the
-clean-pass values.
-
-## Current evidence
-
-The retained file
-[resolution-matrix.jsonl](../evidence/live-release-20260806/resolution-matrix.jsonl)
-is a diagnostic matrix, not a complete publication result package. Use its
-recorded commit, artifact identity, status, and error fields when interpreting
-the rows; do not promote it to a release baseline.
-
-Raw streams are local run products and are not part of the documentation set.
-
-## Run the matrix
-
-The publication driver is the source of the matrix command, result schema, and
-completion state:
+Use `scripts/benchmark_resolution_matrix.sh` for a native diagnostic matrix.
+It writes `nvcr.benchmark.resolution-matrix.v1` JSONL and CSV rows and a
+Markdown summary:
 
 ```bash
-python3 scripts/benchmark_softwarex_matrix.py --help
+scripts/benchmark_resolution_matrix.sh \
+  --resolutions "qcif 720p" \
+  --frames 300 \
+  --qp 32 \
+  --gops "1 299" \
+  --repetitions 3 \
+  --warmup-frames 10 \
+  --engine-root build/engines-rtx4070-exact \
+  --results-dir evidence/performance/rtx4070-native \
+  --output-dir /tmp/nvcr-performance-streams \
+  --hardware rtx4070-native
 ```
 
-It writes `nvcr.softwarex.result.v1` rows and refuses to mark a package complete
-when `--profile`, a build/test gate, required metric, target/artifact identity,
-Python reference, or compatibility baseline is missing. Omitting `--profile`
-is the low-overhead performance-only mode and always leaves the package
-`partial`. The older
-`benchmark_resolution_matrix.sh` output uses
-`nvcr.benchmark.resolution-matrix.v1` and remains diagnostic.
+The inputs and engine bundles must already exist. Run the script with
+`--help` for the input layout and per-resolution override options.
 
-The publication run must cover QCIF, CIF, 360p, 720p, and 1080p, with 540p
-optional; all-intra and normal I/P GOP cases; three measured repetitions; one
-warm-up run; payload/BPP; PSNR-Y/U/V/YUV; latency; host/GPU memory; and a clean
-pinned-Python comparison for every RTX 4070 exact case.
-
-Energy is optional investigation data, not a v1 release blocker.
-
-## Direct Docker benchmark
-
-The native diagnostic matrix can be run inside a pulled x86_64 runtime image
-without Docker Compose:
+For a container measurement, set `NVCR_IMAGE` to the current image selected
+in [Installation](installation.md), then use the direct Docker launcher:
 
 ```bash
 scripts/benchmark_docker.sh \
-  --image omarelghati/nvcr:0.19.1-amd64-cuda12.8-trt10.9 \
+  --image "$NVCR_IMAGE" \
   --input-dir /data/nvcr/yuv \
   --engine-volume nvcr-engines \
   --results-dir evidence/performance/rtx4070-docker \
   --hardware rtx4070-docker \
   -- \
-  --resolutions "qcif cif 360p 720p 1080p" \
-  --frames 300 --qp 32 --gops "1 299" --repetitions 3
+  --resolutions "qcif 720p" \
+  --frames 300 \
+  --qp 32 \
+  --gops "1 299" \
+  --repetitions 3 \
+  --warmup-frames 10
 ```
 
-The launcher performs `docker pull`, mounts the input directory read-only, the
-engine volume read-only, and evidence/output directories as writable mounts.
-Rows contain codec-reported throughput plus process wall-time throughput,
-which includes container process startup and is the metric to compare against
-the native run. The launcher defaults to container user `0:0` for NVIDIA
-device compatibility; pull an immutable image tag when retaining evidence.
+The launcher records the image's resolved digest. Add
+`--install-profiles "qcif 720p"` only when the engine volume is empty. The
+public engine catalog is anonymous; the artifact client does not implement
+authenticated private-catalog downloads.
 
-## Current comparison and portability boundary
+On Windows, use `scripts/benchmark_docker.ps1` or run the Bash launcher under
+WSL 2 as described in [Docker on Windows](docker-windows.md). Identify those
+rows as containerized execution on that Windows/WSL2 host. A container fixes
+the Linux userspace, but it does not normalize host, GPU, driver, power,
+thermal, storage, Docker Desktop, or WSL overhead.
 
-The benchmark comparison is based on bare-metal Linux measurements. The RTX
-3050 and RTX 5060 Docker benchmark runs are portability checks: they verify
-that the pulled Linux/amd64 runtime and target-local TensorRT bundles execute
-on those GPUs. They are not additional bare-metal performance baselines, and
-their Docker FPS must not be pooled with the bare-metal Linux comparison.
+Record at minimum:
+
+- Windows edition and build;
+- WSL 2 kernel and Docker Desktop versions;
+- GPU and driver;
+- image tag and resolved digest;
+- CUDA and TensorRT versions;
+- storage path and filesystem;
+- power and clock mode; and
+- whether the measurement uses the process or codec-loop timing boundary.
+
+## Timing boundaries
+
+Diagnostic rows retain two timing boundaries:
+
+| Field | Boundary | Appropriate use |
+|---|---|---|
+| `throughput_fps` | Codec loop reported by the NVCR CLI | Runtime diagnosis within one setup |
+| `process_throughput_fps` | Complete encode or decode command wall time | Native-versus-container or cross-tool comparison |
+
+Do not mix these fields in one ratio or table. For cross-runtime comparisons,
+use the same process-level boundary, input prefix, frame count, QP, GOP,
+warm-up, and repetition policy.
+
+Profiling and memory sampling can add synchronization or polling overhead.
+Keep profiled repetitions separate from clean throughput repetitions, and do
+not substitute profile-pass FPS for clean-pass FPS.
+
+The controlled driver uses `encode_fps_mean` and `decode_fps_mean` for the
+normal measured repetitions. Its `total_wall_time_ms` includes normal CLI and
+file-I/O costs but excludes the separate verbose, quality, and memory-sampling
+passes.
+
+## Byte and quality boundaries
+
+In the diagnostic schema, `payload_bytes` is the sum of serialized `NVAU`
+access-unit bytes reported by the CLI. It includes the NVAU header and
+codec-private payload and excludes outer `PacketIO` or `NVCS` file framing.
+`payload_bpp` is:
+
+```text
+payload_bytes * 8 / (width * height * frames)
+```
+
+An inner entropy or rANS byte count is a different boundary. Compare Python and
+NVCR rate values only when both sides use the same byte boundary, and state
+that boundary with every cross-runtime result.
+
+## Controlled comparisons
+
+The strict evaluation driver validates source, target, artifact, test, input,
+and measurement identities before writing aggregate result rows. Its legacy
+filename and schemas remain stable implementation identifiers:
+
+```bash
+python3 scripts/benchmark_softwarex_matrix.py --help
+```
+
+A complete controlled result requires:
+
+- a clean commit and Release build;
+- detected target identity and current target-local artifact digests;
+- registered and passing core, engine, and I/P round-trip gates;
+- fixed inputs, frame counts, QP/GOP cases, one warm-up, and three measured
+  repetitions;
+- clean throughput repetitions and separate latency, quality, and memory
+  repetitions;
+- an immutable image digest or native build identity;
+- the required pinned Python-reference rows on the reference target; and
+- `run-summary.json` with `status: complete` and no required failed or
+  skipped cases.
+
+Exact engine bundles are the baseline. A same-compute-capability or
+Ampere-and-newer result also requires matching exact rows and separate
+correctness and performance-ratio validation. TensorRT must still match the
+engine manifest exactly; a broader hardware class does not make plans portable
+across TensorRT versions. Jetson uses exact bundles only.
+
+The full matrix, acceptance logic, and commands are in the
+[evaluation protocol](experiments/evaluation-protocol.md),
+[result schema](experiments/result-schema.md), and
+[runbook](experiments/runbook.md).
+
+## Regenerating retained summaries
+
+Treat JSONL as canonical. Do not hand-edit numbers in generated summaries.
+
+Consolidate Python DCVC-RT runner output:
+
+```bash
+python3 scripts/consolidate_dcvc_rt_results.py \
+  --source /path/to/dcvc-rt-results \
+  --output /tmp/python-data \
+  --hardware rtx4070
+```
+
+Regenerate a Python-versus-NVCR comparison from two retained JSONL files:
+
+```bash
+python3 scripts/consolidate_runtime_results.py \
+  --python results/rtx4070/python/data/results.jsonl \
+  --nvcr results/rtx4070/nvcr/data/results.jsonl \
+  --output /tmp/rtx4070-summary.md
+```
+
+Verify the generated summary and hashes before replacing a retained result.
+Keep raw YUV, reconstructed video, encoded streams, checkpoints, model exports,
+and TensorRT plans outside Git.
+
+## Interpreting retained results
+
+[The result inventory](../results/README.md) records the platform, software
+identity, dirty state, artifact identity, evidence class, completeness, and
+permitted interpretation of each retained result. A profile file, successful
+build, TensorRT deserialization, or complete-looking table does not establish
+target support by itself.

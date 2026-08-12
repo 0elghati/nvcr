@@ -8,7 +8,7 @@ datasets. It is diagnostic evidence, not a release or target-support claim.
 | Runtime | Canonical data | SHA-256 | Rows | Coverage |
 |---|---|---|---:|---|
 | Python DCVC-RT | [python/data/results.jsonl](python/data/results.jsonl) | `ce4485182f2b0e172ef92b120109efd94a921329bae5f44b6f8e5d24a3a2057d` | 36 | Six resolutions, GOP 1/30/100, encode/decode, one row per case |
-| NVCR | [nvcr/data/results.jsonl](nvcr/data/results.jsonl) | `114b229555fba937ba9f7cd1617ad676abd195c07918cd20f7f4b5657ded0bc5` | 144 | Six resolutions, GOP 1/30/100, encode/decode, three repetitions plus averages |
+| NVCR | [nvcr/data/results.jsonl](nvcr/data/results.jsonl) | `6a1d77cc197f17d90930a2dab9fb291eb41c0547d6ab929bea626a3b16165cdb` | 144 | Six resolutions, GOP 1/30/100, encode/decode, three repetitions plus averages |
 
 Both datasets use RTX 4070, QP 32, and 100 frames. The NVCR run uses 10
 warm-up frames, three measured repetitions, and memory profiling. Its recorded

@@ -1,7 +1,7 @@
 # Support
 
-Use the repository issue tracker for public support unless a release-specific
-contact is stated in the evaluated release metadata.
+Use the repository issue tracker for public support unless a release note
+states a different contact.
 
 - Usage questions: include NVCR version, platform/target profile, installation
   method, exact command, and the non-sensitive error output.

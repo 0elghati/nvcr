@@ -32,18 +32,20 @@ Each application archive must:
 ## Container images
 
 When Release Please creates a draft release, the release workflow dispatches
-both the native package build and the container publication workflow. The
-container workflow builds the exact release tag on the matching self-hosted
-architecture and publishes three tags per platform family:
+native package and container delivery jobs. Each job builds the exact
+application tag on the matching self-hosted architecture. A successful job may
+publish:
 
 - an immutable application-version tag for reproducibility;
 - a family rolling tag for compatibility with existing users; and
-- an explicit `latest-*` rolling tag used by the Docker installation guides.
+- an explicit `latest-*` rolling convenience tag.
 
 There is no shared unqualified `latest` tag because x86_64 NVIDIA and Jetson
-images have different architectures and NVIDIA userspace. Container
-publication requires the Docker Hub credentials and both target runners; a
-failed target job must be repaired before treating the release as complete.
+images have different architectures and NVIDIA userspace. User guides may
+start from a platform-qualified `latest-*` tag, but they record the resolved
+OCI digest, release version, and source revision. Reproducible commands use
+the recorded digest or an immutable version tag. Platform delivery status is
+reported independently in each release.
 
 A native package can be reproduced with:
 
@@ -84,6 +86,9 @@ nvcr-engines-linux-amd64-sm89-dcvcrt-cvpr2025-720p.tar.gz
 nvcr-engines-linux-amd64-ampere-plus-dcvcrt-cvpr2025-720p.tar.gz
 ```
 
+These are naming patterns; a class is installable only when the active catalog
+contains a compatible entry.
+
 `nvcr-engine-catalog.json` uses schema `nvcr.engine-catalog.v1`. Every entry
 records archive hash and size, codec/model/target/engine profiles, architecture,
 hardware compatibility, GPU identity, CUDA runtime, TensorRT version, and
@@ -93,13 +98,13 @@ Catalog selection ranks candidates in this order:
 
 1. exact device;
 2. same compute capability on supported desktop targets;
-3. explicitly published Ampere-plus desktop compatibility.
+3. explicitly released Ampere-plus desktop compatibility.
 
 TensorRT matching remains exact. Jetson engines remain exact target-local
 artifacts. The installer validates archive hashes, manifests, required files,
 and bundle digests; it never builds a missing engine automatically.
 
-## Engine publication gate
+## Engine catalog admission gate
 
 Before an engine archive enters the catalog:
 
@@ -114,7 +119,7 @@ Before an engine archive enters the catalog:
 
 Uploading the catalog last ensures that installers cannot select an incomplete
 update. A local archive, successful upload, or plan-only load does not by itself
-establish publication or target support.
+establish catalog admission or target support.
 
 ## Reproducible evaluation evidence package
 
@@ -142,7 +147,7 @@ Commit metadata, hashes, commands, summaries, and compact result rows. Keep
 checkpoints, model exports, TensorRT plans, raw YUV, encoded streams, and
 reconstructed video outside Git.
 
-Only a `run-summary.json` status of `complete` is publication-ready. Completion
+Only a `run-summary.json` status of `complete` is eligible for controlled use. Completion
 requires the registered build/test gates, current artifact identity, required
 metrics, separate profiling repetitions, and pinned reference comparisons.
 Dirty, partial, plan-only, skipped, or missing-metric packages remain

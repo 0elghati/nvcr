@@ -1,17 +1,19 @@
 # Result schema
 
-Each experiment row is one JSON object in a JSONL file. Required rows use schema `nvcr.softwarex.result.v1`.
+Each experiment row is one JSON object in a JSONL file. Required rows use the
+legacy schema identifier `nvcr.softwarex.result.v1`, which remains unchanged
+for tooling compatibility.
 
 The existing `benchmark_resolution_matrix.sh` writes
 `nvcr.benchmark.resolution-matrix.v1` rows with useful timing and PSNR fields,
-but it does not satisfy the complete publication schema. Do not silently treat
-those rows as publication-ready; use `benchmark_softwarex_matrix.py`.
+but it does not satisfy the complete evaluation schema. Do not silently treat
+those rows as complete; use `benchmark_softwarex_matrix.py`.
 
 The diagnostic rows additionally record `execution_mode`, `container_image`,
 `container_digest`, `process_time_seconds`, and
 `process_throughput_fps`. The process fields cover the full encode or decode
 command wall time and are intended for native-versus-Docker comparisons; they
-do not replace the publication driver's `total_wall_time_ms`.
+do not replace the strict evaluation driver's `total_wall_time_ms`.
 
 `scripts/benchmark_softwarex_matrix.py` is the schema-producing driver. It
 writes one aggregate encode/decode-roundtrip row per sequence/profile/QP/GOP
@@ -39,7 +41,7 @@ time, payload bytes, and BPP. When `profiling_enabled` is `false`,
 `profile_runs` is zero and the latency, first-frame, PSNR, and memory fields are
 `null`; the case may pass as a performance-only diagnostic, but the package
 cannot become `complete`. When `profiling_enabled` is `true`, those fields must
-be finite for the case to pass. A publication package requires profiling on
+be finite for the case to pass. A complete package requires profiling on
 every row.
 
 A complete run records either `native_build_id` or both an image tag and
@@ -48,7 +50,7 @@ immutable `container_digest`.
 For a local extracted directory, `engine_bundle_sha256` is a deterministic
 digest over the engine manifest and its checksum manifest and
 `engine_bundle_digest_kind` is `manifest-and-checksum-sha256`. Preserve the
-catalog archive SHA-256 separately when a published archive is used.
+catalog archive SHA-256 separately when a catalog archive is used.
 
 `status` is `pass`, `fail`, or `skipped` for a case. A skipped required
 case prevents the package-level status from becoming `complete`.
@@ -74,8 +76,8 @@ case prevents the package-level status from becoming `complete`.
   "architecture": "x86_64",
   "os": "",
   "driver_version": "",
-  "cuda_runtime_version": "12.6",
-  "tensorrt_version": "10.9.0",
+  "cuda_runtime_version": "",
+  "tensorrt_version": "",
   "codec_id": "dcvc-rt",
   "model_set_id": "dcvcrt-cvpr2025",
   "provider_id": "tensorrt",
@@ -145,6 +147,11 @@ case prevents the package-level status from becoming `complete`.
 payload covers the recorded frame range. The aggregate row keeps encode and
 decode timing fields distinct.
 
+`payload_bytes` is the sum of serialized `NVAU` access units. It includes
+their NVAU headers and codec-private payloads and excludes outer `PacketIO` or
+`NVCS` framing. Entropy or rANS bytes are a different boundary and may be
+compared only with rows measured at that same boundary.
+
 `encode_fps_mean`, `decode_fps_mean`, their standard deviations,
 `total_wall_time_ms`, payload, and BPP come only from the normal measured
 repetitions. Those commands omit verbose per-frame output, quality calculation,
@@ -183,3 +190,8 @@ Compatibility runs supply `--exact-baseline-jsonl`. Input rows must be passing
 frame count, QP, and GOP. The driver records encode/decode ratios. Every
 same-compute or Ampere-plus case needs a match before its package can be
 complete.
+
+Same-compute baselines require identical numeric compute-capability major and
+minor values. Both broader classes are desktop-only, remain bound to the
+manifest's exact TensorRT `major.minor.patch`, and cannot be used to repair a
+runtime-version mismatch. Jetson is exact-only.

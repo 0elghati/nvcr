@@ -1,81 +1,78 @@
 # Scope and support
 
-This page separates four concepts that are easy to conflate: what NVCR is,
-what the architecture implements, what production support has validated, and
-what remains on the roadmap.
+NVCR separates an implemented runtime architecture from the narrower set of
+codec, provider, and hardware combinations validated for use.
 
-## 1. NVCR identity
+## Architecture and supported integration
 
-NVCR is a native C++ runtime architecture for neural video codecs. It is a
-codec-extensible systems layer for stateful sessions, execution-provider
-mediation, target-aware artifacts, and bounded access units. Linux/NVIDIA is
-the current production deployment boundary, not the definition of NVCR.
-
-## 2. Implemented architecture
-
-The repository implements:
-
-- encoder and decoder session contracts with send/receive, `try_again`, flush,
-  drain, reset, state, statistics, and structured errors;
-- codec descriptors, capabilities, option schemas, `ICodecAdapter`, and a
-  static codec/provider registry;
-- provider descriptors, capabilities, tensor bindings, `IExecutable`,
-  `IExecutionProvider`, and the optional offline `IArtifactCompiler` contract;
-- provider-mediated `RuntimeServices` and artifact descriptors, catalogs,
-  resolution, compatibility ranking, hashes, and license restrictions;
-- bounded `NVAU` v1 and implemented generalized sectioned `NVAU` v2 parsing and
-  serialization;
-- a deterministic test codec and CPU provider for conformance tests; and
-- the DCVC-RT adapter, native entropy coding, TensorRT provider registration,
-  CLI, packaging, and evaluation tooling.
-
-These are implementation facts. They do not all represent production support.
-
-## 3. Validated production support
-
-The current production vertical is:
-
-```text
-DCVC-RT codec adapter -> TensorRT FP16 provider -> Linux/NVIDIA target
-```
-
-The checked-in target profiles are RTX 3050 Laptop, RTX 4070, RTX 5060 Laptop,
-and Jetson Orin Nano. They describe requested identities and artifact classes;
-they are not automatic support claims. The test codec and CPU provider are
-conformance fixtures, not CPU neural-codec products or performance baselines.
-
-Support evidence levels are cumulative:
-
-| Evidence level | What it establishes |
+| Layer | Current status |
 |---|---|
-| Core contract validation | CPU tests cover public values, session lifecycle, registry/services, format bounds, resolver behavior, and malformed input |
-| Production codec/provider validation | DCVC-RT/TensorRT builds, artifact checks, I/P round trips, native entropy, and provider-mediated construction pass |
-| Exact-target validation | The named target's current artifact bundle and runtime round trips pass with recorded identity and hashes |
-| Compatibility-mode validation | A same-compute or Ampere-plus bundle passes its explicit correctness and comparison gates; Jetson does not use these classes |
-| Execution-portability validation | The specific host binary, CUDA code, container userspace, or engine class is tested for the stated portability claim |
-| Controlled performance evidence | Release measurements use the documented input, timing boundary, repetitions, instrumentation separation, and environment record |
+| Runtime architecture | C++20 values, sessions, codec/provider contracts, registry, artifact resolution, bounded access units, CLI, and tests are implemented |
+| Conformance fixtures | The deterministic codec and CPU provider validate contracts; they do not perform neural inference |
+| Supported codec/provider integration | DCVC-RT with the TensorRT FP16 provider |
+| Supported operating-system boundary | NVIDIA Linux, including Linux containers |
+| Transitional work | Independent component-level TensorRT loading |
+| Planned work | Additional codecs/providers, INT8, stable C ABI, FFmpeg, and standard-container mapping |
 
-A target becomes supportable only when the applicable levels pass. A matching
-JSON profile, successful compilation, TensorRT deserialization, or CPU test run
-alone is insufficient.
+Checked-in target profiles describe requested hardware and artifact identities.
+A profile or catalog entry alone is not evidence that every validation gate has
+passed.
 
-## 4. Current non-support claims
+## Platform paths
 
-The current release track does not claim:
+| Environment | What NVCR provides | Important boundary |
+|---|---|---|
+| Linux x86_64 with NVIDIA GPU | Native package and CUDA/TensorRT container paths | GPU, driver, TensorRT, CUDA, and engine identity must be compatible |
+| Windows with Docker Desktop/WSL2 | Linux container execution on the Windows host | This is container portability, not a native Windows implementation |
+| Jetson Orin | Native AArch64 package and exact Jetson engine bundles | JetPack/L4T, CUDA, TensorRT, and target identity must match |
+| CPU-only | Portable build and contract tests | No DCVC-RT/TensorRT inference |
 
-- a second production codec or execution provider;
-- CPU neural-codec inference, Windows, macOS, or non-NVIDIA production support;
-- universal TensorRT-plan portability or provider-independent execution;
-- a stable C ABI or frozen C++ ABI;
-- upstream Python DCVC-RT byte/payload interchangeability;
-- `NVAU` as an industry standard, MP4/Matroska container, FFmpeg integration,
-  or finalized NVIF specification; or
-- redistribution permission for checkpoints, exported models, engine plans, or
-  datasets without a separate asset review.
+Release availability can differ by platform. The
+[installation guide](installation.md) identifies the recommended path for the
+latest stable release.
 
-## Roadmap boundary
+## Artifact compatibility
 
-The current priorities are exact-target artifact gates, complete evaluation
-matrices, pinned-reference comparisons, package/license review, and external
-consumer verification. Later codec/provider integrations and media-framework
-or standard-container integration remain future work. See [ROADMAP.md](../ROADMAP.md).
+The public artifact installer selects the best compatible published bundle in
+this order:
+
+1. exact target;
+2. same compute capability on supported desktop systems;
+3. Ampere-and-newer hardware compatibility on supported desktop systems.
+
+Same compute capability means the same numeric SM version; SM 8.9 and SM 12.0
+are different families. Broader hardware compatibility does not relax the
+required TensorRT version or other catalog checks. Jetson uses exact bundles
+only.
+
+## What each validation level establishes
+
+| Validation | What a pass demonstrates |
+|---|---|
+| Core contracts | Session lifecycle, registry, artifacts, access units, and malformed-input handling |
+| Codec/provider integration | DCVC-RT/TensorRT construction, artifact checks, native entropy coding, and I/P encode/decode |
+| Exact target | The recorded runtime and artifact bundle work on the named machine |
+| Compatibility class | The declared broader engine class passed its correctness checks on the recorded targets |
+| Container execution | The released Linux image runs in the recorded host environment |
+| Controlled performance | Measurements follow the documented input, timing, repetition, and environment protocol |
+
+A successful build, TensorRT deserialization, CPU test run, or matching target
+profile proves only that narrower fact. Performance results are specific to
+their recorded hardware and execution environment.
+
+## Not currently claimed
+
+NVCR does not currently claim:
+
+- CPU neural-codec inference or native Windows/macOS support;
+- multiple supported production codecs or providers;
+- arbitrary TensorRT-plan portability or TensorRT version compatibility;
+- byte compatibility with upstream Python DCVC-RT payloads;
+- a frozen C++ ABI or stable C ABI;
+- `NVAU` as an industry standard or `.nvcr` as a standard media container;
+- FFmpeg integration; or
+- redistribution rights for third-party checkpoints, model exports, engine
+  plans, or datasets beyond their individual licences.
+
+See [Identity and scope](identity-and-scope.md), [Compatibility](compatibility.md),
+and the [Roadmap](../ROADMAP.md).

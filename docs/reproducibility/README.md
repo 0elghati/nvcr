@@ -1,71 +1,52 @@
-# Reproducibility and review path
+# Reproducibility
 
-This directory is a compact landing area for an informed reviewer. It points
-to the detailed user, architecture, artifact, and experiment documentation
-without making publication metadata part of the software's identity.
+Reproducible NVCR results bind software, hardware, artifacts, inputs, and the
+measurement boundary. A successful command without those identities is useful
+for diagnosis, but it is not a portable performance result.
 
-## Software identity
+## Record the software identity
 
-NVCR is a native C++ runtime architecture for neural video codecs. Its first
-complete production vertical is the DCVC-RT codec adapter with the TensorRT
-FP16 provider on Linux/NVIDIA targets. The deterministic test codec and CPU
-provider are conformance fixtures.
+- For a source build, record `git rev-parse HEAD`, `git status --short`, and the
+  CMake configuration.
+- For a release install, record the release asset name and checksum.
+- For a container, record both the tag and resolved image digest.
+- Record the codec/provider IDs and the engine manifest and bundle digests.
 
-## Evaluated release
+The current release is available from the repository's
+[latest release page](https://github.com/0elghati/nvcr/releases/latest).
+Historical results retain the revision that produced them; do not relabel them
+with a newer release.
 
-- Evaluated code version: `TO BE FROZEN FOR SUBMISSION`
-- Permanent code-release link: `TO BE FROZEN FOR SUBMISSION`
-- Reproducible evidence/capsule link: `TO BE FROZEN FOR SUBMISSION`
-- Current repository: https://github.com/0elghati/nvcr
-
-These placeholders are not publication metadata. An immutable tag, public
-release assets, and a public evidence package are release gates.
-
-## Five-minute smoke test
-
-For a CPU-accessible contract check:
+## CPU contract validation
 
 ```bash
-cmake -S . -B build-cpu -DCMAKE_BUILD_TYPE=Release \
+cmake -S . -B build-cpu \
+  -DCMAKE_BUILD_TYPE=Release \
   -DNVCR_ENABLE_TENSORRT=OFF
 cmake --build build-cpu --parallel
 ctest --test-dir build-cpu --output-on-failure
 ```
 
-This validates core contracts and fixtures; it does not run the production
-DCVC-RT/TensorRT path. For the production path, install or prepare a validated
-engine bundle and follow [Getting started](../getting-started.md).
+This validates portable runtime, parser, artifact, and lifecycle contracts. It
+does not execute DCVC-RT through TensorRT and does not measure neural-codec
+performance.
 
-## Review map
+## GPU and measurement records
 
-- [Identity and scope](../identity-and-scope.md)
-- [Architecture](../architecture.md)
-- [Extension guide](../extending-nvcr.md)
-- [Elementary stream contract](../spec/nvcr-elementary-stream-v1.md)
-- [Artifact preparation and selection](../dcvcrt-artifacts.md)
-- [Compatibility](../compatibility.md)
-- [Evaluation protocol](../experiments/evaluation-protocol.md)
-- [Runbook](../experiments/runbook.md)
+Use target-local engine validation and a real encode/decode round trip before
+collecting measurements. Keep codec-loop and complete-process timing separate,
+and compare rate only at the same byte boundary.
+
+- [Performance protocol](../performance.md)
+- [Detailed evaluation protocol](../experiments/evaluation-protocol.md)
 - [Result schema](../experiments/result-schema.md)
-- [Claim-to-evidence matrix](claims-and-evidence.md)
+- [Execution runbook](../experiments/runbook.md)
+- [Retained result inventory](../../results/README.md)
 - [Code metadata](code-metadata.md)
-- [Pre-submission checklist](pre-submission-checklist.md)
 
-## Known limitations
+The C++ API/ABI is not frozen. NVCR does not claim native Windows support,
+universal TensorRT-plan portability, upstream Python payload interchangeability,
+standard-container support, or unrestricted model and engine redistribution.
 
-The public C++ API/ABI is not frozen. Only DCVC-RT/TensorRT is a production
-vertical. TensorRT currently creates a provider-owned monolithic backend;
-component-level executable loading is transitional. NVCR does not claim
-upstream Python payload interchangeability, standard containers, FFmpeg
-integration, universal TensorRT-plan portability, or unrestricted asset
-redistribution.
-
-## Licensing, citation, and support
-
-NVCR source is MIT-licensed. Model, checkpoint, engine, runtime, and dataset
-terms remain separate; see [the asset policy](../../ASSET_DISTRIBUTION_POLICY.md),
-[model licensing](../../MODEL_LICENSES.md), and
-[third-party notices](../../THIRD_PARTY_NOTICES.md).
-
-Use [code metadata](code-metadata.md), [CITATION.cff](../../CITATION.cff), and
-[SUPPORT.md](../../SUPPORT.md) for current software metadata and support routes.
+See [SUPPORT.md](../../SUPPORT.md) for questions and bug reports, and
+[SECURITY.md](../../SECURITY.md) for vulnerability reporting.

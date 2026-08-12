@@ -1,40 +1,88 @@
-# NVCR runtime images
+# Docker Hub image contract
 
-NVCR provides native CUDA/TensorRT execution images for two distinct NVIDIA
-platform families:
+NVCR publishes separate runtime image families for Linux/amd64 discrete GPUs
+and Linux/arm64 Jetson. There is intentionally no architecture-neutral
+`latest` tag.
 
-- `amd64-cuda12.8-trt10.9`: linux/amd64, CUDA 12.8, TensorRT 10.9,
-  CUDA helper kernels for the compiler-supported GPU architecture set; engines
-  are selected from the catalog.
-- `jetson-l4t36.4`: linux/arm64 Jetson, JetPack 6.1/L4T 36.4, SM 8.7
-  runtime code.
+## Public tags
 
-Each platform publishes an immutable version tag, a family rolling tag, and an
-explicit architecture-qualified rolling tag:
+| Family | Rolling latest | Rolling family | Immutable release pattern |
+|---|---|---|---|
+| Linux/amd64, CUDA 12.8, TensorRT 10.9 | `latest-amd64-cuda12.8-trt10.9` | `amd64-cuda12.8-trt10.9` | `<version>-amd64-cuda12.8-trt10.9` |
+| Jetson, L4T 36.4 | `latest-jetson-l4t36.4` | `jetson-l4t36.4` | `<version>-jetson-l4t36.4` |
 
-```text
-0.18.0-amd64-cuda12.8-trt10.9
-amd64-cuda12.8-trt10.9
-latest-amd64-cuda12.8-trt10.9
-0.18.0-jetson-l4t36.4
-jetson-l4t36.4
-latest-jetson-l4t36.4
+Rolling tags are delivery pointers. They can move independently and the Jetson
+image can temporarily trail the latest native GitHub release. Use the native
+AArch64 package for the default Jetson installation.
+
+## Consumer workflow
+
+A general Linux/amd64 installation may begin with the rolling tag. Resolve and
+record the immutable identity before running NVCR:
+
+```bash
+export NVCR_IMAGE="omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9"
+docker pull "$NVCR_IMAGE"
+
+export NVCR_IMAGE_REF="$(
+  docker image inspect "$NVCR_IMAGE" --format '{{ index .RepoDigests 0 }}'
+)"
+docker image inspect "$NVCR_IMAGE" \
+  --format 'version={{ index .Config.Labels "org.opencontainers.image.version" }} revision={{ index .Config.Labels "org.opencontainers.image.revision" }} digest={{ index .RepoDigests 0 }}'
 ```
 
-Use the `latest-*` tag for ordinary installation documentation and pin the
-version tag when reproducing a specific release. There is intentionally no
-shared unqualified `latest` tag because the CPU architecture, NVIDIA userspace,
-and TensorRT engine compatibility differ. The shorter family tag remains as a
-backward-compatible rolling alias.
+Use `NVCR_IMAGE_REF` for subsequent commands. For reproduction of a recorded
+run, use its saved digest or immutable versioned tag.
 
-The images contain the native Release runtime and rolling-catalog client, but no
-TensorRT plans, models, input video, or generated output. The architecture-
-specific Compose `engine-install` service downloads every exact-compatible
-bundle from the non-semver `engine-assets` release into a persistent volume.
-The runtime mounts that collection read-only and automatically selects a profile
-from input dimensions when encoding and from bitstream metadata when decoding.
+The image entrypoint is `/opt/nvcr/bin/nvcr`. Invoke the artifact client by
+overriding that entrypoint:
 
-Documentation:
+```bash
+docker volume create nvcr-engines
+docker run --rm --gpus all \
+  --volume nvcr-engines:/opt/nvcr/engines \
+  --entrypoint /opt/nvcr/bin/nvcr-artifacts \
+  "$NVCR_IMAGE_REF" \
+  install --profile qcif --engine-root /opt/nvcr/engines
+```
 
-- https://github.com/0elghati/nvcr/blob/main/docs/docker-jetson.md
-- https://github.com/0elghati/nvcr/blob/main/docs/docker-x86_64.md
+See [First run](../docs/first-run.md) for the canonical functional procedure.
+
+## Image contents and metadata
+
+Runtime images contain:
+
+- the NVCR runtime and CLI;
+- the public artifact client;
+- the platform's CUDA/TensorRT userspace; and
+- OCI source, revision, version, creation-time, license, and description
+  labels.
+
+They do not contain checkpoints, ONNX exports, entropy/model assets, TensorRT
+plans, datasets, input video, or result files. Engine bundles remain in the
+separate rolling catalog and are selected for the active target.
+
+The Linux/amd64 image compiles CUDA helper kernels for the supported
+compiler architecture set. This host-binary property does not make TensorRT
+plans portable.
+
+## Publication behavior
+
+`docker/publish.sh --push` accepts only a clean checkout at the exact release
+tag matching `version.txt`. For each family it publishes:
+
+1. the immutable versioned tag;
+2. the runtime-family alias; and
+3. the architecture-qualified `latest-*` alias.
+
+Publication also attaches provenance and an SBOM. The workflow builds
+Linux/amd64 on the x86_64 release runner and Jetson natively on the AArch64
+Jetson runner.
+
+If one architecture fails or is delayed, report that family independently.
+Do not imply that a rolling tag contains a particular release without
+inspecting its labels and digest.
+
+Maintainer procedures are documented in
+[Packaging and releases](../docs/releasing.md). Platform guidance is in
+[Docker](../docs/docker.md).

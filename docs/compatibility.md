@@ -8,7 +8,7 @@ profile does not imply that every layer is interchangeable.
 | Profile | Production path | Artifact requirement | Current evidence status |
 |---|---|---|---|
 | `rtx3050-laptop-ubuntu2404` | Linux x86_64, RTX 3050 Laptop, TensorRT FP16 | Exact target-local plans | Profile registered; retained results are diagnostic |
-| `rtx4070-ubuntu2404` | Linux x86_64, RTX 4070 SM 8.9, TensorRT FP16 | Exact plans and current TensorRT 10.9 identity | Profile registered; current bundles need model-profile refresh before publication evidence |
+| `rtx4070-ubuntu2404` | Linux x86_64, RTX 4070 SM 8.9, TensorRT FP16 | Exact plans and current TensorRT 10.9 identity | Profile registered; current bundles need model-profile refresh before current target evidence |
 | `rtx5060-laptop-ubuntu2404` | Linux x86_64, RTX 5060 Laptop, TensorRT FP16 | Exact target-local plans | Profile registered; retained results are diagnostic |
 | `orin-nano-l4t3647` | Linux aarch64, Jetson Orin Nano, TensorRT FP16 | Exact Jetson plans and CUDA/TensorRT runtime | Profile registered; warning-free six-profile gate remains required |
 
