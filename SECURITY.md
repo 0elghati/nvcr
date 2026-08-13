@@ -1,9 +1,9 @@
 # Security policy
 
-Report suspected vulnerabilities privately to the repository maintainers using
-the private security-reporting mechanism configured for the GitHub repository.
-If no private channel is available, open a minimal issue requesting a private
-contact without disclosing exploit details.
+If the repository's Security page offers **Report a vulnerability**, use that
+private form. Otherwise, open a minimal public issue asking a maintainer for a
+private coordination contact. Do not disclose vulnerability or exploit details
+in the issue.
 
 Do not include credentials, access tokens, private artifact URLs, checkpoints,
 TensorRT plans, or sensitive input streams in reports. Include the NVCR commit,

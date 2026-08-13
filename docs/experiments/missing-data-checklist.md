@@ -1,62 +1,60 @@
-# Missing-data checklist
+# Evaluation readiness checklist
 
-Complete this list before calling a publication run complete.
+Complete this list before treating a controlled evaluation as complete.
 
-## Inputs and permissions
+## Inputs and reference
 
-- [ ] Raw YUV input paths are available.
-- [ ] Each sequence has width, height, frame rate, frame count, pixel format, and SHA-256.
-- [ ] Sequence redistribution status is known; local-only data stays outside Git.
-- [ ] Pinned DCVC-RT checkout is available or cloning is permitted.
-- [ ] `cvpr2025_image.pth.tar` is available and hash-verified.
-- [ ] `cvpr2025_video.pth.tar` is available and hash-verified.
-- [ ] Python reference environment has PyTorch, ONNX, and ONNXScript.
-- [ ] A pinned wrapper can emit `nvcr.softwarex.python-reference.v1` rows, or
-  equivalent precomputed rows are available.
+- [ ] Every raw YUV input has width, height, frame rate, frame count, pixel
+  format, SHA-256, and redistribution status.
+- [ ] Local-only data remains outside Git.
+- [ ] The bound DCVC-RT source revision and hash-verified image and video
+  checkpoints are available.
+- [ ] The Python reference environment contains PyTorch, ONNX, and ONNXScript.
+- [ ] A reference wrapper can emit `nvcr.softwarex.python-reference.v1` rows,
+  or equivalent precomputed rows are available.
 
 ## Build and artifacts
 
-- [ ] TensorRT `trtexec` path is known on each target.
-- [ ] Model output directory is empty or explicitly versioned.
-- [ ] Engine output directory is target-local and writable.
-- [ ] All requested profiles are present and validated.
-- [ ] Engine manifest and bundle digests are recorded.
-- [ ] Model profile digest is recorded.
-- [ ] Container image tag/digest or native build identifier is recorded.
+- [ ] TensorRT `trtexec` is identified on each target.
+- [ ] Model and engine output directories are empty or deliberately versioned.
+- [ ] The selected target JSON matches the live engine-build host.
+- [ ] Every requested engine profile is present and validated.
+- [ ] Engine, manifest, model-profile, target-profile, and engine-profile
+  digests are recorded.
+- [ ] The runtime TensorRT `major.minor.patch` exactly matches every selected
+  engine manifest.
+- [ ] The image tag and digest or native build identifier is recorded.
 
 ## Hardware
 
-- [ ] RTX 3050 target access, target profile, and exact engine set.
+- [ ] RTX 3050 target access, live target confirmation, and exact engine set.
 - [ ] RTX 4070 target access and exact engine set.
-- [ ] RTX 5060 target access; actual GPU name and SM recorded.
-- [ ] Jetson Orin Nano target access and exact engine set.
-- [ ] Driver, CUDA, TensorRT, OS, architecture, compiler, clocks, and power mode recorded.
-- [ ] Desired profiles selected: `qcif`, `cif`, `360p`, `540p`, `720p`, `1080p`.
-- [ ] Desired QP set selected.
-- [ ] Desired GOP policy selected.
+- [ ] RTX 5060 target access, with actual GPU name and numeric SM recorded.
+- [ ] Jetson Orin Nano access and exact target-local engine set.
+- [ ] Driver, CUDA, TensorRT, OS, architecture, compiler, clocks, and power mode
+  are recorded.
+- [ ] Compatibility class is recorded. Same-compute-capability matches both SM
+  components; broader classes are desktop-only and do not relax TensorRT.
 
 ## Evaluation choices
 
-- [ ] Python comparison target selected; RTX 4070 exact is mandatory.
-- [ ] Exact baseline JSONL is available for every compatibility-class case.
-- [ ] Warm-up count and measured repetition count fixed.
-- [ ] Timing boundary fixed and documented.
-- [ ] Publication command includes `--profile` and a fixed profile repetition
-  count; primary timing remains free of verbose, quality, and memory polling.
-- [ ] External storage location chosen for raw outputs, if needed.
-- [ ] Docker Hub namespace known only if images will be published.
+- [ ] Selected profiles, QP values, GOP policy, and frame counts are fixed.
+- [ ] RTX 4070 exact is included for the required Python comparison.
+- [ ] An exact baseline row exists for every broader-class case.
+- [ ] Warm-up and measured repetition counts are fixed.
+- [ ] Timing and byte boundaries are fixed and documented.
+- [ ] The complete command includes `--profile` with a fixed profile-repetition
+  count; primary timing excludes verbose, quality, and memory instrumentation.
+- [ ] External storage is selected for raw outputs when they must be retained.
 
-## Current publication prerequisites
+## Remaining controlled-evaluation gates
 
-- [ ] Confirm the RTX 3050 Laptop profile against live target detection before
-  running its exact row.
-- [x] Reconcile `rtx4070-ubuntu2404` with the detected TensorRT 10.9 reference
-  host.
-- [ ] Rebuild all selected engine bundles from the current model-profile digest;
-  the local 2026-08-05 RTX 4070 bundles predate it.
-- [ ] Produce pinned `nvcr.softwarex.python-reference.v1` rows for the
-  mandatory RTX 4070 comparison.
-- [ ] Add a Jetson GPU-memory sampler if `nvidia-smi` cannot provide the
-  required metric on the target.
-- [ ] Validate any compatibility-policy assets against an exact baseline before
-  publication.
+- [ ] Confirm the RTX 3050 Laptop profile against live target detection.
+- [ ] Rebuild every selected engine bundle from the current model-profile
+  digest.
+- [ ] Produce matching `nvcr.softwarex.python-reference.v1` rows for the
+  required RTX 4070 cases.
+- [ ] Provide a Jetson GPU-memory sampler when `nvidia-smi` cannot populate the
+  required metric.
+- [ ] Validate each same-compute-capability or Ampere-and-newer case against an
+  exact baseline before retaining it as controlled evidence.

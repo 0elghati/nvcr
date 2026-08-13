@@ -6,7 +6,7 @@ plans, datasets, credentials, or temporary asset URLs.
 
 ## Build and test
 
-The CPU contract path is the fastest baseline:
+The CPU contract path is the default portable validation baseline:
 
 ```bash
 cmake -S . -B build-cpu -DCMAKE_BUILD_TYPE=Release \
@@ -27,9 +27,9 @@ access-unit parsing, and add conformance tests for lifecycle, malformed input,
 artifact compatibility, and registration behavior. A new codec/provider is not
 production-supported until its target and evidence gates pass.
 
-Update the relevant identity, scope, API, extension, stream, artifact, and
-reproducibility and evidence documentation with the change. Keep implementation facts,
-conformance fixtures, transitional paths, and roadmap work explicitly separate.
+Update the relevant architecture, API, deployment, and validation documentation
+with the change. Keep implementation facts, conformance fixtures, transitional
+paths, and roadmap work explicitly separate.
 
 ## Release-aware commits
 

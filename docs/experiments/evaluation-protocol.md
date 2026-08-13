@@ -2,25 +2,18 @@
 
 ## Purpose
 
-The evaluation has two linked parts. Architecture-level tests validate the
-runtime contracts; the production matrix validates the first complete codec /
-provider vertical:
+The evaluation has two parts: core runtime tests and target execution with the
+current codec/provider pair.
 
 ```text
-architecture contracts -> sessions, registry/services, artifacts, NVAU parser
-production vertical    -> DCVC-RT adapter -> TensorRT FP16 -> Linux/NVIDIA
+Core runtime: sessions, registry, engines, and NVAU parsing
+Target execution: NVCR runtime -> DCVC-RT codec integration -> TensorRT FP16 -> Linux/NVIDIA
 ```
 
-The production evaluation validates:
-
-```text
-DCVC-RT codec semantics -> TensorRT execution -> C++20 runtime -> NVAU access units
-```
-
-It must show native encode/decode, stateful I/P GOP operation, reproducible
-artifact preparation and validation, target-aware selection, containerized
-build/test/run workflows, correctness and robustness, useful runtime
-performance, and quality comparable to the pinned Python DCVC-RT reference.
+A target evaluation records native encode/decode, stateful I/P operation,
+engine preparation and validation, target selection, container workflows,
+correctness, throughput, quality, and memory against the pinned Python DCVC-RT
+reference.
 
 Energy is optional downstream research and is not a release gate.
 
@@ -36,16 +29,25 @@ Use:
 - the pinned upstream source and checkpoint hashes in [dcvcrt-artifacts.md](../dcvcrt-artifacts.md).
 
 The deterministic test codec and CPU provider are used for architecture
-conformance only. They are not performance baselines or additional production
-verticals. Energy is optional downstream research data unless a separate
+conformance only. They are not performance baselines or additional supported
+integrations. Energy is optional downstream research data unless a separate
 controlled protocol elevates it.
 
 Do not describe the result as a universal runtime, a multi-codec product, or a Python-compatible bitstream unless a separate test proves that claim.
 
+Catalog installation ranks compatible candidates automatically: exact target,
+then the same numeric compute-capability major and minor, then
+Ampere-and-newer desktop compatibility. SM 8.9 therefore does not match SM 8.6
+or SM 12.0. Jetson is exact-only. Every class requires the TensorRT
+`major.minor.patch` recorded in its manifest; a broader hardware class cannot
+resolve a TensorRT mismatch.
+
 ## Automation contract
 
-Use `scripts/benchmark_softwarex_matrix.py` for publication rows. Its input is
-a local JSON manifest using `nvcr.softwarex.inputs.v1`; start from
+Use `scripts/benchmark_softwarex_matrix.py` for controlled evaluation rows.
+Its legacy filename and schema identifiers are retained for tooling
+compatibility. Its input is a local JSON manifest using
+`nvcr.softwarex.inputs.v1`; start from
 [the example](inputs.example.json). For every selected profile the
 driver:
 
@@ -72,8 +74,8 @@ Profiling is opt-in because verbose output, reconstruction-quality calculation,
 `/proc` polling, and `nvidia-smi` sampling can perturb execution. Without
 `--profile`, the driver produces performance-only case rows: throughput, wall
 time, payload, and BPP are valid, profile fields are `null`, and the package
-remains `partial`. A publication run uses `--profile`; its extra repetitions
-never contribute to throughput means, standard deviations, compatibility
+remains `partial`. A complete controlled run uses `--profile`; its extra
+repetitions never contribute to throughput means, standard deviations, compatibility
 ratios, or `total_wall_time_ms`.
 
 ## Required matrix
@@ -109,7 +111,9 @@ and decode throughput/latency, and end-to-end reconstruction quality. The
 registered tests separately establish I-frame, I/P, reset/reuse, and malformed
 input behavior. Codec timing excludes file I/O and quality calculation. The
 primary process wall time includes normal CLI and file-I/O costs, but never the
-verbose, quality, or memory-sampling costs of the separate profile pass.
+verbose, quality, or memory-sampling costs of the separate profile pass. See
+[Performance and benchmarking](../performance.md) for the canonical timing and
+byte boundaries.
 
 ## Metrics
 
@@ -133,7 +137,7 @@ frame count, QP, and GOP. Each row binds the input digest, pinned source commit,
 checkpoint hashes, and exact command. Every requested RTX 4070 exact case
 requires a matching comparison row before the package can be marked complete.
 The existing `nvcr_dcvcrt_i_frame_golden` test remains a useful one-frame
-conformance gate, but does not replace the publication rate-distortion
+conformance gate, but does not replace the controlled rate-distortion
 comparison.
 
 When a local wrapper can produce that schema, invoke it before ingestion with
@@ -151,20 +155,23 @@ Do not claim bit-exact or payload interchangeability without bidirectional cross
 
 ## Acceptance gates
 
-An exact target is ready for a publication table only when source build, artifact
+An exact target is ready for a controlled report only when source build, artifact
 validation, engine contract tests, I-frame round trip, I/P round trip,
 reset/reuse, malformed-input rejection, the clean performance pass, and the
 separate `--profile` metrics all pass.
 
-A same-compute bundle additionally needs representative same-SM correctness,
-sanity-performance validation, and an exact baseline row for each case.
-Ampere-plus is a desktop fallback and needs separate correctness and
-performance-ratio measurements against exact rows. Jetson is exact-only.
+A same-compute bundle additionally needs correctness and performance validation
+on a representative GPU with the same numeric compute capability, plus an exact
+baseline row for each case. Ampere-and-newer is a desktop fallback and needs
+separate correctness and performance-ratio measurements against exact rows on
+each evaluated target. Builder support does not imply catalog availability.
+Jetson is exact-only. All classes require the manifest's exact TensorRT
+`major.minor.patch`.
 
 A CPU-only pass, a successful TensorRT build, or a catalog match by itself is not end-to-end evidence.
 
 The generated `run-summary.json` and `summary.md` make these states explicit.
-Only `status: complete` is publication-ready. `planned` and `partial`
+Only `status: complete` is complete validation evidence. `planned` and `partial`
 packages are diagnostic records.
 
 ## Evidence package

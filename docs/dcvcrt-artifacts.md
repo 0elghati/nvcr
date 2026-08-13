@@ -1,24 +1,83 @@
-# Model and engine preparation for the first production vertical
+# DCVC-RT model and TensorRT engine artifacts
 
-This page documents the current DCVC-RT/TensorRT production vertical; it is
-not the definition of the NVCR runtime architecture. The artifact workflow
-binds a codec adapter and model set to a provider, engine profile, target,
-runtime, digest, and licensing decision.
+NVCR's DCVC-RT integration uses model assets prepared from a fixed upstream
+revision and TensorRT plans built for a recorded target. The generic NVCR
+packages do not contain checkpoints, ONNX graphs, entropy assets, or TensorRT
+plans.
 
-The current production artifact workflow prepares exactly one model profile:
-`dcvcrt-cvpr2025`. It does not convert
-arbitrary PyTorch models. Preparation is offline; deployed NVCR does not load
-Python, PyTorch, or checkpoint files.
+Runtime commands do not download, export, or build artifacts. Install a
+compatible engine bundle before encoding, or prepare one locally from a source
+checkout.
 
-Generic NVCR releases ship no checkpoints, ONNX graphs, entropy/quant assets,
-or TensorRT plans. Compatible validated engine bundles may be installed from
-the separate public rolling catalog. Users of targets without a catalog match
-obtain checkpoints under their applicable terms and build derived bundles
-locally.
+## Install from the engine catalog
+
+An installed NVCR package provides `nvcr-artifacts`. The engine catalog uses
+anonymous access:
+
+```bash
+nvcr-artifacts install \
+  --profile qcif \
+  --backend dcvcrt \
+  --device-id 0 \
+  --repo 0elghati/nvcr \
+  --asset-release engine-assets \
+  --engine-root "${NVCR_ENGINE_ROOT:-$HOME/.local/share/nvcr/engines}"
+```
+
+`--profile` accepts one or more values and may be repeated. When it is
+omitted, the client installs every compatible profile it finds.
+
+For each profile, catalog selection is automatic:
+
+1. exact target;
+2. same numeric compute capability; then
+3. Ampere-and-newer desktop compatibility.
+
+The client uses a broader class only when the catalog contains an entry that
+passes its checks. The Ampere-and-newer build mode existing in the source does
+not imply that an Ampere-and-newer bundle is available for download.
+
+Exact matching includes the operating system, architecture, GPU identity,
+numeric compute capability, multiprocessor count, and runtime constraints.
+Same-compute-capability matching is desktop x86_64 only and compares both
+compute-capability components: SM 8.9 matches SM 8.9, not SM 8.6 or SM 12.0.
+Ampere-and-newer is also desktop-only and requires compute-capability major
+version 8 or newer. Jetson and other AArch64 targets are exact-only.
+
+All three classes require the exact TensorRT `major.minor.patch` version
+recorded in the engine manifest. A broader hardware class does not repair a
+TensorRT mismatch. Desktop CUDA compatibility permits an engine built with the
+same CUDA major version when its recorded runtime is not newer than the active
+runtime; Jetson requires the recorded CUDA runtime exactly.
+
+The installer validates catalog and archive metadata, SHA-256 digests, the
+engine manifest, and the bundle file inventory. It then creates:
+
+```text
+<engine-root>/bundles/dcvcrt/<target>/<profile>/<archive-sha256>/
+<engine-root>/profiles/dcvcrt/<profile> -> immutable bundle
+<engine-root>/profiles/default -> dcvcrt
+```
+
+Inspect and validate the installed bundle before encoding:
+
+```bash
+export NVCR_ENGINE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/nvcr/engines"
+nvcr-artifacts inspect \
+  "$NVCR_ENGINE_ROOT/profiles/dcvcrt/qcif" --json
+nvcr-artifacts validate \
+  "$NVCR_ENGINE_ROOT/profiles/dcvcrt/qcif" --json
+```
+
+`inspect` reports manifest identity without executing a plan. Successful
+encoding is the execution check. If no catalog entry matches, installation
+stops; it never starts an engine build in the background. The public catalog
+needs no authentication, and the current client does not send
+`GH_TOKEN` or `GITHUB_TOKEN`.
 
 ## Bound source and checkpoints
 
-The versioned model profile is
+The supported model profile is
 [configs/models/dcvcrt-cvpr2025.json](../configs/models/dcvcrt-cvpr2025.json):
 
 ```text
@@ -30,131 +89,59 @@ Video checkpoint:  cvpr2025_video.pth.tar
 SHA-256:           b12e7faf4ddb6126d8e138a627ed6a349b8e1052d3ed9e343e1ba266466675d6
 ```
 
-The checkpoint download locations are maintained by the upstream/model provider:
+Checkpoint distribution is controlled by the model provider. Obtain the named
+files through the
+[bound upstream source](https://github.com/microsoft/DCVC/tree/1feb52a592a9ff2c4e4ba2e5122e2da49a211466)
+and place them under `<dcvcrt-root>/checkpoints/`. The exporter verifies the
+source commit and checkpoint hashes; filenames alone are insufficient.
 
-```text
-https://1drv.ms/f/c/2866592d5c55df8c/Esu0KJ-I2kxCjEP565ARx_YB88i0UnR6XnODqFcvZs4LcA?e=by8CO8
-https://1drv.ms/f/c/2866592d5c55df8c/EozfVVwtWWYggCitBAAAAAABbT4z2Z10fMXISnan72UtSA?e=BID7DA
-```
+Preparation is offline. Deployed NVCR does not load Python, PyTorch, source
+checkpoints, or ONNX graphs.
 
-Place the files at `<dcvcrt-root>/checkpoints/`. The exporter verifies the exact
-Git commit and both checkpoint hashes; it does not trust filenames alone.
+## Prepare an exact bundle locally
 
-## Supported command
+Local preparation is an advanced workflow and must be run from an NVCR source
+checkout. It requires Python with PyTorch, ONNX, and ONNXScript, the bound
+DCVC-RT checkout and checkpoints, TensorRT's `trtexec`, and writable model
+and engine directories.
 
-`scripts/nvcr_artifacts.py` is the public artifact front end. Its operations are:
-
-- `prepare`: verify source/checkpoints, export the model bundle, and build engines;
-- `build`: build engines from an existing model bundle;
-- `inspect`: report identity and versions without execution;
-- `validate`: validate schema, portable paths, required files, and SHA-256 digests.
-
-The DCVC-RT preparation helper, the two exporters, the TensorRT builder, and the
-manifest writer are retained under `scripts/backends/dcvcrt/` as backend-local
-implementation helpers. Direct use is an expert/development path and does not
-define another supported workflow.
-
-## Artifact identity model
-
-NVCR identifies prepared artifacts by the tuple
-`(model_profile_id, target_profile_id, engine_profile_id)`.
-
-- the model profile binds the pinned upstream commit, checkpoints, exporter
-  inputs, and portable model-bundle identity;
-- the target profile binds the validated deployment environment and runtime
-  compatibility checks;
-- the engine profile binds visible dimensions, optimization shapes, precision,
-  workspace, and builder-level choices.
-
-Resolution is therefore one field inside the engine profile, not the whole
-portability contract. Do not manage or retain engine bundles by resolution name
-alone.
-
-## Runtime artifact resolution
-
-The C++ runtime-facing resolver is exposed through
-`include/nvcr/artifacts/resolver.hpp`. It consumes typed candidate records after
-the manifest and checksum validator has accepted a bundle. It does not build
-engines, fetch checkpoints, or silently parse an unvalidated directory.
-
-Resolution requests identify the codec, model set, executable component, engine
-profile when selecting a provider bundle, provider constraint or preference,
-target identity, operating system, architecture, runtime/CUDA versions,
-precision, API/schema versions, and optional expected digest. Candidates retain
-the corresponding catalog fields, target profile, compute capability,
-hardware-compatibility class, availability, digest, and licensing status.
-
-Selection prefers the strongest compatible target match, then the requested
-provider order, then a stable artifact path. Failures use structured NVCR error
-codes: `missing_codec`, `missing_model_set`, `missing_provider`,
-`missing_artifact`, `incompatible_version`, `incompatible_target`,
-`incompatible_precision`, `digest_mismatch`, and `license_restricted`.
-
-The Python `nvcr-artifacts validate` command remains responsible for full JSON
-manifest schema, file inventory, and SHA-256 validation. The resolver is the
-typed selection layer used after that validation boundary. This separation
-keeps artifact discovery deterministic without making the runtime depend on a
-Python process or an implicit engine build.
-
-The C++ catalog loader is exposed through `include/nvcr/artifacts/catalog.hpp`.
-`Catalog::from_json` and `Catalog::from_file` accept only
-`nvcr.engine-catalog.v1`, enforce the required catalog fields, reject duplicate
-identities and filenames, and verify the engine-profile-derived archive
-filename. The runtime-facing model uses `codec_id` and `engine_profile_id`; the
-existing rolling catalog keys `backend` and `profile` remain accepted as
-deprecated aliases. The loader converts entries into resolver candidates with
-the explicit `engine-bundle` component unless the caller supplies another
-component id. With no local artifact root, candidates are marked unavailable;
-with a root, the loader checks path presence only. It parses the catalog digest
-but does not claim the archive bytes match that digest. The existing Python
-validator and downloaded-bundle validation remain authoritative for byte-level
-SHA-256 verification.
-
-## Prepare from checkpoints
-
-Create a Python environment with PyTorch, ONNX, and ONNXScript, then select one
-resolution profile. The registered target is auto-detected unless overridden:
+First record the live target:
 
 ```bash
-/path/to/python -c 'import torch, onnx, onnxscript'
+python3 scripts/nvcr_device.py
+```
 
+Then prepare one profile:
+
+```bash
 ./scripts/nvcr_artifacts.py prepare \
   --model-profile configs/models/dcvcrt-cvpr2025.json \
   --profile 1080p \
   --target-profile configs/targets/rtx4070-ubuntu2404.json \
+  --hardware-compatibility exact \
   --dcvcrt-root /path/to/DCVC-RT \
   --models build/models/dcvcrt \
-  --engines build/engines/dcvcrt \
-  --python /path/to/python
+  --engines-root build/engines-rtx4070-exact \
+  --trtexec /usr/src/tensorrt/bin/trtexec \
+  --python /path/to/python3
 ```
 
-The helper clones/checks out the pinned source by default when the target path is
-absent. Use `--skip-clone` only for an already verified checkout. Use
-`--skip-engine` to stop after portable model assets are ready.
-Exactly one of `--profile NAME` or `--all` is required because TensorRT builds
-are expensive. `--all --engines-root build/engines` creates one bundle per
-registered resolution and reuses the model export.
+The selected target JSON must describe the machine performing the TensorRT
+build. Supplying `--target-profile` is an assertion, not hardware emulation;
+the build command does not independently prove that the JSON matches the live
+host. Compare it with `scripts/nvcr_device.py` before building. Do not select a
+different GPU profile to obtain an attractive bundle name.
 
-The declared FP16 profiles are:
+Use `--all` instead of `--profile 1080p` to build all registered profiles.
+The preparation command verifies or obtains the bound source, exports the model
+bundle once, and builds the requested plans. Use `--skip-clone` only for an
+already verified DCVC-RT checkout and `--skip-engine` only when a portable
+model export is the intended result.
 
-| Profile | Visible dimensions | Workspace | Builder level | Purpose |
-|---|---|---:|---:|---|
-| `qcif` | 64×64 to 176×144 | 512 MiB | 1 | Small correctness/development bundle |
-| `cif` | 64×64 to 352×288 | 512 MiB | 1 | CIF correctness/development bundle |
-| `360p` | fixed 640×360 | 1024 MiB | 4 | Edge latency specialization |
-| `540p` | fixed 960×540 | 1024 MiB | 4 | Edge latency specialization |
-| `720p` | 64×64 to 1280×720 | 1024 MiB | 2 | 720p target validation |
-| `1080p` | 64×64 to 1920×1080 | 1024 MiB | 2 | Reference target validation |
+## Build from an existing model bundle
 
-Internal graph shapes may be padded (for example 1080 to 1088 lines); manifests
-record user-visible dimensions and the engine builder records the actual TensorRT
-profiles. FP16 is the only supported v1 precision. The lower-level INT8 flag is
-experimental and must not be used for release evidence.
-
-## Build engines from a model bundle
-
-A validated model directory can be transferred to the final target. Build plans
-there, selecting that target's profile:
+Transfer a validated model bundle to the machine that will build the plans,
+then run:
 
 ```bash
 ./scripts/nvcr_artifacts.py validate build/models/dcvcrt --json
@@ -162,159 +149,88 @@ there, selecting that target's profile:
 ./scripts/nvcr_artifacts.py build \
   --model-profile configs/models/dcvcrt-cvpr2025.json \
   --profile 1080p \
-  --target-profile configs/targets/orin-nano-l4t3647.json \
+  --target-profile configs/targets/rtx4070-ubuntu2404.json \
+  --hardware-compatibility exact \
   --models build/models/dcvcrt \
-  --engines build/engines/dcvcrt-1080p \
+  --engines-root build/engines-rtx4070-exact \
   --trtexec /usr/src/tensorrt/bin/trtexec \
   --device-id 0
 ```
 
-The TensorRT builder validates the complete model bundle before creating the
-first plan. Legacy manifests, missing graphs, and graph/hash mismatches are
-hard failures; do not bypass this check by mixing files from separate exports.
+The builder validates the model bundle before creating the first plan. Missing
+graphs, stale manifests, and digest mismatches are hard failures.
 
-Never copy an RTX plan to Orin, or an engine across a different GPU model,
-CUDA/TensorRT runtime, or model export. Rebuild on the final target.
+### Broader desktop hardware classes
 
-Store retained engine bundles under
-`dcvcrt-cvpr2025/<target-profile>/<engine-profile>/` rather than by resolution
-name alone.
-
-For the rolling GitHub engine release, package a validated bundle as:
+The same source-checkout command can request one of the two desktop
+compatibility modes:
 
 ```bash
-./scripts/package_engine_bundle.sh \
-  --engine-dir build/engines/dcvcrt-1080p \
-  --output-dir dist
+./scripts/nvcr_artifacts.py build \
+  --profile 1080p \
+  --target-profile configs/targets/rtx4070-ubuntu2404.json \
+  --hardware-compatibility same_compute_capability \
+  --models build/models/dcvcrt \
+  --engines-root build/engines-linux-amd64-sm89 \
+  --trtexec /usr/src/tensorrt/bin/trtexec
+
+./scripts/nvcr_artifacts.py build \
+  --profile 1080p \
+  --target-profile configs/targets/rtx4070-ubuntu2404.json \
+  --hardware-compatibility ampere_plus \
+  --models build/models/dcvcrt \
+  --engines-root build/engines-linux-amd64-ampere-plus \
+  --trtexec /usr/src/tensorrt/bin/trtexec
 ```
 
-The stable archive name is derived from the target/model/profile identity:
+The target JSON must still match the build host. These options pass TensorRT's
+hardware-compatibility mode to every plan and record the selected class in the
+manifest. They do not relax the exact TensorRT version requirement. Validate
+correctness and performance against an exact bundle before using either class.
+Do not use either mode on Jetson.
 
-```text
-nvcr-engines-<target-profile>-dcvcrt-cvpr2025-<resolution>.tar.gz
-```
+## Registered FP16 profiles
 
-The archive contains one `dcvcrt/` engine bundle plus
-`ENGINE-ASSET-MANIFEST.sha256`. It remains a separate rolling GitHub Release asset,
-not part of the generic `linux-x86_64-nvidia` or `linux-aarch64-jetson-l4t36`
-binary packages.
+| Profile | Visible dimensions | Workspace | Builder level |
+|---|---|---:|---:|
+| `qcif` | 64x64 to 176x144 | 512 MiB | 1 |
+| `cif` | 64x64 to 352x288 | 512 MiB | 1 |
+| `360p` | fixed 640x360 | 1024 MiB | 4 |
+| `540p` | fixed 960x540 | 1024 MiB | 4 |
+| `720p` | 64x64 to 1280x720 | 1024 MiB | 2 |
+| `1080p` | 64x64 to 1920x1080 | 1024 MiB | 2 |
 
-Compatibility-mode discrete-GPU engines are a separate non-default engine class.
-Record the selected compatibility mode in the engine manifest and support docs.
-Jetson/L4T is not part of that portability path; build Jetson engines on the
-final target.
+Internal graph shapes may include codec padding. Manifests record visible
+dimensions, and the TensorRT plans record their actual optimization shapes.
+FP16 is the supported precision.
 
-Catalog installation never invokes the TensorRT builder. It selects the most
-specialized published compatible bundle for each requested profile (exact
-device, same compute capability, then Ampere-plus) and returns an error when no
-published bundle applies. A user may then choose to follow the manual build
-procedure above; no build is started implicitly or in the background.
+## Validate and register integration tests
 
-Release maintainers can build any catalog class explicitly:
+Validate every completed engine bundle:
 
 ```bash
-nvcr-artifacts build --profile 1080p --target-profile <target.json> \
-  --hardware-compatibility exact
-nvcr-artifacts build --profile 1080p --target-profile <target.json> \
-  --hardware-compatibility same_compute_capability
-nvcr-artifacts build --profile 1080p --target-profile <target.json> \
-  --hardware-compatibility ampere_plus
+./scripts/nvcr_artifacts.py inspect \
+  build/engines-rtx4070-exact/dcvcrt-1080p --json
+./scripts/nvcr_artifacts.py validate \
+  build/engines-rtx4070-exact/dcvcrt-1080p --json
 ```
 
-The latter two modes pass TensorRT's hardware-compatibility setting to every
-plan and stamp the class into the bundle. They are rejected for public support
-until cross-device correctness and complete-codec performance evidence passes.
-Do not use either compatibility mode on Jetson.
+An engine bundle records model, target, engine-profile, CUDA, TensorRT, GPU,
+hardware-compatibility, shape, and file-digest identity. A complete bundle
+contains the required I/P plans and runtime assets. Validation rejects missing,
+extra, modified, stale, or cross-model files.
 
-Generalized archive names describe the portability boundary rather than the
-GPU that built them: for example, `linux-amd64-sm89` for same-compute-capability
-plans and `linux-amd64-ampere-plus` for the broad desktop fallback. Exact plans
-retain their registered target ID.
-
-## Model bundle contract
-
-`i_frame_manifest.json` and `p_frame_manifest.json` use
-`nvcr.model-manifest.v2`. Together they bind:
-
-- model profile, exporter version, source commit, checkpoint file/hash;
-- PyTorch, ONNX, opset, precision, sample shapes, and QP;
-- every ONNX graph and entropy/quant asset name, size, shape metadata, and hash;
-- relative bundle filenames only—no host-specific absolute paths.
-
-Validation requires all 14 graph files and four runtime assets and checks each
-digest.
-
-## Engine bundle contract
-
-`nvcr.engine-bundle.v2` records:
-
-- model, target, and engine-profile identities;
-- SHA-256 digests of the exact model, target, and engine profile JSON files;
-- optimization point, visible dimensions, FP16, workspace, and builder level;
-- whether runtime-variable TensorRT axes use a `dynamic` or fully `fixed`
-  shape profile;
-- CUDA runtime, TensorRT version, GPU name, compute capability, and SM count;
-  desktop installation/runtime accept an engine recorded on an older CUDA
-  runtime within the same CUDA major family, while Jetson remains exact;
-- I/P model-manifest digests;
-- every generated plan/runtime-asset hash;
-- the digest of the relative `engine.sha256` checksum manifest.
-
-A complete runtime bundle contains 14 plans and six copied runtime assets. Both
-`nvcr-artifacts validate` and runtime initialization reject missing, extra,
-modified, stale, cross-model, or incompatible bundles. Legacy v2 bundles are
-treated as dynamic for compatibility. A fixed bundle must declare
-`shape_profile: fixed`, and every runtime-variable axis in all 14 plans must be
-concrete; partial fixed/dynamic hybrids are rejected.
-
-```bash
-./scripts/nvcr_artifacts.py inspect build/engines/dcvcrt --json
-./scripts/nvcr_artifacts.py validate build/engines/dcvcrt --json
-```
-
-## Register integration tests
+Register its engine-contract and I/P round-trip tests in a Release build:
 
 ```bash
 cmake -S . -B build-release \
   -DCMAKE_BUILD_TYPE=Release \
   -DNVCR_ENABLE_TENSORRT=ON \
-  -DNVCR_TENSORRT_ENGINE_DIR="$PWD/build/engines/dcvcrt"
+  -DNVCR_TENSORRT_ENGINE_DIR="$PWD/build/engines-rtx4070-exact/dcvcrt-1080p"
 cmake --build build-release --parallel
 ctest --test-dir build-release --output-on-failure
 ```
 
-The engine and I/P roundtrip tests are absent from CTest when the engine-directory
-option is omitted; an unconfigured CPU/CUDA-only suite is not end-to-end evidence.
-
-## Clean-room rule
-
-Release evidence uses empty model/engine/build directories and the selected
-versioned profiles. Record the commands, hashes, tool versions, hardware,
-engine settings, tests, and measurements in one current machine-readable result.
-
-## Validated FP16 resolution profiles
-
-The discrete-GPU release matrix contains four independently packaged TensorRT
-profiles. Visible dimensions are the CLI/video dimensions; TensorRT profiles
-also include the runtime padding required by the codec.
-
-| Profile | Visible optimum | Release gate |
-|---|---:|---|
-| `qcif` | 176x144 | Contract plus native I/P roundtrip |
-| `cif` | 352x288 | Contract plus native I/P roundtrip |
-| `720p` | 1280x720 | Contract plus native I/P roundtrip |
-| `1080p` | 1920x1080 | Contract plus native I/P roundtrip |
-
-Additional profiles may be used for target evaluation when their complete
-engine bundles pass the same manifest, checksum, and round-trip checks.
-
-The profile definitions and runtime support are architecture-neutral. Their
-generated TensorRT plans remain target-specific, so Orin and desktop RTX use
-separate builds of the same profile. Existing dynamic profiles remain valid and
-retain their previous runtime behavior.
-
-Configure `NVCR_TENSORRT_ENGINE_DIR` for one primary bundle and provide any
-additional bundles through semicolon-separated `NVCR_TENSORRT_ENGINE_DIRS`.
-CTest registers a profile-labeled contract and roundtrip gate for every
-manifest. Engine plans remain specific to the target GPU, CUDA, and TensorRT
-runtime recorded in `engine_manifest.json`.
+Those integration tests are not registered when no engine directory is given.
+A successful plan build or deserialization alone is not an end-to-end
+round-trip result.

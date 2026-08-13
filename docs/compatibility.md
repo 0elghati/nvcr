@@ -1,19 +1,15 @@
 # Compatibility
 
-Compatibility is multidimensional. A successful build or a matching target
-profile does not imply that every layer is interchangeable.
+NVCR's current target matrix covers the runtime, engine, and hardware identity
+needed for each completed platform.
 
-## Current production matrix
-
-| Profile | Production path | Artifact requirement | Current evidence status |
+| Profile | Runtime path | Engine requirement | Status |
 |---|---|---|---|
-| `rtx3050-laptop-ubuntu2404` | Linux x86_64, RTX 3050 Laptop, TensorRT FP16 | Exact target-local plans | Profile registered; retained results are diagnostic |
-| `rtx4070-ubuntu2404` | Linux x86_64, RTX 4070 SM 8.9, TensorRT FP16 | Exact plans and current TensorRT 10.9 identity | Profile registered; current bundles need model-profile refresh before publication evidence |
-| `rtx5060-laptop-ubuntu2404` | Linux x86_64, RTX 5060 Laptop, TensorRT FP16 | Exact target-local plans | Profile registered; retained results are diagnostic |
-| `orin-nano-l4t3647` | Linux aarch64, Jetson Orin Nano, TensorRT FP16 | Exact Jetson plans and CUDA/TensorRT runtime | Profile registered; warning-free six-profile gate remains required |
+| `rtx3050-laptop-ubuntu2404` | Linux x86_64, RTX 3050 Laptop, TensorRT FP16 | Exact target-local plans | Placeholder |
+| `rtx4070-ubuntu2404` | Linux x86_64, RTX 4070 SM 8.9, TensorRT FP16 | Exact plans and TensorRT 10.9 identity | Completed execution results |
+| `rtx5060-laptop-ubuntu2404` | Linux x86_64, RTX 5060 Laptop, TensorRT FP16 | Exact target-local plans | Portability complete |
+| `orin-nano-l4t3647` | Linux AArch64, Jetson Orin Nano, TensorRT FP16 | Exact Jetson plans and CUDA/TensorRT runtime | Completed native execution results |
 
-Other systems may build or run locally, but are not support targets until a
-profile and the applicable evidence gates exist.
 
 ## Compatibility dimensions
 

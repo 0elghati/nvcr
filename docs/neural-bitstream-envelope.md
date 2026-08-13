@@ -107,7 +107,7 @@ Required common fields:
 |---|---|
 | Magic and version | Identify the access-unit syntax and reject unknown major versions. |
 | Header size and total size | Bound parsing before allocation. |
-| Codec ID | Select the codec family, such as `dcvcrt` or a future backend. |
+| Codec ID | Select the codec family, such as `dcvc-rt` or a future codec. |
 | Codec profile ID | Select the versioned codec/profile contract. |
 | Model bundle ID | Bind the stream to the required model artifacts. |
 | Frame type | Identify intra, predicted, refresh, or future frame classes. |
@@ -282,8 +282,8 @@ compatibility claim is backed by evidence.
 
 ## Current documentation boundary
 
-- [`docs/bitstream.md`](bitstream.md) documents the current `NVAU` version 1
-  access unit and development `NVCR`/`NVCS` framing.
+- [`docs/bitstream.md`](bitstream.md) documents implemented `NVAU` versions 1
+  and 2 plus development `NVCR`/`NVCS` framing.
 - [`docs/architecture.md`](architecture.md) documents the runtime/backend
   boundary.
 - [`docs/scope-and-support.md`](scope-and-support.md) defines which behavior is

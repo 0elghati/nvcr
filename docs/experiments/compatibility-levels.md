@@ -1,78 +1,56 @@
-# Compatibility levels
+# Engine hardware compatibility
 
-Compatibility class describes how an engine bundle relates to the GPU that runs it. It is separate from the container image.
+Hardware compatibility describes the GPU boundary encoded in a TensorRT engine
+bundle. It is independent of the container image and does not relax the
+bundle's model, digest, CUDA, or TensorRT checks.
 
-## Exact
+## Classes
 
-Exact means the bundle was built and validated for the named target profile. This is the primary evidence mode.
+| Manifest value | Hardware boundary | Intended use |
+|---|---|---|
+| `exact` | Named target profile, including GPU identity, numeric compute capability, and multiprocessor count | Default and controlled baseline |
+| `same_compute_capability` | Desktop x86_64 GPUs with the same compute-capability major and minor | Evaluated same-SM fallback |
+| `ampere_plus` | Desktop x86_64 GPUs with compute-capability major version 8 or newer | Broad evaluated fallback |
 
-Current examples:
+Compute capability is numeric. SM 8.9 means major 8, minor 9; it does not
+match SM 8.6 or SM 12.0. The same-compute class is therefore narrower than a
+GPU product family or marketing generation.
 
-```text
-rtx3050-laptop-ubuntu2404
-rtx4070-ubuntu2404
-rtx5060-laptop-ubuntu2404
-orin-nano-l4t3647
-```
+The Ampere-and-newer class is not an optimized universal plan. The source
+builder supports this mode, but catalog installation can select it only when a
+corresponding catalog entry exists. Do not infer download availability from
+the build option or naming convention.
 
-## Same compute capability
+Jetson and other AArch64 targets are exact-only. Do not build or select
+same-compute-capability or Ampere-and-newer bundles for Jetson.
 
-A same-compute bundle is grouped by detected SM class, not by marketing generation:
+## Runtime constraints common to every class
 
-```text
-linux-amd64-sm86
-linux-amd64-sm89
-linux-amd64-smXX
-```
+NVCR requires the TensorRT `major.minor.patch` version recorded in the engine
+manifest. A broader hardware class cannot make an engine valid under another
+TensorRT version.
 
-`smXX` must be replaced with the detected RTX 5060/Blackwell class. Do not say that an SM 8.9 bundle supports every RTX 30xx, 40xx, or 50xx device.
+On desktop, the active CUDA runtime must have the same major version and must
+not be older than the engine's recorded runtime. Jetson requires the recorded
+CUDA runtime exactly. Model, engine-profile, target-profile, manifest, and file
+digests remain enforced for every class.
 
-A same-compute bundle is evidence only after correctness and sanity performance pass on a representative GPU with the same SM class.
+## Catalog selection
 
-## Ampere-plus
-
-Ampere-plus is the broad desktop fallback:
-
-```text
-linux-amd64-ampere-plus
-```
-
-It is not the optimized path and may be slower than exact or same-compute artifacts. Test it separately on each desktop GPU where it is claimed. Never apply it to Jetson.
-
-## Jetson rule
-
-Jetson Orin Nano is exact-only:
+`nvcr-artifacts install` detects the target and chooses the strongest
+compatible catalog candidate for each requested profile:
 
 ```text
-Jetson/L4T targets use exact target-local engine bundles only.
-Do not publish same-compute or Ampere-plus Jetson bundles.
+exact -> same_compute_capability -> ampere_plus
 ```
 
-## Naming
+This ordering is automatic. The installer does not expose a switch for forcing
+a weaker catalog class, and it never starts a local build when no candidate
+matches.
 
-The current packager derives names from the actual target profile:
+## Controlled evaluation
 
-```text
-nvcr-engines-rtx3050-laptop-ubuntu2404-dcvcrt-cvpr2025-720p.tar.gz
-nvcr-engines-rtx4070-ubuntu2404-dcvcrt-cvpr2025-720p.tar.gz
-nvcr-engines-rtx5060-laptop-ubuntu2404-dcvcrt-cvpr2025-720p.tar.gz
-nvcr-engines-orin-nano-l4t3647-dcvcrt-cvpr2025-720p.tar.gz
-nvcr-engines-linux-amd64-sm86-dcvcrt-cvpr2025-720p.tar.gz
-nvcr-engines-linux-amd64-sm89-dcvcrt-cvpr2025-720p.tar.gz
-nvcr-engines-linux-amd64-smXX-dcvcrt-cvpr2025-720p.tar.gz
-nvcr-engines-linux-amd64-ampere-plus-dcvcrt-cvpr2025-720p.tar.gz
-```
-
-The RTX 3050 name refers to the checked-in Laptop target profile. Replace
-`smXX` with the detected Blackwell SM before publishing a same-compute bundle.
-
-## Selection policy
-
-The catalog resolver ranks exact, same-compute, and Ampere-plus candidates. The
-experiment driver requires the intended compatibility class to be selected
-explicitly and records it in every result row.
-
-The experiment driver never chooses a weaker class implicitly. Pass one of:
+The evaluation driver records the intended class explicitly:
 
 ```text
 --compatibility-class exact
@@ -80,9 +58,17 @@ The experiment driver never chooses a weaker class implicitly. Pass one of:
 --compatibility-class ampere_plus
 ```
 
-The requested value must match every selected engine manifest. It rejects
-same-compute SM mismatches and rejects both compatibility classes on AArch64/
-Jetson.
+The requested value must match every selected engine manifest. A
+same-compute-capability result requires matching numeric SM, and both broader
+classes are rejected on AArch64/Jetson.
 
-Compatibility runs also pass exact results from the same test target through
-`--exact-baseline-jsonl`. Missing exact matches keep the package partial.
+Exact results are the baseline. Each broader-class case requires a matching
+exact row through `--exact-baseline-jsonl`, plus correctness and
+performance-ratio validation on every target for which the result is retained.
+
+## Naming
+
+Exact bundles retain their registered target ID. Broader desktop bundles use
+names that state the portability boundary, such as
+`linux-amd64-sm89` or `linux-amd64-ampere-plus`. A name is metadata, not
+evidence that the bundle passed runtime validation on a particular GPU.

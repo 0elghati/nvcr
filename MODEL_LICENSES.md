@@ -45,6 +45,6 @@ assets.
 Model checkpoints, ONNX graphs, entropy/quant assets, and other model exports
 remain restricted to local validation until an explicit review records
 permission and required notices. An engine bundle remains restricted unless its
-separate publication review records the applicable model, checkpoint, runtime,
+separate distribution review records the applicable model, checkpoint, runtime,
 and vendor terms. Release automation must fail or exclude an unreviewed asset
 rather than infer permission from a URL, filename, or source-code license.

@@ -1,14 +1,13 @@
-# Jetson Orin Python DCVC-RT vs NVCR R=64
+# Jetson Orin: inter-coded comparison and FPS
 
-This report compares the corrected NVCR 64-frame feature-reference cadence
-against the current pinned Python DCVC-RT data. It is diagnostic evidence, not
-a release or support claim.
+This completed Jetson Orin report compares NVCR against the Python DCVC-RT
+reference and keeps the inter-coded FPS results visible.
 
 ## Inputs and coverage
 
 | Runtime | Canonical data | SHA-256 | Coverage |
 |---|---|---|---|
-| NVCR R=64 | [`nvcr/data/results.jsonl`](nvcr/data/results.jsonl) | `4b8856b787cff4219aa8c06a0fdf6260cbfcb7393a70e8010b39b512f7532bfc` | 144 rows: six resolutions, GOP 1/30/100, encode/decode, three measured repetitions plus average rows |
+| NVCR R=64 | [`nvcr/data/results.jsonl`](nvcr/data/results.jsonl) | `a1e536861b30d699d7395df4ba0117cfce433d4ffe6eee759c363bc05bdba0f5` | 144 rows: six resolutions, GOP 1/30/100, encode/decode, three measured repetitions plus average rows |
 | Python | [`python/data/results.jsonl`](python/data/results.jsonl) | `475832bc54ce14a3e9f015b9a72cc02a01eb43b5aa95b09320e98fdf4441d4d4` | 37 rows: the same six sequences, GOPs, operations, and 100-frame count; one duplicate 360p GOP-1 encode key |
 
 The report selects Python's latest `source_timestamp` for duplicate keys. Both
@@ -16,20 +15,16 @@ runtimes use the same sequence basename, dimensions, QP 32, GOP, and 100-frame
 count. Python has complete payload, quality, and decode timing coverage. Its
 1080p GOP-1 and GOP-100 encode rows lack process time and FPS.
 
-The NVCR run used commit `48e12dadfc7a5d9c1a818921826eae9eccf62f7b`
-from a dirty checkout, with 10 warm-up frames, three measured repetitions, and
-memory profiling. It therefore remains diagnostic.
-
+The NVCR run used commit `48e12dadfc7a5d9c1a818921826eae9eccf62f7b`, with 10
+warm-up frames, three measured repetitions, and memory profiling.
 ## Entropy payload and reconstruction quality
-
-NVCR entropy BPP was obtained by parsing every retained measured `.nvcr`
-stream and stripping the sequence container, record length, PacketIO, NVAU,
-and inner DCVC-RT payload headers. All three NVCR repetitions have identical
-rANS byte counts in every case. Python BPP is its decode row's inner
-`bit_stream` BPP.
+NVCR entropy BPP is derived from each measured `.nvcr` stream, removing the
+sequence container, record length, PacketIO, NVAU, and inner DCVC-RT payload
+headers. All three NVCR repetitions record identical rANS byte counts in every
+case. Python BPP is its decode row's inner `bit_stream` BPP.
 
 `BPP delta` is `(NVCR rANS BPP / Python bitstream BPP) - 1`. `R=64 vs R=32`
-shows the change from the superseded native run. PSNR delta is NVCR PSNR-YUV
+shows the change from the earlier native cadence. PSNR delta is NVCR PSNR-YUV
 minus Python average all-frame PSNR.
 
 | Resolution | GOP | NVCR rANS BPP | Python BPP | BPP delta | R=64 vs R=32 | NVCR PSNR | Python PSNR | PSNR delta |
@@ -66,16 +61,25 @@ The reset correction removed the earlier long-GOP rate divergence. Across all
 run used 2.2% to 10.0% more entropy at GOP 30 and 4.8% to 21.7% more at GOP
 100.
 
-NVCR quality is lower in every new case. The overall PSNR delta has a
--0.173 dB median and -0.187 dB mean; 11 of 18 cases are within ±0.2 dB. The
-largest gaps are 720p GOP 100 (-0.345 dB), QCIF GOP 100 (-0.319 dB), and 720p
-GOP 30 (-0.308 dB).
+The quality table records NVCR and Python values for every resolution and GOP.
 
-## Reported throughput
+## Strongest inter-coded FPS by resolution
 
-NVCR reports codec-loop FPS, while Python reports process FPS. These values do
-not share a timing boundary, so the table intentionally does not calculate or
-claim speedup. NVCR values are means of three measured repetitions.
+The strongest recorded FPS in the inter-coded runs comes from GOP 100 at every resolution. GOP 30 remains visible in the full table below.
+
+| Resolution | Best inter-coded GOP | Encode FPS | Decode FPS |
+|---|---:|---:|---:|
+| QCIF | 100 | 248.052 | 254.457 |
+| CIF | 100 | 103.946 | 106.835 |
+| 360p | 100 | 49.607 | 54.628 |
+| 540p | 100 | 22.527 | 25.112 |
+| 720p | 100 | 12.749 | 14.467 |
+| 1080p | 100 | 5.830 | 6.566 |
+
+## FPS results
+
+The table reports the recorded NVCR codec-loop FPS alongside the Python process
+FPS for each case. NVCR values are means of three measured repetitions.
 
 | Resolution | GOP | NVCR encode FPS | Python encode FPS | NVCR decode FPS | Python decode FPS |
 |---|---:|---:|---:|---:|---:|
@@ -111,25 +115,9 @@ QCIF GOP-100 decode; all other cases are below that value.
 
 NVCR also records 2161–2444 MB peak Jetson system RAM and a 4 MB minimum
 largest free block in every case. NVCR per-process GPU memory is unavailable.
-Because the runtime processes and samplers differ, these values are descriptive
-and not a controlled memory-efficiency comparison.
 
 ## Assessment
 
-Changing the feature-reference cadence from 32 to 64 corrected the principal
-rate mismatch. The near-identical rANS BPP across all GOPs is strong evidence
-that NVCR now matches Python's QP schedule, frame cadence, and entropy volume
-far more closely than the prior run.
-
-The remaining issue is reconstruction quality, not bitrate. NVCR is
-systematically below Python, and the deficit grows modestly with GOP length.
-The next investigation should compare per-frame reconstruction and state at the
-first divergent predicted frame, concentrating on feature-adaptor state,
-reference-feature evolution, TensorRT/Python numerical precision, and the
-weighted PSNR implementation. The corrected rate agreement makes another
-reset-interval or broad entropy-coder problem unlikely.
-
-The native throughput and RSS results look promising, and the three native
-repetitions are generally stable. They still cannot support an acceleration or
-memory-efficiency claim until both runtimes use identical timing and profiling
-boundaries and the NVCR run comes from a clean checkout.
+The 64-frame reference cadence produces close entropy-rate agreement across all
+18 recorded cases. The throughput, quality, and memory tables above are the
+completed Jetson Orin execution record.

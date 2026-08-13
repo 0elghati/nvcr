@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -17,6 +18,65 @@ SPEC.loader.exec_module(REPORTER)
 
 
 class RuntimeResultValidationTests(unittest.TestCase):
+    @staticmethod
+    def comparison_rows() -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+        python_rows: list[dict[str, object]] = []
+        nvcr_rows: list[dict[str, object]] = []
+        for gop in (1, 30):
+            for operation in ("encode", "decode"):
+                python_row: dict[str, object] = {
+                    "hardware": "rtx4070",
+                    "resolution": "176x144",
+                    "gop_size": gop,
+                    "operation": operation,
+                    "qp": 32,
+                    "frame_num": 100,
+                    "reset_interval": 64,
+                    "source_timestamp": 1,
+                }
+                if operation == "decode":
+                    python_row["ave_all_frame_bpp"] = 0.16
+                    python_row["ave_all_frame_psnr"] = 35.0
+                python_rows.append(python_row)
+
+                base_nvcr_row: dict[str, object] = {
+                    "hardware": "rtx4070",
+                    "size": "176x144",
+                    "gop_size": gop,
+                    "operation": operation,
+                    "qp": 32,
+                    "frames": 100,
+                    "payload_bytes": 55800,
+                    "payload_bpp": 0.176136,
+                    "throughput_fps": 500.0,
+                    "psnr_yuv": 34.8 if operation == "decode" else None,
+                    "nvcr_commit": "0123456789abcdef",
+                    "nvcr_dirty": False,
+                }
+                nvcr_rows.append({**base_nvcr_row, "run_index": "1"})
+                nvcr_rows.append({**base_nvcr_row, "run_index": "average"})
+        return python_rows, nvcr_rows
+
+    def build_synthetic_report(self, **options: object) -> str:
+        python_rows, nvcr_rows = self.comparison_rows()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            python_path = root / "python.jsonl"
+            nvcr_path = root / "nvcr.jsonl"
+            output_path = root / "summary.md"
+            python_path.write_text("{}\n", encoding="utf-8")
+            nvcr_path.write_text("{}\n", encoding="utf-8")
+            return REPORTER.build_report(
+                python_path,
+                nvcr_path,
+                output_path,
+                python_rows,
+                nvcr_rows,
+                "Python DCVC-RT",
+                "NVCR",
+                **options,
+            )
+
     def test_requires_nvcr_average_for_each_repetition_key(self) -> None:
         row = {"size": "176x144", "gop_size": 1, "operation": "encode", "run_index": "1"}
         with self.assertRaisesRegex(ValueError, "missing averages"):
@@ -35,6 +95,50 @@ class RuntimeResultValidationTests(unittest.TestCase):
         link = REPORTER.relative_link(Path("/tmp/report.md"), Path("/data/results.jsonl"))
         self.assertFalse(link.startswith("/"))
         self.assertEqual(link, "../data/results.jsonl")
+
+    def test_inner_bpp_subtracts_fixed_per_frame_overhead(self) -> None:
+        row = {"size": "176x144", "frames": 100, "payload_bytes": 55800}
+        expected = 50000 * 8 / (176 * 144 * 100)
+        self.assertAlmostEqual(REPORTER.nvcr_inner_bpp(row, 58), expected)
+
+    def test_report_only_emits_explicit_same_boundary_rate_cases(self) -> None:
+        report = self.build_synthetic_report(
+            comparable_gops=(1,),
+            nvcr_frame_overhead_bytes=58,
+            nvcr_reference_reset=32,
+            nvcr_checkout_state="dirty",
+        )
+        self.assertIn("| QCIF | 1 | 0.160000 | 0.157828 | -1.36% |", report)
+        self.assertNotIn("| QCIF | 30 | 0.160000 |", report)
+        self.assertIn("Python records a 64-frame feature-reference reset", report)
+        self.assertIn("NVCR as 32 frames", report)
+        self.assertIn("inter-coded GOPs 30 are excluded", report)
+        self.assertIn("## NVCR throughput", report)
+        self.assertIn("| QCIF | 1 | 500.000 | 500.000 |", report)
+        self.assertNotIn("Python FPS", report)
+        self.assertNotIn("PSNR delta", report)
+
+    def test_report_rejects_inter_comparison_with_reset_mismatch(self) -> None:
+        with self.assertRaisesRegex(ValueError, "matching Python and NVCR"):
+            self.build_synthetic_report(
+                comparable_gops=(30,),
+                nvcr_frame_overhead_bytes=58,
+                nvcr_reference_reset=32,
+            )
+
+    def test_report_requires_overhead_for_selected_gop(self) -> None:
+        with self.assertRaisesRegex(ValueError, "require --nvcr-frame-overhead-bytes"):
+            self.build_synthetic_report(comparable_gops=(1,))
+    def test_default_report_keeps_nvcr_throughput_visible(self) -> None:
+
+        report = self.build_synthetic_report()
+
+        self.assertIn("contains no cross-runtime rate table", report)
+        self.assertNotIn("| Resolution | GOP | Python inner-bitstream BPP |", report)
+        self.assertIn("## NVCR throughput", report)
+        self.assertIn("| QCIF | 1 | 500.000 | 500.000 |", report)
+        self.assertNotIn("Python FPS", report)
+        self.assertNotIn("PSNR delta", report)
 
 
 if __name__ == "__main__":

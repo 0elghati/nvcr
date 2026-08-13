@@ -4,19 +4,19 @@ Run from a clean repository root on the machine named by the target profile.
 Do not substitute another GPU, invent an input, or reuse an engine after any
 bound profile changes.
 
-The publication entry point is:
+The controlled evaluation entry point retains its legacy filename:
 
 ```bash
 python3 scripts/benchmark_softwarex_matrix.py --help
 ```
 
 By default the driver runs only its low-overhead performance repetitions. Add
-`--profile` for publication runs: the driver then collects verbose latency,
-PSNR, and memory in separate repetitions after all primary timing. Omitting the
+`--profile` for complete controlled runs: the driver then collects verbose
+latency, PSNR, and memory in separate repetitions after all primary timing. Omitting the
 flag is useful while tuning, but the resulting package remains `partial`.
 
 `scripts/benchmark_resolution_matrix.sh` remains a lower-level diagnostic. Its
-rows are diagnostic and are not publication evidence.
+rows are diagnostic and are not controlled evidence.
 
 ## 1. Supply local inputs
 
@@ -37,7 +37,7 @@ git rev-parse HEAD
 git status --short
 ```
 
-A publication run requires a clean commit. A dirty run is retained as
+A complete controlled run requires a clean commit. A dirty run is retained as
 `partial`, even when its cases pass.
 
 ## 2. Prepare exact artifacts
@@ -69,6 +69,10 @@ The target profile, current model profile, every engine profile, device
 identity, CUDA/TensorRT runtime, manifest, and checksum bytes must agree. A
 successful TensorRT deserialization alone is insufficient.
 
+An explicit target profile must describe the machine performing the TensorRT
+build. Compare it with `scripts/nvcr_device.py`; the build command treats the
+JSON as an assertion and does not emulate the named GPU.
+
 ## 3. Configure the registered gates
 
 The driver requires a Release tree whose CTest registry contains an engine
@@ -89,7 +93,8 @@ profile is selected.
 
 ## 4. CPU container validation
 
-This is reviewer-accessible contract evidence, not GPU or publication evidence:
+This is publicly reproducible contract evidence, not GPU or
+supported-integration evidence:
 
 ```bash
 docker build --platform linux/amd64 --target test \
@@ -98,7 +103,7 @@ docker run --rm nvcr-test:cpu cpu
 ```
 
 Record it as: CPU/core tests passed; TensorRT engine tests, GPU roundtrips, and
-the publication matrix were not run.
+the controlled matrix were not run.
 
 ## 5. RTX 4070 exact
 
@@ -247,7 +252,10 @@ python3 scripts/benchmark_softwarex_matrix.py \
 ```
 
 Configure `build-release-sm89` with the selected same-compute directories as in
-step 3. Repeat on a representative GPU for every claimed SM class.
+step 3. Same compute capability means the same numeric major and minor:
+SM 8.9 does not match SM 8.6 or SM 12.0. Repeat on a representative GPU for
+every retained SM class. The runtime TensorRT `major.minor.patch` must still
+match the engine manifest exactly.
 
 ## 10. Ampere-plus validation
 
@@ -281,6 +289,10 @@ python3 scripts/benchmark_softwarex_matrix.py \
 
 Configure the matching Release tree first. Repeat correctness and ratio
 measurement on every desktop target where the fallback is claimed.
+The target JSON must match the build host, and the resulting plans remain bound
+to the manifest's exact TensorRT version. Source support for this build mode
+does not imply that an Ampere-and-newer catalog bundle is available. Never use
+this class on Jetson.
 
 ## 11. Containers and identity
 
@@ -298,12 +310,13 @@ container, pass both `--container-image` and its immutable
 must mount inputs and engines read-only and evidence output writable. Container
 userspace must match the engine TensorRT identity.
 
-For the lower-level direct Docker benchmark, pull and run the same runtime
-image through `scripts/benchmark_docker.sh`:
+For the lower-level direct Docker benchmark, set `NVCR_IMAGE` to the current
+runtime image selected in the installation guide. The launcher records its
+resolved digest:
 
 ```bash
 scripts/benchmark_docker.sh \
-  --image omarelghati/nvcr:0.19.1-amd64-cuda12.8-trt10.9 \
+  --image "$NVCR_IMAGE" \
   --input-dir /data/nvcr/yuv \
   --engine-volume nvcr-engines \
   --results-dir evidence/performance/rtx4070-docker \
@@ -327,8 +340,8 @@ pool their FPS with the bare-metal Linux comparison.
 ## 12. Accept the package
 
 Open `run-summary.json`, `test-summary.json`, `failures.jsonl`, and
-`summary.md`. Only package status `complete` is publication-ready. The driver
-requires:
+`summary.md`. Only package status `complete` is accepted as controlled evidence.
+The driver requires:
 
 - current validated artifacts and target identity;
 - a recorded native build ID or immutable container identity;

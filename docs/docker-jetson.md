@@ -1,90 +1,119 @@
-# Docker on Jetson Orin
+# Jetson Orin
 
-For JetPack 6.1 / L4T 36.4. Run these commands on the Jetson.
+The recommended Jetson delivery is the latest stable native AArch64 package.
+It is resolved from the GitHub release API and installed with an exact-target
+engine from the public catalog.
 
-## Install
+The complete runtime inspection and encode/decode procedure is in
+[First run](first-run.md#jetson-orin-native-installation).
 
-```bash
-docker pull omarelghati/nvcr:latest-jetson-l4t36.4
+## Target boundary
 
-docker run --rm --runtime=nvidia --gpus all --network=host \
-  -v nvcr-engines:/opt/nvcr/engines \
-  --entrypoint /opt/nvcr/bin/nvcr-artifacts \
-  omarelghati/nvcr:latest-jetson-l4t36.4 install \
-    --engine-root /opt/nvcr/engines --profile qcif
-```
+The documented reference family is Jetson Orin on JetPack 6.1 / L4T 36.4,
+AArch64, CUDA 12.6, TensorRT 10.3, and compute capability 8.7. Record the full
+detected module and software versions; the family name alone is insufficient
+for engine selection.
 
-Docker creates `nvcr-engines` automatically. The image already uses
-`/opt/nvcr/engines` by default.
+Jetson engines are exact-target artifacts. Same-compute-capability and
+Ampere-plus desktop bundles are rejected on AArch64/Jetson. A successful run
+establishes functionality for the recorded target and does not generalize to
+every Jetson module or JetPack release.
 
-## Prepare Akiyo QCIF
+## Preflight
 
-NVCR expects headerless 8-bit YUV420. Convert Xiph's 176x144, 300-frame Akiyo
-Y4M file:
-
-```bash
-export NVCR_DATASET_DIR="/absolute/path/to/yuv-dataset"
-export NVCR_OUTPUT_DIR="/absolute/path/to/nvcr-output"
-mkdir -p "$NVCR_DATASET_DIR" "$NVCR_OUTPUT_DIR"
-
-curl -fL https://media.xiph.org/video/derf/y4m/akiyo_qcif.y4m \
-  -o "$NVCR_DATASET_DIR/akiyo_qcif.y4m"
-ffmpeg -i "$NVCR_DATASET_DIR/akiyo_qcif.y4m" \
-  -pix_fmt yuv420p -f rawvideo \
-  "$NVCR_DATASET_DIR/akiyo_qcif.yuv"
-```
-
-Other inputs: [Xiph Derf](https://media.xiph.org/video/derf/) and the
-[UVG HD YUV420 dataset](https://tie-ultravideo.rd.tuni.fi/dataset.html). Check
-each dataset's license; UVG is CC BY-NC.
-
-## Encode and decode
-
-Host directories map to `/input` and `/output` inside the container:
+Run these commands on the Jetson:
 
 ```bash
-docker run --rm --runtime=nvidia --gpus all --network=host \
-  --user "$(id -u):$(id -g)" \
-  -v nvcr-engines:/opt/nvcr/engines:ro \
-  -v "$NVCR_DATASET_DIR:/input:ro" \
-  -v "$NVCR_OUTPUT_DIR:/output" \
-  omarelghati/nvcr:latest-jetson-l4t36.4 encode \
-    -i /input/akiyo_qcif.yuv -o /output/akiyo_qcif.nvcr \
-    -s 176x144 -r 29.97 --frames 4 --gop-size 2 --qp 32
-
-docker run --rm --runtime=nvidia --gpus all --network=host \
-  --user "$(id -u):$(id -g)" \
-  -v nvcr-engines:/opt/nvcr/engines:ro \
-  -v "$NVCR_OUTPUT_DIR:/output" \
-  omarelghati/nvcr:latest-jetson-l4t36.4 decode \
-    -i /output/akiyo_qcif.nvcr \
-    -o /output/akiyo_qcif_reconstructed.yuv
+uname -m
+head -n 1 /etc/nv_tegra_release
+/usr/local/cuda/bin/nvcc --version
+dpkg-query -W -f='${Package}\t${Version}\n' \
+  nvidia-jetpack libnvinfer10 2>/dev/null || true
 ```
 
-| Host storage | Container path | Mode |
-|---|---|---|
-| `nvcr-engines` volume | `/opt/nvcr/engines` | read-only when running |
-| `$NVCR_DATASET_DIR` | `/input` | read-only |
-| `$NVCR_OUTPUT_DIR` | `/output` | writable |
+Expected platform characteristics are `aarch64`, an L4T R36 release, CUDA
+12.6, and TensorRT major version 10. Keep the exact output when reporting a
+problem.
 
-`cannot open input` means the container path is wrong; use
-`/input/akiyo_qcif.yuv`, not its host path. If `--user` blocks GPU access, omit
-it and correct output ownership afterward.
+## Resolve and install the native release
 
-## Compose or local build
+```bash
+export NVCR_RELEASE="$(
+  curl -fsSL https://api.github.com/repos/0elghati/nvcr/releases/latest |
+    python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"])'
+)"
+printf 'NVCR release: %s\n' "$NVCR_RELEASE"
 
-From a source checkout:
+curl -fsSLo /tmp/nvcr-install.sh \
+  "https://raw.githubusercontent.com/0elghati/nvcr/${NVCR_RELEASE}/scripts/install.sh"
+bash /tmp/nvcr-install.sh \
+  --tag "$NVCR_RELEASE" --profile qcif --run-tests
+
+export PATH="$HOME/.local/nvcr/bin:$PATH"
+export NVCR_ENGINE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/nvcr/engines"
+```
+
+The installer downloads the AArch64 package and its checksum from the resolved
+release, verifies the archive, installs the binaries, and requests only the
+QCIF engine. `--run-tests` checks command availability; the first-run
+encode/decode procedure is the functional validation.
+
+Verify the installed registry and bundle before encoding:
+
+```bash
+nvcr codec list
+nvcr provider list
+nvcr-artifacts validate \
+  "$NVCR_ENGINE_ROOT/profiles/dcvcrt/qcif" --json
+```
+
+The current public catalog uses anonymous access. A
+`no compatible published dcvcrt engine` error means no accepted exact bundle
+matches the detected Jetson/runtime identity. It is not an authentication
+failure. Build and validate the engines on the target by following
+[Model and engine preparation](dcvcrt-artifacts.md).
+
+## Jetson container status
+
+NVCR also publishes the architecture-qualified rolling alias:
+
+```text
+omarelghati/nvcr:latest-jetson-l4t36.4
+```
+
+This mutable alias can trail the latest native GitHub release. Do not infer its
+application version from the word `latest`; pull and inspect it:
 
 ```bash
 export NVCR_JETSON_IMAGE="omarelghati/nvcr:latest-jetson-l4t36.4"
-export NVCR_INPUT_DIR="$NVCR_DATASET_DIR"
-export NVCR_OUTPUT_DIR
-docker compose -f docker/compose.jetson.yaml run --rm engine-install \
-  install --engine-root /opt/nvcr/engines --profile qcif
-
-docker build --platform linux/arm64 --target runtime \
-  -f docker/Dockerfile.jetson -t nvcr:orin-nano .
+docker pull "$NVCR_JETSON_IMAGE"
+docker image inspect "$NVCR_JETSON_IMAGE" \
+  --format 'version={{ index .Config.Labels "org.opencontainers.image.version" }} revision={{ index .Config.Labels "org.opencontainers.image.revision" }} digest={{ index .RepoDigests 0 }}'
 ```
 
-Jetson images and TensorRT engines must be built and run on the target Jetson;
-do not reuse desktop engines.
+Choose the rolling container only after its recorded version and runtime
+contract satisfy the intended use. For general Jetson installation, use the
+native release procedure above.
+
+A locally built Jetson image is a source build, not a released image. Build it
+natively on AArch64 and retain its source revision and local image identity.
+
+## Operational considerations
+
+For functional and performance reports, retain:
+
+- module and GPU identity;
+- JetPack/L4T, CUDA, and TensorRT versions;
+- resolved NVCR release;
+- exact engine manifest and hashes;
+- `nvpmodel`, clocks, temperature, and throttling state; and
+- input and timing identities.
+
+Do not use desktop plans on Jetson or infer plan portability solely from
+compute capability.
+
+## Next step
+
+Run the canonical
+[Jetson functional validation](first-run.md#jetson-orin-native-installation).
+Use [Troubleshooting](troubleshooting.md) for target or runtime failures.

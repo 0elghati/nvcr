@@ -1,4 +1,4 @@
-# NVCR Performance Run
+# RTX 3050 placeholder
 
 - Commit: 27f60770890c3c86dd7f0076604b5563404cf006
 - Dirty: true

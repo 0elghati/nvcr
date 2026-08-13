@@ -1,26 +1,18 @@
-# Reproducible experiments
+# Reproducible evaluation
 
-This directory defines the reproducible NVCR evaluation protocol. It
-is separate from the shorter product and usage documentation and evaluates both
-architecture-level runtime claims and the first production vertical.
+This directory describes how NVCR evaluation runs are prepared and recorded.
+It is for people preparing or assessing recorded evaluations; use [First run](../first-run.md) for an
+installation procedure.
 
-The evaluation covers the first complete NVCR vertical:
+The current evaluated path is:
 
 ```text
-codec adapter:       DCVC-RT
-execution provider:  TensorRT
-runtime:             C++20
-artifacts:           target-local TensorRT engine bundles
-stream layer:        bounded NVAU access units
-pixels:              planar YUV420P8
+NVCR runtime -> DCVC-RT codec integration -> TensorRT provider -> Linux/NVIDIA target
 ```
 
-The production claim is narrow: NVCR provides a reproducible native runtime
-around this one codec/provider pair. Architecture-level evidence additionally
-covers session lifecycle, delayed output, registration, provider mediation,
-artifact resolution, bounded parsing, and malformed rejection. This is not a
-claim of universal NVIDIA support, multi-codec production support, or Python
-bitstream compatibility.
+The protocol checks runtime behaviour as well as target execution: session
+lifecycle, engine selection, encode/decode, quality, rate, throughput, and
+memory. It records exactly which target and engine were used.
 
 ## Read in this order
 
@@ -29,34 +21,37 @@ bitstream compatibility.
 3. [Compatibility levels](compatibility-levels.md)
 4. [Result schema](result-schema.md)
 5. [Runbook](runbook.md)
-6. [Missing-data checklist](missing-data-checklist.md)
+6. [Readiness checklist](missing-data-checklist.md)
 7. [Input manifest example](inputs.example.json)
 
-The reviewer-facing claim matrix is in [../reproducibility/claims-and-evidence.md](../reproducibility/claims-and-evidence.md).
+For the higher-level distinctions between functional validation, diagnostic,
+and controlled runs, start with
+[Performance and benchmarking](../performance.md).
 
 ## Current state
 
-The repository has device detection, target profiles, artifact validation,
+The repository provides device detection, target profiles, artifact validation,
 target-local engine building, Docker/Compose workflows, the lower-level
-`benchmark_resolution_matrix.sh`, and the publication driver
-`scripts/benchmark_softwarex_matrix.py`. The driver validates profile digests
-and target identity before execution, runs registered build/test gates, captures
-the complete result schema, and writes the evidence package described below.
+`benchmark_resolution_matrix.sh`, and the strict evaluation driver
+`scripts/benchmark_softwarex_matrix.py`. The legacy filename is retained for
+compatibility. The driver validates profile digests and target identity, runs
+registered build/test gates, captures the complete result schema, and writes an
+evidence package.
 
 Checked-in target profiles cover RTX 3050 Laptop, RTX 4070, RTX 5060 Laptop,
-and Jetson Orin Nano. A target row becomes publication evidence only after live
-identity detection, current artifact validation, registered GPU gates, and the
-complete protocol pass. The RTX 4070 profile uses TensorRT 10.9; its exact
-bundles must be rebuilt from the current model-profile digest before a clean
-publication run.
+and Jetson Orin Nano. A profile is an artifact request, not a support claim. A
+row becomes controlled evidence only after live identity detection, current
+artifact validation, registered GPU gates, and the complete protocol pass.
 
-The driver is tested automation, not evidence by itself. A result package is
-complete only when it records a clean commit, current artifacts, registered and
-passing GPU gates, the requested matrix, a separate `--profile` collection
-pass, and the mandatory RTX 4070 Python reference comparison. Primary
-throughput and wall-time values always come from repetitions without optional
-profiling instrumentation.
+The driver is tested automation, not evidence by itself. A package is complete
+only when it records a clean commit, current artifacts, passing registered
+gates, the requested matrix, separate profiling repetitions, and required
+pinned-reference comparisons. Primary throughput and wall-time values always
+come from repetitions without optional profiling instrumentation.
 
-## Evidence rule
+## Retention rule
 
-A clean evidence package contains metadata, hashes, commands, summaries, and small JSONL rows. Keep checkpoints, TensorRT plans, raw YUV, encoded streams, reconstructed video, and other large products outside Git.
+A clean evidence package contains metadata, hashes, commands, summaries, and
+small JSONL rows. Keep checkpoints, TensorRT plans, raw YUV, encoded streams,
+reconstructed video, and other large products outside Git. Index every retained
+package and its limitations in [`results/README.md`](../../results/README.md).
