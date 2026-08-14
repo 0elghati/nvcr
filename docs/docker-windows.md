@@ -33,17 +33,19 @@ WSL GPU interface; do not install a second Linux display driver inside WSL.
 
 ## Image identity
 
-Use the architecture-qualified desktop alias and resolve its immutable digest:
+Select the published desktop release version and resolve its immutable digest:
 
 ```powershell
-$NvcrImage = "omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9"
+$NvcrVersion = "<version>"
+$NvcrImage = "omarelghati/nvcr:${NvcrVersion}-amd64-cuda12.8-trt10.9"
 docker pull $NvcrImage
 $NvcrImageRef = docker image inspect $NvcrImage --format '{{ index .RepoDigests 0 }}'
 docker image inspect $NvcrImage --format 'version={{ index .Config.Labels "org.opencontainers.image.version" }} revision={{ index .Config.Labels "org.opencontainers.image.revision" }} digest={{ index .RepoDigests 0 }}'
 ```
 
 Record `$NvcrImageRef` with the run and use it for subsequent commands.
-There is no architecture-neutral NVCR `latest` image.
+`latest-amd64-cuda12.8-trt10.9` is a rolling convenience alias. There is no
+architecture-neutral NVCR `latest` image.
 
 ## Storage and paths
 

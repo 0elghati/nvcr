@@ -6,22 +6,25 @@ and Linux/arm64 Jetson. There is intentionally no architecture-neutral
 
 ## Public tags
 
-| Family | Rolling latest | Rolling family | Immutable release pattern |
+| Family | Immutable release (primary) | Rolling family | `latest` convenience alias |
 |---|---|---|---|
-| Linux/amd64, CUDA 12.8, TensorRT 10.9 | `latest-amd64-cuda12.8-trt10.9` | `amd64-cuda12.8-trt10.9` | `<version>-amd64-cuda12.8-trt10.9` |
-| Jetson, L4T 36.4 | `latest-jetson-l4t36.4` | `jetson-l4t36.4` | `<version>-jetson-l4t36.4` |
+| Linux/amd64, CUDA 12.8, TensorRT 10.9 | `<version>-amd64-cuda12.8-trt10.9` | `amd64-cuda12.8-trt10.9` | `latest-amd64-cuda12.8-trt10.9` |
+| Jetson, L4T 36.4 | `<version>-jetson-l4t36.4` | `jetson-l4t36.4` | `latest-jetson-l4t36.4` |
 
-Rolling tags are delivery pointers. They can move independently and the Jetson
-image can temporarily trail the latest native GitHub release. Use the native
-AArch64 package for the default Jetson installation.
+Use the immutable versioned tag for a release. The family and `latest-*` tags
+are moving delivery pointers; `latest-*` is only a convenience alias for the
+most recently validated delivery in that family. The Jetson aliases can
+temporarily trail the latest native GitHub release. Use the native AArch64
+package for the default Jetson installation.
 
 ## Consumer workflow
 
-A general Linux/amd64 installation may begin with the rolling tag. Resolve and
-record the immutable identity before running NVCR:
+A general Linux/amd64 installation should select the published release version
+and use its immutable tag:
 
 ```bash
-export NVCR_IMAGE="omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9"
+export NVCR_VERSION="<version>"
+export NVCR_IMAGE="omarelghati/nvcr:${NVCR_VERSION}-amd64-cuda12.8-trt10.9"
 docker pull "$NVCR_IMAGE"
 
 export NVCR_IMAGE_REF="$(
@@ -31,8 +34,9 @@ docker image inspect "$NVCR_IMAGE" \
   --format 'version={{ index .Config.Labels "org.opencontainers.image.version" }} revision={{ index .Config.Labels "org.opencontainers.image.revision" }} digest={{ index .RepoDigests 0 }}'
 ```
 
-Use `NVCR_IMAGE_REF` for subsequent commands. For reproduction of a recorded
-run, use its saved digest or immutable versioned tag.
+Use `NVCR_IMAGE_REF` for subsequent commands. `latest-amd64-cuda12.8-trt10.9`
+is available when a rolling convenience alias is appropriate, but do not use it
+to identify a release or reproduce a recorded run.
 
 The image entrypoint is `/opt/nvcr/bin/nvcr`. Invoke the artifact client by
 overriding that entrypoint:
@@ -71,9 +75,9 @@ plans portable.
 `docker/publish.sh --push` accepts only a clean checkout at the exact release
 tag matching `version.txt`. For each family it publishes:
 
-1. the immutable versioned tag;
+1. the immutable versioned tag, which is the primary release reference;
 2. the runtime-family alias; and
-3. the architecture-qualified `latest-*` alias.
+3. the architecture-qualified `latest-*` convenience alias.
 
 Publication also attaches provenance and an SBOM. The workflow builds
 Linux/amd64 on the x86_64 release runner and Jetson natively on the AArch64

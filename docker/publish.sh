@@ -6,8 +6,9 @@ usage() {
 Usage: docker/publish.sh [--load|--push] <amd64-cuda12.8-trt10.9|jetson>
 
 Builds one architecture-specific NVCR runtime image. --load imports it into the
-local Docker daemon (default). --push publishes immutable-version, runtime-
-family, and architecture-qualified rolling tags to Docker Hub.
+local Docker daemon (default). --push publishes the immutable versioned tag as
+the primary release tag, plus runtime-family and architecture-qualified latest
+aliases to Docker Hub.
 
 Environment:
   NVCR_DOCKERHUB_REPOSITORY  Docker Hub repository (default: omarelghati/nvcr)
@@ -73,12 +74,11 @@ if [[ "$action" == push ]]; then
 fi
 
 build_args=()
-tag_suffixes=()
 case "$image_family" in
 amd64-cuda12.8-trt10.9)
     platform=linux/amd64
     dockerfile=docker/Dockerfile.x86_64
-    tag_suffixes=(amd64-cuda12.8-trt10.9)
+    tag_suffix=amd64-cuda12.8-trt10.9
     build_args=(
         "CUDA_DEVEL_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04"
         "CUDA_RUNTIME_IMAGE=nvidia/cuda:12.8.1-runtime-ubuntu24.04"
@@ -97,18 +97,14 @@ jetson)
     fi
     platform=linux/arm64
     dockerfile=docker/Dockerfile.jetson
-    tag_suffixes=(jetson-l4t36.4)
+    tag_suffix=jetson-l4t36.4
     ;;
 esac
 
-docker_tags=()
-for suffix in "${tag_suffixes[@]}"; do
-    docker_tags+=(
-        "$repository:$version-$suffix"
-        "$repository:$suffix"
-        "$repository:latest-$suffix"
-    )
-done
+immutable_tag="$repository:$version-$tag_suffix"
+family_tag="$repository:$tag_suffix"
+latest_tag="$repository:latest-$tag_suffix"
+docker_tags=("$immutable_tag" "$family_tag" "$latest_tag")
 
 tag_args=()
 for tag in "${docker_tags[@]}"; do
@@ -127,7 +123,8 @@ if [[ "$action" == push ]]; then
     attestation_args=(--provenance=mode=max --sbom=true)
 fi
 
-echo "Building ${docker_tags[0]}"
+echo "Building immutable release tag $immutable_tag"
+echo "Adding moving aliases $family_tag and $latest_tag"
 docker buildx build \
     --platform "$platform" \
     --target runtime \
