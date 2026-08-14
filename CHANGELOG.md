@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/0elghati/nvcr/compare/v1.0.1...v1.0.2) (2026-08-14)
+
+
+### Bug Fixes
+
+* removed obsolete tests ([#132](https://github.com/0elghati/nvcr/issues/132)) ([2129603](https://github.com/0elghati/nvcr/commit/212960301a2409fa27d5f0210f73e82a7df1de5a))
+
 ## [1.0.1](https://github.com/0elghati/nvcr/compare/v1.0.0...v1.0.1) (2026-08-14)
 
 
