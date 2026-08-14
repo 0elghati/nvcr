@@ -15,7 +15,6 @@ The runtime does not depend on Python. These scripts prepare artifacts, package 
 | `release_engine_assets.sh` | Stage and publish rolling engine assets |
 | `ci/check_jetson_cross_toolchain.sh` | Validate the x86-hosted Jetson cross-build environment |
 | `generate_sample_yuv.py` | Generate deterministic planar YUV420P8 functional-validation input |
-| `check_documentation_consistency.py` | Check citation versions, local Markdown links, public prose, paths, and obvious secrets |
 | `benchmark_softwarex_matrix.py` | Validate and run the controlled evaluation matrix; write a complete evidence package |
 | `benchmark_resolution_matrix.sh` | Run the lower-level diagnostic resolution matrix |
 | `benchmark_docker.sh` | Pull an NVCR runtime image and run the same diagnostic matrix with `docker run` |

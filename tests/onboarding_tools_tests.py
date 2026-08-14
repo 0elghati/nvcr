@@ -30,10 +30,6 @@ generate_sample_yuv = _load_module(
     "nvcr_generate_sample_yuv",
     REPOSITORY_ROOT / "scripts" / "generate_sample_yuv.py",
 )
-documentation_check = _load_module(
-    "nvcr_check_documentation_consistency",
-    REPOSITORY_ROOT / "scripts" / "check_documentation_consistency.py",
-)
 
 
 class GenerateSampleYuvTests(unittest.TestCase):
@@ -89,117 +85,6 @@ class GenerateSampleYuvTests(unittest.TestCase):
             self.assertIn("bytes: 152064", completed.stdout)
             self.assertRegex(completed.stdout, r"sha256: [0-9a-f]{64}")
 
-
-class DocumentationConsistencyTests(unittest.TestCase):
-    def _write(self, root: Path, relative: str, content: str) -> None:
-        path = root / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-
-    def _make_repository(self, root: Path, version: str = "1.4.2") -> None:
-        self._write(root, "version.txt", f"{version}\n")
-        self._write(
-            root,
-            "CITATION.cff",
-            "cff-version: 1.2.0\n"
-            "title: NVCR\n"
-            f"version: {version}\n"
-            "preferred-citation:\n"
-            "  type: software\n"
-            f"  version: {version}\n",
-        )
-        self._write(
-            root,
-            "README.md",
-            "# NVCR\n\n"
-            "[Guide](docs/guide.md#install-on-linux)\n"
-            "[Duplicate](docs/guide.md#details-1)\n"
-            "[Explicit](docs/guide.md#fixed-anchor)\n",
-        )
-        self._write(
-            root,
-            "docs/guide.md",
-            "# Guide\n\n"
-            "## Install on Linux\n\n"
-            "## Details\n\n"
-            "## Details\n\n"
-            '<a id="fixed-anchor"></a>\n\n'
-            "`SoftwareX reviewer publication` is code, not prose.\n\n"
-            "The benchmark_softwarex_matrix.py name is an immutable identifier.\n\n"
-            "Container image publication details are documented separately.\n\n"
-            "```text\njournal manuscript submission\n```\n",
-        )
-        self._write(root, "CHANGELOG.md", "reviewer [missing](missing.md)\n")
-        self._write(root, "docs/AGENTS.md", "publication nvrc\n")
-        self._write(root, "docs/third_party/README.md", "journal\n")
-        self._write(
-            root,
-            "docs/first-run.md",
-            "```bash\n"
-            "docker pull omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9\n"
-            "docker pull omarelghati/nvcr:latest-jetson-l4t36.4\n"
-            "```\n",
-        )
-
-    def test_dynamic_version_links_and_legacy_identifiers_pass(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self._make_repository(root)
-            version, files, issues = documentation_check.check_repository(root)
-            self.assertEqual(version, "1.4.2")
-            self.assertEqual(issues, [])
-            self.assertEqual(
-                {path.relative_to(root).as_posix() for path in files},
-                {"README.md", "docs/first-run.md", "docs/guide.md"},
-            )
-
-    def test_citation_and_fragment_drift_are_reported(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self._make_repository(root)
-            self._write(
-                root,
-                "CITATION.cff",
-                "cff-version: 1.2.0\ntitle: NVCR\nversion: 1.4.1\n"
-                "preferred-citation:\n  version: 1.4.1\n",
-            )
-            self._write(root, "README.md", "# NVCR\n\n[Bad](docs/guide.md#absent)\n")
-
-            _, _, issues = documentation_check.check_repository(root)
-            messages = "\n".join(issue.render() for issue in issues)
-            self.assertIn("does not match version.txt '1.4.2'", messages)
-            self.assertIn("Markdown fragment does not exist", messages)
-
-    def test_public_prose_paths_and_secrets_are_reported(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self._make_repository(root)
-            self._write(
-                root,
-                "docs/guide.md",
-                "# Guide\n\n"
-                "A reviewer prepared this publication-ready table in /home/alice/work.\n"
-                "The obsolete name is NVRC.\n"
-                "Credential: ghp_abcdefghijklmnopqrstuvwxyz123456.\n",
-            )
-            self._write(
-                root,
-                "docs/first-run.md",
-                "Use omarelghati/nvcr:9.8.7-amd64-cuda12.8-trt10.9.\n"
-                "Do not use omarelghati/nvcr:latest.\n"
-                "The latest stable release is v9.8.7.\n",
-            )
-
-            _, _, issues = documentation_check.check_repository(root)
-            messages = "\n".join(issue.render() for issue in issues)
-            self.assertIn("prohibited reviewer wording", messages)
-            self.assertIn("prohibited publication-readiness wording", messages)
-            self.assertIn("machine-local user path", messages)
-            self.assertIn("obsolete repository name", messages)
-            self.assertIn("possible GitHub token", messages)
-            self.assertIn("pinned semantic-version NVCR image tag", messages)
-            self.assertIn("unqualified NVCR latest image tag", messages)
-            self.assertIn("hardcoded latest-stable version claim", messages)
 
 
 if __name__ == "__main__":
