@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use NVCR, please cite the v1.0.2 software release using these metadata."
+message: "If you use NVCR, please cite the v1.0.5 software release using these metadata."
 title: "NVCR: Native runtime architecture for neural video codecs"
 abstract: >-
   NVCR provides a native C++ runtime architecture for neural video codecs,
@@ -18,7 +18,7 @@ authors:
     given-names: "Walid"
 repository-code: https://github.com/0elghati/nvcr
 license: MIT
-version: 1.0.2
+version: 1.0.5
 preferred-citation:
   type: software
   title: "NVCR: Native runtime architecture for neural video codecs"
@@ -34,6 +34,6 @@ preferred-citation:
     - family-names: "Bouarifi"
       given-names: "Walid"
   year: 2026
-  version: "1.0.2"
-  url: https://github.com/0elghati/nvcr/releases/tag/v1.0.2
+  version: "1.0.5"
+  url: https://github.com/0elghati/nvcr/releases/tag/v1.0.5
 date-released: 2026-08-14
