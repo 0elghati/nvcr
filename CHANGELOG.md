@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/0elghati/nvcr/compare/v1.0.3...v1.0.4) (2026-08-14)
+
+
+### Bug Fixes
+
+* Update citation version ([#136](https://github.com/0elghati/nvcr/issues/136)) ([ff4557a](https://github.com/0elghati/nvcr/commit/ff4557a8b2934c1a26706880268750ec73c35ab9))
+
 ## [1.0.3](https://github.com/0elghati/nvcr/compare/v1.0.2...v1.0.3) (2026-08-14)
 
 
