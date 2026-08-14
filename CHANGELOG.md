@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/0elghati/nvcr/compare/v1.0.0...v1.0.1) (2026-08-14)
+
+
+### Bug Fixes
+
+* **docker:** prioritize immutable version tags ([#130](https://github.com/0elghati/nvcr/issues/130)) ([6581917](https://github.com/0elghati/nvcr/commit/65819177495c5ecf9d15c9ca8d6ed81bc0e82a34))
+
 ## [1.0.0](https://github.com/0elghati/nvcr/compare/v0.22.0...v1.0.0) (2026-08-14)
 
 
