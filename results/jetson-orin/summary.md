@@ -15,7 +15,7 @@ runtimes use the same sequence basename, dimensions, QP 32, GOP, and 100-frame
 count. Python has complete payload, quality, and decode timing coverage. Its
 1080p GOP-1 and GOP-100 encode rows lack process time and FPS.
 
-The NVCR run used commit `48e12dadfc7a5d9c1a818921826eae9eccf62f7b`, with 10
+The NVCR run used commit `0a21a749e9b945006de7403b6782a0970b78f7b3`, with 10
 warm-up frames, three measured repetitions, and memory profiling.
 ## Entropy payload and reconstruction quality
 NVCR entropy BPP is derived from each measured `.nvcr` stream, removing the

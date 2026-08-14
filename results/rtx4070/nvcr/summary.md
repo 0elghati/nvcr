@@ -1,7 +1,7 @@
 # NVCR Performance Run
 
-- Commit: cdb5a754b9d435f3da00c1a8221405656f6f0a01
-- Dirty: true
+- Commit: 0a21a749e9b945006de7403b6782a0970b78f7b3
+- Dirty: false
 - Hardware: rtx4070
 - Execution mode: native
 - Container image: none
