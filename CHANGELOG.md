@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.0.0](https://github.com/0elghati/nvcr/compare/v0.22.0...v1.0.0) (2026-08-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* better documentation for human onboarding ([#125](https://github.com/0elghati/nvcr/issues/125))
+
+### Features
+
+* better documentation for human onboarding ([#125](https://github.com/0elghati/nvcr/issues/125)) ([01dd69d](https://github.com/0elghati/nvcr/commit/01dd69de6be53023667d953e7927f28d24402d32))
+* run on rtx 3050 laptop machine ([#126](https://github.com/0elghati/nvcr/issues/126)) ([09c443e](https://github.com/0elghati/nvcr/commit/09c443e7757a12d6d90cdd8fe4dd5314b159b7ae))
+
+
+### Bug Fixes
+
+* fix wrong metadata for run summary ([#129](https://github.com/0elghati/nvcr/issues/129)) ([ecb10e4](https://github.com/0elghati/nvcr/commit/ecb10e44a2df82744461745e8f55fa4cb26f1b76))
+* update Citation.cff ([#128](https://github.com/0elghati/nvcr/issues/128)) ([cc11425](https://github.com/0elghati/nvcr/commit/cc11425ee0f1f470c1adc18d27795eb3fd1e758a))
+
 ## [0.22.0](https://github.com/0elghati/nvcr/compare/v0.21.0...v0.22.0) (2026-08-11)
 
 
