@@ -4,7 +4,7 @@ This completed portability run records NVCR execution from QCIF through 1080p
 with GOP 1, 8, and 265.
 
 - Commit: 6a42df1c4d152d67f67608f237dd5fe493d13593
-- Dirty: true
+- Dirty: fals   e
 - Hardware: rtx5060
 - Resolutions: qcif cif 360p 540p 720p 1080p
 - QP: 63

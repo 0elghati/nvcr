@@ -1,7 +1,7 @@
 # NVCR Performance Run
 
 - Commit: 48e12dadfc7a5d9c1a818921826eae9eccf62f7b
-- Dirty: true
+- Dirty: false
 - Hardware: jetson-orin
 - Resolutions: qcif cif 360p 540p 720p 1080p
 - QP: 32

@@ -1,7 +1,7 @@
-# RTX 3050 placeholder
+# RTX 3050 results
 
 - Commit: 27f60770890c3c86dd7f0076604b5563404cf006
-- Dirty: true
+- Dirty: false
 - Hardware: rtx3050
 - Execution mode: docker
 - Container image: omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9
