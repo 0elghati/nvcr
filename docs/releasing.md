@@ -33,18 +33,20 @@ Each application archive must:
 
 When Release Please creates a draft release, the release workflow dispatches
 native package and container delivery jobs. Each job builds the exact
-application tag on the matching self-hosted architecture. A successful job may
-publish:
+application tag on the matching self-hosted architecture. A successful job
+publishes:
 
-- an immutable application-version tag for reproducibility;
+- an immutable application-version tag as the primary release reference;
 - a family rolling tag for compatibility with existing users; and
-- an explicit `latest-*` rolling convenience tag.
+- an explicit `latest-*` rolling convenience tag for the latest validated
+  delivery in that family.
 
 There is no shared unqualified `latest` tag because x86_64 NVIDIA and Jetson
-images have different architectures and NVIDIA userspace. User guides may
-start from a platform-qualified `latest-*` tag, but they record the resolved
-OCI digest, release version, and source revision. Reproducible commands use
-the recorded digest or an immutable version tag. Platform delivery status is
+images have different architectures and NVIDIA userspace. User guides select the
+platform-qualified immutable version tag and record
+the resolved OCI digest, release version, and source revision. They may mention
+a `latest-*` alias only as a moving convenience pointer. Reproducible commands
+use the recorded digest or immutable version tag. Platform delivery status is
 reported independently in each release.
 
 A native package can be reproduced with:

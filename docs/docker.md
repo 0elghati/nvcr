@@ -22,19 +22,22 @@ Published tags are architecture and runtime qualified:
 
 | Purpose | Linux/amd64 pattern | Jetson pattern |
 |---|---|---|
-| Latest delivery for that family | `latest-amd64-cuda12.8-trt10.9` | `latest-jetson-l4t36.4` |
-| Immutable release | `<version>-amd64-cuda12.8-trt10.9` | `<version>-jetson-l4t36.4` |
+| Immutable release (primary) | `<version>-amd64-cuda12.8-trt10.9` | `<version>-jetson-l4t36.4` |
 | Family alias | `amd64-cuda12.8-trt10.9` | `jetson-l4t36.4` |
+| Latest delivery for that family (convenience) | `latest-amd64-cuda12.8-trt10.9` | `latest-jetson-l4t36.4` |
 
-There is no unqualified `latest` tag. A family alias is mutable and can move
-when a release is published. The Jetson rolling alias can temporarily trail
-the latest native GitHub release.
+There is no unqualified `latest` tag. Select a release with its immutable
+versioned tag. The family and `latest-*` aliases are mutable; `latest-*` is a
+convenience pointer to the most recently validated delivery for that family.
+The Jetson rolling aliases can temporarily trail the latest native GitHub
+release.
 
-General installation may begin with a rolling alias, but execution and reports
-should use its resolved digest:
+General installation should use the selected immutable tag, then resolve its
+digest for execution and reports:
 
 ```bash
-export NVCR_IMAGE="omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9"
+export NVCR_VERSION="<version>"
+export NVCR_IMAGE="omarelghati/nvcr:${NVCR_VERSION}-amd64-cuda12.8-trt10.9"
 docker pull "$NVCR_IMAGE"
 
 export NVCR_IMAGE_REF="$(

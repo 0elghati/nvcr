@@ -42,12 +42,13 @@ form is an alternative; use one form consistently throughout this procedure.
 
 ### Resolve the runtime image
 
-NVCR publishes architecture-qualified rolling aliases rather than an
-architecture-neutral `latest` image. Pull the desktop alias, resolve it to an
-immutable digest, and print its release metadata:
+NVCR publishes an immutable versioned tag for each release. Select the release
+version, pull that tag, resolve it to an immutable digest, and print its
+metadata:
 
 ```bash
-export NVCR_IMAGE="omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9"
+export NVCR_VERSION="<version>"
+export NVCR_IMAGE="omarelghati/nvcr:${NVCR_VERSION}-amd64-cuda12.8-trt10.9"
 docker pull "$NVCR_IMAGE"
 
 export NVCR_IMAGE_REF="$(
@@ -57,7 +58,8 @@ docker image inspect "$NVCR_IMAGE" \
   --format 'version={{ index .Config.Labels "org.opencontainers.image.version" }} revision={{ index .Config.Labels "org.opencontainers.image.revision" }} digest={{ index .RepoDigests 0 }}'
 ```
 
-Use `NVCR_IMAGE_REF`, not the mutable alias, for the remaining commands.
+Use `NVCR_IMAGE_REF` for the remaining commands.
+`latest-amd64-cuda12.8-trt10.9` is only a rolling convenience alias.
 
 ### Generate the input
 

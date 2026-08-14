@@ -32,11 +32,12 @@ form is an alternative; use one form consistently while diagnosing a failure.
 
 ## Select and identify the image
 
-Use the Linux/amd64 rolling alias for general installation, then retain its
-immutable digest:
+Select the published Linux/amd64 release version, then retain its immutable
+digest:
 
 ```bash
-export NVCR_IMAGE="omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9"
+export NVCR_VERSION="<version>"
+export NVCR_IMAGE="omarelghati/nvcr:${NVCR_VERSION}-amd64-cuda12.8-trt10.9"
 docker pull "$NVCR_IMAGE"
 
 export NVCR_IMAGE_REF="$(
@@ -46,8 +47,8 @@ docker image inspect "$NVCR_IMAGE" \
   --format 'version={{ index .Config.Labels "org.opencontainers.image.version" }} revision={{ index .Config.Labels "org.opencontainers.image.revision" }} digest={{ index .RepoDigests 0 }}'
 ```
 
-Use `NVCR_IMAGE_REF` for the run. There is no unqualified NVCR `latest`
-image.
+Use `NVCR_IMAGE_REF` for the run. `latest-amd64-cuda12.8-trt10.9` is a
+rolling convenience alias; there is no unqualified NVCR `latest` image.
 
 The entrypoint is already `nvcr`:
 
