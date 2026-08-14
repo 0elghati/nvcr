@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/0elghati/nvcr/compare/v1.0.4...v1.0.5) (2026-08-14)
+
+
+### Bug Fixes
+
+* **citation:** Put publishable version ([#138](https://github.com/0elghati/nvcr/issues/138)) ([1b466b3](https://github.com/0elghati/nvcr/commit/1b466b3e3a53fade3618edf74489cb967f71a4e8))
+
 ## [1.0.4](https://github.com/0elghati/nvcr/compare/v1.0.3...v1.0.4) (2026-08-14)
 
 
