@@ -426,7 +426,7 @@ run_once() {
         "$payload" "$decode_seconds" "$decode_fps" "$psnr_yuv" "$payload_bpp" \
         "$decode_peak_memory" "$decode_peak_gpu" "$decode_peak_system" "$decode_min_lfb" \
         "$decode_sampler" "$decode_sample_ms"
-    printf '%s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n' \
+    printf '%s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n' \
         "$payload" "$encode_seconds" "$encode_fps" "$decode_seconds" "$decode_fps" "$psnr_yuv" "$payload_bpp" "$encode_peak_memory" "$encode_peak_gpu" \
         "$encode_peak_system" "$encode_min_lfb" "$encode_sampler" "$encode_sample_ms" \
         "$decode_peak_memory" "$decode_peak_gpu" "$decode_peak_system" "$decode_min_lfb" \
