@@ -48,7 +48,6 @@ class RuntimeResultValidationTests(unittest.TestCase):
                     "frames": 100,
                     "payload_bytes": 55800,
                     "payload_bpp": 0.176136,
-                    "throughput_fps": 500.0,
                     "psnr_yuv": 34.8 if operation == "decode" else None,
                     "nvcr_commit": "0123456789abcdef",
                     "nvcr_dirty": False,
@@ -113,8 +112,7 @@ class RuntimeResultValidationTests(unittest.TestCase):
         self.assertIn("Python records a 64-frame feature-reference reset", report)
         self.assertIn("NVCR as 32 frames", report)
         self.assertIn("inter-coded GOPs 30 are excluded", report)
-        self.assertIn("## NVCR throughput", report)
-        self.assertIn("| QCIF | 1 | 500.000 | 500.000 |", report)
+        self.assertNotIn("## NVCR throughput", report)
         self.assertNotIn("Python FPS", report)
         self.assertNotIn("PSNR delta", report)
 
@@ -129,14 +127,13 @@ class RuntimeResultValidationTests(unittest.TestCase):
     def test_report_requires_overhead_for_selected_gop(self) -> None:
         with self.assertRaisesRegex(ValueError, "require --nvcr-frame-overhead-bytes"):
             self.build_synthetic_report(comparable_gops=(1,))
-    def test_default_report_keeps_nvcr_throughput_visible(self) -> None:
+    def test_default_report_omits_nvcr_throughput(self) -> None:
 
         report = self.build_synthetic_report()
 
         self.assertIn("contains no cross-runtime rate table", report)
         self.assertNotIn("| Resolution | GOP | Python inner-bitstream BPP |", report)
-        self.assertIn("## NVCR throughput", report)
-        self.assertIn("| QCIF | 1 | 500.000 | 500.000 |", report)
+        self.assertNotIn("## NVCR throughput", report)
         self.assertNotIn("Python FPS", report)
         self.assertNotIn("PSNR delta", report)
 

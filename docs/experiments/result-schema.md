@@ -10,10 +10,8 @@ but it does not satisfy the complete evaluation schema. Do not silently treat
 those rows as complete; use `benchmark_softwarex_matrix.py`.
 
 The diagnostic rows additionally record `execution_mode`, `container_image`,
-`container_digest`, `process_time_seconds`, and
-`process_throughput_fps`. The process fields cover the full encode or decode
-command wall time and are intended for native-versus-Docker comparisons; they
-do not replace the strict evaluation driver's `total_wall_time_ms`.
+and `container_digest`. They do not replace the strict evaluation driver's
+`total_wall_time_ms`.
 
 `scripts/benchmark_softwarex_matrix.py` is the schema-producing driver. It
 writes one aggregate encode/decode-roundtrip row per sequence/profile/QP/GOP
