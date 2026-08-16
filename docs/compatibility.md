@@ -5,9 +5,9 @@ needed for each completed platform.
 
 | Profile | Runtime path | Engine requirement | Status |
 |---|---|---|---|
-| `rtx3050-laptop-ubuntu2404` | Linux x86_64, RTX 3050 Laptop, TensorRT FP16 | Exact target-local plans | Placeholder |
+| `rtx3050-laptop-ubuntu2404` | Linux x86_64, RTX 3050 Laptop, TensorRT FP16 | Exact target-local plans | Docker execution recorded; exact target validation remains open |
 | `rtx4070-ubuntu2404` | Linux x86_64, RTX 4070 SM 8.9, TensorRT FP16 | Exact plans and TensorRT 10.9 identity | Completed execution results |
-| `rtx5060-laptop-ubuntu2404` | Linux x86_64, RTX 5060 Laptop, TensorRT FP16 | Exact target-local plans | Portability complete |
+| `rtx5060-laptop-ubuntu2404` | Linux x86_64, RTX 5060 Laptop, TensorRT FP16 | Exact target-local plans | Portability execution recorded |
 | `orin-nano-l4t3647` | Linux AArch64, Jetson Orin Nano, TensorRT FP16 | Exact Jetson plans and CUDA/TensorRT runtime | Completed native execution results |
 
 

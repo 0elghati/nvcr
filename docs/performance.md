@@ -76,16 +76,9 @@ Record at minimum:
 
 ## Timing boundaries
 
-Diagnostic rows retain two timing boundaries:
-
-| Field | Boundary | Appropriate use |
-|---|---|---|
-| `throughput_fps` | Codec loop reported by the NVCR CLI | Runtime diagnosis within one setup |
-| `process_throughput_fps` | Complete encode or decode command wall time | Native-versus-container or cross-tool comparison |
-
-Do not mix these fields in one ratio or table. For cross-runtime comparisons,
-use the same process-level boundary, input prefix, frame count, QP, GOP,
-warm-up, and repetition policy.
+Resolution-matrix diagnostic rows retain codec duration but do not publish FPS
+or wrapper wall-time fields. This avoids conflating source frame rate,
+codec-loop throughput, and process-level timing in review-facing results.
 
 Profiling and memory sampling can add synchronization or polling overhead.
 Keep profiled repetitions separate from clean throughput repetitions, and do
