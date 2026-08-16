@@ -110,7 +110,8 @@ scripts/benchmark_resolution_matrix.sh \
 
 For the equivalent Docker runtime, first resolve the current platform image as
 described in [Installation](../docs/installation.md), then use the direct
-launcher. It records the resolved image identity in the diagnostic rows:
+launcher. It records the image identity and adds full process wall-time
+throughput to the same diagnostic rows:
 
 ```bash
 scripts/benchmark_docker.sh \
@@ -130,10 +131,10 @@ scripts/benchmark_docker.sh \
 The named engine volume must contain bundles installed for the same GPU,
 CUDA, and TensorRT runtime. Add `--install-profiles "qcif 720p"` to install
 those profiles before the measured run. Compare native and Docker results by
-the controlled evaluation protocol rather than direct resolution-matrix
-diagnostics. The launcher defaults to container user `0:0` for NVIDIA device
-compatibility; use `--user UID:GID` only when non-root access is known to work
-on the target.
+`process_throughput_fps`; codec throughput remains useful for diagnosing
+runtime-only changes. The launcher defaults to container user `0:0` for
+NVIDIA device compatibility; use `--user UID:GID` only when non-root access is
+known to work on the target.
 
 With the standard sibling layout, `--engine-root` resolves each selected label
 to `dcvcrt-<resolution>` under that directory. The existing per-resolution

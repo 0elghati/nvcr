@@ -1,14 +1,14 @@
 # Jetson Orin: inter-coded comparison and FPS
 
 This completed Jetson Orin report compares NVCR against the Python DCVC-RT
-reference and keeps the inter-coded FPS results visible.
+reference and keeps the inter-coded throughput results visible.
 
 ## Inputs and coverage
 
 | Runtime | Canonical data | SHA-256 | Coverage |
 |---|---|---|---|
-| NVCR R=64 | [`nvcr/data/results.jsonl`](nvcr/data/results.jsonl) | `a1e536861b30d699d7395df4ba0117cfce433d4ffe6eee759c363bc05bdba0f5` | 144 rows: six resolutions, GOP 1/30/100, encode/decode, three measured repetitions plus average rows |
-| Python | [`python/data/results.jsonl`](python/data/results.jsonl) | `475832bc54ce14a3e9f015b9a72cc02a01eb43b5aa95b09320e98fdf4441d4d4` | 37 rows: the same six sequences, GOPs, operations, and 100-frame count; one duplicate 360p GOP-1 encode key |
+| NVCR R=64 | [`nvcr/data/results.jsonl`](nvcr/data/results.jsonl) | `c82f26cb76ad273008943e814fb587853e7ede3c67b83a898e32620699215b9e` | 144 rows: six resolutions, GOP 1/30/100, encode/decode, three measured repetitions plus average rows |
+| Python | [`python/data/results.jsonl`](python/data/results.jsonl) | `baf8467c73efd2cbe0bc2a99b7fb959fbb76ad6872bb9d0f04990de92d736fc5` | 37 rows: the same six sequences, GOPs, operations, and 100-frame count; one duplicate 360p GOP-1 encode key |
 
 The report selects Python's latest `source_timestamp` for duplicate keys. Both
 runtimes use the same sequence basename, dimensions, QP 32, GOP, and 100-frame
@@ -63,11 +63,11 @@ run used 2.2% to 10.0% more entropy at GOP 30 and 4.8% to 21.7% more at GOP
 
 The quality table records NVCR and Python values for every resolution and GOP.
 
-## Strongest inter-coded FPS by resolution
+## Strongest inter-coded throughput by resolution
 
-The strongest recorded FPS in the inter-coded runs comes from GOP 100 at every resolution. GOP 30 remains visible in the full table below.
+The strongest recorded throughput in the inter-coded runs comes from GOP 100 at every resolution. GOP 30 remains visible in the full table below.
 
-| Resolution | Best inter-coded GOP | Encode FPS | Decode FPS |
+| Resolution | Best inter-coded GOP | Encode throughput FPS | Decode throughput FPS |
 |---|---:|---:|---:|
 | QCIF | 100 | 248.052 | 254.457 |
 | CIF | 100 | 103.946 | 106.835 |
@@ -76,12 +76,11 @@ The strongest recorded FPS in the inter-coded runs comes from GOP 100 at every r
 | 720p | 100 | 12.749 | 14.467 |
 | 1080p | 100 | 5.830 | 6.566 |
 
-## FPS results
+## Throughput results
 
-The table reports the recorded NVCR codec-loop FPS alongside the Python process
-FPS for each case. NVCR values are means of three measured repetitions.
+The table reports the recorded NVCR codec-loop throughput alongside Python throughput for each case. NVCR values are means of three measured repetitions.
 
-| Resolution | GOP | NVCR encode FPS | Python encode FPS | NVCR decode FPS | Python decode FPS |
+| Resolution | GOP | NVCR encode throughput FPS | Python encode throughput FPS | NVCR decode throughput FPS | Python decode throughput FPS |
 |---|---:|---:|---:|---:|---:|
 | QCIF | 1 | 123.327 | 8.136 | 131.185 | 14.432 |
 | QCIF | 30 | 238.666 | 8.544 | 239.606 | 19.080 |

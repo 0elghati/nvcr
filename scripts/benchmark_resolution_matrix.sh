@@ -172,7 +172,7 @@ mkdir -p "$results_dir"
 [[ -n "$report" ]] || report="$results_dir/summary.md"
 mkdir -p "$(dirname "$jsonl")" "$(dirname "$csv")" "$(dirname "$report")"
 : >"$jsonl"
-printf '%s\n' 'schema,hardware,execution_mode,container_image,container_digest,operation,resolution,input,size,frames,warmup_frames,run_index,runs_planned,qp,gop_size,engine_profile,payload_bytes,payload_bpp,codec_time_seconds,fps,psnr_yuv,peak_memory_mb,peak_gpu_memory_mb,peak_system_memory_mb,min_largest_free_block_mb,memory_sampler,memory_sample_ms' >"$csv"
+printf '%s\n' 'schema,hardware,execution_mode,container_image,container_digest,operation,resolution,input,size,fps,frames,warmup_frames,run_index,runs_planned,qp,gop_size,engine_profile,payload_bytes,payload_bpp,codec_time_seconds,throughput_fps,process_time_seconds,process_throughput_fps,psnr_yuv,peak_memory_mb,peak_gpu_memory_mb,peak_system_memory_mb,min_largest_free_block_mb,memory_sampler,memory_sample_ms' >"$csv"
 cat >"$report" <<EOF
 # NVCR Performance Run
 
@@ -192,15 +192,18 @@ cat >"$report" <<EOF
 - Memory sample interval ms: $memory_sample_ms
 
 The CSV and JSONL files in this directory contain individual repetitions and
-average rows. Payload BPP is codec payload bits divided by width * height * frames.
+average rows. Codec throughput is the runtime-reported encode/decode FPS.
+Process throughput uses the full command wall time, including process startup
+and container overhead, and is the comparison metric for native versus Docker
+runs. Payload BPP is codec payload bits divided by width * height * frames.
 When memory profiling is enabled, peak memory is the profiled nvcr process
 RAM peak from /proc; Jetson system RAM and largest-free-block values come from
 tegrastats when available.
 
 ## Results
 
-| Operation | Resolution | Run | GOP | Payload bytes | Payload BPP | Codec seconds | FPS | PSNR-YUV | Peak RAM MB | System RAM MB | Min LFB MB |
-|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Operation | Resolution | Run | GOP | Payload bytes | Payload BPP | Codec seconds | Codec FPS | Process seconds | Process FPS | PSNR-YUV | Peak RAM MB | System RAM MB | Min LFB MB |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 EOF
 
 select_engine() {
@@ -275,7 +278,16 @@ command_peak_system_memory_mb="null"
 command_min_largest_free_block_mb="null"
 command_memory_sampler="none"
 command_memory_sample_ms="0"
+command_wall_time_seconds="0"
+
+process_fps() {
+    awk -v frame_count="$frames" -v seconds="$1" \
+        'BEGIN {if (seconds > 0) printf "%.6f", frame_count / seconds; else print "null"}'
+}
+
 run_command_capture() {
+    local started ended
+    started="$(date +%s.%N)"
     if [[ "$profile_memory" != true ]]; then
         command_stdout="$("$@")"
         command_peak_memory_mb="null"
@@ -284,6 +296,8 @@ run_command_capture() {
         command_min_largest_free_block_mb="null"
         command_memory_sampler="none"
         command_memory_sample_ms="0"
+        ended="$(date +%s.%N)"
+        command_wall_time_seconds="$(awk -v start="$started" -v end="$ended" 'BEGIN {printf "%.6f", end - start}')"
         return 0
     fi
 
@@ -314,6 +328,8 @@ run_command_capture() {
         command_memory_sampler="none"
         command_memory_sample_ms="$memory_sample_ms"
     fi
+    ended="$(date +%s.%N)"
+    command_wall_time_seconds="$(awk -v start="$started" -v end="$ended" 'BEGIN {printf "%.6f", end - start}')"
     rm -f "$stdout_file" "$stderr_file" "$metrics_file"
     return "$rc"
 }
@@ -352,42 +368,45 @@ merge_sampler() {
 }
 
 append_row() {
-    local operation="$1" label="$2" input="$3" size="$4" gop="$5"
-    local profile="$6" run_index="$7" payload="$8" seconds="$9" fps="${10}" psnr_yuv="${11}" payload_bpp="${12}"
-    local peak_memory_mb="${13}" peak_gpu_memory_mb="${14}" peak_system_memory_mb="${15}"
-    local min_largest_free_block_mb="${16}" memory_sampler="${17}" row_memory_sample_ms="${18}"
-    printf '{"schema":"nvcr.benchmark.resolution-matrix.v1","hardware":"%s","execution_mode":"%s","container_image":"%s","container_digest":"%s","nvcr_commit":"%s","nvcr_dirty":%s,"operation":"%s","resolution":"%s","input":"%s","size":"%s","frames":%s,"warmup_frames":%s,"run_index":"%s","runs_planned":%s,"qp":%s,"gop_size":%s,"engine_profile":"%s","payload_bytes":%s,"payload_bpp":%s,"codec_time_seconds":%s,"fps":%s,"psnr_yuv":%s,"peak_memory_mb":%s,"peak_gpu_memory_mb":%s,"peak_system_memory_mb":%s,"min_largest_free_block_mb":%s,"memory_sampler":"%s","memory_sample_ms":%s}\n' \
-        "$hardware" "$execution_mode" "$container_image" "$container_digest" "$commit" "$dirty" "$operation" "$label" "$input" "$size" "$frames" \
+    local operation="$1" label="$2" input="$3" size="$4" fps="$5" gop="$6"
+    local profile="$7" run_index="$8" payload="$9" seconds="${10}" throughput="${11}"
+    local process_seconds="${12}" process_throughput="${13}" psnr_yuv="${14}" payload_bpp="${15}"
+    local peak_memory_mb="${16}" peak_gpu_memory_mb="${17}" peak_system_memory_mb="${18}"
+    local min_largest_free_block_mb="${19}" memory_sampler="${20}" row_memory_sample_ms="${21}"
+    printf '{"schema":"nvcr.benchmark.resolution-matrix.v1","hardware":"%s","execution_mode":"%s","container_image":"%s","container_digest":"%s","nvcr_commit":"%s","nvcr_dirty":%s,"operation":"%s","resolution":"%s","input":"%s","size":"%s","fps":%s,"frames":%s,"warmup_frames":%s,"run_index":"%s","runs_planned":%s,"qp":%s,"gop_size":%s,"engine_profile":"%s","payload_bytes":%s,"payload_bpp":%s,"codec_time_seconds":%s,"throughput_fps":%s,"process_time_seconds":%s,"process_throughput_fps":%s,"psnr_yuv":%s,"peak_memory_mb":%s,"peak_gpu_memory_mb":%s,"peak_system_memory_mb":%s,"min_largest_free_block_mb":%s,"memory_sampler":"%s","memory_sample_ms":%s}\n' \
+        "$hardware" "$execution_mode" "$container_image" "$container_digest" "$commit" "$dirty" "$operation" "$label" "$input" "$size" "$fps" "$frames" \
         "$warmup_frames" "$run_index" "$repetitions" "$qp" "$gop" "$profile" \
-        "$payload" "$payload_bpp" "$seconds" "$fps" "$psnr_yuv" "$peak_memory_mb" \
+        "$payload" "$payload_bpp" "$seconds" "$throughput" "$process_seconds" "$process_throughput" "$psnr_yuv" "$peak_memory_mb" \
         "$peak_gpu_memory_mb" "$peak_system_memory_mb" "$min_largest_free_block_mb" "$memory_sampler" "$row_memory_sample_ms" >>"$jsonl"
-    printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+    printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
         "$(csv_escape resolution-matrix.v1)" "$(csv_escape "$hardware")" "$(csv_escape "$execution_mode")" \
         "$(csv_escape "$container_image")" "$(csv_escape "$container_digest")" "$(csv_escape "$operation")" \
         "$(csv_escape "$label")" "$(csv_escape "$input")" "$(csv_escape "$size")" \
-        "$(csv_escape "$frames")" "$(csv_escape "$warmup_frames")" \
+        "$(csv_escape "$fps")" "$(csv_escape "$frames")" "$(csv_escape "$warmup_frames")" \
         "$(csv_escape "$run_index")" "$(csv_escape "$repetitions")" "$(csv_escape "$qp")" \
         "$(csv_escape "$gop")" "$(csv_escape "$profile")" "$(csv_escape "$payload")" \
-        "$(csv_escape "$payload_bpp")" "$(csv_escape "$seconds")" "$(csv_escape "$fps")" "$(csv_escape "$psnr_yuv")" \
+        "$(csv_escape "$payload_bpp")" "$(csv_escape "$seconds")" "$(csv_escape "$throughput")" \
+        "$(csv_escape "$process_seconds")" "$(csv_escape "$process_throughput")" "$(csv_escape "$psnr_yuv")" \
         "$(csv_escape "$peak_memory_mb")" "$(csv_escape "$peak_gpu_memory_mb")" \
         "$(csv_escape "$peak_system_memory_mb")" "$(csv_escape "$min_largest_free_block_mb")" \
         "$(csv_escape "$memory_sampler")" "$(csv_escape "$row_memory_sample_ms")" >>"$csv"
-    printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' \
+    printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' \
         "$operation" "$label" "$run_index" "$gop" "$payload" "$payload_bpp" "$seconds" \
-        "$fps" "$psnr_yuv" "$peak_memory_mb" \
+        "$throughput" "$process_seconds" "$process_throughput" "$psnr_yuv" "$peak_memory_mb" \
         "$peak_system_memory_mb" "$min_largest_free_block_mb" >>"$report"
 }
 
 run_once() {
-    local label="$1" size="$2" source_fps="$3" profile="$4" input="$5" gop="$6" run_index="$7"
+    local label="$1" size="$2" fps="$3" profile="$4" input="$5" gop="$6" run_index="$7"
     local stream="$output_dir/nvcr_${label}_qp${qp}_gop${gop}_run${run_index}.nvcr"
-    local encode_log decode_log parsed frames_done payload encode_seconds encode_fps
-    local decode_seconds decode_fps psnr_yuv width height payload_bpp
+    local encode_log decode_log parsed frames_done payload encode_seconds encode_fps encode_process_fps
+    local decode_seconds decode_fps decode_process_fps psnr_yuv width height payload_bpp
+    local encode_process_seconds decode_process_seconds
     local encode_peak_memory encode_peak_gpu encode_peak_system encode_min_lfb encode_sampler encode_sample_ms
     local decode_peak_memory decode_peak_gpu decode_peak_system decode_min_lfb decode_sampler decode_sample_ms
     select_engine "$label" "$profile"
     echo "== $label run=$run_index qp=$qp gop=$gop profile=$profile ==" >&2
-    run_command_capture "$nvcr_bin" encode -i "$input" -o "$stream" -s "$size" -r "$source_fps" \
+    run_command_capture "$nvcr_bin" encode -i "$input" -o "$stream" -s "$size" -r "$fps" \
         --frames "$frames" --gop-size "$gop" --qp "$qp" "${engine_args[@]}"
     encode_log="$command_stdout"
     encode_peak_memory="$command_peak_memory_mb"
@@ -396,6 +415,8 @@ run_once() {
     encode_min_lfb="$command_min_largest_free_block_mb"
     encode_sampler="$command_memory_sampler"
     encode_sample_ms="$command_memory_sample_ms"
+    encode_process_seconds="$command_wall_time_seconds"
+    encode_process_fps="$(process_fps "$encode_process_seconds")"
     parsed="$(printf '%s\n' "$encode_log" | sed -n 's/^Encoded \([0-9][0-9]*\) frame(s), \([0-9][0-9]*\) payload bytes, codec time \([0-9.][0-9.]*\) s (\([0-9.][0-9.]*\) fps)$/\1 \2 \3 \4/p')"
     [[ -n "$parsed" ]] || { echo "could not parse encode summary" >&2; return 1; }
     read -r frames_done payload encode_seconds encode_fps <<<"$parsed"
@@ -414,31 +435,37 @@ run_once() {
     decode_min_lfb="$command_min_largest_free_block_mb"
     decode_sampler="$command_memory_sampler"
     decode_sample_ms="$command_memory_sample_ms"
+    decode_process_seconds="$command_wall_time_seconds"
+    decode_process_fps="$(process_fps "$decode_process_seconds")"
     parsed="$(printf '%s\n' "$decode_log" | sed -n 's/^Decoded [0-9][0-9]* frame(s), codec time \([0-9.][0-9.]*\) s (\([0-9.][0-9.]*\) fps)$/\1 \2/p')"
     [[ -n "$parsed" ]] || { echo "could not parse decode summary" >&2; return 1; }
     read -r decode_seconds decode_fps <<<"$parsed"
     psnr_yuv="$(printf '%s\n' "$decode_log" | sed -n 's/^Quality [0-9][0-9]* frame(s):.*PSNR-YUV \([0-9.][0-9.]*\) dB$/\1/p')"
     [[ -n "$psnr_yuv" ]] || { echo "could not parse quality summary" >&2; return 1; }
-    append_row encode "$label" "$input" "$size" "$gop" "$profile" "$run_index" \
-        "$payload" "$encode_seconds" "$encode_fps" null "$payload_bpp" "$encode_peak_memory" \
+    append_row encode "$label" "$input" "$size" "$fps" "$gop" "$profile" "$run_index" \
+        "$payload" "$encode_seconds" "$encode_fps" "$encode_process_seconds" "$encode_process_fps" null "$payload_bpp" "$encode_peak_memory" \
         "$encode_peak_gpu" "$encode_peak_system" "$encode_min_lfb" "$encode_sampler" "$encode_sample_ms"
-    append_row decode "$label" "$input" "$size" "$gop" "$profile" "$run_index" \
-        "$payload" "$decode_seconds" "$decode_fps" "$psnr_yuv" "$payload_bpp" \
+    append_row decode "$label" "$input" "$size" "$fps" "$gop" "$profile" "$run_index" \
+        "$payload" "$decode_seconds" "$decode_fps" "$decode_process_seconds" "$decode_process_fps" "$psnr_yuv" "$payload_bpp" \
         "$decode_peak_memory" "$decode_peak_gpu" "$decode_peak_system" "$decode_min_lfb" \
         "$decode_sampler" "$decode_sample_ms"
-    printf '%s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n' \
-        "$payload" "$encode_seconds" "$encode_fps" "$decode_seconds" "$decode_fps" "$psnr_yuv" "$payload_bpp" "$encode_peak_memory" "$encode_peak_gpu" \
+    printf '%s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n' \
+        "$payload" "$encode_seconds" "$encode_fps" "$decode_seconds" "$decode_fps" \
+        "$encode_process_seconds" "$encode_process_fps" "$decode_process_seconds" "$decode_process_fps" \
+        "$psnr_yuv" "$payload_bpp" "$encode_peak_memory" "$encode_peak_gpu" \
         "$encode_peak_system" "$encode_min_lfb" "$encode_sampler" "$encode_sample_ms" \
         "$decode_peak_memory" "$decode_peak_gpu" "$decode_peak_system" "$decode_min_lfb" \
         "$decode_sampler" "$decode_sample_ms"
 }
 
 run_case() {
-    local label="$1" size="$2" source_fps="$3" profile="$4" input="$5" gop="$6"
+    local label="$1" size="$2" fps="$3" profile="$4" input="$5" gop="$6"
     local run_index result payload encode_seconds encode_fps decode_seconds decode_fps psnr_yuv payload_bpp
+    local encode_process_seconds encode_process_fps decode_process_seconds decode_process_fps
     local encode_peak_memory encode_peak_gpu encode_peak_system encode_min_lfb encode_sampler encode_sample_ms
     local decode_peak_memory decode_peak_gpu decode_peak_system decode_min_lfb decode_sampler decode_sample_ms
-    local payload_sum=0 encode_seconds_sum=0 encode_fps_sum=0 decode_seconds_sum=0 decode_fps_sum=0 psnr_sum=0
+    local payload_sum=0 encode_seconds_sum=0 encode_fps_sum=0 decode_seconds_sum=0 decode_fps_sum=0
+    local encode_process_seconds_sum=0 decode_process_seconds_sum=0 psnr_sum=0
     local encode_peak_memory_max=null encode_peak_gpu_max=null encode_peak_system_max=null encode_min_lfb_min=null
     local decode_peak_memory_max=null decode_peak_gpu_max=null decode_peak_system_max=null decode_min_lfb_min=null
     local encode_sampler_merged=none decode_sampler_merged=none
@@ -446,14 +473,15 @@ run_case() {
     select_engine "$label" "$profile"
     if ((warmup_frames > 0)); then
         local warmup_stream="$output_dir/nvcr_${label}_qp${qp}_gop${gop}_warmup.nvcr"
-        "$nvcr_bin" encode -i "$input" -o "$warmup_stream" -s "$size" -r "$source_fps" \
+        "$nvcr_bin" encode -i "$input" -o "$warmup_stream" -s "$size" -r "$fps" \
             --frames "$warmup_frames" --gop-size "$gop" --qp "$qp" "${engine_args[@]}" >/dev/null
         "$nvcr_bin" decode -i "$warmup_stream" -o /dev/null --frames "$warmup_frames" \
             "${engine_args[@]}" >/dev/null
     fi
     for run_index in $(seq 1 "$repetitions"); do
-        result="$(run_once "$label" "$size" "$source_fps" "$profile" "$input" "$gop" "$run_index")"
-        read -r payload encode_seconds encode_fps decode_seconds decode_fps psnr_yuv payload_bpp \
+        result="$(run_once "$label" "$size" "$fps" "$profile" "$input" "$gop" "$run_index")"
+        read -r payload encode_seconds encode_fps decode_seconds decode_fps encode_process_seconds encode_process_fps \
+            decode_process_seconds decode_process_fps psnr_yuv payload_bpp \
             encode_peak_memory encode_peak_gpu encode_peak_system encode_min_lfb encode_sampler encode_sample_ms \
             decode_peak_memory decode_peak_gpu decode_peak_system decode_min_lfb decode_sampler decode_sample_ms \
             <<<"$result"
@@ -462,6 +490,8 @@ run_case() {
         encode_fps_sum="$(awk "BEGIN {printf \"%.6f\", $encode_fps_sum + $encode_fps}")"
         decode_seconds_sum="$(awk "BEGIN {printf \"%.6f\", $decode_seconds_sum + $decode_seconds}")"
         decode_fps_sum="$(awk "BEGIN {printf \"%.6f\", $decode_fps_sum + $decode_fps}")"
+        encode_process_seconds_sum="$(awk "BEGIN {printf \"%.6f\", $encode_process_seconds_sum + $encode_process_seconds}")"
+        decode_process_seconds_sum="$(awk "BEGIN {printf \"%.6f\", $decode_process_seconds_sum + $decode_process_seconds}")"
         psnr_sum="$(awk "BEGIN {printf \"%.6f\", $psnr_sum + $psnr_yuv}")"
         encode_peak_memory_max="$(max_number "$encode_peak_memory_max" "$encode_peak_memory")"
         encode_peak_gpu_max="$(max_number "$encode_peak_gpu_max" "$encode_peak_gpu")"
@@ -475,11 +505,16 @@ run_case() {
         decode_sampler_merged="$(merge_sampler "$decode_sampler_merged" "$decode_sampler")"
     done
     local avg_payload avg_encode_seconds avg_encode_fps avg_decode_seconds avg_decode_fps avg_psnr
+    local avg_encode_process_seconds avg_encode_process_fps avg_decode_process_seconds avg_decode_process_fps
     avg_payload="$(awk "BEGIN {printf \"%.0f\", $payload_sum / $repetitions}")"
     avg_encode_seconds="$(awk "BEGIN {printf \"%.6f\", $encode_seconds_sum / $repetitions}")"
     avg_encode_fps="$(awk "BEGIN {printf \"%.6f\", $encode_fps_sum / $repetitions}")"
     avg_decode_seconds="$(awk "BEGIN {printf \"%.6f\", $decode_seconds_sum / $repetitions}")"
     avg_decode_fps="$(awk "BEGIN {printf \"%.6f\", $decode_fps_sum / $repetitions}")"
+    avg_encode_process_seconds="$(awk "BEGIN {printf \"%.6f\", $encode_process_seconds_sum / $repetitions}")"
+    avg_decode_process_seconds="$(awk "BEGIN {printf \"%.6f\", $decode_process_seconds_sum / $repetitions}")"
+    avg_encode_process_fps="$(process_fps "$avg_encode_process_seconds")"
+    avg_decode_process_fps="$(process_fps "$avg_decode_process_seconds")"
     avg_psnr="$(awk "BEGIN {printf \"%.6f\", $psnr_sum / $repetitions}")"
     local avg_payload_bpp
     IFS=x read -r width height <<<"$size"
@@ -488,16 +523,17 @@ run_case() {
     if [[ "$profile_memory" == true ]]; then
         aggregate_memory_sample_ms="$memory_sample_ms"
     fi
-    append_row encode "$label" "$input" "$size" "$gop" "$profile" average \
-        "$avg_payload" "$avg_encode_seconds" "$avg_encode_fps" null "$avg_payload_bpp" \
+    append_row encode "$label" "$input" "$size" "$fps" "$gop" "$profile" average \
+        "$avg_payload" "$avg_encode_seconds" "$avg_encode_fps" "$avg_encode_process_seconds" "$avg_encode_process_fps" null "$avg_payload_bpp" \
         "$encode_peak_memory_max" "$encode_peak_gpu_max" "$encode_peak_system_max" \
         "$encode_min_lfb_min" "$encode_sampler_merged" "$aggregate_memory_sample_ms"
-    append_row decode "$label" "$input" "$size" "$gop" "$profile" average \
-        "$avg_payload" "$avg_decode_seconds" "$avg_decode_fps" "$avg_psnr" "$avg_payload_bpp" \
+    append_row decode "$label" "$input" "$size" "$fps" "$gop" "$profile" average \
+        "$avg_payload" "$avg_decode_seconds" "$avg_decode_fps" "$avg_decode_process_seconds" "$avg_decode_process_fps" "$avg_psnr" "$avg_payload_bpp" \
         "$decode_peak_memory_max" "$decode_peak_gpu_max" "$decode_peak_system_max" \
         "$decode_min_lfb_min" "$decode_sampler_merged" "$aggregate_memory_sample_ms"
-    printf 'case=%s gop=%s runs=%s payload=%s payload_bpp=%s encode_fps=%s decode_fps=%s psnr_yuv=%s\n' \
-        "$label" "$gop" "$repetitions" "$avg_payload" "$avg_payload_bpp" "$avg_encode_fps" "$avg_decode_fps" "$avg_psnr"
+    printf 'case=%s gop=%s runs=%s payload=%s payload_bpp=%s encode_fps=%s decode_fps=%s encode_process_fps=%s decode_process_fps=%s psnr_yuv=%s\n' \
+        "$label" "$gop" "$repetitions" "$avg_payload" "$avg_payload_bpp" "$avg_encode_fps" "$avg_decode_fps" \
+        "$avg_encode_process_fps" "$avg_decode_process_fps" "$avg_psnr"
 }
 
 run_resolution() {

@@ -305,6 +305,14 @@ def build_report(
                 f"| {label} | {gop} | {fmt(py_bpp, 6)} | {fmt(nv_bpp, 6)} | {pct(delta)} |"
             )
 
+    throughput_lines: list[str] = []
+    for label in resolutions:
+        for gop in gops:
+            encode_fps = number(nvcr[(label, gop, "encode")], "throughput_fps", "fps")
+            decode_fps = number(nvcr[(label, gop, "decode")], "throughput_fps", "fps")
+            throughput_lines.append(
+                f"| {label} | {gop} | {fmt(encode_fps)} | {fmt(decode_fps)} |"
+            )
     excluded_inter_gops = [gop for gop in gops if gop != 1 and gop not in selected_gops]
     if effective_python_reset is not None and nvcr_reference_reset is not None:
         if effective_python_reset != nvcr_reference_reset:
@@ -375,6 +383,15 @@ def build_report(
 
     lines.extend(
         [
+            "## NVCR throughput",
+            "",
+            "NVCR's measured codec-loop throughput is shown below. Values are the "
+            "average rows from the recorded repetitions.",
+            "",
+            "| Resolution | GOP | Encode FPS | Decode FPS |",
+            "|---|---:|---:|---:|",
+            *throughput_lines,
+            "",
             "## Additional recorded metrics",
             "",
             "- PSNR, memory, and wrapper-inclusive payload BPP remain available in the source JSONL.",

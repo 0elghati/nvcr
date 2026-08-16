@@ -1,14 +1,14 @@
-# RTX 4070: inter-coded comparison and FPS
+# RTX 4070: inter-coded comparison and throughput
 
 This completed report compares NVCR against the Python DCVC-RT reference at
-every recorded GOP and keeps the FPS results visible.
+every recorded GOP and keeps the throughput results visible.
 
 ## Inputs and coverage
 
 | Runtime | Canonical data | SHA-256 | Rows | Coverage |
 |---|---|---|---:|---|
-| Python DCVC-RT | [results.jsonl](python/data/results.jsonl) | `ce4485182f2b0e172ef92b120109efd94a921329bae5f44b6f8e5d24a3a2057d` | 36 | 36 comparison cases |
-| NVCR R=64 | [results.jsonl](nvcr/results.jsonl) | `fc0c53bc0f2cee173f213d49995ed97db1e88c15832872644b8b8db0cad99f88` | 108 | 36 average cases plus retained repetition rows |
+| Python DCVC-RT | [results.jsonl](python/data/results.jsonl) | `bc28974d0be665def87b10ceac3e6f4ebe9f91f80f23162f6445b00be0914c27` | 36 | 36 comparison cases |
+| NVCR R=64 | [results.jsonl](nvcr/results.jsonl) | `e57003687a705aebfc7123e693b8078077b389fa4b675ea68836cc24708c79c1` | 108 | 36 average cases plus retained repetition rows |
 
 Both datasets use the hardware label `rtx4070`, QP values 32, and frame counts 100. Coverage is QCIF, CIF, 360p, 540p, 720p, 1080p with GOPs 1, 30, 100 and encode/decode operations. Python and NVCR are both identified with a 64-frame feature-reference reset interval, so all three GOPs are directly comparable.
 
@@ -49,15 +49,15 @@ The derivation removes the fixed 58-byte non-entropy overhead in every retained 
 
 Across all 18 cases, NVCR entropy BPP is within -0.41% to +2.87% of Python, and NVCR PSNR is within -0.34 dB of Python at every case.
 
-## Strongest inter-coded FPS by resolution
+## Strongest inter-coded throughput by resolution
 
-The strongest recorded encode FPS in the inter-coded runs comes from GOP 100 at
-every resolution. Decode FPS also peaks at GOP 100 at every resolution except
+The strongest recorded encode throughput in the inter-coded runs comes from GOP 100 at
+every resolution. Decode throughput also peaks at GOP 100 at every resolution except
 QCIF, where GOP 30 is marginally faster (1033.758 vs 1021.886, +1.2%, within
 the two-repetition measurement noise). GOP 100 is used below for a GOP that is
 consistent across resolutions.
 
-| Resolution | Best inter-coded GOP | Encode FPS | Decode FPS |
+| Resolution | Best inter-coded GOP | Encode throughput FPS | Decode throughput FPS |
 |---|---:|---:|---:|
 | QCIF | 100 | 957.692 | 1021.886 |
 | CIF | 100 | 576.553 | 606.987 |
@@ -66,11 +66,11 @@ consistent across resolutions.
 | 720p | 100 | 102.380 | 107.388 |
 | 1080p | 100 | 50.303 | 51.689 |
 
-## FPS results
+## Throughput results
 
-NVCR's measured codec-loop FPS is shown below. Values are the average rows from the recorded repetitions.
+NVCR's measured codec-loop throughput is shown below. Values are the average rows from the recorded repetitions.
 
-| Resolution | GOP | Encode FPS | Decode FPS |
+| Resolution | GOP | Encode throughput FPS | Decode throughput FPS |
 |---|---:|---:|---:|
 | QCIF | 1 | 511.567 | 601.672 |
 | QCIF | 30 | 934.139 | 1033.758 |

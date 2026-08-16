@@ -28,7 +28,6 @@ SCALAR_FIELDS = (
     "p_frame_num",
     "total_bytes",
     "bitrate_kbps",
-    "fps",
     "process_time_s",
     "process_frame_count",
     "process_avg_frame_time_s",
@@ -107,12 +106,15 @@ def _process_frame_count(record: dict[str, Any], operation: str) -> int | None:
     return frame_count
 
 
-def _fps(
+def _throughput_fps(
     record: dict[str, Any],
     operation: str,
     frame_count: int | None,
     process_time: float | None,
 ) -> float | None:
+    direct_throughput = _number(record.get("throughput_fps"))
+    if direct_throughput is not None:
+        return direct_throughput
     if operation == "encode":
         source_fps = _number(record.get("process_encode_fps"))
     else:
@@ -128,7 +130,7 @@ def _fps(
         and process_time > 0.0
     ):
         return round(frame_count / process_time, 6)
-    return None
+    return _number(record.get("fps"))
 
 
 def _records(value: Any) -> Iterator[dict[str, Any]]:
@@ -183,9 +185,9 @@ def _row(
         row["frame_num"] = frame_count
     process_time = _process_time(record, operation)
     process_frame_count = _process_frame_count(record, operation)
-    fps = _fps(record, operation, process_frame_count, process_time)
-    if fps is not None:
-        row["fps"] = fps
+    throughput_fps = _throughput_fps(record, operation, process_frame_count, process_time)
+    if throughput_fps is not None:
+        row["throughput_fps"] = throughput_fps
     if process_time is not None:
         row["process_time_s"] = process_time
     if process_frame_count is not None:
@@ -242,7 +244,7 @@ def _write_summary(output: Path, rows: list[dict[str, Any]]) -> None:
         f"- Resolutions: {', '.join(resolutions)}",
         f"- Sequences: {', '.join(sequences)}",
         f"- GOP sizes: {', '.join(str(value) for value in gops)}",
-        "- Metrics: frame counts, payload size, bitrate, process timing, FPS, memory, and decode quality",
+        "- Metrics: frame counts, payload size, bitrate, process timing, throughput FPS, memory, and decode quality",
         "- Energy and power results: excluded",
         "",
         "The JSONL file is the canonical dataset; CSV is provided for spreadsheet and plotting workflows.",
@@ -261,7 +263,7 @@ def write_dataset(rows: list[dict[str, Any]], output: Path) -> None:
         for row in rows:
             stream.write(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n")
     with (output / "results.csv").open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
+        writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     _write_summary(output, rows)
