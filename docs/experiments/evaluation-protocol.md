@@ -87,7 +87,7 @@ Run the primary tables with exact bundles for:
 - RTX 3050 exact;
 - RTX 4070 exact;
 - RTX 5060 exact, currently represented by `rtx5060-laptop-ubuntu2404`;
-- Jetson Orin Nano exact, when the target is available.
+- Jetson Orin Nano exact.
 
 ### Profiles and coding structure
 

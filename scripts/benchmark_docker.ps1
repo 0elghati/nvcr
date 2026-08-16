@@ -6,7 +6,7 @@ Runs the NVCR Docker resolution matrix from a Windows host checkout.
 & .\scripts\benchmark_docker.ps1 `
     -Image omarelghati/nvcr:0.19.1-amd64-cuda12.8-trt10.9 `
     -InputDir C:\research\nvcr\datasets `
-    -EngineVolume C:\research\nvcr\build\engines\dcvcrt-cvpr2025 `
+    -EngineDir C:\research\nvcr\build\engines\dcvcrt-cvpr2025 `
     -ResultsDir C:\research\nvcr\evidence\performance\rtx5060-docker `
     -Hardware rtx5060-docker `
     -MatrixArgs @('--resolutions', 'qcif 720p', '--frames', '300', '--qp', '32', '--gops', '1 299', '--repetitions', '3', '--warmup-frames', '10')
@@ -22,6 +22,7 @@ specific list, or -NoInstall to skip this check entirely.
 [CmdletBinding()]
 param(
     [string]$Image,
+    [string]$EngineDir = "",
     [string]$EngineVolume = "nvcr-engines",
     [string]$InputDir,
     [string]$ResultsDir,
@@ -87,10 +88,16 @@ if (-not [string]::IsNullOrWhiteSpace($HostRepoDir)) {
     $repoMountSource = Resolve-HostDirectory $HostRepoDir
 }
 
-$engineIsHostDirectory = Test-Path -LiteralPath $EngineVolume -PathType Container
+$engineIsHostDirectory = -not [string]::IsNullOrWhiteSpace($EngineDir)
 $engineSource = $EngineVolume
+$engineLabel = $EngineVolume
 if ($engineIsHostDirectory) {
+    $engineSource = Resolve-HostDirectory $EngineDir -Create
+    $engineLabel = $engineSource
+} elseif (Test-Path -LiteralPath $EngineVolume -PathType Container) {
+    $engineIsHostDirectory = $true
     $engineSource = Resolve-HostDirectory $EngineVolume
+    $engineLabel = $engineSource
 }
 
 $engineContainerRoot = "/opt/nvcr/engines"
@@ -138,12 +145,15 @@ if ($MatrixArgs.Count -gt 0 -and $MatrixArgs[0] -eq "--") {
 function Test-EngineProfile {
     param([Parameter(Mandatory = $true)][string]$ProfileName)
 
+    $testScript = 'profile=$1; root=$2; test -f "$root/dcvcrt-$profile/engine_manifest.json" || test -f "$root/profiles/dcvcrt/$profile/engine_manifest.json"'
     $testArgs = @("run", "--rm") + $engineRuntimeMountArgs + @(
         "--entrypoint", "/bin/bash",
         $Image,
         "-c",
-        "test -f '$engineContainerRoot/dcvcrt-$ProfileName/engine_manifest.json' -o " +
-            "-f '$engineContainerRoot/profiles/dcvcrt/$ProfileName/engine_manifest.json'"
+        $testScript,
+        "nvcr-test-engine-profile",
+        $ProfileName,
+        $engineContainerRoot
     )
     & docker @testArgs | Out-Null
     return $LASTEXITCODE -eq 0
@@ -158,7 +168,7 @@ if (-not $NoInstall -and [string]::IsNullOrWhiteSpace($InstallProfiles)) {
     }
     $missingProfiles = @($matrixResolutions -split "\s+" | Where-Object { $_ } | Where-Object { -not (Test-EngineProfile $_) })
     if ($missingProfiles.Count -gt 0) {
-        Write-Host "Engine profiles not found in $EngineVolume, installing: $($missingProfiles -join ' ')"
+        Write-Host "Engine profiles not found in $engineLabel, installing: $($missingProfiles -join ' ')"
         $InstallProfiles = $missingProfiles -join " "
     } else {
         Write-Host "Engine profiles already installed: $matrixResolutions"

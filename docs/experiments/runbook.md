@@ -326,9 +326,6 @@ scripts/benchmark_docker.sh \
   --frames 300 --qp 32 --gops "1 299" --repetitions 3
 ```
 
-Use `process_throughput_fps` for the native-versus-Docker comparison. The
-codec-reported FPS is retained separately for runtime diagnostics.
-
 ### Evidence boundary
 
 The reported performance comparison uses bare-metal Linux measurements. The
