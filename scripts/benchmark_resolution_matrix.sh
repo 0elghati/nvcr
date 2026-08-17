@@ -368,7 +368,7 @@ merge_sampler() {
 append_row() {
     local operation="$1" label="$2" input="$3" size="$4" fps="$5" gop="$6"
     local profile="$7" run_index="$8" payload="$9" seconds="${10}" throughput="${11}"
-    local process_seconds="${12}" process_throughput="${13}" psnr_yuv="${14}" payload_bpp="${15}"
+    local psnr_yuv="${14}" payload_bpp="${15}"
     local peak_memory_mb="${16}" peak_gpu_memory_mb="${17}" peak_system_memory_mb="${18}"
     local min_largest_free_block_mb="${19}" memory_sampler="${20}" row_memory_sample_ms="${21}"
     printf '{"schema":"nvcr.benchmark.resolution-matrix.v1","hardware":"%s","execution_mode":"%s","container_image":"%s","container_digest":"%s","nvcr_commit":"%s","nvcr_dirty":%s,"operation":"%s","resolution":"%s","input":"%s","size":"%s","fps":%s,"frames":%s,"warmup_frames":%s,"run_index":"%s","runs_planned":%s,"qp":%s,"gop_size":%s,"engine_profile":"%s","payload_bytes":%s,"payload_bpp":%s,"codec_time_seconds":%s,"throughput_fps":%s,"psnr_yuv":%s,"peak_memory_mb":%s,"peak_gpu_memory_mb":%s,"peak_system_memory_mb":%s,"min_largest_free_block_mb":%s,"memory_sampler":"%s","memory_sample_ms":%s}\n' \
