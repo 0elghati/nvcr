@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.6](https://github.com/0elghati/nvcr/compare/v1.0.5...v1.0.6) (2026-08-17)
+
+
+### Bug Fixes
+
+* **experiments:** Rerun experiment on Jetson Orin Nano Super ([#144](https://github.com/0elghati/nvcr/issues/144)) ([bb87acc](https://github.com/0elghati/nvcr/commit/bb87acc7c74a4d6963a4b0072d1ac1b6d571bcf3))
+* Rerun on RTX 3050 ([#140](https://github.com/0elghati/nvcr/issues/140)) ([592517a](https://github.com/0elghati/nvcr/commit/592517ad5419d82c36a04dc47679db984e327914))
+* **results:** retain codec throughput only ([#143](https://github.com/0elghati/nvcr/issues/143)) ([d30f628](https://github.com/0elghati/nvcr/commit/d30f628f4a3581d634b0b69ffa90a15d891425de))
+
 ## [1.0.5](https://github.com/0elghati/nvcr/compare/v1.0.4...v1.0.5) (2026-08-14)
 
 
