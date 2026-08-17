@@ -13,7 +13,7 @@ reference and keeps the inter-coded throughput results visible.
 The report selects Python's latest `source_timestamp` for duplicate keys. Both
 runtimes use the same sequence basename, dimensions, QP 32, GOP, and 100-frame
 count. Python has complete payload, quality, and decode timing coverage. Its
-1080p GOP-1 and GOP-100 encode rows lack process time and FPS.
+1080p GOP-1 and GOP-100 encode rows lack throughput values.
 
 The NVCR run used commit `0a21a749e9b945006de7403b6782a0970b78f7b3`, with 10
 warm-up frames, three measured repetitions, and memory profiling.

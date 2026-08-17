@@ -23,7 +23,7 @@ jsonl=""
 csv=""
 report=""
 
-data_root="${NVCR_BENCH_DATA_ROOT:-$repo_root/datasets}"
+data_root="${NVCR_BENCH_DATA_ROOT:-$repo_root/../datasets}"
 input_qcif="${NVCR_BENCH_QCIF_INPUT:-$data_root/qcif/akiyo_qcif.yuv}"
 input_cif="${NVCR_BENCH_CIF_INPUT:-$data_root/cif/waterfall_cif.yuv}"
 input_360="${NVCR_BENCH_360P_INPUT:-$data_root/360p/BasketballDrive_640x360_50.yuv}"
@@ -172,7 +172,7 @@ mkdir -p "$results_dir"
 [[ -n "$report" ]] || report="$results_dir/summary.md"
 mkdir -p "$(dirname "$jsonl")" "$(dirname "$csv")" "$(dirname "$report")"
 : >"$jsonl"
-printf '%s\n' 'schema,hardware,execution_mode,container_image,container_digest,operation,resolution,input,size,fps,frames,warmup_frames,run_index,runs_planned,qp,gop_size,engine_profile,payload_bytes,payload_bpp,codec_time_seconds,throughput_fps,process_time_seconds,process_throughput_fps,psnr_yuv,peak_memory_mb,peak_gpu_memory_mb,peak_system_memory_mb,min_largest_free_block_mb,memory_sampler,memory_sample_ms' >"$csv"
+printf '%s\n' 'schema,hardware,execution_mode,container_image,container_digest,operation,resolution,input,size,fps,frames,warmup_frames,run_index,runs_planned,qp,gop_size,engine_profile,payload_bytes,payload_bpp,codec_time_seconds,throughput_fps,psnr_yuv,peak_memory_mb,peak_gpu_memory_mb,peak_system_memory_mb,min_largest_free_block_mb,memory_sampler,memory_sample_ms' >"$csv"
 cat >"$report" <<EOF
 # NVCR Performance Run
 
@@ -192,18 +192,16 @@ cat >"$report" <<EOF
 - Memory sample interval ms: $memory_sample_ms
 
 The CSV and JSONL files in this directory contain individual repetitions and
-average rows. Codec throughput is the runtime-reported encode/decode FPS.
-Process throughput uses the full command wall time, including process startup
-and container overhead, and is the comparison metric for native versus Docker
-runs. Payload BPP is codec payload bits divided by width * height * frames.
-When memory profiling is enabled, peak memory is the profiled nvcr process
-RAM peak from /proc; Jetson system RAM and largest-free-block values come from
-tegrastats when available.
+average rows. Throughput is the runtime-reported encode/decode FPS. Payload BPP
+is codec payload bits divided by width * height * frames.
+When memory profiling is enabled, peak memory is the profiled NVCR RAM peak
+from /proc; Jetson system RAM and largest-free-block values come from tegrastats
+when available.
 
 ## Results
 
-| Operation | Resolution | Run | GOP | Payload bytes | Payload BPP | Codec seconds | Codec FPS | Process seconds | Process FPS | PSNR-YUV | Peak RAM MB | System RAM MB | Min LFB MB |
-|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Operation | Resolution | Run | GOP | Payload bytes | Payload BPP | Codec seconds | Codec FPS | PSNR-YUV | Peak RAM MB | System RAM MB | Min LFB MB |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 EOF
 
 select_engine() {
@@ -373,12 +371,12 @@ append_row() {
     local process_seconds="${12}" process_throughput="${13}" psnr_yuv="${14}" payload_bpp="${15}"
     local peak_memory_mb="${16}" peak_gpu_memory_mb="${17}" peak_system_memory_mb="${18}"
     local min_largest_free_block_mb="${19}" memory_sampler="${20}" row_memory_sample_ms="${21}"
-    printf '{"schema":"nvcr.benchmark.resolution-matrix.v1","hardware":"%s","execution_mode":"%s","container_image":"%s","container_digest":"%s","nvcr_commit":"%s","nvcr_dirty":%s,"operation":"%s","resolution":"%s","input":"%s","size":"%s","fps":%s,"frames":%s,"warmup_frames":%s,"run_index":"%s","runs_planned":%s,"qp":%s,"gop_size":%s,"engine_profile":"%s","payload_bytes":%s,"payload_bpp":%s,"codec_time_seconds":%s,"throughput_fps":%s,"process_time_seconds":%s,"process_throughput_fps":%s,"psnr_yuv":%s,"peak_memory_mb":%s,"peak_gpu_memory_mb":%s,"peak_system_memory_mb":%s,"min_largest_free_block_mb":%s,"memory_sampler":"%s","memory_sample_ms":%s}\n' \
+    printf '{"schema":"nvcr.benchmark.resolution-matrix.v1","hardware":"%s","execution_mode":"%s","container_image":"%s","container_digest":"%s","nvcr_commit":"%s","nvcr_dirty":%s,"operation":"%s","resolution":"%s","input":"%s","size":"%s","fps":%s,"frames":%s,"warmup_frames":%s,"run_index":"%s","runs_planned":%s,"qp":%s,"gop_size":%s,"engine_profile":"%s","payload_bytes":%s,"payload_bpp":%s,"codec_time_seconds":%s,"throughput_fps":%s,"psnr_yuv":%s,"peak_memory_mb":%s,"peak_gpu_memory_mb":%s,"peak_system_memory_mb":%s,"min_largest_free_block_mb":%s,"memory_sampler":"%s","memory_sample_ms":%s}\n' \
         "$hardware" "$execution_mode" "$container_image" "$container_digest" "$commit" "$dirty" "$operation" "$label" "$input" "$size" "$fps" "$frames" \
         "$warmup_frames" "$run_index" "$repetitions" "$qp" "$gop" "$profile" \
-        "$payload" "$payload_bpp" "$seconds" "$throughput" "$process_seconds" "$process_throughput" "$psnr_yuv" "$peak_memory_mb" \
+        "$payload" "$payload_bpp" "$seconds" "$throughput" "$psnr_yuv" "$peak_memory_mb" \
         "$peak_gpu_memory_mb" "$peak_system_memory_mb" "$min_largest_free_block_mb" "$memory_sampler" "$row_memory_sample_ms" >>"$jsonl"
-    printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+    printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
         "$(csv_escape resolution-matrix.v1)" "$(csv_escape "$hardware")" "$(csv_escape "$execution_mode")" \
         "$(csv_escape "$container_image")" "$(csv_escape "$container_digest")" "$(csv_escape "$operation")" \
         "$(csv_escape "$label")" "$(csv_escape "$input")" "$(csv_escape "$size")" \
@@ -386,14 +384,12 @@ append_row() {
         "$(csv_escape "$run_index")" "$(csv_escape "$repetitions")" "$(csv_escape "$qp")" \
         "$(csv_escape "$gop")" "$(csv_escape "$profile")" "$(csv_escape "$payload")" \
         "$(csv_escape "$payload_bpp")" "$(csv_escape "$seconds")" "$(csv_escape "$throughput")" \
-        "$(csv_escape "$process_seconds")" "$(csv_escape "$process_throughput")" "$(csv_escape "$psnr_yuv")" \
-        "$(csv_escape "$peak_memory_mb")" "$(csv_escape "$peak_gpu_memory_mb")" \
+        "$(csv_escape "$psnr_yuv")" "$(csv_escape "$peak_memory_mb")" "$(csv_escape "$peak_gpu_memory_mb")" \
         "$(csv_escape "$peak_system_memory_mb")" "$(csv_escape "$min_largest_free_block_mb")" \
         "$(csv_escape "$memory_sampler")" "$(csv_escape "$row_memory_sample_ms")" >>"$csv"
-    printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' \
+    printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' \
         "$operation" "$label" "$run_index" "$gop" "$payload" "$payload_bpp" "$seconds" \
-        "$throughput" "$process_seconds" "$process_throughput" "$psnr_yuv" "$peak_memory_mb" \
-        "$peak_system_memory_mb" "$min_largest_free_block_mb" >>"$report"
+        "$throughput" "$psnr_yuv" "$peak_memory_mb" "$peak_system_memory_mb" "$min_largest_free_block_mb" >>"$report"
 }
 
 run_once() {

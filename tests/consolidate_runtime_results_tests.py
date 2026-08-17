@@ -33,6 +33,7 @@ class RuntimeResultValidationTests(unittest.TestCase):
                     "frame_num": 100,
                     "reset_interval": 64,
                     "source_timestamp": 1,
+                    "throughput_fps": 400.0,
                 }
                 if operation == "decode":
                     python_row["ave_all_frame_bpp"] = 0.16
@@ -108,15 +109,23 @@ class RuntimeResultValidationTests(unittest.TestCase):
             nvcr_reference_reset=32,
             nvcr_checkout_state="dirty",
         )
-        self.assertIn("| QCIF | 1 | 0.160000 | 0.157828 | -1.36% |", report)
+        self.assertIn(
+            "| QCIF | 1 | 0.160000 | 0.157828 | -1.36% | 34.800 | 35.000 | -0.200 |",
+            report,
+        )
         self.assertNotIn("| QCIF | 30 | 0.160000 |", report)
         self.assertIn("Python records a 64-frame feature-reference reset", report)
         self.assertIn("NVCR as 32 frames", report)
         self.assertIn("inter-coded GOPs 30 are excluded", report)
-        self.assertIn("## NVCR throughput", report)
-        self.assertIn("| QCIF | 1 | 500.000 | 500.000 |", report)
-        self.assertNotIn("Python FPS", report)
-        self.assertNotIn("PSNR delta", report)
+        self.assertIn("### Aggregate comparison", report)
+        self.assertIn("PSNR delta", report)
+        self.assertIn("## Throughput", report)
+        self.assertIn("Python encode FPS", report)
+        self.assertIn("NVCR encode FPS", report)
+        self.assertIn(
+            "| QCIF | 1 | 400.000 | 500.000 | 400.000 | 500.000 |",
+            report,
+        )
 
     def test_report_rejects_inter_comparison_with_reset_mismatch(self) -> None:
         with self.assertRaisesRegex(ValueError, "matching Python and NVCR"):
@@ -129,16 +138,20 @@ class RuntimeResultValidationTests(unittest.TestCase):
     def test_report_requires_overhead_for_selected_gop(self) -> None:
         with self.assertRaisesRegex(ValueError, "require --nvcr-frame-overhead-bytes"):
             self.build_synthetic_report(comparable_gops=(1,))
-    def test_default_report_keeps_nvcr_throughput_visible(self) -> None:
+    def test_default_report_keeps_throughput_visible(self) -> None:
 
         report = self.build_synthetic_report()
 
         self.assertIn("contains no cross-runtime rate table", report)
         self.assertNotIn("| Resolution | GOP | Python inner-bitstream BPP |", report)
-        self.assertIn("## NVCR throughput", report)
-        self.assertIn("| QCIF | 1 | 500.000 | 500.000 |", report)
-        self.assertNotIn("Python FPS", report)
-        self.assertNotIn("PSNR delta", report)
+        self.assertIn("## Throughput", report)
+        self.assertIn("Python encode FPS", report)
+        self.assertIn("NVCR encode FPS", report)
+        self.assertIn(
+            "| QCIF | 1 | 400.000 | 500.000 | 400.000 | 500.000 |",
+            report,
+        )
+        self.assertNotIn("### Aggregate comparison", report)
 
 
 if __name__ == "__main__":
