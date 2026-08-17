@@ -19,8 +19,8 @@ RESULT_NAME = re.compile(
     r",q=(?P<qp>\d+),gop=(?P<gop>\d+),time=(?P<timestamp>\d+)_(?P<operation>encode|decode)\.json$"
 )
 
-# These are the comparable process-level measurements. Energy and power fields
-# are deliberately absent instead of being removed after collection.
+# These are the retained scalar measurements. Energy and power fields are
+# deliberately absent instead of being removed after collection.
 SCALAR_FIELDS = (
     "mode",
     "frame_num",
@@ -28,9 +28,6 @@ SCALAR_FIELDS = (
     "p_frame_num",
     "total_bytes",
     "bitrate_kbps",
-    "process_time_s",
-    "process_frame_count",
-    "process_avg_frame_time_s",
     "model_initialization_time_s",
     "peak_memory_mb",
     "peak_gpu_memory_mb",
@@ -188,16 +185,6 @@ def _row(
     throughput_fps = _throughput_fps(record, operation, process_frame_count, process_time)
     if throughput_fps is not None:
         row["throughput_fps"] = throughput_fps
-    if process_time is not None:
-        row["process_time_s"] = process_time
-    if process_frame_count is not None:
-        row["process_frame_count"] = process_frame_count
-    if (
-        process_frame_count is not None
-        and process_time is not None
-        and process_frame_count > 0
-    ):
-        row["process_avg_frame_time_s"] = round(process_time / process_frame_count, 6)
     for field in QUALITY_FIELDS:
         if field in record:
             row[field] = record[field]

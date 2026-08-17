@@ -123,6 +123,10 @@ def pct(value: float | None) -> str:
     return "—" if value is None else f"{value * 100:+.2f}%"
 
 
+def signed(value: float | None, digits: int = 3) -> str:
+    return "—" if value is None else f"{value:+.{digits}f}"
+
+
 def resolution_key(label: str) -> tuple[int, str]:
     try:
         return (RESOLUTION_ORDER.index(label), label)
@@ -286,6 +290,9 @@ def build_report(
 
     rate_lines: list[str] = []
     rate_deltas: list[float] = []
+    psnr_deltas: list[float] = []
+    rate_deltas_by_gop: defaultdict[int, list[float]] = defaultdict(list)
+    psnr_deltas_by_gop: defaultdict[int, list[float]] = defaultdict(list)
     if selected_gops:
         assert nvcr_frame_overhead_bytes is not None
         selected_keys = {
@@ -301,18 +308,61 @@ def build_report(
             nv_bpp = nvcr_inner_bpp(nvcr[key], nvcr_frame_overhead_bytes)
             delta = nv_bpp / py_bpp - 1.0
             rate_deltas.append(delta)
+            rate_deltas_by_gop[gop].append(delta)
+            py_psnr = number(python[key], "ave_all_frame_psnr")
+            nv_psnr = number(nvcr[key], "psnr_yuv")
+            psnr_delta = None
+            if py_psnr is not None and nv_psnr is not None:
+                psnr_delta = nv_psnr - py_psnr
+                psnr_deltas.append(psnr_delta)
+                psnr_deltas_by_gop[gop].append(psnr_delta)
             rate_lines.append(
-                f"| {label} | {gop} | {fmt(py_bpp, 6)} | {fmt(nv_bpp, 6)} | {pct(delta)} |"
+                f"| {label} | {gop} | {fmt(py_bpp, 6)} | {fmt(nv_bpp, 6)} | "
+                f"{pct(delta)} | {fmt(nv_psnr)} | {fmt(py_psnr)} | {signed(psnr_delta)} |"
             )
 
     throughput_lines: list[str] = []
     for label in resolutions:
         for gop in gops:
-            encode_fps = number(nvcr[(label, gop, "encode")], "throughput_fps", "fps")
-            decode_fps = number(nvcr[(label, gop, "decode")], "throughput_fps", "fps")
+            python_encode_fps = number(python[(label, gop, "encode")], "throughput_fps", "fps")
+            python_decode_fps = number(python[(label, gop, "decode")], "throughput_fps", "fps")
+            nvcr_encode_fps = number(nvcr[(label, gop, "encode")], "throughput_fps", "fps")
+            nvcr_decode_fps = number(nvcr[(label, gop, "decode")], "throughput_fps", "fps")
             throughput_lines.append(
-                f"| {label} | {gop} | {fmt(encode_fps)} | {fmt(decode_fps)} |"
+                f"| {label} | {gop} | {fmt(python_encode_fps)} | "
+                f"{fmt(nvcr_encode_fps)} | {fmt(python_decode_fps)} | "
+                f"{fmt(nvcr_decode_fps)} |"
             )
+    strongest_lines: list[str] = []
+    inter_gops = [gop for gop in gops if gop != 1]
+    for label in resolutions:
+        best_encode = max(
+            inter_gops,
+            key=lambda gop: number(nvcr[(label, gop, "encode")], "throughput_fps", "fps")
+            or float("-inf"),
+            default=None,
+        )
+        best_decode = max(
+            inter_gops,
+            key=lambda gop: number(nvcr[(label, gop, "decode")], "throughput_fps", "fps")
+            or float("-inf"),
+            default=None,
+        )
+        encode_value = (
+            number(nvcr[(label, best_encode, "encode")], "throughput_fps", "fps")
+            if best_encode is not None
+            else None
+        )
+        decode_value = (
+            number(nvcr[(label, best_decode, "decode")], "throughput_fps", "fps")
+            if best_decode is not None
+            else None
+        )
+        strongest_lines.append(
+            f"| {label} | {best_encode if best_encode is not None else '—'} | "
+            f"{fmt(encode_value)} | {best_decode if best_decode is not None else '—'} | "
+            f"{fmt(decode_value)} |"
+        )
     excluded_inter_gops = [gop for gop in gops if gop != 1 and gop not in selected_gops]
     if effective_python_reset is not None and nvcr_reference_reset is not None:
         if effective_python_reset != nvcr_reference_reset:
@@ -361,11 +411,31 @@ def build_report(
                 f"The derivation removes the fixed {nvcr_frame_overhead_bytes}-byte non-entropy overhead in every retained NVCR access unit.",
                 "`Relative difference` is `(NVCR inner-entropy BPP / Python inner-bitstream BPP) - 1`.",
                 "",
-                "| Resolution | GOP | Python inner-bitstream BPP | NVCR derived inner-entropy BPP | Relative difference |",
-                "|---|---:|---:|---:|---:|",
+                "| Resolution | GOP | Python BPP | NVCR BPP | BPP delta | NVCR PSNR-YUV | Python PSNR-YUV | PSNR delta (dB) |",
+                "|---|---:|---:|---:|---:|---:|---:|---:|",
                 *rate_lines,
                 "",
                 f"Across these {len(rate_deltas)} explicitly selected cases, the relative-difference range is {pct(min(rate_deltas))} to {pct(max(rate_deltas))}; the median is {pct(statistics.median(rate_deltas))}.",
+                "",
+                "### Aggregate comparison",
+                "",
+                "| GOP | BPP delta range | Median BPP delta | Median PSNR delta (dB) |",
+                "|---:|---:|---:|---:|",
+                *[
+                    f"| {gop} | {pct(min(rate_deltas_by_gop[gop]))} to "
+                    f"{pct(max(rate_deltas_by_gop[gop]))} | "
+                    f"{pct(statistics.median(rate_deltas_by_gop[gop]))} | "
+                    f"{signed(statistics.median(psnr_deltas_by_gop[gop])) if psnr_deltas_by_gop[gop] else '—'} |"
+                    for gop in selected_gops
+                ],
+                "",
+                (
+                    f"Across the selected cases, the PSNR delta range is "
+                    f"{signed(min(psnr_deltas))} to {signed(max(psnr_deltas))} dB; "
+                    f"the median is {signed(statistics.median(psnr_deltas))} dB."
+                    if psnr_deltas
+                    else "No paired PSNR values were available for the selected cases."
+                ),
                 "",
                 reset_text,
                 "",
@@ -383,18 +453,26 @@ def build_report(
 
     lines.extend(
         [
-            "## NVCR throughput",
+            "## Throughput",
             "",
-            "NVCR's measured codec-loop throughput is shown below. Values are the "
-            "average rows from the recorded repetitions.",
+            "Python and NVCR `throughput_fps` values are shown side by side using "
+            "the recorded encode and decode rows.",
             "",
-            "| Resolution | GOP | Encode FPS | Decode FPS |",
-            "|---|---:|---:|---:|",
+            "| Resolution | GOP | Python encode FPS | NVCR encode FPS | Python decode FPS | NVCR decode FPS |",
+            "|---|---:|---:|---:|---:|---:|",
             *throughput_lines,
+            "",
+            "### Strongest NVCR inter-coded codec throughput",
+            "",
+            "The strongest NVCR codec-loop result among the recorded inter-coded GOPs is shown per resolution.",
+            "",
+            "| Resolution | Best encode GOP | Encode FPS | Best decode GOP | Decode FPS |",
+            "|---|---:|---:|---:|---:|",
+            *strongest_lines,
             "",
             "## Additional recorded metrics",
             "",
-            "- PSNR, memory, and wrapper-inclusive payload BPP remain available in the source JSONL.",
+            "- Wrapper-inclusive NVCR payload BPP remains available in the source JSONL; the rate table above uses inner-entropy BPP.",
             "",
         ]
     )
