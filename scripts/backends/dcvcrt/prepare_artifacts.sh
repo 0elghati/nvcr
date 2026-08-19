@@ -394,7 +394,7 @@ Use this engine directory with NVCR:
   --engine-dir $engines_dir
 
 Example:
-  nvcr encode -i input.yuv -o output.nvcr -s 1920x1080 -r 50 --frames 97 --qp 32 --engine-dir $engines_dir
+  nvcr encode -i input.yuv -o output.nvcr -s 1920x1080 -r 50 -c dcvc-rt --frames 97 --qp 32 --engine-dir $engines_dir
 
 Exact TensorRT plans are target-specific. Desktop compatibility plans may be
 shared only according to their recorded hardware class. TensorRT versions remain

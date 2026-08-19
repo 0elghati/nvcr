@@ -43,8 +43,11 @@ add_executable(
     support/test_provider/test_provider.cpp)
 target_link_libraries(nvcr_contract_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_contract_tests)
-if(NVCR_ENABLE_TENSORRT)
+if(NVCR_ENABLE_TENSORRT AND NVCR_ENABLE_DCVC_RT)
     target_compile_definitions(nvcr_contract_tests PRIVATE NVCR_TEST_HAS_TENSORRT=1)
+endif()
+if(NVCR_ENABLE_DCVC_RT)
+    target_compile_definitions(nvcr_contract_tests PRIVATE NVCR_TEST_HAS_DCVCRT=1)
 endif()
 add_test(NAME nvcr_contract_tests COMMAND nvcr_contract_tests)
 
@@ -80,6 +83,7 @@ endif()
 
 nvcr_set_project_warnings(nvcr_tests)
 
+if(NVCR_ENABLE_DCVC_RT)
 add_executable(nvcr_dcvcrt_payload_tests dcvcrt_payload_tests.cpp)
 target_include_directories(
     nvcr_dcvcrt_payload_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcrt")
@@ -91,6 +95,7 @@ add_executable(nvcr_rans_conformance_tests rans_conformance_tests.cpp)
 target_link_libraries(nvcr_rans_conformance_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_rans_conformance_tests)
 add_test(NAME nvcr_rans_conformance COMMAND nvcr_rans_conformance_tests)
+endif()
 
 if(TARGET nvcr_cli)
     add_test(
@@ -101,7 +106,7 @@ if(TARGET nvcr_cli)
             -P "${CMAKE_CURRENT_SOURCE_DIR}/check_cli_gop.cmake")
 endif()
 
-if(NVCR_ENABLE_TENSORRT)
+if(NVCR_ENABLE_TENSORRT AND NVCR_ENABLE_DCVC_RT)
     add_executable(nvcr_cuda_ops_tests cuda_ops_tests.cpp)
     target_include_directories(
         nvcr_cuda_ops_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcrt/backend/tensorrt")

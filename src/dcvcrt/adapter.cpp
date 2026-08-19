@@ -32,6 +32,21 @@ public:
         return entry ? entry->decoder_options : codec::OptionSchema{};
     }
 
+    [[nodiscard]] Result<void>
+    apply_defaults(RuntimeConfiguration& configuration) const override {
+        if (!configuration.codec_id.empty() && configuration.codec_id != codec_descriptor().id) {
+            return Error(
+                ErrorCode::invalid_argument,
+                "DCVC-RT adapter was selected for a different codec id",
+                "dcvcrt");
+        }
+        configuration.codec_id = codec_descriptor().id;
+        if (configuration.model_id.empty()) configuration.model_id = "dcvcrt-cvpr2025";
+        if (configuration.bitstream_model_id.empty()) configuration.bitstream_model_id = "dcvcrt";
+        if (configuration.provider_id.empty()) configuration.provider_id = "tensorrt";
+        return {};
+    }
+
     [[nodiscard]] Result<codec::Components>
     create_components(
         const RuntimeConfiguration& configuration,

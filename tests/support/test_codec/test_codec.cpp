@@ -136,6 +136,14 @@ public:
         return {{{"test_codec.strict_payload", "bool", "reject malformed payloads", "true", {}, {}, false}}};
     }
 
+    [[nodiscard]] Result<void>
+    apply_defaults(RuntimeConfiguration& configuration) const override {
+        auto defaults = ICodecAdapter::apply_defaults(configuration);
+        if (!defaults) return defaults.error();
+        if (configuration.provider_id.empty()) configuration.provider_id = "test-cpu";
+        return {};
+    }
+
     [[nodiscard]] Result<codec::Components>
     create_components(
         const RuntimeConfiguration&,

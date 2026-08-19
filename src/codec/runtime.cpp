@@ -4,9 +4,18 @@
 
 #include <chrono>
 #include <optional>
+#include <string>
 #include <utility>
 
 namespace nvcr::codec {
+namespace {
+
+std::string codec_subsystem(const RuntimeConfiguration& configuration) {
+    return configuration.codec_id.empty() ? "codec" : configuration.codec_id;
+}
+
+}  // namespace
+
 
 Runtime::Runtime(
     RuntimeConfiguration configuration,
@@ -17,12 +26,12 @@ Runtime::Runtime(
       components_(std::move(components)),
       encoder_state_(configuration_.gop_size),
       decoder_state_(configuration_.gop_size),
-      logger_(logger_factory->create("dcvcrt")),
+      logger_(logger_factory->create(codec_subsystem(configuration_))),
       statistics_(std::move(statistics)) {}
 
 Result<void> Runtime::initialize() {
     if (initialized_) {
-        return Error(ErrorCode::invalid_state, "runtime is already initialized", "dcvcrt");
+        return Error(ErrorCode::invalid_state, "runtime is already initialized", codec_subsystem(configuration_));
     }
     if (!components_.codec) {
         return Error(
@@ -39,10 +48,10 @@ Result<void> Runtime::initialize() {
 
 Result<Packet> Runtime::encode(const Frame& frame) {
     if (!initialized_) {
-        return Error(ErrorCode::invalid_state, "runtime is not initialized", "dcvcrt");
+        return Error(ErrorCode::invalid_state, "runtime is not initialized", codec_subsystem(configuration_));
     }
     if (frame.size_bytes() == 0) {
-        return Error(ErrorCode::invalid_argument, "cannot encode an empty frame", "dcvcrt");
+        return Error(ErrorCode::invalid_argument, "cannot encode an empty frame", codec_subsystem(configuration_));
     }
     const auto started = std::chrono::steady_clock::now();
     auto frame_type = encoder_state_.next_frame_type();
@@ -79,13 +88,13 @@ Result<Packet> Runtime::encode(const Frame& frame) {
 
 Result<Frame> Runtime::decode(const Packet& packet) {
     if (!initialized_) {
-        return Error(ErrorCode::invalid_state, "runtime is not initialized", "dcvcrt");
+        return Error(ErrorCode::invalid_state, "runtime is not initialized", codec_subsystem(configuration_));
     }
     if (packet.size() > configuration_.max_packet_bytes) {
         return Error(
             ErrorCode::resource_exhausted,
             "packet exceeds configured limit",
-            "dcvcrt");
+            codec_subsystem(configuration_));
     }
     std::optional<AccessUnit> access_unit;
     std::span<const std::byte> codec_payload = packet.data();
@@ -96,13 +105,13 @@ Result<Frame> Runtime::decode(const Packet& packet) {
             return Error(
                 ErrorCode::malformed_bitstream,
                 "access-unit model identity does not match the configured bundle",
-                "dcvcrt");
+                codec_subsystem(configuration_));
         }
         if (parsed.value().frame_type != packet.frame_type()) {
             return Error(
                 ErrorCode::malformed_bitstream,
                 "packet and access-unit frame types disagree",
-                "dcvcrt");
+                codec_subsystem(configuration_));
         }
         access_unit = std::move(parsed.value());
         if (access_unit->reset_state) {
@@ -113,7 +122,7 @@ Result<Frame> Runtime::decode(const Packet& packet) {
         return Error(
             ErrorCode::malformed_bitstream,
             "legacy codec payload rejected by configuration",
-            "dcvcrt");
+            codec_subsystem(configuration_));
     }
     auto valid = decoder_state_.validate_packet(packet.frame_type());
     if (!valid) return valid.error();
@@ -128,7 +137,7 @@ Result<Frame> Runtime::decode(const Packet& packet) {
         return Error(
             ErrorCode::malformed_bitstream,
             "decoded dimensions do not match the access unit",
-            "dcvcrt");
+            codec_subsystem(configuration_));
     }
     auto reference = Frame::copy_from(
         output.width(),
@@ -150,7 +159,7 @@ Result<Frame> Runtime::decode(const Packet& packet) {
 
 Result<void> Runtime::flush() {
     if (!initialized_) {
-        return Error(ErrorCode::invalid_state, "runtime is not initialized", "dcvcrt");
+        return Error(ErrorCode::invalid_state, "runtime is not initialized", codec_subsystem(configuration_));
     }
     auto result = components_.codec->flush();
     if (!result) return result.error();

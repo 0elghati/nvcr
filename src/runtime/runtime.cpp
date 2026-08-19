@@ -1,7 +1,6 @@
 #include "nvcr/runtime/runtime.hpp"
 
 #include "nvcr/codec/runtime.hpp"
-#include "nvcr/dcvcrt/backend.hpp"
 #include "nvcr/logging/logger.hpp"
 #include "nvcr/memory/memory_pool.hpp"
 
@@ -31,9 +30,9 @@ struct Runtime::Impl final {
     mutable std::mutex mutex;
     RuntimeState state{RuntimeState::initializing};
 
-    // Pending output queued by send_frame / send_access_unit.  DCVC-RT is
-    // one-frame/one-unit so at most one item is ever pending, but the queue
-    // keeps the send/receive split clean for future multi-output codecs.
+    // Pending output queued by send_frame / send_access_unit. The current
+    // one-frame/one-unit adapters use at most one item, but the queue keeps
+    // the send/receive split clean for delayed or multi-output codecs.
     std::optional<Packet> pending_encoded;
     std::optional<Frame>  pending_decoded;
     bool encoder_flushed{false};
@@ -47,10 +46,6 @@ Runtime& Runtime::operator=(Runtime&&) noexcept = default;
 
 Result<Runtime> Runtime::create(
     RuntimeConfiguration configuration, codec::Components components) {
-    // Bootstrap built-in registry entries before validation and initialization.
-    dcvcrt::register_codec();
-    dcvcrt::register_execution_providers();
-
     auto valid = ConfigurationLoader::validate(configuration);
     if (!valid) {
         return valid.error();

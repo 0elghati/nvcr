@@ -30,7 +30,9 @@ DCVC-RT codec adapter -> TensorRT FP16 provider -> Linux/NVIDIA targets
 ```
 
 The adapter owns GOP/reference semantics, native entropy coding, and
-codec-private payload syntax. TensorRT owns target-local plans, CUDA/TensorRT
+codec-private payload syntax. Codec selection is registry-first: the CLI
+requires `-c`/`--codec`, and DCVC-RT is an optional built-in selected by ID.
+TensorRT owns target-local plans, CUDA/TensorRT
 execution, synchronization, and provider errors. TensorRT currently creates a
 provider-owned monolithic DCVC-RT backend; independent model-stage loading
 through `IExecutionProvider::load` remains transitional.
@@ -61,7 +63,9 @@ redistribution status.
 ## Later codec integrations
 
 Additional codec adapters may be added after the adapter/session/access-unit
-contracts and compatibility evidence are maintained. A future codec must pass
+contracts and compatibility evidence are maintained. The core can be built
+without DCVC-RT; new built-ins register through the generic registry hook and
+are selected explicitly by codec ID. A future codec must pass
 its own parser, round-trip, lifecycle, artifact, and reference gates before it
 is described as production-supported.
 

@@ -12,9 +12,11 @@ Implement a codec adapter that provides:
 2. `CodecCapabilities` for frame types, delay, QP/rate controls, and supported
    ordering behavior.
 3. Namespaced encoder and decoder `OptionSchema` declarations.
-4. `ICodecAdapter::create_components`, using `RuntimeServices` to obtain
+4. `ICodecAdapter::apply_defaults`, to supply codec-owned model, stream, and
+   provider defaults after the caller selects the codec.
+5. `ICodecAdapter::create_components`, using `RuntimeServices` to obtain
    provider-owned components rather than naming a concrete provider type.
-5. A `CodecBackend` that translates codec semantics into `CodecEncodeResult`
+6. A `CodecBackend` that translates codec semantics into `CodecEncodeResult`
    and `CodecDecodeResult`, owns codec reference/latent state, and converts
    backend exceptions into `Result` errors.
 
@@ -45,7 +47,10 @@ conformant, or byte/payload interchangeable with another implementation.
 
 ### Codec registration and tests
 
-Register the codec in the static registry with an adapter factory. Required
+Register the codec in the static registry with an adapter factory. Built-in
+implementations are registered by `runtime::register_builtin_components()`;
+applications may also register statically linked adapters before session
+creation. Required
 tests include:
 
 - descriptor, capabilities, option-schema, and registration discovery;

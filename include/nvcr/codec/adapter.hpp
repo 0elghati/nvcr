@@ -24,6 +24,20 @@ public:
     [[nodiscard]] virtual OptionSchema encoder_options() const = 0;
     [[nodiscard]] virtual OptionSchema decoder_options() const = 0;
 
+    // Applies codec-owned defaults before the generic runtime validates the
+    // configuration. Callers select the adapter first; an adapter may then
+    // choose its default model, stream identity, and execution provider.
+    // Explicit caller values must be preserved unless they are incompatible.
+    [[nodiscard]] virtual Result<void>
+    apply_defaults(RuntimeConfiguration& configuration) const {
+        if (configuration.codec_id.empty()) configuration.codec_id = descriptor().id;
+        if (configuration.model_id.empty()) configuration.model_id = descriptor().id;
+        if (configuration.bitstream_model_id.empty()) {
+            configuration.bitstream_model_id = descriptor().id;
+        }
+        return {};
+    }
+
     // Creates runtime components for the given session configuration.
     [[nodiscard]] virtual Result<Components>
     create_components(

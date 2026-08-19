@@ -1,7 +1,8 @@
 # Command line
 
-Use the `nvcr` command to discover the installed codec and provider, then
-encode or decode planar 8-bit YUV420 video. Install a compatible engine first:
+Use the `nvcr` command to discover installed codecs and providers, then select a
+codec explicitly with `-c CODEC` or `--codec CODEC` before encoding or decoding
+planar 8-bit YUV420 video. Install a compatible artifact bundle first:
 commands that run the codec use that local engine and never download or build
 one automatically.
 
@@ -16,7 +17,8 @@ packaged binary by its archive manifest, a source build with
 `git describe --tags --always --dirty`, and a container with its immutable
 tag, digest, and OCI labels.
 
-A CPU-only build with TensorRT disabled does not build the `nvcr` CLI.
+A build with TensorRT disabled still builds `nvcr` for registry discovery and
+for codecs/providers that do not require TensorRT.
 
 ## Discover codecs and providers
 
@@ -82,6 +84,7 @@ Engine selection precedence is:
 6. `./engines`.
 
 Within a collection, installed profiles live under
+`profiles/<backend>/<profile>`; DCVC-RT currently uses
 `profiles/dcvcrt/<profile>`. Dimensions map to `qcif`, `cif`, exact
 `360p`, exact `540p`, `720p`, or `1080p`; larger input requires an
 explicit compatible bundle.
@@ -105,8 +108,14 @@ nvcr encode \
   -i nvcr-example/input.yuv \
   -o nvcr-example/output.nvcr \
   -s 176x144 -r 30 \
+  -c dcvc-rt --backend dcvcrt \
   --frames 4 --gop-size 2 --qp 32 --verbose
 ```
+
+`-c` and `--codec` are equivalent. A codec is required for both encode and
+decode because existing NVAU v1 access units identify a model, not a codec
+implementation. `--backend` is an optional artifact namespace; DCVC-RT uses
+`dcvcrt` for its catalog layout.
 
 `--frames 0` processes complete frames to end of input. `--gop-size 1`
 explicitly selects all-intra development mode. Normal operation uses I/P
@@ -122,11 +131,13 @@ runtime—currently a bounded `NVAU` access unit. It excludes the outer
 ```bash
 nvcr decode \
   -i nvcr-example/output.nvcr \
-  -o nvcr-example/reconstructed.yuv
+  -o nvcr-example/reconstructed.yuv \
+  -c dcvc-rt --backend dcvcrt
 
 nvcr decode \
   -i nvcr-example/output.nvcr \
   -o nvcr-example/reconstructed.yuv \
+  -c dcvc-rt --backend dcvcrt \
   --quality-metrics nvcr-example/input.yuv
 ```
 
@@ -136,11 +147,11 @@ PSNR against a raw reference with matching frames and dimensions.
 
 ## Diagnostics and timing boundary
 
-`--verbose` prints the chosen TensorRT bundle before backend initialization,
+`--verbose` prints the selected artifact bundle before backend initialization,
 then reports per-frame progress. Treat successful frame processing, not the
-selection line alone, as execution evidence. `--profile` prints TensorRT/CUDA
-stage counters and adds synchronization, so do not use profiling repetitions
-for throughput.
+selection line alone, as execution evidence. `--profile` may add
+adapter-specific diagnostics and synchronization, so do not use profiling
+repetitions for throughput.
 
 CLI FPS uses time around the runtime encode/decode call. It does not include
 process startup, file/container orchestration, or the full subprocess boundary.

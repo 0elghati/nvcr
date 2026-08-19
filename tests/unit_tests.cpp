@@ -1,4 +1,3 @@
-#include <nvcr/dcvcrt/sequence_state.hpp>
 #include <nvcr/nvcr.hpp>
 
 #include <gtest/gtest.h>
@@ -69,7 +68,8 @@ TEST(ConfigurationLoader, KeepsBitstreamModelIdSeparate) {
     {
         std::ofstream output(path);
         ASSERT_TRUE(output);
-        output << "model_id=internal-profile\n"
+        output << "codec_id=test-codec\n"
+               << "model_id=internal-profile\n"
                << "bitstream_model_id=public-stream\n"
                << "provider_id=onnxruntime\n";
     }
@@ -79,6 +79,7 @@ TEST(ConfigurationLoader, KeepsBitstreamModelIdSeparate) {
     std::filesystem::remove(path, cleanup_error);
 
     ASSERT_TRUE(configuration) << configuration.error().describe();
+    EXPECT_EQ(configuration.value().codec_id, "test-codec");
     EXPECT_EQ(configuration.value().model_id, "internal-profile");
     EXPECT_EQ(configuration.value().bitstream_model_id, "public-stream");
     EXPECT_EQ(configuration.value().provider_id, "onnxruntime");

@@ -26,12 +26,15 @@ enum class TensorRTExecutionMode : std::uint8_t {
 };
 
 struct RuntimeConfiguration final {
+    // Selected codec implementation. This is a registry identity, not an
+    // artifact directory or an on-wire model identifier.
+    std::string codec_id;
     std::filesystem::path intra_engine_path;
     std::filesystem::path predicted_engine_path;
     std::filesystem::path entropy_model_path;
-    std::string model_id{"dcvcrt-cvpr2025"};
-    std::string bitstream_model_id{"dcvcrt"};
-    std::string provider_id{"tensorrt"};
+    std::string model_id;
+    std::string bitstream_model_id;
+    std::string provider_id;
     CodecApiVersion codec_api_version{1};
     ProviderApiVersion provider_api_version{1};
     StreamFormatVersion stream_format_version{1, 0};

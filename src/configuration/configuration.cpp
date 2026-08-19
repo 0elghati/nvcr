@@ -77,7 +77,9 @@ Result<void> apply_setting(
     RuntimeConfiguration& configuration,
     std::string_view key,
     std::string_view value) {
-    if (key == "intra_engine_path") {
+    if (key == "codec_id") {
+        configuration.codec_id = value;
+    } else if (key == "intra_engine_path") {
         configuration.intra_engine_path = value;
     } else if (key == "predicted_engine_path") {
         configuration.predicted_engine_path = value;
@@ -189,6 +191,9 @@ Result<RuntimeConfiguration> ConfigurationLoader::from_file(
 }
 
 Result<void> ConfigurationLoader::validate(const RuntimeConfiguration& configuration) {
+    if (!valid_identifier(configuration.codec_id)) {
+        return Error(ErrorCode::invalid_argument, "invalid codec_id", "configuration");
+    }
     if (!valid_identifier(configuration.model_id)) {
         return Error(ErrorCode::invalid_argument, "invalid model_id", "configuration");
     }

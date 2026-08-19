@@ -60,9 +60,11 @@ serialized per runtime because codec state is mutable.
 
 ## Construction and registration
 
-Applications select registered codec `dcvc-rt` and provider `tensorrt`.
-The selected adapter obtains provider-owned components through
-`RuntimeServices`; that construction is separate from the lifecycle loop.
+Applications call `runtime::register_builtin_components()`, select a registered
+codec by ID, and create its adapter through `Registry::create_codec()`. The
+caller then invokes `ICodecAdapter::apply_defaults` before validation and asks
+the selected adapter for provider-owned components through `RuntimeServices`.
+DCVC-RT and TensorRT are one built-in pairing, not runtime defaults.
 
 The registry is static in the current release. Test codec/provider entries are
 linked only for contract coverage. They do not establish additional products

@@ -56,6 +56,10 @@ int main(int argc, char* argv[]) {
 
     const fs::path engine_root = fs::absolute(argv[1]);
     nvcr::RuntimeConfiguration configuration;
+    configuration.codec_id = "dcvc-rt";
+    configuration.model_id = "dcvcrt-cvpr2025";
+    configuration.bitstream_model_id = "dcvcrt";
+    configuration.provider_id = "tensorrt";
     configuration.intra_engine_path = engine_root;
     configuration.device_id = 0;
 

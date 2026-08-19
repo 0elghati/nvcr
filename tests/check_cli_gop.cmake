@@ -8,7 +8,7 @@ execute_process(
     COMMAND "${NVCR_CLI}" encode
         -i "${TEST_DIRECTORY}/missing-input.yuv"
         -o "${output}"
-        -s 176x144 --frames 2 --engine-dir "${TEST_DIRECTORY}/missing-engines"
+        -s 176x144 -c dcvc-rt --frames 2 --engine-dir "${TEST_DIRECTORY}/missing-engines"
     RESULT_VARIABLE result
     OUTPUT_VARIABLE stdout
     ERROR_VARIABLE stderr)

@@ -150,13 +150,15 @@ docker run --rm --runtime=nvidia \
   --mount "type=bind,source=$NVCR_WORK_DIR,target=/work" \
   "$NVCR_IMAGE_REF" encode \
   -i /work/input.yuv -o /work/output.nvcr \
-  -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32 --verbose
+  -s 176x144 -r 30 -c dcvc-rt --backend dcvcrt \
+  --frames 4 --gop-size 2 --qp 32 --verbose
 
 docker run --rm --runtime=nvidia \
   --volume nvcr-engines:/opt/nvcr/engines:ro \
   --mount "type=bind,source=$NVCR_WORK_DIR,target=/work" \
   "$NVCR_IMAGE_REF" decode \
   -i /work/output.nvcr -o /work/reconstructed.yuv \
+  -c dcvc-rt --backend dcvcrt \
   --quality-metrics /work/input.yuv
 
 test -s "$NVCR_WORK_DIR/output.nvcr"
@@ -239,8 +241,8 @@ docker run --rm --gpus all $NvcrImageRef compatibility check --codec dcvc-rt --p
 ### Encode, decode, and verify
 
 ```powershell
-docker run --rm --gpus all --volume nvcr-engines:/opt/nvcr/engines:ro --mount "type=bind,source=$WorkDir,target=/work" $NvcrImageRef encode -i /work/input.yuv -o /work/output.nvcr -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32 --verbose
-docker run --rm --gpus all --volume nvcr-engines:/opt/nvcr/engines:ro --mount "type=bind,source=$WorkDir,target=/work" $NvcrImageRef decode -i /work/output.nvcr -o /work/reconstructed.yuv --quality-metrics /work/input.yuv
+docker run --rm --gpus all --volume nvcr-engines:/opt/nvcr/engines:ro --mount "type=bind,source=$WorkDir,target=/work" $NvcrImageRef encode -i /work/input.yuv -o /work/output.nvcr -s 176x144 -r 30 -c dcvc-rt --backend dcvcrt --frames 4 --gop-size 2 --qp 32 --verbose
+docker run --rm --gpus all --volume nvcr-engines:/opt/nvcr/engines:ro --mount "type=bind,source=$WorkDir,target=/work" $NvcrImageRef decode -i /work/output.nvcr -o /work/reconstructed.yuv -c dcvc-rt --backend dcvcrt --quality-metrics /work/input.yuv
 
 if ((Get-Item $OutputPath).Length -le 0) { throw "Encoded output is empty" }
 if ((Get-Item $ReconstructedPath).Length -ne 152064) { throw "Decoded size is not 152064 bytes" }
@@ -328,11 +330,13 @@ nvcr-artifacts inspect \
 nvcr encode \
   -i "$NVCR_WORK_DIR/input.yuv" \
   -o "$NVCR_WORK_DIR/output.nvcr" \
-  -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32 --verbose
+  -s 176x144 -r 30 -c dcvc-rt --backend dcvcrt \
+  --frames 4 --gop-size 2 --qp 32 --verbose
 
 nvcr decode \
   -i "$NVCR_WORK_DIR/output.nvcr" \
   -o "$NVCR_WORK_DIR/reconstructed.yuv" \
+  -c dcvc-rt --backend dcvcrt \
   --quality-metrics "$NVCR_WORK_DIR/input.yuv"
 
 test -s "$NVCR_WORK_DIR/output.nvcr"

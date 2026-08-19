@@ -28,6 +28,11 @@
 
 namespace nvcr::runtime {
 
+// Registers codec/provider implementations compiled into this NVCR build.
+// This is intentionally separate from Registry itself: applications may also
+// register their own statically linked adapters before creating a session.
+void register_builtin_components();
+
 // ---------------------------------------------------------------------------
 // Codec registry entry
 // ---------------------------------------------------------------------------

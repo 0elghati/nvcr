@@ -1,8 +1,10 @@
 #include "support/test_codec/test_codec.hpp"
 #include "support/test_provider/test_provider.hpp"
 
+#if defined(NVCR_TEST_HAS_DCVCRT)
 #include <nvcr/dcvcrt/backend.hpp>
-#if defined(NVCR_TEST_HAS_TENSORRT)
+#endif
+#if defined(NVCR_TEST_HAS_TENSORRT) && defined(NVCR_TEST_HAS_DCVCRT)
 #include <nvcr/dcvcrt/tensorrt_backend.hpp>
 #endif
 #include <nvcr/nvcr.hpp>
@@ -26,10 +28,7 @@ void expect(bool condition, const char* message) {
 }
 
 void registry_contracts() {
-    nvcr::dcvcrt::register_codec();
-#if defined(NVCR_TEST_HAS_TENSORRT)
-    nvcr::dcvcrt::register_tensorrt_provider();
-#endif
+    nvcr::runtime::register_builtin_components();
     nvcr::test_support::register_test_codec();
     nvcr::test_support::register_test_provider();
 
@@ -39,7 +38,9 @@ void registry_contracts() {
 
     expect(!codecs.empty(), "codec registry is non-empty");
     expect(!providers.empty(), "provider registry is non-empty");
+#if defined(NVCR_TEST_HAS_DCVCRT)
     expect(registry.find_codec("dcvc-rt").has_value(), "dcvc-rt is registered");
+#endif
     expect(registry.find_codec("test-codec").has_value(), "test codec is registered");
     auto registered_adapter = registry.create_codec("test-codec");
     expect(registered_adapter.has_value(), "registered test codec creates an adapter");
@@ -215,6 +216,24 @@ void codec_adapter_contract() {
                    decoded.value().frame.data().begin(), decoded.value().frame.data().end(),
                    frame.value().data().begin()),
                "test backend preserves frame bytes");
+    }
+
+    nvcr::RuntimeConfiguration runtime_configuration;
+    auto defaults = adapter->apply_defaults(runtime_configuration);
+    expect(defaults.has_value(), "test adapter applies runtime defaults");
+    expect(runtime_configuration.codec_id == "test-codec", "adapter selects its codec id");
+    expect(runtime_configuration.provider_id == "test-cpu", "adapter selects its provider");
+    auto runtime_components = adapter->create_components(runtime_configuration, services);
+    expect(runtime_components.has_value(), "test adapter creates runtime components");
+    if (!defaults || !runtime_components) return;
+    auto runtime = nvcr::Runtime::create(
+        std::move(runtime_configuration), std::move(runtime_components.value()));
+    expect(runtime.has_value(), "generic runtime creates a selected test codec");
+    if (runtime) {
+        expect(runtime.value().send_frame(frame.value()).has_value(),
+               "generic runtime accepts a test-codec frame");
+        auto packet = runtime.value().receive_access_unit();
+        expect(packet.has_value(), "generic runtime emits a test-codec access unit");
     }
 }
 

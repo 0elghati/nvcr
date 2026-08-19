@@ -28,7 +28,9 @@ if(NVCR_ENABLE_TENSORRT)
     find_package(TensorRT REQUIRED)
 endif()
 
-add_subdirectory(third_party/dcvc_rans)
+if(NVCR_ENABLE_DCVC_RT)
+    add_subdirectory(third_party/dcvc_rans)
+endif()
 
 # ---------------------------------------------------------------------------
 # Module-boundary interface targets
@@ -79,18 +81,26 @@ target_sources(
         src/common/error.cpp
         src/common/sha256.cpp
         src/configuration/configuration.cpp
-        src/dcvcrt/adapter.cpp
-        src/dcvcrt/payload.cpp
-        src/dcvcrt/rans_codec.cpp
-        src/dcvcrt/registration.cpp
         src/logging/logger.cpp
         src/memory/memory_pool.cpp
         src/runtime/frame.cpp
         src/runtime/packet.cpp
         src/runtime/registry.cpp
+        src/runtime/builtins.cpp
         src/runtime/runtime.cpp
-        src/statistics/statistics.cpp
-        $<TARGET_OBJECTS:nvcr_dcvc_rans>)
+        src/statistics/statistics.cpp)
+
+if(NVCR_ENABLE_DCVC_RT)
+    target_sources(
+        nvcr
+        PRIVATE
+            src/dcvcrt/adapter.cpp
+            src/dcvcrt/payload.cpp
+            src/dcvcrt/rans_codec.cpp
+            src/dcvcrt/registration.cpp
+            $<TARGET_OBJECTS:nvcr_dcvc_rans>)
+    target_compile_definitions(nvcr PRIVATE NVCR_HAS_DCVCRT=1)
+endif()
 
 target_include_directories(
     nvcr
@@ -116,7 +126,7 @@ if(spdlog_FOUND)
     target_compile_definitions(nvcr PRIVATE NVCR_HAS_SPDLOG=1)
 endif()
 
-if(NVCR_ENABLE_TENSORRT)
+if(NVCR_ENABLE_TENSORRT AND NVCR_ENABLE_DCVC_RT)
     target_sources(
         nvcr
         PRIVATE
@@ -137,11 +147,7 @@ if(NVCR_BUILD_EXAMPLES)
 endif()
 
 if(NVCR_BUILD_CLI)
-    if(NVCR_ENABLE_TENSORRT)
-        add_subdirectory(cli)
-    else()
-        message(STATUS "NVCR CLI skipped because NVCR_ENABLE_TENSORRT=OFF")
-    endif()
+    add_subdirectory(cli)
 endif()
 
 if(NVCR_BUILD_REFERENCE_TOOLS)
@@ -180,14 +186,16 @@ install(
         scripts/install.sh
         scripts/install_from_source.sh
     DESTINATION "${CMAKE_INSTALL_DATADIR}/nvcr/scripts")
-install(
-    PROGRAMS
-        scripts/backends/dcvcrt/prepare_artifacts.sh
-        scripts/backends/dcvcrt/build_tensorrt.sh
-        scripts/backends/dcvcrt/export_i_onnx.py
-        scripts/backends/dcvcrt/export_p_onnx.py
-        scripts/backends/dcvcrt/write_tensorrt_engine_manifest.py
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/nvcr/scripts/backends/dcvcrt")
+if(NVCR_ENABLE_DCVC_RT)
+    install(
+        PROGRAMS
+            scripts/backends/dcvcrt/prepare_artifacts.sh
+            scripts/backends/dcvcrt/build_tensorrt.sh
+            scripts/backends/dcvcrt/export_i_onnx.py
+            scripts/backends/dcvcrt/export_p_onnx.py
+            scripts/backends/dcvcrt/write_tensorrt_engine_manifest.py
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/nvcr/scripts/backends/dcvcrt")
+endif()
 install(DIRECTORY configs/ DESTINATION "${CMAKE_INSTALL_DATADIR}/nvcr/configs")
 install(
     FILES resources/nvcr.conf.example

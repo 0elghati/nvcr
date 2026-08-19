@@ -62,10 +62,12 @@ nvcr provider list
 nvcr encode \
   -i "$NVCR_WORK_DIR/input.yuv" \
   -o "$NVCR_WORK_DIR/output.nvcr" \
-  -s 176x144 -r 30 --frames 4 --gop-size 2 --qp 32
+  -s 176x144 -r 30 -c dcvc-rt --backend dcvcrt \
+  --frames 4 --gop-size 2 --qp 32
 nvcr decode \
   -i "$NVCR_WORK_DIR/output.nvcr" \
   -o "$NVCR_WORK_DIR/reconstructed.yuv" \
+  -c dcvc-rt --backend dcvcrt \
   --quality-metrics "$NVCR_WORK_DIR/input.yuv"
 
 test -s "$NVCR_WORK_DIR/output.nvcr"

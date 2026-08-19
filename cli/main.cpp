@@ -1,4 +1,3 @@
-#include <nvcr/dcvcrt/adapter.hpp>
 #include <nvcr/nvcr.hpp>
 
 #include <algorithm>
@@ -45,7 +44,7 @@ struct Options final {
     fs::path output;
     fs::path engine_dir;
     fs::path quality_reference;
-    std::string backend{"default"};
+    std::string backend;
     std::string engine_profile;
     std::uint32_t width{};
     std::uint32_t height{};
@@ -65,11 +64,11 @@ void usage(std::ostream& out) {
     out << "NVCR native encoder and decoder\n\n"
         << "Usage:\n"
         << "  nvcr encode -i INPUT.yuv -o OUTPUT.nvcr -s WIDTHxHEIGHT\n"
-        << "              [--provider ID] [--backend NAME] [--engine-profile NAME]\n"
+        << "              -c ID [--provider ID] [--backend NAME] [--engine-profile NAME]\n"
         << "              [--frames N] [--qp N]\n"
         << "              [--gop-size N] [-r FPS] [--engine-dir DIR]\n"
         << "  nvcr decode -i INPUT.nvcr -o OUTPUT.yuv [--quality-metrics REFERENCE.yuv]\n"
-        << "              [--provider ID] [--backend NAME] [--engine-profile NAME] [--frames N]\n"
+        << "              -c ID [--provider ID] [--backend NAME] [--engine-profile NAME] [--frames N]\n"
         << "              [--device-id N] [--engine-dir DIR]\n"
         << "  nvcr codec list\n"
         << "  nvcr codec describe CODEC_ID\n"
@@ -85,11 +84,12 @@ void usage(std::ostream& out) {
         << "  -s, --size WIDTHxHEIGHT   Raw input dimensions (encode only)\n"
         << "      --width N             Raw input width (encode only)\n"
         << "      --height N            Raw input height (encode only)\n"
-        << "      --backend NAME        Installed backend selector (default: NVCR_BACKEND or default)\n"
-        << "      --provider ID         Execution provider id (default: tensorrt)\n"
-        << "      --engine-profile NAME Installed engine profile, for example 720p\n"
+        << "  -c, --codec ID            Registered codec id (or NVCR_CODEC)\n"
+        << "      --backend NAME        Artifact namespace selector (or NVCR_BACKEND)\n"
+        << "      --provider ID         Execution provider id (adapter default if omitted)\n"
+        << "      --engine-profile NAME Artifact profile, for example 720p\n"
         << "                            (default: inferred from encoded dimensions)\n"
-        << "      --engine-dir DIR      Custom TensorRT engine and entropy asset directory\n"
+        << "      --engine-dir DIR      Codec-specific artifact bundle directory\n"
         << "                            (overrides backend/profile selection)\n"
         << "      --frames N            Frames to process; 0 means all (default: 0)\n"
         << "      --qp N                I-frame QP (default: 32)\n"
@@ -97,7 +97,7 @@ void usage(std::ostream& out) {
         << "  -r, --fps FPS             Input frame rate (default: 60)\n"
         << "      --frame-period-us N   Exact timestamp interval (alternative to --fps)\n"
         << "      --device-id N         CUDA device (default: 0)\n"
-        << "      --profile             Print TensorRT/CUDA per-frame profiling counters\n"
+        << "      --profile             Print adapter-specific per-frame profiling counters\n"
         << "      --quality-metrics FILE  Report decoded Y/U/V and weighted PSNR against FILE\n"
         << "  -v, --verbose             Print per-frame CLI progress and info logs\n"
         << "  -h, --help                Show this help\n\n"
@@ -193,7 +193,8 @@ fs::path resolve_engine_dir(
     }
 
     const auto root = default_engine_root();
-    const std::string backend = options.backend == "default" ? "dcvcrt" : options.backend;
+    const std::string backend = options.backend;
+    if (backend.empty()) return {};
     const std::string profile = options.engine_profile.empty()
         ? engine_profile_for_dimensions(width, height)
         : options.engine_profile;
@@ -202,8 +203,7 @@ fs::path resolve_engine_dir(
 }
 
 void bootstrap_registry() {
-    nvcr::dcvcrt::register_codec();
-    nvcr::dcvcrt::register_execution_providers();
+    nvcr::runtime::register_builtin_components();
 }
 
 int codec_list_command() {
@@ -456,7 +456,7 @@ bool parse_options(int argc, char* argv[], Options& options) {
             options.profile = true;
         } else if (argument == "--verbose" || argument == "-v") {
             options.verbose = true;
-        } else if (argument == "--codec") {
+        } else if (argument == "--codec" || argument == "-c") {
             options.codec_id = std::string(value_after(argument));
             if (options.codec_id.empty()) return false;
         } else if (argument == "--provider") {
@@ -477,7 +477,10 @@ bool parse_options(int argc, char* argv[], Options& options) {
     }
 
     if (const char* backend = std::getenv("NVCR_BACKEND")) {
-        if (*backend != '\0' && options.backend == "default") options.backend = backend;
+        if (*backend != '\0' && options.backend.empty()) options.backend = backend;
+    }
+    if (const char* codec = std::getenv("NVCR_CODEC")) {
+        if (*codec != 0 && options.codec_id.empty()) options.codec_id = codec;
     }
     if (const char* provider = std::getenv("NVCR_PROVIDER")) {
         if (*provider != '\0' && options.provider_id.empty()) options.provider_id = provider;
@@ -494,6 +497,10 @@ bool parse_options(int argc, char* argv[], Options& options) {
                   << "' is deprecated; use '" << options.engine_profile << "'\n";
     }
     options.backend = normalize_backend(std::move(options.backend));
+    if (options.codec_id.empty()) {
+        std::cerr << "nvcr: --codec is required for encode and decode (or set NVCR_CODEC)\n";
+        return false;
+    }
     if (options.input.empty() || options.output.empty()) {
         std::cerr << "nvcr: --input and --output are required\n";
         return false;
@@ -660,42 +667,37 @@ RecordRead read_record(std::istream& input, std::vector<std::byte>& bytes) {
 
 nvcr::Result<nvcr::Runtime> create_runtime(
     const Options& options, std::uint32_t width, std::uint32_t height) {
-    const auto engine_dir = resolve_engine_dir(options, width, height);
-    if (engine_dir.empty()) {
-        return nvcr::Error(
-            nvcr::ErrorCode::invalid_argument,
-            "no automatic TensorRT engine profile covers " + std::to_string(width) + "x" +
-                std::to_string(height) +
-                "; use --engine-profile or --engine-dir for a custom bundle",
-            "cli");
-    }
-    if (!engine_bundle_exists(engine_dir)) {
-        const std::string profile = options.engine_profile.empty()
-            ? engine_profile_for_dimensions(width, height)
-            : options.engine_profile;
-        return nvcr::Error(
-            nvcr::ErrorCode::dependency_unavailable,
-            "no installed TensorRT engine bundle for profile " + profile +
-                "; run: nvcr-artifacts install --profile " + profile,
-            "cli");
-    }
-    if (options.verbose) {
-        std::cout << "Using TensorRT engine bundle: " << engine_dir << '\n';
-    }
-    auto adapter = nvcr::dcvcrt::make_adapter();
+    bootstrap_registry();
+    auto& registry = nvcr::runtime::Registry::instance();
+    auto adapter = registry.create_codec(options.codec_id);
     if (!adapter) return adapter.error();
+
     nvcr::RuntimeConfiguration configuration;
-    configuration.intra_engine_path = engine_dir;
+    configuration.codec_id = options.codec_id;
     if (!options.provider_id.empty()) configuration.provider_id = options.provider_id;
     configuration.device_id = options.device_id;
     configuration.intra_qp = options.qp;
     configuration.gop_size = options.gop_size;
     configuration.enable_profiling = options.profile;
     configuration.log_level = options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
-    bootstrap_registry();
-    nvcr::runtime::RuntimeServices services(
-        nvcr::runtime::Registry::instance(),
-        configuration.provider_id);
+    auto defaults = adapter.value()->apply_defaults(configuration);
+    if (!defaults) return defaults.error();
+
+    const auto engine_dir = resolve_engine_dir(options, width, height);
+    if (!engine_dir.empty()) {
+        if (!engine_bundle_exists(engine_dir)) {
+            return nvcr::Error(
+                nvcr::ErrorCode::dependency_unavailable,
+                "no installed artifact bundle at " + engine_dir.string(),
+                "cli");
+        }
+        configuration.intra_engine_path = engine_dir;
+        if (options.verbose) {
+            std::cout << "Using artifact bundle: " << engine_dir << '\n';
+        }
+    }
+
+    nvcr::runtime::RuntimeServices services(registry, configuration.provider_id);
     auto components = adapter.value()->create_components(configuration, services);
     if (!components) return components.error();
     return nvcr::Runtime::create(configuration, std::move(components.value()));

@@ -1,9 +1,13 @@
-# Paths point to artifacts produced from the unmodified DCVC-RT models.
-intra_engine_path=/opt/nvcr/models/dcvcrt
-predicted_engine_path=/opt/nvcr/models/dcvcrt
-entropy_model_path=/opt/nvcr/models/dcvcrt
-model_id=dcvcrt-cvpr2025
-provider_id=tensorrt
+# Select a registered codec and use identities accepted by that adapter.
+# DCVC-RT users should set codec_id=dcvc-rt and follow docs/dcvcrt-artifacts.md.
+codec_id=example-codec
+model_id=example-model
+bitstream_model_id=example-stream
+provider_id=example-provider
+# Optional provider-owned artifact paths.
+intra_engine_path=/opt/nvcr/models/example
+predicted_engine_path=/opt/nvcr/models/example
+entropy_model_path=/opt/nvcr/models/example
 device_id=0
 intra_qp=32
 gop_size=32
