@@ -102,6 +102,17 @@ for required in "${required_files[@]}"; do
     fi
 done
 
+nvcr_reported_version="$("$package_root/bin/nvcr" --version)"
+if [[ "$nvcr_reported_version" != "nvcr $version" ]]; then
+    echo "release nvcr reports '$nvcr_reported_version', expected 'nvcr $version'" >&2
+    exit 1
+fi
+artifacts_reported_version="$("$package_root/bin/nvcr-artifacts" --version)"
+if [[ "$artifacts_reported_version" != "nvcr-artifacts $version" ]]; then
+    echo "release nvcr-artifacts reports '$artifacts_reported_version', expected 'nvcr-artifacts $version'" >&2
+    exit 1
+fi
+
 if ! command -v readelf >/dev/null 2>&1; then
     echo "release packaging requires readelf to verify the ELF architecture" >&2
     exit 1

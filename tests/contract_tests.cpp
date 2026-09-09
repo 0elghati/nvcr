@@ -99,7 +99,14 @@ void runtime_services_contract() {
     descriptor.provider_id = "test-cpu";
     descriptor.precision = "int8";
     descriptor.path = "in-memory";
-        expect(nvcr::current_software_version.major == 0U, "software version is explicit");
+    expect(
+        nvcr::current_software_version.major == NVCR_TEST_PROJECT_VERSION_MAJOR &&
+            nvcr::current_software_version.minor == NVCR_TEST_PROJECT_VERSION_MINOR &&
+            nvcr::current_software_version.patch == NVCR_TEST_PROJECT_VERSION_PATCH,
+        "software version components match the configured project version");
+    expect(
+        nvcr::current_software_version_string == NVCR_TEST_PROJECT_VERSION,
+        "software version string matches the configured project version");
         expect(descriptor.codec_api_version.major == 1U, "artifact codec API version is explicit");
         expect(descriptor.provider_api_version.major == 1U, "artifact provider API version is explicit");
         expect(descriptor.manifest_schema_version.major == 2U,

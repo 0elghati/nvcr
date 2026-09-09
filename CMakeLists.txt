@@ -1,10 +1,23 @@
 cmake_minimum_required(VERSION 3.24)
 
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/version.txt" NVCR_VERSION LIMIT_COUNT 1)
+string(STRIP "${NVCR_VERSION}" NVCR_VERSION)
+if(NOT NVCR_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "version.txt must contain MAJOR.MINOR.PATCH")
+endif()
+
 project(
     NVCR
-    VERSION 1.0.6 # x-release-please-version
+    VERSION "${NVCR_VERSION}"
     DESCRIPTION "Native runtime architecture for neural video codecs"
     LANGUAGES CXX)
+
+set(NVCR_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
+file(MAKE_DIRECTORY "${NVCR_GENERATED_INCLUDE_DIR}/nvcr/common")
+configure_file(
+    include/nvcr/common/versions.hpp.in
+    "${NVCR_GENERATED_INCLUDE_DIR}/nvcr/common/versions.hpp"
+    @ONLY)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -48,6 +61,7 @@ add_library(nvcr_base INTERFACE)
 add_library(NVCR::base ALIAS nvcr_base)
 target_include_directories(
     nvcr_base INTERFACE
+        "$<BUILD_INTERFACE:${NVCR_GENERATED_INCLUDE_DIR}>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 target_compile_features(nvcr_base INTERFACE cxx_std_20)
@@ -95,6 +109,7 @@ target_sources(
 target_include_directories(
     nvcr
     PUBLIC
+        "$<BUILD_INTERFACE:${NVCR_GENERATED_INCLUDE_DIR}>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 target_include_directories(
@@ -137,11 +152,7 @@ if(NVCR_BUILD_EXAMPLES)
 endif()
 
 if(NVCR_BUILD_CLI)
-    if(NVCR_ENABLE_TENSORRT)
-        add_subdirectory(cli)
-    else()
-        message(STATUS "NVCR CLI skipped because NVCR_ENABLE_TENSORRT=OFF")
-    endif()
+    add_subdirectory(cli)
 endif()
 
 if(NVCR_BUILD_REFERENCE_TOOLS)
@@ -167,10 +178,14 @@ install(
 if(TARGET nvcr_cli)
     install(TARGETS nvcr_cli RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 endif()
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated/bin")
+configure_file(
+    scripts/nvcr_artifacts.py
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/bin/nvcr-artifacts"
+    @ONLY)
 install(
-    PROGRAMS scripts/nvcr_artifacts.py
-    DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    RENAME nvcr-artifacts)
+    PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/generated/bin/nvcr-artifacts"
+    DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(
     FILES scripts/nvcr_device.py
     DESTINATION "${CMAKE_INSTALL_DATADIR}/nvcr/scripts")
@@ -219,6 +234,9 @@ install(
     DIRECTORY include/
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     FILES_MATCHING PATTERN "*.hpp")
+install(
+    FILES "${NVCR_GENERATED_INCLUDE_DIR}/nvcr/common/versions.hpp"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/nvcr/common")
 install(
     EXPORT NVCRTargets
     FILE NVCRTargets.cmake
