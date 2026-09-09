@@ -1,8 +1,11 @@
 # RFC: NVCR v2 codec/provider execution boundary
 
-Status: Proposed
+Status: Accepted design direction; implementation pending
 Date: 2026-09-09
 Scope: Architecture and migration design only
+
+Related: [NVCR vision](NVCR_VISION.md) and
+[active v2 roadmap](../ROADMAP.md#active-v2-work)
 
 ## Decision summary
 
@@ -277,18 +280,21 @@ Use the controlled procedure in docs/performance.md: Release builds, identical
 source/input/engine bundle, one warm-up, three measured runs, clean throughput
 separate from profiling, and retained raw per-run values.
 
-Before PR 2, capture and approve a pre-refactor baseline. Proposed acceptance
-limits are:
+Before PR 2, capture and approve a pre-refactor baseline:
 
-- no supported profile loses more than 3% median encode or decode FPS;
-- pooled equal-work FPS loses no more than 2%;
-- no new per-stage device synchronization or host transfer appears;
-- peak device memory increases by no more than the larger of 5% or 64 MiB;
-- context-policy and CUDA-graph hit/miss behavior remain explainable.
+- record the exact source, inputs, engine bundles, profiles, targets, and
+  runtime configuration;
+- retain per-run encode/decode values and characterize run-to-run variance;
+- record per-profile median and pooled equal-work FPS;
+- record host transfers, synchronization points, peak device memory, context
+  policy, and CUDA-graph hit/miss behavior;
+- obtain explicit approval for the numeric acceptance limits after reviewing
+  that evidence; and
+- record the approved limits in the roadmap or retained evidence package.
 
-These numeric limits are proposed policy, not an existing measured guarantee.
-Ratify or replace them before production extraction begins. A result outside a
-limit blocks that PR until explained and explicitly accepted.
+No numeric regression limit is established by this RFC. Production extraction
+must not begin until the baseline and limits are approved. A result outside an
+approved limit blocks that PR until it is explained and explicitly accepted.
 
 ## Risks and open decisions
 
