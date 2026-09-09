@@ -87,7 +87,9 @@ not substitute profile-pass FPS for clean-pass FPS.
 The controlled driver uses `encode_fps_mean` and `decode_fps_mean` for the
 normal measured repetitions. Its `total_wall_time_ms` includes normal CLI and
 file-I/O costs but excludes the separate verbose, quality, and memory-sampling
-passes.
+passes. The corresponding `*_runs` arrays retain the raw clean repetitions;
+provider copy, synchronization, context-policy, and graph-cache counters are
+recorded only by the separate profile pass.
 
 ## Byte and quality boundaries
 
