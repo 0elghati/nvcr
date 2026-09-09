@@ -109,6 +109,8 @@ struct EngineInstance final {
     std::size_t graph_captures{};
 };
 
+constexpr std::size_t max_cuda_graph_invocations_per_engine = 16;
+
 enum class ContextPolicy : std::uint8_t {
     per_engine,
     shared_workspace_persistent,
@@ -1519,8 +1521,8 @@ Result<void> enqueue_engine(
 
     // Bound address/shape variants prevent an unbounded graph cache if an
     // application alternates many buffers or resolutions in one session.
-    constexpr std::size_t max_graph_invocations = 16;
-    if (instance.graph_invocations.size() >= max_graph_invocations) {
+    if (instance.graph_invocations.size() >=
+        max_cuda_graph_invocations_per_engine) {
         if (!context.enqueueV3(stream)) {
             return backend_error(instance.path.filename().string() + " enqueueV3 failed");
         }
@@ -3283,11 +3285,19 @@ public:
         }
         std::size_t graph_captures = 0;
         std::size_t graph_hits = 0;
+        std::size_t graph_entries = 0;
         for (const auto& engine : engines_) {
             graph_captures += engine.graph_captures;
             graph_hits += engine.graph_hits;
+            graph_entries += engine.graph_invocations.size();
         }
-        if (graph_captures != 0 || graph_hits != 0) {
+        if (profiling_enabled_) {
+            std::clog << "[nvcr.profile] cuda_graph captures=" << graph_captures
+                      << " hits=" << graph_hits
+                      << " entries=" << graph_entries
+                      << " limit_per_engine=" << max_cuda_graph_invocations_per_engine
+                      << '\n';
+        } else if (graph_captures != 0 || graph_hits != 0) {
             std::clog << "[nvcr.dcvcrt] [info] CUDA Graph TensorRT captures="
                       << graph_captures << " hits=" << graph_hits << '\n';
         }

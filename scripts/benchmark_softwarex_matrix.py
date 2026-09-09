@@ -100,6 +100,22 @@ DECODE_LATENCY = re.compile(
     rf"^frame [0-9]+: decoded in ({NUMBER}) ms$",
     re.MULTILINE,
 )
+PROVIDER_PROFILE = re.compile(
+    r"^\[nvcr\.profile\] (encode|decode) frame=([0-9]+) type=([IP]) "
+    r"allocs=([0-9]+) alloc_bytes=([0-9]+) "
+    r"h2d=([0-9]+)/([0-9]+) d2h=([0-9]+)/([0-9]+) "
+    r"d2d=([0-9]+)/([0-9]+) syncs=([0-9]+)$",
+    re.MULTILINE,
+)
+CONTEXT_POLICY = re.compile(
+    r"^\[nvcr\.dcvcrt\] \[info\] TensorRT mode: ([a-z-]+)$",
+    re.MULTILINE,
+)
+CUDA_GRAPH_PROFILE = re.compile(
+    r"^\[nvcr\.profile\] cuda_graph captures=([0-9]+) hits=([0-9]+) "
+    r"entries=([0-9]+) limit_per_engine=([0-9]+)$",
+    re.MULTILINE,
+)
 
 
 class SoftwareXError(RuntimeError):
@@ -297,6 +313,69 @@ def parse_decode_output(
     }
 
 
+def parse_provider_profile(
+    output: str,
+    operation: str,
+    expected_frames: int,
+) -> dict[str, Any]:
+    matches = [
+        match
+        for match in PROVIDER_PROFILE.finditer(output)
+        if match.group(1) == operation
+    ]
+    if len(matches) != expected_frames:
+        raise SoftwareXError(
+            f"NVCR emitted {len(matches)} {operation} provider profile rows, "
+            f"expected {expected_frames}"
+        )
+    frame_indices = [int(match.group(2)) for match in matches]
+    if frame_indices != list(range(expected_frames)):
+        raise SoftwareXError(
+            f"NVCR {operation} provider profile frame indices are not contiguous"
+        )
+    policies = set(CONTEXT_POLICY.findall(output))
+    if len(policies) != 1:
+        raise SoftwareXError(f"NVCR {operation} context policy is missing or ambiguous")
+    graph_matches = CUDA_GRAPH_PROFILE.findall(output)
+    if len(graph_matches) != 1:
+        raise SoftwareXError(
+            f"NVCR {operation} CUDA graph profile is missing or ambiguous"
+        )
+
+    counter_groups = {
+        "allocations": 4,
+        "allocation_bytes": 5,
+        "h2d_copies": 6,
+        "h2d_bytes": 7,
+        "d2h_copies": 8,
+        "d2h_bytes": 9,
+        "d2d_copies": 10,
+        "d2d_bytes": 11,
+        "synchronizations": 12,
+    }
+    values = {
+        name: [int(match.group(group)) for match in matches]
+        for name, group in counter_groups.items()
+    }
+    captures, hits, entries, limit = (int(value) for value in graph_matches[0])
+    return {
+        "context_policy": policies.pop(),
+        "frame_count": expected_frames,
+        "frame_types": {
+            frame_type: sum(match.group(3) == frame_type for match in matches)
+            for frame_type in ("I", "P")
+        },
+        "totals": {name: sum(samples) for name, samples in values.items()},
+        "max_per_frame": {name: max(samples) for name, samples in values.items()},
+        "cuda_graph": {
+            "captures": captures,
+            "hits": hits,
+            "entries": entries,
+            "limit_per_engine": limit,
+        },
+    }
+
+
 def command_text(command: Iterable[str]) -> str:
     return shlex.join(str(item) for item in command)
 
@@ -389,45 +468,48 @@ def run_monitored(
     sample_interval_ms: int,
 ) -> CommandResult:
     started = time.monotonic()
-    try:
-        process = subprocess.Popen(
+    with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as stdout_file, \
+            tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as stderr_file:
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=REPOSITORY_ROOT,
+                env=environment,
+                text=True,
+                stdout=stdout_file,
+                stderr=stderr_file,
+            )
+        except OSError as error:
+            return CommandResult(command, None, "", str(error), 0.0)
+        peak_host: float | None = None
+        peak_gpu: float | None = None
+        interval = max(sample_interval_ms, 10) / 1000.0
+        next_gpu_sample = 0.0
+        while process.poll() is None:
+            host = process_memory_mb(process.pid)
+            if host is not None:
+                peak_host = host if peak_host is None else max(peak_host, host)
+            now = time.monotonic()
+            if sample_interval_ms > 0 and now >= next_gpu_sample:
+                gpu = gpu_process_memory_mb(process.pid)
+                if gpu is not None:
+                    peak_gpu = gpu if peak_gpu is None else max(peak_gpu, gpu)
+                next_gpu_sample = now + interval
+            time.sleep(min(interval, 0.05))
+        return_code = process.wait()
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        stdout = stdout_file.read()
+        stderr = stderr_file.read()
+        return CommandResult(
             command,
-            cwd=REPOSITORY_ROOT,
-            env=environment,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            return_code,
+            stdout,
+            stderr,
+            (time.monotonic() - started) * 1000.0,
+            finite_json_number(peak_host),
+            finite_json_number(peak_gpu),
         )
-    except OSError as error:
-        return CommandResult(command, None, "", str(error), 0.0)
-    peak_host: float | None = None
-    peak_gpu: float | None = None
-    interval = max(sample_interval_ms, 10) / 1000.0
-    next_gpu_sample = 0.0
-    while process.poll() is None:
-        host = process_memory_mb(process.pid)
-        if host is not None:
-            peak_host = host if peak_host is None else max(peak_host, host)
-        now = time.monotonic()
-        if sample_interval_ms > 0 and now >= next_gpu_sample:
-            gpu = gpu_process_memory_mb(process.pid)
-            if gpu is not None:
-                peak_gpu = gpu if peak_gpu is None else max(peak_gpu, gpu)
-            next_gpu_sample = now + interval
-        time.sleep(min(interval, 0.05))
-    stdout, stderr = process.communicate()
-    host = process_memory_mb(process.pid)
-    if host is not None:
-        peak_host = host if peak_host is None else max(peak_host, host)
-    return CommandResult(
-        command,
-        process.returncode,
-        stdout,
-        stderr,
-        (time.monotonic() - started) * 1000.0,
-        finite_json_number(peak_host),
-        finite_json_number(peak_gpu),
-    )
 
 
 def load_sequences(path: Path) -> list[SequenceSpec]:
@@ -919,6 +1001,10 @@ def aggregate_performance(
 ) -> dict[str, Any]:
     encode_fps = [float(run["encode"]["fps"]) for run in runs]
     decode_fps = [float(run["decode"]["fps"]) for run in runs]
+    wall_times = [
+        run["encode_result"].elapsed_ms + run["decode_result"].elapsed_ms
+        for run in runs
+    ]
     payloads = [int(run["encode"]["payload_bytes"]) for run in runs]
     payload_bytes = round(statistics.mean(payloads))
     return {
@@ -930,12 +1016,10 @@ def aggregate_performance(
         "decode_fps_stddev": finite_json_number(
             statistics.stdev(decode_fps) if len(runs) > 1 else 0.0
         ),
-        "total_wall_time_ms": finite_json_number(
-            statistics.mean(
-                run["encode_result"].elapsed_ms + run["decode_result"].elapsed_ms
-                for run in runs
-            )
-        ),
+        "encode_fps_runs": [finite_json_number(value) for value in encode_fps],
+        "decode_fps_runs": [finite_json_number(value) for value in decode_fps],
+        "total_wall_time_ms": finite_json_number(statistics.mean(wall_times)),
+        "total_wall_time_ms_runs": [finite_json_number(value) for value in wall_times],
         "payload_bytes": payload_bytes,
         "payload_bytes_runs": payloads,
         "bits_per_pixel": finite_json_number(
@@ -998,6 +1082,15 @@ def aggregate_profile(runs: list[dict[str, Any]]) -> dict[str, Any]:
                 default=None,
             )
         ),
+        "provider_profile_runs": [
+            {
+                "run_index": run["run_index"],
+                "encode": run["encode_provider_profile"],
+                "decode": run["decode_provider_profile"],
+            }
+            for run in runs
+            if "encode_provider_profile" in run and "decode_provider_profile" in run
+        ],
     }
 
 
@@ -1037,6 +1130,11 @@ def empty_metrics() -> dict[str, Any]:
         "psnr_yuv": None,
         "peak_gpu_memory_mb": None,
         "peak_host_memory_mb": None,
+        "encode_fps_runs": [],
+        "decode_fps_runs": [],
+        "total_wall_time_ms_runs": [],
+        "payload_bytes_runs": [],
+        "provider_profile_runs": [],
     }
 
 
@@ -1213,9 +1311,9 @@ def run_case(
             str(engine_dir),
         ]
         if profiled:
-            encode_command.append("--verbose")
+            encode_command.extend(("--profile", "--verbose"))
             decode_command.extend(
-                ["--quality-metrics", str(sequence.path), "--verbose"]
+                ["--quality-metrics", str(sequence.path), "--profile", "--verbose"]
             )
         for command in (encode_command, decode_command):
             command_log.append(command)
@@ -1241,6 +1339,11 @@ def run_case(
                 sequence.frames,
                 require_latencies=profiled,
             )
+            encode_provider_profile = (
+                parse_provider_profile(encode_result.stderr, "encode", sequence.frames)
+                if profiled
+                else None
+            )
             if profiled:
                 decode_result = run_monitored(
                     decode_command,
@@ -1263,13 +1366,19 @@ def run_case(
                 require_latencies=profiled,
                 require_quality=profiled,
             )
-            return {
+            result = {
                 "run_index": label,
                 "encode": encode,
                 "decode": decode,
                 "encode_result": encode_result,
                 "decode_result": decode_result,
             }
+            if profiled:
+                result["encode_provider_profile"] = encode_provider_profile
+                result["decode_provider_profile"] = parse_provider_profile(
+                    decode_result.stderr, "decode", sequence.frames
+                )
+            return result
         finally:
             for path in (stream, reconstruction):
                 try:

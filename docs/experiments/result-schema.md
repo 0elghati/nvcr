@@ -30,6 +30,8 @@ metrics come from additional repetitions requested with `--profile`.
 | Identity | `codec_id`, `model_set_id`, `provider_id`, `build_target_id`, `engine_profile_id`, `engine_manifest_sha256`, `engine_bundle_sha256`, `engine_bundle_digest_kind`, `model_profile_sha256`, `target_profile_sha256`, `engine_profile_sha256` |
 | Input | `sequence_id`, `input_sha256`, `input_bytes`, `input_redistribution`, `pixel_format`, `resolution`, `width`, `height`, `source_fps`, `frames`, `qp`, `gop_size`, `mode` |
 | Measurement | `warmup_runs`, `measured_runs`, `profiling_enabled`, `profile_runs`, `performance_instrumentation` |
+| Raw baseline samples | `encode_fps_runs`, `decode_fps_runs`, `total_wall_time_ms_runs`, `payload_bytes_runs` |
+| Provider execution profile | `provider_profile_runs` |
 | Runtime | `encode_fps_mean`, `encode_fps_stddev`, `decode_fps_mean`, `decode_fps_stddev`, `total_wall_time_ms`, `encode_latency_ms_median`, `encode_latency_ms_p95`, `decode_latency_ms_median`, `decode_latency_ms_p95`, `first_frame_latency_ms` |
 | Quality/size | `payload_bytes`, `bits_per_pixel`, `psnr_y`, `psnr_u`, `psnr_v`, `psnr_yuv` |
 | Memory/reference | `peak_gpu_memory_mb`, `peak_host_memory_mb`, `python_reference_available`, `python_psnr_yuv`, `python_payload_bytes`, `python_vs_nvcr_psnr_yuv` |
@@ -158,6 +160,12 @@ repetitions. Those commands omit verbose per-frame output, quality calculation,
 and memory polling. Profile repetitions run afterward and contribute only
 latency, first-frame latency, PSNR, and peak-memory fields. Their throughput and
 process wall time are intentionally discarded.
+
+The raw baseline arrays retain each clean repetition used by those aggregates.
+`provider_profile_runs` comes from the separate profiled repetitions and records
+the selected context policy, frame-type counts, allocation/copy/synchronization
+totals and maxima, plus CUDA graph captures, hits, entries, and the per-engine
+cache limit. Provider profiling is excluded from clean throughput samples.
 
 The driver hashes exactly the measured YUV prefix
 `width * height * 3 / 2 * frames`, even when the source file contains more
