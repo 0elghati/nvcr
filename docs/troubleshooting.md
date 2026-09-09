@@ -321,17 +321,18 @@ monitor temperature and throttling, and record those settings with the result.
 **Do not.** Use a desktop TensorRT plan or generalize one module's result to all
 Jetson targets.
 
-## CPU build has no NVCR CLI
+## CPU build cannot run neural inference
 
-**Symptom.** A CPU-only build completes without the `nvcr` CLI.
+**Symptom.** A CPU-only build has `nvcr`, but encode or decode cannot use TensorRT.
 
-**What it means.** This is expected with
-`-DNVCR_ENABLE_TENSORRT=OFF`; the configuration builds portable libraries and
-contract tests but skips the TensorRT CLI.
+**What it means.** This is expected with `-DNVCR_ENABLE_TENSORRT=OFF`. The build
+includes the CLI for help, version, and portable discovery, but it has no neural
+inference provider.
 
 **Check.** List and run the configured tests:
 
 ```bash
+build-cpu/cli/nvcr --version
 ctest --test-dir build-cpu -N
 ctest --test-dir build-cpu --output-on-failure
 ```
@@ -343,13 +344,18 @@ or performance.
 
 ## Version identity is unclear
 
-**Symptom.** The installed build cannot be identified with a command-line
-version flag.
+**Symptom.** The installed software version or exact build provenance is unknown.
 
-**What it means.** There is no `nvcr --version` or
-`nvcr-artifacts --version` yet.
+**What it means.** The commands report the software release identity. Archive
+manifests, source revisions, and container digests still identify the exact build.
 
-**Check.** Use the identity source that matches the installation:
+**Check.** Query both installed commands, then retain the provenance source that
+matches the installation:
+
+```bash
+nvcr --version
+nvcr-artifacts --version
+```
 
 - Native install: record the release archive and
   `PACKAGE-MANIFEST.sha256`.
@@ -361,10 +367,10 @@ docker image inspect "$NVCR_IMAGE" \
   --format '{{json .RepoDigests}} {{json .Config.Labels}}'
 ```
 
-**Fix.** Record the archive manifest, source revision, or immutable image digest
-with the run.
+**Fix.** Record the reported version plus the archive manifest, source revision,
+or immutable image digest with the run.
 
-**Do not.** Infer a release solely from the repository CMake version.
+**Do not.** Treat the software version alone as exact build provenance.
 
 ## A result is incomplete
 

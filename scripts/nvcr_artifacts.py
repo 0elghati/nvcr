@@ -19,6 +19,16 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+SOFTWARE_VERSION = "@PROJECT_VERSION@"
+if SOFTWARE_VERSION.startswith("@") and SOFTWARE_VERSION.endswith("@"):
+    SOFTWARE_VERSION = (
+        Path(__file__).resolve().parents[1] / "version.txt"
+    ).read_text(encoding="utf-8").strip()
+
+if len(sys.argv) == 2 and sys.argv[1] == "--version":
+    print(f"nvcr-artifacts {SOFTWARE_VERSION}")
+    raise SystemExit(0)
+
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 SOURCE_ROOT = SCRIPT_DIRECTORY.parent
 if (SOURCE_ROOT / "configs").is_dir() and (SOURCE_ROOT / "scripts").is_dir():
@@ -1071,7 +1081,9 @@ def forward_artifact_command(command: str, arguments: list[str]) -> int:
 
 def main() -> int:
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
-        print("usage: nvcr-artifacts {install|prepare|build|inspect|validate} [options]")
+        print(
+            "usage: nvcr-artifacts --version | {install|prepare|build|inspect|validate} [options]"
+        )
         return 0 if len(sys.argv) >= 2 else 2
     command = sys.argv[1]
     try:

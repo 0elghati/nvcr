@@ -30,4 +30,5 @@ implementation.
 
 TensorRT currently creates the DCVC-RT backend as one provider-owned component.
 Additional production codecs and providers, stable public plane/stride
-ownership, and a final v1 release remain future work.
+ownership, and the provider-boundary work proposed for v2 remain future work.
+The v1.x release line is already published.

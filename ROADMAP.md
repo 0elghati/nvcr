@@ -29,11 +29,13 @@ end-to-end integration is DCVC-RT through TensorRT FP16 on Linux/NVIDIA targets.
 DCVC-RT codec adapter -> TensorRT FP16 provider -> Linux/NVIDIA targets
 ```
 
-The adapter owns GOP/reference semantics, native entropy coding, and
-codec-private payload syntax. TensorRT owns target-local plans, CUDA/TensorRT
-execution, synchronization, and provider errors. TensorRT currently creates a
-provider-owned monolithic DCVC-RT backend; independent model-stage loading
-through `IExecutionProvider::load` remains transitional.
+The intended boundary assigns GOP/reference semantics, native entropy coding,
+and codec-private payload syntax to the codec adapter, while TensorRT owns
+target-local plans, execution, synchronization, and provider errors. The v1.x
+production implementation does not yet realize that split: its provider factory
+creates a monolithic `TensorRTBackend` that also owns DCVC-RT orchestration,
+entropy, payload, and device-DPB behavior. The proposed v2 extraction is
+documented in [the provider-boundary RFC](docs/provider-boundary-v2.md).
 
 The deterministic test codec and CPU provider are conformance fixtures. They do
 not count as additional production codecs/providers or performance baselines.
@@ -43,15 +45,25 @@ not count as additional production codecs/providers or performance baselines.
 | Area | Status | Remaining gate |
 |---|---|---|
 | Runtime and stream contracts | Implemented | Maintain parser, reset, flush, delayed-output, and I/P coverage |
-| TensorRT provider path | Implemented | Keep provider-owned boundary explicit; split model stages only with a new production integration |
+| TensorRT provider path | v1.x monolith shipped; v2 boundary design active | Extract only through the staged RFC gates; do not change production in the design PR |
 | Binary and container packaging | Implemented | The engine-bundle packager now carries the NVCR and upstream notices inside the installed bundle; republish existing catalog archives and verify manifests/digests before the release gate. Complete provenance, clean-package, and version-first container-tag checks |
 | Public documentation and onboarding | Implemented | Keep the project identity, contributions, reference comparisons, latest-release examples, and platform workflows current |
-| CLI and artifact-client build identity | Follow-up | Add `nvcr --version` and `nvcr-artifacts --version`, and reconcile the legacy `current_software_version` constant; until then use package manifests, source revisions, or OCI metadata |
+| CLI and artifact-client build identity | Implemented | Keep `version.txt`, build metadata, both version commands, citation metadata, and package checks consistent |
 | Linux container GPU injection | Follow-up | Validate and document configured `nvidia` runtime, Docker `--gpus`, and CDI paths across supported Docker and NVIDIA Container Toolkit versions |
 | Exact-target artifacts | In progress | RTX 3050 Laptop TensorRT 10.9.0/CUDA runtime 12080: all six exact bundles published with verified remote digests after 84 independent warning-free plan loads and dimension-matched I/P round trips. Fresh catalog QCIF installation and downloaded-bundle round trip pass with identical stream/reconstruction hashes. See [publication evidence](evidence/rtx3050-trt109-local-20261012/summary.md). Produce current warning-free profile sets and target-local evidence for remaining targets |
 | Reproducible evaluation | Matched measurements complete | Process throughput is the primary comparison; codec-interval measurements are reported separately. See the [result inventory](results/README.md) for coverage and retained records. The RTX 4070 matched campaign predates the current stricter preflight gate: it was captured under a forked/unpinned reference source and without a matched smoke. Rerun with a clean pinned reference and a passing matched smoke before further publication claims |
 | Compatibility classes | Experimental | Compare against complete exact baselines |
 | Public C++ API/ABI | Release policy adopted | Preserve public API compatibility in patch and minor releases; require a major release for breaking changes. Rebuild applications when upgrading; cross-release ABI compatibility is not guaranteed. |
+
+## Active v2 work
+
+The first v2 work item is boundary definition, not a provider refactor. Phase A
+establishes coherent v1.x version and status reporting. Phase B traces the live
+DCVC-RT/TensorRT path and records two viable designs, a recommendation, staged
+migration, and correctness/performance gates in
+[the provider-boundary RFC](docs/provider-boundary-v2.md). Production extraction,
+a second provider, a second codec, FFmpeg, and stream changes require separate
+approved work.
 
 Generic packages exclude checkpoints, exported model assets, TensorRT plans,
 and datasets. Validated engine bundles use the separate rolling catalog and
@@ -97,6 +109,8 @@ during export.
 
 Additional codec adapters may be added after the adapter/session/access-unit
 contracts and compatibility evidence are maintained. A future codec must pass
+Energy measurement remains optional downstream evidence, not a release gate.
+
 its own parser, round-trip, lifecycle, artifact, and reference gates before it
 is described as production-supported.
 
@@ -122,7 +136,10 @@ support, a stable C ABI, upstream Python payload interchangeability, an
 industry-standard neural bitstream, or unrestricted model/checkpoint/engine
 redistribution.
 
-## v1 exit criteria
+## v1.x maintenance and release gates
+
+The v1.x line is released. These remain ongoing maintenance and release gates;
+they do not imply that v1 is pending.
 
 1. Clean source and package builds.
 2. Complete parser, reset, flush, malformed-input, delayed-output, and I/P tests.
