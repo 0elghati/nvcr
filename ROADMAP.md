@@ -45,7 +45,7 @@ not count as additional production codecs/providers or performance baselines.
 | Area | Status | Remaining gate |
 |---|---|---|
 | Runtime and stream contracts | Implemented | Maintain parser, reset, flush, delayed-output, and I/P coverage |
-| TensorRT provider path | v1.x monolith shipped; v2 boundary design active | Extract only through the staged RFC gates; do not change production in the design PR |
+| TensorRT provider path | v1.x monolith shipped; v2 boundary design accepted | Proceed through the staged RFC gates without combining contract, extraction, and orchestration changes |
 | Binary and container packaging | Implemented | Complete license, provenance, clean-package, and version-first container-tag checks |
 | Public documentation and onboarding | Implemented | Keep the project identity, contributions, reference comparisons, latest-release examples, and platform workflows current |
 | CLI and artifact-client build identity | Implemented | Keep `version.txt`, build metadata, both version commands, citation metadata, and package checks consistent |
@@ -57,25 +57,36 @@ not count as additional production codecs/providers or performance baselines.
 
 ## Active v2 work
 
-The first v2 work item is boundary definition, not a provider refactor. Phase A
-establishes coherent v1.x version and status reporting. Phase B traces the live
-DCVC-RT/TensorRT path and records two viable designs, a recommendation, staged
-migration, and correctness/performance gates in
-[the provider-boundary RFC](docs/provider-boundary-v2.md). Production extraction,
-a second provider, a second codec, FFmpeg, and stream changes require separate
-approved work.
+The long-term direction is recorded in [the NVCR vision](docs/NVCR_VISION.md).
+The table below is the execution record for the active provider-boundary work.
+
+| Sequence | Work item | Status | Exit evidence |
+|---|---|---|---|
+| A | Baseline coherence | Complete in [PR #145](https://github.com/0elghati/nvcr/pull/145) | Version, status, metadata, and baseline tests agree |
+| B0 | Production-path discovery and boundary RFC | Complete in [PR #145](https://github.com/0elghati/nvcr/pull/145) | Live source path traced; ownership, alternatives, migration, and gates documented |
+| B1 | Vision and execution governance | Recorded | Vision tracked; roadmap and RFC cross-linked; performance limits remain an explicit pre-extraction decision |
+| B2 | Provider-session contracts and deterministic fixtures | Next | Internal or experimental contracts cover ownership, bounds, dependencies, completion, reset, and errors without switching production |
+| B3 | Pre-refactor target baseline | Required before B4 | Exact inputs and bundles, per-run values, variance, copies/synchronization, peak memory, context policy, and approved acceptance limits recorded |
+| B4 | TensorRT execution session behind the facade | Pending | Engine/context, binding, allocation, stream/event, graph-cache, and enqueue ownership move behind the session contract while bundle validation and context policy remain intact |
+| B5 | I-frame codec orchestration | Pending | DCVC-RT owns stage order, quantization, entropy, and payload assembly with byte and reconstructed-frame parity |
+| B6 | P-frame state and orchestration | Pending | DCVC-RT owns reference semantics; GOP, reset, flush, repeated-session, and malformed-input gates pass |
+| B7 | Production construction cleanup | Pending | A real adapter factory selects codec and provider; direct registration, component factory, and the unused stub are removed after their last callers |
+
+The next implementation PR is B2. B3 must be approved before TensorRT extraction
+starts in B4. A second provider, a second codec, FFmpeg, and stream changes
+remain separate approved work.
 
 Generic packages exclude checkpoints, exported model assets, TensorRT plans,
 and datasets. Validated engine bundles use the separate rolling catalog and
 remain bound to their recorded GPU, CUDA, TensorRT, model, profile, digest, and
 redistribution status.
 
+Energy measurement remains optional downstream evidence, not a release gate.
+
 ## Later codec integrations
 
 Additional codec adapters may be added after the adapter/session/access-unit
 contracts and compatibility evidence are maintained. A future codec must pass
-Energy measurement remains optional downstream evidence, not a release gate.
-
 its own parser, round-trip, lifecycle, artifact, and reference gates before it
 is described as production-supported.
 
