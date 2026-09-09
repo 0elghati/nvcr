@@ -65,16 +65,17 @@ The table below is the execution record for the active provider-boundary work.
 | A | Baseline coherence | Complete in [PR #145](https://github.com/0elghati/nvcr/pull/145) | Version, status, metadata, and baseline tests agree |
 | B0 | Production-path discovery and boundary RFC | Complete in [PR #145](https://github.com/0elghati/nvcr/pull/145) | Live source path traced; ownership, alternatives, migration, and gates documented |
 | B1 | Vision and execution governance | Recorded | Vision tracked; roadmap and RFC cross-linked; performance limits remain an explicit pre-extraction decision |
-| B2 | Provider-session contracts and deterministic fixtures | Next | Internal or experimental contracts cover ownership, bounds, dependencies, completion, reset, and errors without switching production |
-| B3 | Pre-refactor target baseline | Required before B4 | Exact inputs and bundles, per-run values, variance, copies/synchronization, peak memory, context policy, and approved acceptance limits recorded |
+| B2 | Provider-session contracts and deterministic fixtures | Implemented; review pending | Experimental contracts and deterministic tests cover ownership, bounds, dependencies, completion, reset, and errors without switching production |
+| B3 | Pre-refactor target baseline | Next; required before B4 | Exact inputs and bundles, per-run values, variance, copies/synchronization, peak memory, context policy, and approved acceptance limits recorded |
 | B4 | TensorRT execution session behind the facade | Pending | Engine/context, binding, allocation, stream/event, graph-cache, and enqueue ownership move behind the session contract while bundle validation and context policy remain intact |
 | B5 | I-frame codec orchestration | Pending | DCVC-RT owns stage order, quantization, entropy, and payload assembly with byte and reconstructed-frame parity |
 | B6 | P-frame state and orchestration | Pending | DCVC-RT owns reference semantics; GOP, reset, flush, repeated-session, and malformed-input gates pass |
 | B7 | Production construction cleanup | Pending | A real adapter factory selects codec and provider; direct registration, component factory, and the unused stub are removed after their last callers |
 
-The next implementation PR is B2. B3 must be approved before TensorRT extraction
-starts in B4. A second provider, a second codec, FFmpeg, and stream changes
-remain separate approved work.
+The current implementation PR is B2. Its clean CPU Release build, test, install,
+sanitizer, and TensorRT Release target gates pass. B3 must be captured and
+approved before TensorRT extraction starts in B4. A second provider, a second
+codec, FFmpeg, and stream changes remain separate approved work.
 
 Generic packages exclude checkpoints, exported model assets, TensorRT plans,
 and datasets. Validated engine bundles use the separate rolling catalog and

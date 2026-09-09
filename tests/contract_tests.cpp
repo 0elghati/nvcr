@@ -87,6 +87,214 @@ void registry_contracts() {
     }
 }
 
+nvcr::provider::experimental::ExecutableStageDescriptor make_test_stage(
+    std::string stage_id) {
+    namespace session_api = nvcr::provider::experimental;
+
+    session_api::ExecutableStageDescriptor descriptor;
+    descriptor.stage_id = std::move(stage_id);
+    descriptor.artifact.codec_id = "test-codec";
+    descriptor.artifact.model_set_id = "test-model";
+    descriptor.artifact.component_id = "identity";
+    descriptor.artifact.provider_id = "test-cpu";
+    descriptor.artifact.precision = "int8";
+    descriptor.artifact.path = "in-memory";
+    descriptor.tensors = {
+        {
+            "input",
+            session_api::TensorDataType::int8,
+            session_api::TensorAccess::read,
+            {{1, 4}},
+        },
+        {
+            "output",
+            session_api::TensorDataType::int8,
+            session_api::TensorAccess::write,
+            {{1, 4}},
+        },
+    };
+    return descriptor;
+}
+
+void provider_session_contract() {
+    namespace session_api = nvcr::provider::experimental;
+
+    auto session = nvcr::test_support::make_test_provider_session();
+    auto other_session = nvcr::test_support::make_test_provider_session();
+    expect(session != nullptr && other_session != nullptr,
+           "experimental provider sessions are constructible");
+    if (!session || !other_session) return;
+    expect(session->owner_id() != other_session->owner_id(),
+           "provider session ownership identities are unique");
+
+    auto zero_allocation = session->allocate(0U, session_api::MemoryDomain::host);
+    expect(!zero_allocation &&
+               zero_allocation.error().code() == nvcr::ErrorCode::invalid_argument,
+           "provider session rejects zero-byte allocations");
+    auto excessive_allocation =
+        session->allocate(1024U * 1024U + 1U, session_api::MemoryDomain::host);
+    expect(!excessive_allocation &&
+               excessive_allocation.error().code() == nvcr::ErrorCode::resource_exhausted,
+           "provider session reports bounded resource exhaustion");
+
+    auto input =
+        session->allocate(4U, session_api::MemoryDomain::provider_device);
+    auto output =
+        session->allocate(4U, session_api::MemoryDomain::provider_device);
+    auto chained_output =
+        session->allocate(4U, session_api::MemoryDomain::provider_device);
+    auto foreign_buffer =
+        other_session->allocate(4U, session_api::MemoryDomain::provider_device);
+    expect(input && output && chained_output && foreign_buffer,
+           "provider sessions allocate deterministic opaque buffers");
+    if (!input || !output || !chained_output || !foreign_buffer) return;
+    expect(input.value()->size_bytes() == 4U &&
+               input.value()->domain() == session_api::MemoryDomain::provider_device &&
+               input.value()->owner_id() == session->owner_id(),
+           "provider buffer exposes size, domain, and owner");
+
+    const std::vector<std::byte> expected{
+        std::byte{0x11}, std::byte{0x22}, std::byte{0x33}, std::byte{0x44}};
+    expect(nvcr::test_support::write_test_buffer(input.value(), 0U, expected).has_value(),
+           "deterministic fixture seeds an opaque provider buffer");
+
+    auto stage = session->load_stage(make_test_stage("identity"));
+    auto foreign_stage = other_session->load_stage(make_test_stage("identity"));
+    expect(stage && foreign_stage, "provider sessions load immutable executable stages");
+    if (!stage || !foreign_stage) return;
+    expect(stage.value()->descriptor().tensors.size() == 2U &&
+               stage.value()->owner_id() == session->owner_id(),
+           "executable stage retains its tensor contract and owner");
+
+    std::vector<session_api::TensorView> views{
+        {
+            "input",
+            session_api::TensorDataType::int8,
+            {4},
+            session_api::TensorAccess::read,
+            {input.value(), 0U, 4U},
+        },
+        {
+            "output",
+            session_api::TensorDataType::int8,
+            {4},
+            session_api::TensorAccess::write,
+            {output.value(), 0U, 4U},
+        },
+    };
+    auto first = session->submit(stage.value(), views, {});
+    expect(first.has_value(), "provider session submits a valid stage");
+    if (!first) return;
+    expect(!first.value()->ready(), "provider completion may remain asynchronous");
+
+    views[0].storage.buffer = output.value();
+    views[1].storage.buffer = chained_output.value();
+    const std::vector<session_api::ExecutionDependency> dependency{{first.value()}};
+    auto second = session->submit(stage.value(), views, dependency);
+    expect(second.has_value(), "provider session chains completion dependencies");
+    if (!second) return;
+    expect(second.value()->wait().has_value(),
+           "waiting on chained work waits its dependency");
+    expect(first.value()->ready() && second.value()->ready(),
+           "dependency and chained completion become ready");
+    expect(second.value()->wait().has_value(), "completion wait is idempotent");
+    auto chained_bytes =
+        nvcr::test_support::read_test_buffer(chained_output.value(), 0U, 4U);
+    expect(chained_bytes && chained_bytes.value() == expected,
+           "dependency chaining preserves deterministic execution order");
+
+    views[0].storage.buffer = input.value();
+    views[1].storage = {output.value(), 3U, 2U};
+    auto invalid_slice = session->submit(stage.value(), views, {});
+    expect(!invalid_slice &&
+               invalid_slice.error().code() == nvcr::ErrorCode::invalid_argument,
+           "provider session rejects out-of-bounds buffer slices");
+
+    views[1].storage = {output.value(), 0U, 4U};
+    views[0].shape = {5};
+    auto invalid_shape = session->submit(stage.value(), views, {});
+    expect(!invalid_shape &&
+               invalid_shape.error().code() == nvcr::ErrorCode::invalid_argument,
+           "provider session rejects shapes outside stage bounds");
+
+    views[0].shape = {4};
+    views[1].storage.buffer = foreign_buffer.value();
+    auto foreign_storage = session->submit(stage.value(), views, {});
+    expect(!foreign_storage &&
+               foreign_storage.error().code() == nvcr::ErrorCode::invalid_argument,
+           "provider session rejects foreign buffer ownership");
+
+    views[1].storage.buffer = output.value();
+    auto foreign_execution = session->submit(foreign_stage.value(), views, {});
+    expect(!foreign_execution &&
+               foreign_execution.error().code() == nvcr::ErrorCode::invalid_argument,
+           "provider session rejects foreign stage ownership");
+
+    auto pending = session->submit(stage.value(), views, {});
+    expect(pending && !pending.value()->ready(),
+           "provider reset fixture has pending owned work");
+    if (!pending) return;
+    expect(session->reset().has_value(), "provider reset waits owned work");
+    expect(pending.value()->ready(), "provider reset completes pending work");
+    auto after_reset = session->submit(stage.value(), views, {});
+    expect(after_reset && after_reset.value()->wait().has_value(),
+           "provider reset preserves loaded stages and retained buffers");
+
+    auto other_input =
+        other_session->allocate(4U, session_api::MemoryDomain::provider_device);
+    auto other_output =
+        other_session->allocate(4U, session_api::MemoryDomain::provider_device);
+    expect(other_input && other_output, "second provider session allocates buffers");
+    if (!other_input || !other_output) return;
+    views[0].storage.buffer = other_input.value();
+    views[1].storage.buffer = other_output.value();
+    auto foreign_dependency =
+        other_session->submit(foreign_stage.value(), views, dependency);
+    expect(!foreign_dependency &&
+               foreign_dependency.error().code() == nvcr::ErrorCode::invalid_argument,
+           "provider session rejects foreign completion dependencies");
+
+    auto failing_stage = session->load_stage(make_test_stage("fail"));
+    expect(failing_stage.has_value(), "provider session loads deterministic failure stage");
+    if (!failing_stage) return;
+    views[0].storage.buffer = input.value();
+    views[1].storage.buffer = output.value();
+    auto failing = session->submit(failing_stage.value(), views, {});
+    expect(failing.has_value(), "provider session returns completion before async failure");
+    if (!failing) return;
+    auto failed = failing.value()->wait();
+    expect(!failed && failed.error().code() == nvcr::ErrorCode::backend_error &&
+               failed.error().subsystem() == "test-provider-session",
+           "completion reports structured provider execution errors");
+    auto reset_failure = session->reset();
+    expect(!reset_failure &&
+               reset_failure.error().code() == nvcr::ErrorCode::backend_error,
+           "provider reset reports errors from owned work");
+    expect(session->reset().has_value(), "provider reset clears completed work after error");
+
+    session_api::Completion destruction_completion;
+    {
+        auto destruction_session = nvcr::test_support::make_test_provider_session();
+        auto destruction_input =
+            destruction_session->allocate(4U, session_api::MemoryDomain::provider_device);
+        auto destruction_output =
+            destruction_session->allocate(4U, session_api::MemoryDomain::provider_device);
+        auto destruction_stage =
+            destruction_session->load_stage(make_test_stage("identity"));
+        if (destruction_input && destruction_output && destruction_stage) {
+            views[0].storage.buffer = destruction_input.value();
+            views[1].storage.buffer = destruction_output.value();
+            auto submitted =
+                destruction_session->submit(destruction_stage.value(), views, {});
+            if (submitted) destruction_completion = submitted.value();
+        }
+        expect(destruction_completion && !destruction_completion->ready(),
+               "provider destruction fixture owns pending work");
+    }
+    expect(destruction_completion && destruction_completion->ready(),
+           "provider session destruction waits only its owned work");
+}
+
 void runtime_services_contract() {
     nvcr::runtime::RuntimeServices services(
         nvcr::runtime::Registry::instance(),
@@ -282,6 +490,7 @@ void session_lifecycle_contract() {
 
 int main() {
     registry_contracts();
+    provider_session_contract();
     runtime_services_contract();
     codec_adapter_contract();
     session_lifecycle_contract();

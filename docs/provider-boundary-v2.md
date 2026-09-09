@@ -1,6 +1,6 @@
 # RFC: NVCR v2 codec/provider execution boundary
 
-Status: Accepted design direction; implementation pending
+Status: Accepted design direction; contract phase implemented, extraction pending
 Date: 2026-09-09
 Scope: Architecture and migration design only
 
@@ -224,6 +224,9 @@ That permits one call site to switch at a time and avoids a flag-day refactor.
 - Extend the deterministic provider to test ownership, bounds, dependency
   chaining, reset, and error behavior.
 - Keep production construction and bitstreams unchanged.
+
+Implemented under `nvcr::provider::experimental`; production construction
+continues to use the existing provider facade.
 
 ### PR 2: TensorRT execution session behind the facade
 
