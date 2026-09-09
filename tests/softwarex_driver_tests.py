@@ -64,8 +64,41 @@ Wrote YUV420p8 4x2 to output.yuv
         self.assertEqual(decode["latencies_ms"], [])
         self.assertIsNone(decode["psnr_yuv"])
 
+    def test_parses_provider_execution_profile(self) -> None:
+        output = """\
+[nvcr.dcvcrt] [info] TensorRT mode: performance
+[nvcr.profile] encode frame=0 type=I allocs=3 alloc_bytes=30 h2d=1/10 d2h=2/20 d2d=0/0 syncs=2
+[nvcr.profile] encode frame=1 type=P allocs=4 alloc_bytes=40 h2d=1/11 d2h=1/12 d2d=2/13 syncs=1
+[nvcr.profile] cuda_graph captures=0 hits=0 entries=0 limit_per_engine=16
+"""
+        profile = softwarex.parse_provider_profile(output, "encode", 2)
+        self.assertEqual(profile["context_policy"], "performance")
+        self.assertEqual(profile["frame_types"], {"I": 1, "P": 1})
+        self.assertEqual(profile["totals"]["h2d_bytes"], 21)
+        self.assertEqual(profile["max_per_frame"]["synchronizations"], 2)
+        self.assertEqual(profile["cuda_graph"]["limit_per_engine"], 16)
+
 
 class AggregationTests(unittest.TestCase):
+    def test_monitored_run_handles_large_profile_output(self) -> None:
+        payload_bytes = 256 * 1024
+        result = softwarex.run_monitored(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sys; "
+                    f"sys.stdout.write('o' * {payload_bytes}); "
+                    f"sys.stderr.write('e' * {payload_bytes})"
+                ),
+            ],
+            environment={},
+            sample_interval_ms=0,
+        )
+        self.assertEqual(result.return_code, 0)
+        self.assertEqual(len(result.stdout), payload_bytes)
+        self.assertEqual(len(result.stderr), payload_bytes)
+
     def test_aggregate_keeps_profile_data_out_of_performance_means(self) -> None:
         sequence = softwarex.SequenceSpec(
             "fixture",
@@ -214,8 +247,19 @@ class AggregationTests(unittest.TestCase):
                 )
                 elapsed = 2000.0
                 host, gpu = 25.0, 35.0
+            operation = command[1]
+            profile_output = "\n".join(
+                (
+                    "[nvcr.dcvcrt] [info] TensorRT mode: performance",
+                    f"[nvcr.profile] {operation} frame=0 type=I allocs=1 "
+                    "alloc_bytes=10 h2d=1/10 d2h=1/10 d2d=0/0 syncs=1",
+                    f"[nvcr.profile] {operation} frame=1 type=P allocs=1 "
+                    "alloc_bytes=10 h2d=1/10 d2h=1/10 d2d=0/0 syncs=1",
+                    "[nvcr.profile] cuda_graph captures=0 hits=0 entries=0 limit_per_engine=16",
+                )
+            )
             return softwarex.CommandResult(
-                command, 0, output, "", elapsed, host, gpu
+                command, 0, output, profile_output, elapsed, host, gpu
             )
 
         run_command.side_effect = clean_result
@@ -252,11 +296,17 @@ class AggregationTests(unittest.TestCase):
             self.assertNotIn("--quality-metrics", call.args[0])
         for call in run_monitored.call_args_list:
             self.assertIn("--verbose", call.args[0])
+            self.assertIn("--profile", call.args[0])
         self.assertEqual(result["encode_fps_mean"], 100.0)
         self.assertEqual(result["decode_fps_mean"], 50.0)
         self.assertEqual(result["total_wall_time_ms"], 7.0)
         self.assertEqual(result["psnr_yuv"], 30.375)
         self.assertEqual(result["peak_gpu_memory_mb"], 35.0)
+        self.assertEqual(result["encode_fps_runs"], [100.0, 100.0])
+        self.assertEqual(
+            result["provider_profile_runs"][0]["encode"]["context_policy"],
+            "performance",
+        )
 
     def test_computes_compatibility_performance_ratios(self) -> None:
         comparison = softwarex.comparison_metrics(
@@ -265,6 +315,29 @@ class AggregationTests(unittest.TestCase):
         )
         self.assertEqual(comparison["encode_fps_ratio_vs_exact"], 0.75)
         self.assertEqual(comparison["decode_fps_ratio_vs_exact"], 1.2)
+
+    def test_summarizes_raw_baseline_samples_with_equal_work_pooling(self) -> None:
+        rows = [
+            {
+                "status": "pass",
+                "resolution": "qcif",
+                "frames": 100,
+                "encode_fps_runs": [100.0, 200.0],
+                "decode_fps_runs": [200.0, 400.0],
+                "encode_fps_mean": 150.0,
+                "encode_fps_stddev": 10.0,
+                "decode_fps_mean": 300.0,
+                "decode_fps_stddev": 20.0,
+                "peak_gpu_memory_mb": 512.0,
+            }
+        ]
+        summary = softwarex.summarize_baseline_rows(rows)
+        profile = summary["profiles"]["qcif"]
+        self.assertEqual(profile["encode_fps_median"], 150.0)
+        self.assertEqual(profile["encode_fps_pooled_equal_work"], 133.333333)
+        self.assertEqual(profile["decode_fps_pooled_equal_work"], 266.666667)
+        self.assertEqual(profile["frame_work"], 200)
+        self.assertEqual(profile["peak_gpu_memory_mb"], 512.0)
 
 
 class ContractTests(unittest.TestCase):
