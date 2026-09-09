@@ -177,10 +177,10 @@ x86_64 packages and containers, native AArch64 packages for Jetson Orin, and
 Windows-hosted execution through Docker Desktop/WSL 2. CPU builds cover runtime
 and format contracts, but do not run neural inference.
 
-NVCR is pre-v1. The C++ API/ABI is not frozen. Native Windows and macOS
-execution, CPU neural inference, INT8 release support, FFmpeg integration,
-standard multimedia containers, and additional codec/provider integrations are
-outside the current release.
+NVCR v1.x is released. The public C++ API/ABI has not been declared stable
+across minor releases. Native Windows and macOS execution, CPU neural inference,
+INT8 release support, FFmpeg integration, standard multimedia containers, and
+additional codec/provider integrations are outside the current release.
 
 ## Documentation
 

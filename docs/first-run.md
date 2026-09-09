@@ -346,9 +346,9 @@ pass. See [Jetson](docker-jetson.md) for the target boundary.
 ## CPU-only contract validation
 
 This path validates runtime, codec/provider, artifact, entropy, access-unit,
-parser, and lifecycle contracts. It does not build the production CLI or
-execute DCVC-RT/TensorRT inference. It requires Git, curl, Python 3, CMake
-3.24 or newer, a C++20 compiler, and a standard build tool.
+parser, and lifecycle contracts. It builds the CLI for diagnostics and portable
+discovery, but does not execute DCVC-RT/TensorRT inference. It requires Git,
+curl, Python 3, CMake 3.24 or newer, a C++20 compiler, and a standard build tool.
 
 Resolve and check out the latest stable source:
 
@@ -371,14 +371,15 @@ cmake -S . -B build-cpu \
   -DNVCR_ENABLE_TENSORRT=OFF \
   -DNVCR_FETCH_DEPENDENCIES=OFF
 cmake --build build-cpu --parallel
+build-cpu/cli/nvcr --version
 ctest --test-dir build-cpu -N
 ctest --test-dir build-cpu --output-on-failure
 ```
 
 Success means the checked-out tag equals `NVCR_RELEASE`, configuration
-reports that the TensorRT CLI is skipped, the library and registered CPU tests
-build, and CTest reports all configured tests passing. The precise test count
-can change between releases; `ctest -N` is authoritative for the resolved
+reports that TensorRT is disabled, the CLI reports the release version, the
+library and registered CPU tests build, and CTest reports all tests passing.
+The test count can change between releases; `ctest -N` is authoritative for the resolved
 tag.
 
 For development on `main`, follow [Building from source](building-from-source.md)

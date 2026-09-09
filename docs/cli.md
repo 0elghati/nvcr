@@ -9,14 +9,18 @@ one automatically.
 
 ```bash
 nvcr --help
+nvcr --version
+nvcr-artifacts --version
 ```
 
-There is no `nvcr --version` or `nvcr-artifacts --version` yet. Identify a
-packaged binary by its archive manifest, a source build with
-`git describe --tags --always --dirty`, and a container with its immutable
-tag, digest, and OCI labels.
+Both version commands print the software version from the release's canonical
+`version.txt` identity and exit without selecting a GPU, engine, or model.
+Continue to retain the package manifest, source commit and dirty state, or
+container digest when exact build provenance matters.
 
-A CPU-only build with TensorRT disabled does not build the `nvcr` CLI.
+A CPU-only build includes `nvcr` for help, version, and portable discovery
+commands. Encode and decode still require a supported execution provider and do
+not perform neural inference in that build.
 
 ## Discover codecs and providers
 

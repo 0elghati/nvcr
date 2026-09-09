@@ -150,10 +150,10 @@ records:
 | Packet size | `u64` | following packet length |
 | Packet | variable | one `NVCR` packet |
 
-`NVCR`/`NVCS` are application/development formats. They are not the v1 codec
-access-unit promise, an upstream DCVC-RT container, MP4, Matroska, or FFmpeg
-integration, and no pre-v1 backward-compatibility promise is made. Temporary
-legacy raw `NVI1`/`NVP1` decode can be enabled per session only for isolated
+`NVCR`/`NVCS` are application/development formats, not an upstream DCVC-RT
+container, MP4, Matroska, or FFmpeg integration. Compatibility is limited to
+the explicitly versioned formats and tested migration paths documented here.
+Temporary legacy raw `NVI1`/`NVP1` decode can be enabled per session for isolated
 development migration.
 
 ## Compatibility position

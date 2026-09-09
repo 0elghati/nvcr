@@ -95,7 +95,7 @@ when mapping errors into an application.
 
 ## Stability boundary
 
-Headers and behavior may change before v1. A stable C ABI, FFmpeg integration,
-hardware-frame ownership contract, native Windows interface, and standard
-container mapping are planned work, not current API guarantees. See
+NVCR v1.x is released, but cross-minor C++ API/ABI stability is not guaranteed.
+A stable C ABI, FFmpeg integration, hardware-frame ownership contract, native
+Windows interface, and standard container mapping remain planned work. See
 [Architecture](architecture.md) and [Scope and support](scope-and-support.md).
