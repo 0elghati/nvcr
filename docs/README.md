@@ -27,6 +27,7 @@ what it is for before asking you to run commands.
 ## Understand NVCR
 
 - [What NVCR is](identity-and-scope.md)
+- [Long-term vision](NVCR_VISION.md)
 - [Architecture](architecture.md)
 - [v2 codec/provider boundary RFC](provider-boundary-v2.md)
 - [C++ API](reference.md)
