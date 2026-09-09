@@ -316,6 +316,29 @@ class AggregationTests(unittest.TestCase):
         self.assertEqual(comparison["encode_fps_ratio_vs_exact"], 0.75)
         self.assertEqual(comparison["decode_fps_ratio_vs_exact"], 1.2)
 
+    def test_summarizes_raw_baseline_samples_with_equal_work_pooling(self) -> None:
+        rows = [
+            {
+                "status": "pass",
+                "resolution": "qcif",
+                "frames": 100,
+                "encode_fps_runs": [100.0, 200.0],
+                "decode_fps_runs": [200.0, 400.0],
+                "encode_fps_mean": 150.0,
+                "encode_fps_stddev": 10.0,
+                "decode_fps_mean": 300.0,
+                "decode_fps_stddev": 20.0,
+                "peak_gpu_memory_mb": 512.0,
+            }
+        ]
+        summary = softwarex.summarize_baseline_rows(rows)
+        profile = summary["profiles"]["qcif"]
+        self.assertEqual(profile["encode_fps_median"], 150.0)
+        self.assertEqual(profile["encode_fps_pooled_equal_work"], 133.333333)
+        self.assertEqual(profile["decode_fps_pooled_equal_work"], 266.666667)
+        self.assertEqual(profile["frame_work"], 200)
+        self.assertEqual(profile["peak_gpu_memory_mb"], 512.0)
+
 
 class ContractTests(unittest.TestCase):
     @staticmethod

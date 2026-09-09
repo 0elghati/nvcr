@@ -166,6 +166,8 @@ The raw baseline arrays retain each clean repetition used by those aggregates.
 the selected context policy, frame-type counts, allocation/copy/synchronization
 totals and maxima, plus CUDA graph captures, hits, entries, and the per-engine
 cache limit. Provider profiling is excluded from clean throughput samples.
+`run-summary.json` derives per-profile and overall medians, maximum coefficients
+of variation, peak device memory, and pooled equal-work FPS from the raw rows.
 
 The driver hashes exactly the measured YUV prefix
 `width * height * 3 / 2 * frames`, even when the source file contains more

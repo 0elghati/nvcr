@@ -1138,6 +1138,73 @@ def empty_metrics() -> dict[str, Any]:
     }
 
 
+def summarize_baseline_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    passing = [row for row in rows if row.get("status") == "pass"]
+
+    def summarize(selected: list[dict[str, Any]]) -> dict[str, Any]:
+        def samples(field: str) -> list[tuple[int, float]]:
+            return [
+                (int(row["frames"]), float(value))
+                for row in selected
+                for value in row.get(field, [])
+                if isinstance(value, (int, float)) and not isinstance(value, bool)
+                and math.isfinite(float(value)) and float(value) > 0.0
+            ]
+
+        def pooled(values: list[tuple[int, float]]) -> float | None:
+            if not values:
+                return None
+            return finite_json_number(
+                sum(frames for frames, _ in values)
+                / sum(frames / fps for frames, fps in values)
+            )
+
+        encode = samples("encode_fps_runs")
+        decode = samples("decode_fps_runs")
+        peak_gpu = [
+            float(row["peak_gpu_memory_mb"])
+            for row in selected
+            if isinstance(row.get("peak_gpu_memory_mb"), (int, float))
+        ]
+        encode_cv = [
+            100.0 * float(row["encode_fps_stddev"]) / float(row["encode_fps_mean"])
+            for row in selected
+            if float(row.get("encode_fps_mean") or 0.0) > 0.0
+        ]
+        decode_cv = [
+            100.0 * float(row["decode_fps_stddev"]) / float(row["decode_fps_mean"])
+            for row in selected
+            if float(row.get("decode_fps_mean") or 0.0) > 0.0
+        ]
+        return {
+            "cases": len(selected),
+            "clean_samples": len(encode),
+            "frame_work": sum(frames for frames, _ in encode),
+            "encode_fps_median": finite_json_number(
+                statistics.median(value for _, value in encode) if encode else None
+            ),
+            "decode_fps_median": finite_json_number(
+                statistics.median(value for _, value in decode) if decode else None
+            ),
+            "encode_fps_pooled_equal_work": pooled(encode),
+            "decode_fps_pooled_equal_work": pooled(decode),
+            "encode_cv_percent_max": finite_json_number(max(encode_cv, default=None)),
+            "decode_cv_percent_max": finite_json_number(max(decode_cv, default=None)),
+            "peak_gpu_memory_mb": finite_json_number(max(peak_gpu, default=None)),
+        }
+
+    profiles = sorted({str(row["resolution"]) for row in passing})
+    return {
+        "overall": summarize(passing),
+        "profiles": {
+            profile: summarize(
+                [row for row in passing if row.get("resolution") == profile]
+            )
+            for profile in profiles
+        },
+    }
+
+
 def missing_metric_fields(
     metrics: dict[str, Any], fields: Iterable[str]
 ) -> list[str]:
@@ -2140,6 +2207,7 @@ def main(argv: list[str] | None = None) -> int:
         "execution_identity": test_summary.get("execution_identity", "not-run"),
         "python_reference": python_status,
         "compatibility_baseline": baseline_status,
+        "performance_summary": summarize_baseline_rows(rows),
         "started_at": run_started,
         "completed_at": utc_now(),
     }
