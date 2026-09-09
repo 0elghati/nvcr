@@ -73,9 +73,15 @@ export NVCR_ENGINE_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/nvcr/engines"
 | Active profile | `$NVCR_ENGINE_ROOT/profiles/dcvcrt/<profile>` |
 | Immutable bundle | `$NVCR_ENGINE_ROOT/bundles/dcvcrt/<target>/<profile>/<sha256>` |
 
-The CLI does not yet provide a `--version` option. Record `NVCR_RELEASE`
-and retain the installed `PACKAGE-MANIFEST.sha256` when installation identity
-matters.
+Confirm the installed software identity with:
+
+```bash
+nvcr --version
+nvcr-artifacts --version
+```
+
+Retain `NVCR_RELEASE` and the installed `PACKAGE-MANIFEST.sha256` when exact
+installation provenance matters.
 
 Override installation paths only when required:
 

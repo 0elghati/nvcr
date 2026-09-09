@@ -64,6 +64,7 @@ struct Options final {
 void usage(std::ostream& out) {
     out << "NVCR native encoder and decoder\n\n"
         << "Usage:\n"
+        << "  nvcr --version\n"
         << "  nvcr encode -i INPUT.yuv -o OUTPUT.nvcr -s WIDTHxHEIGHT\n"
         << "              [--provider ID] [--backend NAME] [--engine-profile NAME]\n"
         << "              [--frames N] [--qp N]\n"
@@ -100,6 +101,7 @@ void usage(std::ostream& out) {
         << "      --profile             Print TensorRT/CUDA per-frame profiling counters\n"
         << "      --quality-metrics FILE  Report decoded Y/U/V and weighted PSNR against FILE\n"
         << "  -v, --verbose             Print per-frame CLI progress and info logs\n"
+        << "      --version             Print the NVCR software version\n"
         << "  -h, --help                Show this help\n\n"
         << "Without an explicit engine override, encode selects a profile from -s and\n"
         << "decode selects it from dimensions embedded in the first access unit.\n";
@@ -970,6 +972,10 @@ int decode(const Options& options) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+    if (argc == 2 && std::string_view(argv[1]) == "--version") {
+        std::cout << "nvcr " << nvcr::current_software_version_string << '\n';
+        return 0;
+    }
     Options options;
     if (!parse_options(argc, argv, options)) {
         std::cerr << "\n";

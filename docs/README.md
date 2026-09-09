@@ -28,6 +28,7 @@ what it is for before asking you to run commands.
 
 - [What NVCR is](identity-and-scope.md)
 - [Architecture](architecture.md)
+- [v2 codec/provider boundary RFC](provider-boundary-v2.md)
 - [C++ API](reference.md)
 - [DCVC-RT integration](dcvcrt-integration.md)
 - [Bitstreams and access units](bitstream.md)

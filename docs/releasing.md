@@ -8,6 +8,11 @@ every application version.
 
 ## Application packages
 
+
+`version.txt` is the canonical application version. CMake generates the C++
+runtime version and the installed artifact client from that value. Release jobs
+also compare the tag with `version.txt`, and package creation rejects either
+installed command if its reported version differs from the requested archive
 NVCR publishes separate native Linux archives:
 
 ```text
