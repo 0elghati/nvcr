@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/0elghati/nvcr/compare/v1.0.6...v1.1.0) (2026-09-11)
+
+
+### Features
+
+* establish v2 baseline and provider boundary RFC ([#145](https://github.com/0elghati/nvcr/issues/145)) ([a325864](https://github.com/0elghati/nvcr/commit/a3258642bb19e035e07497211f81160fb6428140))
+* **experiments:** establish B3 provider baseline recording ([#149](https://github.com/0elghati/nvcr/issues/149)) ([11208d1](https://github.com/0elghati/nvcr/commit/11208d1e23824f69045027af8aa0f17eeae5d6c4))
+
 ## [1.0.6](https://github.com/0elghati/nvcr/compare/v1.0.5...v1.0.6) (2026-08-17)
 
 
