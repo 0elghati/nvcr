@@ -1,6 +1,6 @@
 # RFC: NVCR v2 codec/provider execution boundary
 
-Status: Accepted design direction; contract phase implemented, extraction pending
+Status: Accepted design direction; TensorRT extraction implemented, GPU gates pending
 Date: 2026-09-09
 Scope: Architecture and migration design only
 
@@ -234,6 +234,10 @@ continues to use the existing provider facade.
   graph-cache, and enqueue code into a TensorRT provider session.
 - Keep TensorRTBackend as the only caller.
 - Preserve context-policy selection and bundle validation.
+
+Implemented as a private production session used only by `TensorRTBackend`.
+The GPU correctness, byte-parity, lifecycle, and performance exit gates remain
+pending until the target device is idle.
 
 ### PR 3: I-frame orchestration
 
