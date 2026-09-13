@@ -1,6 +1,6 @@
 # RFC: NVCR v2 codec/provider execution boundary
 
-Status: Accepted design direction; B5 technical gates pass, numeric performance acceptance pending
+Status: Accepted design direction; B4-B6 complete; B7 next
 Date: 2026-09-09
 Scope: Architecture and migration design only
 
@@ -240,8 +240,8 @@ The CPU Release/install, sanitizer/fuzz, TensorRT Release, six exact-profile
 GPU, pinned Python/native golden, lifecycle, B3/B4 byte parity, reconstruction,
 and measured performance gates pass. The retained records are the
 [performance comparison](../evidence/vision-b4-rtx4070-20260911.md) and
-[closure evidence](../evidence/vision-b4-closure-rtx4070-20260913.md). No
-numeric performance limit has been approved, so B4 remains open.
+[closure evidence](../evidence/vision-b4-closure-rtx4070-20260913.md). The
+recorded B4 result was explicitly accepted on 2026-09-13, completing B4.
 
 ### PR 3: I-frame orchestration
 
@@ -257,14 +257,13 @@ executes the selected stage handles and retains device allocation, CUDA
 transforms, copies, synchronization, graph caching, and profiling. The clean
 CPU, sanitizer/fuzz, TensorRT non-GPU, six exact-profile GPU, pinned golden,
 65-frame byte/reconstruction parity, and matched performance gates pass. See
-the [B5 evidence](../evidence/vision-b5-rtx4070-20260913.md). Numeric performance
-acceptance is still unapproved, so B5 remains open.
+the [B5 evidence](../evidence/vision-b5-rtx4070-20260913.md). The recorded
+B5 result was explicitly accepted on 2026-09-13, completing B5.
 
-### B5 readiness note
+### B5 implementation boundary
 
-B5 must not begin until the recorded B4 performance result is explicitly
-accepted against an approved numeric limit. When approved, B5 is one ownership
-change with the following boundary.
+B5 was explicitly reprioritized before B4's recorded result was accepted. The
+change kept this boundary:
 
 Move these I-frame responsibilities out of
 `src/dcvcrt/backend/tensorrt/backend.cpp` and into a DCVC-RT codec-side
@@ -330,8 +329,8 @@ retains CUDA transforms, stage execution, transfers, synchronization, graph
 caching, and profiling. The clean CPU, sanitizer/fuzz, TensorRT non-GPU, six
 exact-profile GPU, pinned golden, 65-frame byte/reconstruction parity, and
 matched performance gates pass. See
-[the B6 evidence](../evidence/vision-b6-rtx4070-20260913.md). Numeric performance
-acceptance remains unapproved, so B6 remains open.
+[the B6 evidence](../evidence/vision-b6-rtx4070-20260913.md). The recorded
+B6 result was explicitly accepted on 2026-09-13, completing B6.
 
 ### PR 5: construction cleanup
 

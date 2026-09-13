@@ -64,27 +64,28 @@ The table below is the execution record for the active provider-boundary work.
 |---|---|---|---|
 | A | Baseline coherence | Complete in [PR #145](https://github.com/0elghati/nvcr/pull/145) | Version, status, metadata, and baseline tests agree |
 | B0 | Production-path discovery and boundary RFC | Complete in [PR #145](https://github.com/0elghati/nvcr/pull/145) | Live source path traced; ownership, alternatives, migration, and gates documented |
-| B1 | Vision and execution governance | Recorded | Vision tracked; roadmap and RFC cross-linked; performance limits remain an explicit pre-extraction decision |
+| B1 | Vision and execution governance | Recorded | Vision tracked; roadmap and RFC cross-linked; performance acceptance remains explicit per migration |
 | B2 | Provider-session contracts and deterministic fixtures | Complete in [PR #148](https://github.com/0elghati/nvcr/pull/148) | Experimental contracts and deterministic tests cover ownership, bounds, dependencies, completion, reset, and errors without switching production |
-| B3 | Pre-refactor target baseline | RTX 4070 baseline captured; numeric limit approval pending | Exact inputs and bundles, per-run values, variance, copies/synchronization, peak memory, context policy, and approved acceptance limits recorded |
-| B4 | TensorRT execution session behind the facade | In progress; all technical gates pass, numeric performance acceptance pending | Engine/context, binding, allocation, stream/event, graph-cache, and enqueue ownership move behind the session contract while bundle validation and context policy remain intact |
-| B5 | I-frame codec orchestration | In progress; all technical gates pass, numeric performance acceptance pending | DCVC-RT owns stage order, quantization, entropy, and payload assembly with byte and reconstructed-frame parity |
-| B6 | P-frame state and orchestration | In progress; all technical gates pass, numeric performance acceptance pending | DCVC-RT owns reference semantics; GOP, reset, flush, repeated-session, and malformed-input gates pass |
-| B7 | Production construction cleanup | Pending | A real adapter factory selects codec and provider; direct registration, component factory, and the unused stub are removed after their last callers |
+| B3 | Pre-refactor target baseline | Complete; recorded comparisons accepted 2026-09-13 | Exact inputs and bundles, per-run values, variance, copies/synchronization, peak memory, context policy, and accepted comparisons recorded |
+| B4 | TensorRT execution session behind the facade | Complete; measured regression accepted 2026-09-13 | Engine/context, binding, allocation, stream/event, graph-cache, and enqueue ownership moved behind the session contract while bundle validation and context policy remain intact |
+| B5 | I-frame codec orchestration | Complete; measured regression accepted 2026-09-13 | DCVC-RT owns stage order, quantization, entropy, and payload assembly with byte and reconstructed-frame parity |
+| B6 | P-frame state and orchestration | Complete; measured regression accepted 2026-09-13 | DCVC-RT owns reference semantics; GOP, reset, flush, repeated-session, and malformed-input gates pass |
+| B7 | Production construction cleanup | Next | A real adapter factory selects codec and provider; direct registration, component factory, and the unused stub are removed after their last callers |
 
 B2 was completed in PR #148. Its clean CPU Release build, test, install,
-sanitizer, and TensorRT Release target gates passed. B3 must be captured and
-approved before TensorRT extraction starts in B4. A second provider, a second
-codec, FFmpeg, and stream changes remain separate approved work.
+sanitizer, and TensorRT Release target gates passed. B3 was captured before
+TensorRT extraction began in B4. A second provider, a second codec, FFmpeg, and
+stream changes remain separate approved work.
 
 B3 recording now retains raw clean samples, per-profile and pooled summaries,
 provider copy/synchronization counters, context policy, peak memory, and bounded
 CUDA graph-cache behavior. The RTX 4070 baseline and B4 comparison are recorded
 in [the B4 performance evidence](evidence/vision-b4-rtx4070-20260911.md).
-Numeric limit approval remains.
+The recorded B4-B6 regression results were explicitly accepted on 2026-09-13.
+This approval is specific to those measured changes and is not a reusable limit.
 
-B4 was explicitly reprioritized while the idle-device B3 measurement remains
-pending. The private TensorRT execution session now implements the experimental
+B4 was explicitly reprioritized before the recorded measurements were accepted.
+The private TensorRT execution session now implements the experimental
 provider-session contract and owns bundle/stage loading, runtime and contexts,
 opaque buffers, stream/events, dependencies/completions, graph caching, enqueue,
 and provider profiling. `TensorRTBackend` remains its only production caller and
@@ -97,38 +98,38 @@ See [the B4 closure evidence](evidence/vision-b4-closure-rtx4070-20260913.md).
 Relative to B3, pooled B4 encode throughput changed by -0.294% for normal I/P
 and -0.640% for all-intra, while decode improved by 1.206% and 0.426%. Peak
 device memory and all provider copy/synchronization, context-policy, and
-graph-cache records are unchanged. B4 remains open only because no numeric
-performance acceptance limit has been approved.
+graph-cache records are unchanged. The recorded B4 result was explicitly
+accepted on 2026-09-13, completing B4.
 
-B5 was explicitly started while the B3/B4 numeric acceptance decision remains
-open. The DCVC-RT codec-side `IntraOrchestration` now owns named I-frame stage
-selection, I-frame CDF and quantization assets, rANS session state, and NVI1
-payload parsing and assembly. TensorRT continues to own device buffers, CUDA
-transforms, stage submission, transfers, synchronization, and profiling. Clean
-CPU Release/install, sanitizer/fuzz, TensorRT Release, all six exact-profile GPU
+B5 was explicitly started before the B3/B4 result was accepted. The DCVC-RT
+codec-side `IntraOrchestration` now owns named I-frame stage selection, I-frame
+CDF and quantization assets, rANS session state, and NVI1 payload parsing and
+assembly. TensorRT continues to own device buffers, CUDA transforms, stage
+submission, transfers, synchronization, and profiling. Clean CPU Release/install,
+sanitizer/fuzz, TensorRT Release, all six exact-profile GPU
 contracts and I/P round trips, and the pinned Python/native golden pass. A
 65-frame GOP-8 comparison against B4 produced identical complete `.nvcr` and
 decoded-YUV hashes. The matched five-profile result records +0.044% pooled I/P
 encode, +0.364% pooled I/P decode, +0.827% pooled all-intra encode, and +1.430%
 pooled all-intra decode. Provider counters and peak device memory are unchanged.
-See [the B5 evidence](evidence/vision-b5-rtx4070-20260913.md). B5 remains open
-until a numeric performance limit is approved and applied.
+See [the B5 evidence](evidence/vision-b5-rtx4070-20260913.md). The recorded B5
+result was explicitly accepted on 2026-09-13, completing B5.
 
-B6 was explicitly started on top of B5 while the numeric acceptance decision
-remains open. The codec-side `PredictedOrchestration` now owns named P-frame
-stage selection, effective QP and reference choice, P-frame CDF and quantization
-assets, rANS state, and NVP1 parsing and assembly. Codec-side `ReferenceState`
-owns feature availability and reference generation/index meaning. TensorRT
-continues to own provider buffers, CUDA transforms, stage submission, transfers,
-synchronization, and profiling. Clean CPU Release/install, sanitizer/fuzz,
-TensorRT Release, all six exact-profile GPU contracts and I/P round trips, the
+B6 was explicitly started on top of B5. The codec-side
+`PredictedOrchestration` now owns named P-frame stage selection, effective QP and
+reference choice, P-frame CDF and quantization assets, rANS state, and NVP1
+parsing and assembly. Codec-side `ReferenceState` owns feature availability
+and reference generation/index meaning. TensorRT continues to own provider
+buffers, CUDA transforms, stage submission, transfers, synchronization, and
+profiling. Clean CPU Release/install, sanitizer/fuzz, TensorRT Release, all six
+exact-profile GPU contracts and I/P round trips, the
 pinned golden, and the 65-frame GOP-8 byte/reconstruction parity gates pass.
 Relative to B5, matched pooled throughput changed by +0.045% I/P encode,
 -0.160% I/P decode, -0.019% all-intra encode, and -0.360% all-intra decode.
 Payloads, quality, provider counters, engine/input identities, and peak device
 memory are unchanged. See
-[the B6 evidence](evidence/vision-b6-rtx4070-20260913.md). B6 remains open until
-a numeric performance limit is approved and applied.
+[the B6 evidence](evidence/vision-b6-rtx4070-20260913.md). The recorded B6
+result was explicitly accepted on 2026-09-13, completing B6.
 
 Generic packages exclude checkpoints, exported model assets, TensorRT plans,
 and datasets. Validated engine bundles use the separate rolling catalog and
