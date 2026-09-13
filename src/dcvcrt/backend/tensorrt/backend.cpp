@@ -5,6 +5,7 @@
 #include "../../../common/sha256.hpp"
 #include "cuda_ops.hpp"
 #include "engine_specs.hpp"
+#include "../../orchestration.hpp"
 #include "../../payload.hpp"
 
 #include "nvcr/dcvcrt/rans_codec.hpp"
@@ -1411,7 +1412,7 @@ struct HostTensor final {
 
 struct RuntimeAssets;
 HostTensor make_quant_tensor(
-    const RuntimeAssets& assets, bool encoder, std::uint32_t qp, std::string name);
+    std::span<const float> values, std::uint32_t qp, std::string name);
 HostTensor make_video_quant_tensor(
     const RuntimeAssets& assets, std::string_view kind, std::uint32_t qp);
 
@@ -1530,9 +1531,8 @@ class SessionExecutionScope;
 
 class TensorRTExecutionSession final : public session_api::IProviderSession {
 public:
-    // B4 keeps the existing codec call sites and stage order intact. This token
-    // carries only an opaque session plus stage index into the compatibility
-    // wrapper; no engine or context escapes the session.
+    // This token carries only an opaque session plus stage index into the
+    // compatibility wrapper; no engine or context escapes the session.
     struct StageInvocation final {
         TensorRTExecutionSession* session{};
         std::size_t engine_index{};
@@ -1545,7 +1545,10 @@ public:
     TensorRTExecutionSession& operator=(const TensorRTExecutionSession&) = delete;
 
     [[nodiscard]] Result<void> initialize(const RuntimeConfiguration& configuration);
-    [[nodiscard]] Result<void> initialize_codec_buffers(const RuntimeAssets& assets);
+    [[nodiscard]] Result<void> initialize_codec_buffers(
+        std::span<const float> image_q_encoder,
+        std::span<const float> image_q_decoder,
+        const RuntimeAssets& assets);
 
     [[nodiscard]] std::string_view owner_id() const noexcept override {
         return owner_id_;
@@ -1569,6 +1572,15 @@ public:
         std::size_t engine_index,
         std::span<const DeviceTensor* const> inputs,
         EngineOutputStorage output_storage = EngineOutputStorage::owned);
+
+    [[nodiscard]] Result<std::vector<DeviceTensor>> run_stage(
+        const session_api::ExecutableStage& stage,
+        std::span<const DeviceTensor* const> inputs,
+        EngineOutputStorage output_storage = EngineOutputStorage::owned);
+
+    [[nodiscard]] std::vector<session_api::ExecutableStage> loaded_stages() const {
+        return {stages_.begin(), stages_.end()};
+    }
 
     [[nodiscard]] StageInvocation operator[](std::size_t engine_index) noexcept {
         return StageInvocation{this, engine_index};
@@ -1770,15 +1782,18 @@ Result<DeviceTensor> allocate_device_tensor_scratch(
 }
 
 Result<void> populate_image_quant_cache(
-    const RuntimeAssets& assets, ImageQuantDeviceCache& cache, cudaStream_t stream) {
+    std::span<const float> q_encoder,
+    std::span<const float> q_decoder,
+    ImageQuantDeviceCache& cache,
+    cudaStream_t stream) {
     for (std::uint32_t qp = 0; qp < image_qp_count; ++qp) {
         auto q_enc = upload_tensor(
-            make_quant_tensor(assets, true, qp, "q_enc"), "q_enc", stream);
+            make_quant_tensor(q_encoder, qp, "q_enc"), "q_enc", stream);
         if (!q_enc) return q_enc.error();
         cache.q_enc[qp] = std::move(q_enc.value());
 
         auto q_dec = upload_tensor(
-            make_quant_tensor(assets, false, qp, "q_dec"), "q_dec", stream);
+            make_quant_tensor(q_decoder, qp, "q_dec"), "q_dec", stream);
         if (!q_dec) return q_dec.error();
         cache.q_dec[qp] = std::move(q_dec.value());
     }
@@ -1963,6 +1978,20 @@ Result<std::vector<DeviceTensor>> TensorRTExecutionSession::run_stage(
     return outputs;
 }
 
+Result<std::vector<DeviceTensor>> TensorRTExecutionSession::run_stage(
+    const session_api::ExecutableStage& stage,
+    std::span<const DeviceTensor* const> inputs,
+    EngineOutputStorage output_storage) {
+    const auto concrete = std::dynamic_pointer_cast<const TensorRTStage>(stage);
+    if (!concrete || concrete->owner_id() != owner_id_) {
+        return Error(
+            ErrorCode::invalid_argument,
+            "TensorRT stage belongs to another provider session",
+            std::string(subsystem));
+    }
+    return run_stage(concrete->engine_index(), inputs, output_storage);
+}
+
 Result<std::vector<DeviceTensor>> run_device_engine(
     TensorRTExecutionSession::StageInvocation invocation,
     const EngineSpec&,
@@ -1971,6 +2000,14 @@ Result<std::vector<DeviceTensor>> run_device_engine(
     EngineOutputStorage output_storage = EngineOutputStorage::owned) {
     return invocation.session->run_stage(
         invocation.engine_index, inputs, output_storage);
+}
+
+Result<std::vector<DeviceTensor>> run_device_stage(
+    TensorRTExecutionSession& session,
+    const session_api::ExecutableStage& stage,
+    std::span<const DeviceTensor* const> inputs,
+    EngineOutputStorage output_storage = EngineOutputStorage::owned) {
+    return session.run_stage(stage, inputs, output_storage);
 }
 
 Result<session_api::Completion> TensorRTExecutionSession::submit(
@@ -2729,14 +2766,8 @@ private:
 };
 
 struct RuntimeAssets final {
-    std::size_t image_z_group{std::numeric_limits<std::size_t>::max()};
-    std::size_t gaussian_y_group{std::numeric_limits<std::size_t>::max()};
     std::size_t video_z_group{std::numeric_limits<std::size_t>::max()};
     std::size_t video_gaussian_y_group{std::numeric_limits<std::size_t>::max()};
-    std::uint32_t qp_count{};
-    std::uint32_t quant_channels{};
-    std::vector<float> q_enc;
-    std::vector<float> q_dec;
     std::vector<float> p_q_encoder;
     std::vector<float> p_q_decoder;
     std::vector<float> p_q_feature;
@@ -2744,100 +2775,7 @@ struct RuntimeAssets final {
 };
 
 Result<RuntimeAssets> load_runtime_assets(const fs::path& root, RansCodec& rans) {
-    const auto entropy_path = root / "i_entropy.bin";
-    auto entropy_bytes = read_binary(entropy_path);
-    if (!entropy_bytes) return entropy_bytes.error();
-    AssetReader entropy_reader(entropy_path, entropy_bytes.value());
-    auto entropy_magic = entropy_reader.expect_magic("NVCRENT1");
-    if (!entropy_magic) return entropy_magic.error();
-    auto group_count = entropy_reader.read_u32();
-    if (!group_count) return group_count.error();
-    if (group_count.value() != 2) {
-        return backend_error("I-frame entropy asset must contain exactly two CDF groups");
-    }
-
     RuntimeAssets assets;
-    for (std::uint32_t group_index = 0; group_index < group_count.value(); ++group_index) {
-        auto name_size = entropy_reader.read_u32();
-        auto row_count = entropy_reader.read_u32();
-        if (!name_size) return name_size.error();
-        if (!row_count) return row_count.error();
-        if (name_size.value() == 0 || name_size.value() > 64 ||
-            row_count.value() == 0 || row_count.value() > 16384) {
-            return backend_error("invalid CDF group dimensions in " + entropy_path.string());
-        }
-        auto name = entropy_reader.read_string(name_size.value());
-        if (!name) return name.error();
-
-        RansCdfTable table;
-        table.values.reserve(row_count.value());
-        table.sizes.reserve(row_count.value());
-        table.offsets.reserve(row_count.value());
-        for (std::uint32_t row_index = 0; row_index < row_count.value(); ++row_index) {
-            auto size = entropy_reader.read_i32();
-            auto offset = entropy_reader.read_i32();
-            if (!size) return size.error();
-            if (!offset) return offset.error();
-            if (size.value() < 2 || size.value() > 1024) {
-                return backend_error("invalid CDF row size in " + entropy_path.string());
-            }
-            std::vector<std::int32_t> values;
-            values.reserve(static_cast<std::size_t>(size.value()));
-            for (std::int32_t value_index = 0; value_index < size.value(); ++value_index) {
-                auto value = entropy_reader.read_i32();
-                if (!value) return value.error();
-                values.push_back(value.value());
-            }
-            table.values.push_back(std::move(values));
-            table.sizes.push_back(size.value());
-            table.offsets.push_back(offset.value());
-        }
-        auto registered = rans.add_cdf(std::move(table));
-        if (!registered) return registered.error();
-        if (name.value() == "image_z") {
-            assets.image_z_group = registered.value();
-        } else if (name.value() == "gaussian_y") {
-            assets.gaussian_y_group = registered.value();
-        } else {
-            return backend_error("unknown CDF group " + name.value());
-        }
-    }
-    if (!entropy_reader.done() ||
-        assets.image_z_group == std::numeric_limits<std::size_t>::max() ||
-        assets.gaussian_y_group == std::numeric_limits<std::size_t>::max()) {
-        return backend_error("incomplete I-frame entropy asset");
-    }
-
-    const auto quant_path = root / "i_quant.bin";
-    auto quant_bytes = read_binary(quant_path);
-    if (!quant_bytes) return quant_bytes.error();
-    AssetReader quant_reader(quant_path, quant_bytes.value());
-    auto quant_magic = quant_reader.expect_magic("NVCRQNT1");
-    if (!quant_magic) return quant_magic.error();
-    auto qp_count = quant_reader.read_u32();
-    auto channels = quant_reader.read_u32();
-    if (!qp_count) return qp_count.error();
-    if (!channels) return channels.error();
-    if (qp_count.value() != 64 || channels.value() != 368) {
-        return backend_error("unexpected I-frame quantization tensor shape");
-    }
-    assets.qp_count = qp_count.value();
-    assets.quant_channels = channels.value();
-    const auto value_count = static_cast<std::size_t>(qp_count.value()) * channels.value();
-    assets.q_enc.reserve(value_count);
-    assets.q_dec.reserve(value_count);
-    for (auto* destination : {&assets.q_enc, &assets.q_dec}) {
-        for (std::size_t index = 0; index < value_count; ++index) {
-            auto value = quant_reader.read_f32();
-            if (!value) return value.error();
-            if (!std::isfinite(value.value())) {
-                return backend_error("invalid quantization value in " + quant_path.string());
-            }
-            destination->push_back(value.value());
-        }
-    }
-    if (!quant_reader.done()) return backend_error("trailing data in " + quant_path.string());
-
     const auto p_entropy_path = root / "p_entropy.bin";
     auto p_entropy_bytes = read_binary(p_entropy_path);
     if (!p_entropy_bytes) return p_entropy_bytes.error();
@@ -2943,12 +2881,11 @@ Result<RuntimeAssets> load_runtime_assets(const fs::path& root, RansCodec& rans)
 }
 
 HostTensor make_quant_tensor(
-    const RuntimeAssets& assets, bool encoder, std::uint32_t qp, std::string name) {
+    std::span<const float> values, std::uint32_t qp, std::string name) {
     HostTensor output{std::move(name), make_dims(368, 1, 1), std::vector<__half>(368)};
-    const auto& source = encoder ? assets.q_enc : assets.q_dec;
     const auto first = static_cast<std::size_t>(qp) * 368;
     for (std::size_t index = 0; index < 368; ++index) {
-        output.values[index] = to_half(source[first + index]);
+        output.values[index] = to_half(values[first + index]);
     }
     return output;
 }
@@ -3027,8 +2964,7 @@ Result<CodecDecodeResult> decode_intra(
     const SequenceStateView& state,
     DeviceDpb& device_dpb,
     TensorRTExecutionSession& engines,
-    RansCodec& rans,
-    const RuntimeAssets& assets,
+    IntraOrchestration& orchestration,
     ImageQuantDeviceCache& image_quant_cache,
     ImageDecodeStaging& image_decode_staging,
     cudaStream_t stream);
@@ -3039,8 +2975,7 @@ Result<CodecEncodeResult> encode_intra(
     const SequenceStateView& state,
     DeviceDpb& device_dpb,
     TensorRTExecutionSession& engines,
-    RansCodec& rans,
-    const RuntimeAssets& assets,
+    IntraOrchestration& orchestration,
     ImageQuantDeviceCache& image_quant_cache,
     ImageDecodeStaging& image_decode_staging,
     PinnedHostBuffer<std::int8_t>& image_z_symbols_buffer,
@@ -3093,8 +3028,9 @@ Result<CodecEncodeResult> encode_intra(
     if (!q_enc_opt.has_value()) return backend_error("missing cached image q_enc tensor");
     auto* q_enc = &q_enc_opt.value();
     std::array<DeviceTensor*, 2> analysis_inputs{&input_frame.value(), q_enc};
-    auto analysis_outputs = run_device_engine(
-        engines[0], engine_specs[0], analysis_inputs, stream, EngineOutputStorage::scratch);
+    auto analysis_outputs = run_device_stage(
+        engines, orchestration.stage(IntraStage::analysis), analysis_inputs,
+        EngineOutputStorage::scratch);
     if (!analysis_outputs) return analysis_outputs.error();
     auto y_result = take_device_tensor(analysis_outputs.value(), "y");
     if (!y_result) return y_result.error();
@@ -3113,8 +3049,9 @@ Result<CodecEncodeResult> encode_intra(
     if (status != cudaSuccess) return cuda_error("cuda_ops::replicate_pad", status);
 
     std::array<DeviceTensor*, 1> hyper_analysis_inputs{&y_padded.value()};
-    auto hyper_analysis_outputs = run_device_engine(
-        engines[1], engine_specs[1], hyper_analysis_inputs, stream, EngineOutputStorage::scratch);
+    auto hyper_analysis_outputs = run_device_stage(
+        engines, orchestration.stage(IntraStage::hyper_analysis),
+        hyper_analysis_inputs, EngineOutputStorage::scratch);
     if (!hyper_analysis_outputs) return hyper_analysis_outputs.error();
     auto z_result = take_device_tensor(hyper_analysis_outputs.value(), "z");
     if (!z_result) return z_result.error();
@@ -3129,8 +3066,9 @@ Result<CodecEncodeResult> encode_intra(
     if (status != cudaSuccess) return cuda_error("cuda_ops::round_to_int8", status);
 
     std::array<DeviceTensor*, 1> hyper_synthesis_inputs{&z_device};
-    auto hyper_synthesis_outputs = run_device_engine(
-        engines[2], engine_specs[2], hyper_synthesis_inputs, stream, EngineOutputStorage::scratch);
+    auto hyper_synthesis_outputs = run_device_stage(
+        engines, orchestration.stage(IntraStage::hyper_synthesis),
+        hyper_synthesis_inputs, EngineOutputStorage::scratch);
     if (!hyper_synthesis_outputs) return hyper_synthesis_outputs.error();
     auto params_padded_result = take_device_tensor(hyper_synthesis_outputs.value(), "params_padded");
     auto common_padded_result = take_device_tensor(hyper_synthesis_outputs.value(), "common_padded");
@@ -3227,9 +3165,11 @@ Result<CodecEncodeResult> encode_intra(
                 "cudaMemcpyAsync I spatial common");
             if (!copied) return copied.error();
             std::array<DeviceTensor*, 1> spatial_inputs{&spatial_context.value()};
-            auto spatial_outputs = run_device_engine(
-                engines[static_cast<std::size_t>(3 + stage_index)],
-                engine_specs[static_cast<std::size_t>(3 + stage_index)], spatial_inputs, stream,
+            const auto spatial_stage = static_cast<IntraStage>(
+                static_cast<std::size_t>(IntraStage::spatial_prior_1) +
+                static_cast<std::size_t>(stage_index));
+            auto spatial_outputs = run_device_stage(
+                engines, orchestration.stage(spatial_stage), spatial_inputs,
                 EngineOutputStorage::scratch);
             if (!spatial_outputs) return spatial_outputs.error();
             auto spatial_result = take_device_tensor(spatial_outputs.value(), "scales_means");
@@ -3294,8 +3234,8 @@ Result<CodecEncodeResult> encode_intra(
     if (!q_dec_opt.has_value()) return backend_error("missing cached image q_dec tensor");
     auto* q_dec = &q_dec_opt.value();
     std::array<DeviceTensor*, 2> synthesis_inputs{&*y_hat_device, q_dec};
-    auto synthesis_outputs = run_device_engine(
-        engines[6], engine_specs[6], synthesis_inputs, stream);
+    auto synthesis_outputs = run_device_stage(
+        engines, orchestration.stage(IntraStage::synthesis), synthesis_inputs);
     if (!synthesis_outputs) return synthesis_outputs.error();
     auto frame_device_result = take_device_tensor(synthesis_outputs.value(), "frame_hat");
     if (!frame_device_result) return frame_device_result.error();
@@ -3306,25 +3246,22 @@ Result<CodecEncodeResult> encode_intra(
 
     const bool two_coders =
         static_cast<std::uint64_t>(frame.width()) * frame.height() >= 1280ULL * 720ULL;
-    rans.reset_encoder();
-    auto mode = rans.set_use_two_coders(two_coders);
+    auto mode = orchestration.begin_encode(two_coders);
     if (!mode) return mode.error();
     const auto per_channel = static_cast<std::size_t>(z_device.shape.d[2] * z_device.shape.d[3]);
-    auto stream_bytes = [&]() -> Result<std::vector<std::byte>> {
+    auto payload = [&]() -> Result<std::vector<std::byte>> {
         CpuProfileScope entropy_scope("i_entropy_encode");
-        auto encoded_z = rans.encode_z(
-            z_symbols, assets.image_z_group, static_cast<std::size_t>(qp) * 128, per_channel);
+        auto encoded_z = orchestration.encode_z(z_symbols, qp, per_channel);
         if (!encoded_z) return encoded_z.error();
         for (std::size_t stage_index = 0; stage_index < 4; ++stage_index) {
             std::span<std::int16_t> indexes(index_buffers[stage_index]->data, reduced_count);
-            auto encoded_y = rans.encode_y(indexes, assets.gaussian_y_group);
+            auto encoded_y = orchestration.encode_y(indexes);
             if (!encoded_y) return encoded_y.error();
         }
-        return rans.finish_encode();
+        return orchestration.finish_encode(
+            frame.width(), frame.height(), qp, two_coders);
     }();
-    if (!stream_bytes) return stream_bytes.error();
-    auto payload = make_intra_payload(
-        frame.width(), frame.height(), qp, two_coders, stream_bytes.value());
+    if (!payload) return payload.error();
 
     std::array<const DeviceTensor*, 1> tensors{&frame_device};
     auto downloaded = download_tensors(tensors, stream);
@@ -3344,15 +3281,16 @@ Result<CodecEncodeResult> encode_intra(
 
     if (verify_reconstruction) {
         auto conformant_reconstruction = decode_intra(
-            payload, frame.timestamp(), state, device_dpb, engines, rans, assets, image_quant_cache, image_decode_staging, stream);
+            payload.value(), frame.timestamp(), state, device_dpb, engines,
+            orchestration, image_quant_cache, image_decode_staging, stream);
         if (!conformant_reconstruction) return conformant_reconstruction.error();
         return CodecEncodeResult{
-            std::move(payload), std::move(conformant_reconstruction.value().frame),
+            std::move(payload.value()), std::move(conformant_reconstruction.value().frame),
             std::move(conformant_reconstruction.value().latent_state), qp};
     }
 
     return CodecEncodeResult{
-        std::move(payload), std::move(reconstructed.value()), std::move(latent_state), qp};
+        std::move(payload.value()), std::move(reconstructed.value()), std::move(latent_state), qp};
 }
 
 Result<CodecDecodeResult> decode_intra(
@@ -3361,12 +3299,11 @@ Result<CodecDecodeResult> decode_intra(
     const SequenceStateView& state,
     DeviceDpb& device_dpb,
     TensorRTExecutionSession& engines,
-    RansCodec& rans,
-    const RuntimeAssets& assets,
+    IntraOrchestration& orchestration,
     ImageQuantDeviceCache& image_quant_cache,
     ImageDecodeStaging& image_decode_staging,
     cudaStream_t stream) {
-    auto parsed = parse_intra_payload(payload);
+    auto parsed = orchestration.parse_payload(payload);
     if (!parsed) return parsed.error();
     const auto info = parsed.value();
     const auto padded_height = round_up(static_cast<std::int32_t>(info.height), 16);
@@ -3376,17 +3313,12 @@ Result<CodecDecodeResult> decode_intra(
     const auto z_height = round_up(y_height, 4) / 4;
     const auto z_width = round_up(y_width, 4) / 4;
 
-    rans.reset_encoder();
-    auto mode = rans.set_use_two_coders(info.two_coders);
-    if (!mode) return mode.error();
-    auto stream_set = rans.set_stream(info.rans);
+    auto stream_set = orchestration.begin_decode(info);
     if (!stream_set) return stream_set.error();
     const auto per_channel = static_cast<std::size_t>(z_height * z_width);
     auto z_values = [&]() -> Result<std::vector<std::int8_t>> {
         CpuProfileScope entropy_scope("i_entropy_decode_z");
-        return rans.decode_z(
-            128 * per_channel, assets.image_z_group,
-            static_cast<std::size_t>(info.qp) * 128, per_channel);
+        return orchestration.decode_z(128 * per_channel, info.qp, per_channel);
     }();
     if (!z_values) return z_values.error();
     const auto staging_reduced_count =
@@ -3404,8 +3336,9 @@ Result<CodecDecodeResult> decode_intra(
     if (!z_device) return z_device.error();
 
     std::array<DeviceTensor*, 1> hyper_inputs{&z_device.value()};
-    auto hyper_outputs = run_device_engine(
-        engines[2], engine_specs[2], hyper_inputs, stream, EngineOutputStorage::scratch);
+    auto hyper_outputs = run_device_stage(
+        engines, orchestration.stage(IntraStage::hyper_synthesis), hyper_inputs,
+        EngineOutputStorage::scratch);
     if (!hyper_outputs) return hyper_outputs.error();
     auto params_padded_result = take_device_tensor(hyper_outputs.value(), "params_padded");
     auto common_padded_result = take_device_tensor(hyper_outputs.value(), "common_padded");
@@ -3482,9 +3415,8 @@ Result<CodecDecodeResult> decode_intra(
 
         auto decoded = [&]() -> Result<std::vector<std::int8_t>> {
             CpuProfileScope entropy_scope("i_entropy_decode_y");
-            return rans.decode_y(
-                std::span<const std::uint8_t>(indexes.data, reduced_count),
-                assets.gaussian_y_group);
+            return orchestration.decode_y(
+                std::span<const std::uint8_t>(indexes.data, reduced_count));
         }();
         if (!decoded) return decoded.error();
         auto& symbols = image_decode_staging.symbols[stage_slot];
@@ -3523,9 +3455,11 @@ Result<CodecDecodeResult> decode_intra(
                 "cudaMemcpyAsync I decode spatial common");
             if (!copied) return copied.error();
             std::array<DeviceTensor*, 1> spatial_inputs{&spatial_context.value()};
-            const auto engine_index = static_cast<std::size_t>(3 + stage);
-            auto spatial_outputs = run_device_engine(
-                engines[engine_index], engine_specs[engine_index], spatial_inputs, stream,
+            const auto spatial_stage = static_cast<IntraStage>(
+                static_cast<std::size_t>(IntraStage::spatial_prior_1) +
+                static_cast<std::size_t>(stage));
+            auto spatial_outputs = run_device_stage(
+                engines, orchestration.stage(spatial_stage), spatial_inputs,
                 EngineOutputStorage::scratch);
             if (!spatial_outputs) return spatial_outputs.error();
             auto spatial_result = take_device_tensor(spatial_outputs.value(), "scales_means");
@@ -3545,8 +3479,8 @@ Result<CodecDecodeResult> decode_intra(
     if (!q_dec_opt.has_value()) return backend_error("missing cached image q_dec tensor");
     auto* q_dec = &q_dec_opt.value();
     std::array<DeviceTensor*, 2> synthesis_inputs{&*y_hat_device, q_dec};
-    auto synthesis_outputs = run_device_engine(
-        engines[6], engine_specs[6], synthesis_inputs, stream);
+    auto synthesis_outputs = run_device_stage(
+        engines, orchestration.stage(IntraStage::synthesis), synthesis_inputs);
     if (!synthesis_outputs) return synthesis_outputs.error();
     auto frame_device_result = take_device_tensor(synthesis_outputs.value(), "frame_hat");
     if (!frame_device_result) return frame_device_result.error();
@@ -4140,6 +4074,8 @@ Result<CodecDecodeResult> decode_predicted(
 }
 
 Result<void> TensorRTExecutionSession::initialize_codec_buffers(
+    std::span<const float> image_q_encoder,
+    std::span<const float> image_q_decoder,
     const RuntimeAssets& assets) {
     if (!initialized_) {
         return Error(
@@ -4150,7 +4086,7 @@ Result<void> TensorRTExecutionSession::initialize_codec_buffers(
     CudaAllocationScope allocation_scope(
         stream_, nullptr, &scratch_arena_, false, owner_id_, stream_owner_);
     auto image_ready = populate_image_quant_cache(
-        assets, image_quant_cache_, stream_);
+        image_q_encoder, image_q_decoder, image_quant_cache_, stream_);
     if (!image_ready) return image_ready.error();
     return populate_video_quant_cache(assets, video_quant_cache_, stream_);
 }
@@ -4181,13 +4117,25 @@ public:
             auto session_ready = session->initialize(configuration);
             if (!session_ready) return session_ready.error();
 
+            IntraOrchestration intra_orchestration;
+            auto intra_ready = intra_orchestration.initialize(
+                configuration.intra_engine_path);
+            if (!intra_ready) return intra_ready.error();
+            const auto loaded_stages = session->loaded_stages();
+            auto stages_ready = intra_orchestration.bind_stages(loaded_stages);
+            if (!stages_ready) return stages_ready.error();
+
             RansCodec rans;
             auto assets = load_runtime_assets(configuration.intra_engine_path, rans);
             if (!assets) return assets.error();
-            auto buffers_ready = session->initialize_codec_buffers(assets.value());
+            auto buffers_ready = session->initialize_codec_buffers(
+                intra_orchestration.encoder_quantization(),
+                intra_orchestration.decoder_quantization(),
+                assets.value());
             if (!buffers_ready) return buffers_ready.error();
 
             session_ = std::move(session);
+            intra_orchestration_ = std::move(intra_orchestration);
             rans_ = std::move(rans);
             assets_ = std::move(assets.value());
             intra_qp_ = configuration.intra_qp;
@@ -4222,7 +4170,8 @@ public:
             const auto stream = session_->stream();
             Result<CodecEncodeResult> result = frame_type == FrameType::intra ?
                 encode_intra(
-                    frame, intra_qp_, state, encoder_dpb_, *session_, rans_, assets_,
+                    frame, intra_qp_, state, encoder_dpb_, *session_,
+                    intra_orchestration_,
                     session_->image_quant_cache(), session_->image_decode_staging(),
                     session_->image_z_symbols_buffer(), session_->image_indexes0_buffer(),
                     session_->image_indexes1_buffer(), session_->image_indexes2_buffer(),
@@ -4269,7 +4218,8 @@ public:
             const auto stream = session_->stream();
             Result<CodecDecodeResult> result = frame_type == FrameType::intra ?
                 decode_intra(
-                    payload, timestamp, state, decoder_dpb_, *session_, rans_, assets_,
+                    payload, timestamp, state, decoder_dpb_, *session_,
+                    intra_orchestration_,
                     session_->image_quant_cache(), session_->image_decode_staging(),
                     stream) :
                 decode_predicted(
@@ -4304,6 +4254,7 @@ public:
 
 private:
     std::unique_ptr<TensorRTExecutionSession> session_;
+    IntraOrchestration intra_orchestration_;
     RansCodec rans_;
     RuntimeAssets assets_;
     DeviceDpb encoder_dpb_;
