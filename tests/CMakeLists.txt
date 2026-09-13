@@ -96,6 +96,13 @@ target_link_libraries(nvcr_dcvcrt_payload_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_dcvcrt_payload_tests)
 add_test(NAME nvcr_dcvcrt_payloads COMMAND nvcr_dcvcrt_payload_tests)
 
+add_executable(nvcr_dcvcrt_orchestration_tests dcvcrt_orchestration_tests.cpp)
+target_include_directories(
+    nvcr_dcvcrt_orchestration_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcrt")
+target_link_libraries(nvcr_dcvcrt_orchestration_tests PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_dcvcrt_orchestration_tests)
+add_test(NAME nvcr_dcvcrt_orchestration COMMAND nvcr_dcvcrt_orchestration_tests)
+
 add_executable(nvcr_rans_conformance_tests rans_conformance_tests.cpp)
 target_link_libraries(nvcr_rans_conformance_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_rans_conformance_tests)

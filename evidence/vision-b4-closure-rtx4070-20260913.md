@@ -2,9 +2,9 @@
 
 Recorded on 2026-09-13 for the TensorRT execution-session extraction.
 
-This record closes the technical B4 gates on the available RTX 4070. B4
-remains open because no numeric performance acceptance limit has been approved.
-The measured performance comparison remains in
+This record closes the technical B4 gates on the available RTX 4070. The
+recorded performance comparison was explicitly accepted on 2026-09-13,
+completing B4. Full measurements remain in
 [`vision-b4-rtx4070-20260911.md`](vision-b4-rtx4070-20260911.md).
 
 ## Identity
@@ -195,11 +195,10 @@ The reconstructed YUV files have SHA-256:
 Raw streams, reconstructed YUV, TensorRT plans, checkpoints, and source video
 remain outside Git.
 
-## Remaining decision
+## Acceptance
 
 All B4 technical gates pass on the available RTX 4070. The recorded pooled
 throughput changes are -0.294% I/P encode, +1.206% I/P decode, -0.640%
 all-intra encode, and +0.426% all-intra decode. The worst per-profile decrease
-is -0.824%. No repository document contains an approved numeric limit, so B4
-remains open until those results are explicitly accepted or a different limit
-is approved and applied.
+is -0.824%. The recorded result was explicitly accepted on 2026-09-13. With
+the technical gates above passing, B4 is complete.
