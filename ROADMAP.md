@@ -68,7 +68,7 @@ The table below is the execution record for the active provider-boundary work.
 | B2 | Provider-session contracts and deterministic fixtures | Complete in [PR #148](https://github.com/0elghati/nvcr/pull/148) | Experimental contracts and deterministic tests cover ownership, bounds, dependencies, completion, reset, and errors without switching production |
 | B3 | Pre-refactor target baseline | RTX 4070 baseline captured; numeric limit approval pending | Exact inputs and bundles, per-run values, variance, copies/synchronization, peak memory, context policy, and approved acceptance limits recorded |
 | B4 | TensorRT execution session behind the facade | In progress; all technical gates pass, numeric performance acceptance pending | Engine/context, binding, allocation, stream/event, graph-cache, and enqueue ownership move behind the session contract while bundle validation and context policy remain intact |
-| B5 | I-frame codec orchestration | Pending | DCVC-RT owns stage order, quantization, entropy, and payload assembly with byte and reconstructed-frame parity |
+| B5 | I-frame codec orchestration | In progress; all technical gates pass, numeric performance acceptance pending | DCVC-RT owns stage order, quantization, entropy, and payload assembly with byte and reconstructed-frame parity |
 | B6 | P-frame state and orchestration | Pending | DCVC-RT owns reference semantics; GOP, reset, flush, repeated-session, and malformed-input gates pass |
 | B7 | Production construction cleanup | Pending | A real adapter factory selects codec and provider; direct registration, component factory, and the unused stub are removed after their last callers |
 
@@ -99,6 +99,20 @@ and -0.640% for all-intra, while decode improved by 1.206% and 0.426%. Peak
 device memory and all provider copy/synchronization, context-policy, and
 graph-cache records are unchanged. B4 remains open only because no numeric
 performance acceptance limit has been approved.
+
+B5 was explicitly started while the B3/B4 numeric acceptance decision remains
+open. The DCVC-RT codec-side `IntraOrchestration` now owns named I-frame stage
+selection, I-frame CDF and quantization assets, rANS session state, and NVI1
+payload parsing and assembly. TensorRT continues to own device buffers, CUDA
+transforms, stage submission, transfers, synchronization, and profiling. Clean
+CPU Release/install, sanitizer/fuzz, TensorRT Release, all six exact-profile GPU
+contracts and I/P round trips, and the pinned Python/native golden pass. A
+65-frame GOP-8 comparison against B4 produced identical complete `.nvcr` and
+decoded-YUV hashes. The matched five-profile result records +0.044% pooled I/P
+encode, +0.364% pooled I/P decode, +0.827% pooled all-intra encode, and +1.430%
+pooled all-intra decode. Provider counters and peak device memory are unchanged.
+See [the B5 evidence](evidence/vision-b5-rtx4070-20260913.md). B5 remains open
+until a numeric performance limit is approved and applied.
 
 Generic packages exclude checkpoints, exported model assets, TensorRT plans,
 and datasets. Validated engine bundles use the separate rolling catalog and

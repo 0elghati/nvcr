@@ -1,6 +1,6 @@
 # RFC: NVCR v2 codec/provider execution boundary
 
-Status: Accepted design direction; TensorRT extraction implemented, technical B4 gates pass, numeric performance acceptance pending
+Status: Accepted design direction; B5 technical gates pass, numeric performance acceptance pending
 Date: 2026-09-09
 Scope: Architecture and migration design only
 
@@ -249,6 +249,16 @@ numeric performance limit has been approved, so B4 remains open.
   assembly into the DCVC-RT codec side.
 - Compare deterministic access-unit bytes and reconstructed output with the
   pre-extraction baseline.
+
+Implemented on `codex/b5-i-frame-orchestration`. The codec-side
+`IntraOrchestration` owns the named I-frame stage set, I-frame quantization and
+CDF assets, rANS state, and NVI1 parsing and assembly. The TensorRT session
+executes the selected stage handles and retains device allocation, CUDA
+transforms, copies, synchronization, graph caching, and profiling. The clean
+CPU, sanitizer/fuzz, TensorRT non-GPU, six exact-profile GPU, pinned golden,
+65-frame byte/reconstruction parity, and matched performance gates pass. See
+the [B5 evidence](../evidence/vision-b5-rtx4070-20260913.md). Numeric performance
+acceptance is still unapproved, so B5 remains open.
 
 ### B5 readiness note
 
