@@ -21,6 +21,16 @@ constexpr std::array<std::string_view, 7> intra_stage_ids{
     "i_synthesis.plan",
 };
 
+constexpr std::array<std::string_view, 7> predicted_stage_ids{
+    "p_reference_frame.plan",
+    "p_reference_feature.plan",
+    "p_analysis.plan",
+    "p_hyper_analysis.plan",
+    "p_prior.plan",
+    "p_spatial_prior.plan",
+    "p_synthesis.plan",
+};
+
 Error orchestration_error(std::string message) {
     return Error(ErrorCode::backend_error, std::move(message), "dcvcrt.orchestration");
 }
@@ -116,6 +126,27 @@ private:
 };
 
 }  // namespace
+
+bool ReferenceState::matches(const codec::SequenceStateView& state) const noexcept {
+    return has_frame_ && next_frame_index_ == state.frame_index &&
+        generation_ == state.generation;
+}
+
+void ReferenceState::commit(
+    const codec::SequenceStateView& state,
+    bool has_feature) noexcept {
+    has_frame_ = true;
+    has_feature_ = has_feature;
+    next_frame_index_ = state.frame_index + 1U;
+    generation_ = state.generation;
+}
+
+void ReferenceState::reset() noexcept {
+    has_frame_ = false;
+    has_feature_ = false;
+    next_frame_index_ = 0U;
+    generation_ = 0U;
+}
 
 Result<void> IntraOrchestration::initialize(
     const std::filesystem::path& bundle_root) {
@@ -302,6 +333,257 @@ Result<std::vector<std::int8_t>> IntraOrchestration::decode_z(
 }
 
 Result<std::vector<std::int8_t>> IntraOrchestration::decode_y(
+    std::span<const std::uint8_t> indexes) {
+    return rans_.decode_y(indexes, gaussian_y_group_);
+}
+
+Result<void> PredictedOrchestration::initialize(
+    const std::filesystem::path& bundle_root) {
+    const auto entropy_path = bundle_root / "p_entropy.bin";
+    auto entropy_bytes = read_binary(entropy_path);
+    if (!entropy_bytes) return entropy_bytes.error();
+    AssetReader entropy_reader(entropy_path, entropy_bytes.value());
+    auto entropy_magic = entropy_reader.expect_magic("NVCRPEN1");
+    if (!entropy_magic) return entropy_magic.error();
+    auto group_count = entropy_reader.read_u32();
+    if (!group_count) return group_count.error();
+    if (group_count.value() != 2U) {
+        return orchestration_error(
+            "P-frame entropy asset must contain exactly two CDF groups");
+    }
+
+    rans_.clear_cdfs();
+    video_z_group_ = std::numeric_limits<std::size_t>::max();
+    gaussian_y_group_ = std::numeric_limits<std::size_t>::max();
+    for (std::uint32_t group_index = 0; group_index < group_count.value(); ++group_index) {
+        auto name_size = entropy_reader.read_u32();
+        auto row_count = entropy_reader.read_u32();
+        if (!name_size) return name_size.error();
+        if (!row_count) return row_count.error();
+        if (name_size.value() == 0U || name_size.value() > 64U ||
+            row_count.value() == 0U || row_count.value() > 16384U) {
+            return orchestration_error("invalid P-frame CDF group dimensions");
+        }
+        auto name = entropy_reader.read_string(name_size.value());
+        if (!name) return name.error();
+
+        RansCdfTable table;
+        table.values.reserve(row_count.value());
+        table.sizes.reserve(row_count.value());
+        table.offsets.reserve(row_count.value());
+        for (std::uint32_t row_index = 0; row_index < row_count.value(); ++row_index) {
+            auto size = entropy_reader.read_i32();
+            auto offset = entropy_reader.read_i32();
+            if (!size) return size.error();
+            if (!offset) return offset.error();
+            if (size.value() < 2 || size.value() > 1024) {
+                return orchestration_error("invalid P-frame CDF row size");
+            }
+            std::vector<std::int32_t> values;
+            values.reserve(static_cast<std::size_t>(size.value()));
+            for (std::int32_t value_index = 0; value_index < size.value(); ++value_index) {
+                auto value = entropy_reader.read_i32();
+                if (!value) return value.error();
+                values.push_back(value.value());
+            }
+            table.values.push_back(std::move(values));
+            table.sizes.push_back(size.value());
+            table.offsets.push_back(offset.value());
+        }
+        auto registered = rans_.add_cdf(std::move(table));
+        if (!registered) return registered.error();
+        if (name.value() == "video_z") {
+            video_z_group_ = registered.value();
+        } else if (name.value() == "gaussian_y") {
+            gaussian_y_group_ = registered.value();
+        } else {
+            return orchestration_error("unknown P-frame CDF group " + name.value());
+        }
+    }
+    if (!entropy_reader.done() ||
+        video_z_group_ == std::numeric_limits<std::size_t>::max() ||
+        gaussian_y_group_ == std::numeric_limits<std::size_t>::max()) {
+        return orchestration_error("incomplete P-frame entropy asset");
+    }
+
+    const auto quant_path = bundle_root / "p_quant.bin";
+    auto quant_bytes = read_binary(quant_path);
+    if (!quant_bytes) return quant_bytes.error();
+    AssetReader quant_reader(quant_path, quant_bytes.value());
+    auto quant_magic = quant_reader.expect_magic("NVCRPQN1");
+    if (!quant_magic) return quant_magic.error();
+    auto array_count = quant_reader.read_u32();
+    if (!array_count) return array_count.error();
+    if (array_count.value() != 4U) {
+        return orchestration_error("P-frame quant asset must contain four arrays");
+    }
+
+    q_encoder_.clear();
+    q_decoder_.clear();
+    q_feature_.clear();
+    q_reconstruction_.clear();
+    for (std::uint32_t array_index = 0; array_index < array_count.value(); ++array_index) {
+        auto name_size = quant_reader.read_u32();
+        auto qps = quant_reader.read_u32();
+        auto channels = quant_reader.read_u32();
+        if (!name_size) return name_size.error();
+        if (!qps) return qps.error();
+        if (!channels) return channels.error();
+        auto name = quant_reader.read_string(name_size.value());
+        if (!name) return name.error();
+        const std::uint32_t expected_channels =
+            name.value() == "q_recon" ? 320U : 256U;
+        if (qps.value() != 72U || channels.value() != expected_channels) {
+            return orchestration_error(
+                "unexpected P-frame quantization tensor shape for " + name.value());
+        }
+        std::vector<float>* destination = nullptr;
+        if (name.value() == "q_encoder") destination = &q_encoder_;
+        else if (name.value() == "q_decoder") destination = &q_decoder_;
+        else if (name.value() == "q_feature") destination = &q_feature_;
+        else if (name.value() == "q_recon") destination = &q_reconstruction_;
+        else return orchestration_error("unknown P-frame quant array " + name.value());
+        destination->reserve(
+            static_cast<std::size_t>(qps.value()) * channels.value());
+        for (std::size_t index = 0;
+             index < static_cast<std::size_t>(qps.value()) * channels.value();
+             ++index) {
+            auto value = quant_reader.read_f32();
+            if (!value) return value.error();
+            if (!std::isfinite(value.value())) {
+                return orchestration_error("invalid P-frame quantization value");
+            }
+            destination->push_back(value.value());
+        }
+    }
+    if (!quant_reader.done() || q_encoder_.empty() || q_decoder_.empty() ||
+        q_feature_.empty() || q_reconstruction_.empty()) {
+        return orchestration_error("incomplete P-frame quantization asset");
+    }
+    return {};
+}
+
+Result<void> PredictedOrchestration::bind_stages(
+    std::span<const provider::experimental::ExecutableStage> loaded_stages) {
+    std::array<provider::experimental::ExecutableStage, stage_count> selected;
+    for (std::size_t expected_index = 0; expected_index < predicted_stage_ids.size();
+         ++expected_index) {
+        for (const auto& candidate : loaded_stages) {
+            if (candidate &&
+                candidate->descriptor().stage_id == predicted_stage_ids[expected_index]) {
+                selected[expected_index] = candidate;
+                break;
+            }
+        }
+        if (!selected[expected_index]) {
+            return orchestration_error(
+                "provider session is missing DCVC-RT P-frame stage " +
+                std::string(predicted_stage_ids[expected_index]));
+        }
+    }
+    stages_ = std::move(selected);
+    return {};
+}
+
+const provider::experimental::ExecutableStage& PredictedOrchestration::stage(
+    PredictedStage stage_id) const {
+    return stages_[static_cast<std::size_t>(stage_id)];
+}
+
+Result<PredictedFrameDecision> PredictedOrchestration::select_frame(
+    std::uint32_t base_qp,
+    const codec::SequenceStateView& state,
+    const ReferenceState& reference) const {
+    if (!reference.matches(state)) {
+        return Error(ErrorCode::invalid_state, "encoder device DPB is unavailable",
+                     "dcvcrt.orchestration");
+    }
+    constexpr std::array<std::uint32_t, 8> index_map{0, 1, 0, 2, 0, 2, 0, 2};
+    constexpr std::array<std::uint32_t, 3> shifts{0, 8, 4};
+    if (base_qp >= 64U) {
+        return orchestration_error("base P-frame QP must be in [0, 63]");
+    }
+    const auto qp = base_qp + shifts[index_map[state.frame_index % index_map.size()]];
+    if (qp >= 72U) {
+        return orchestration_error(
+            "effective P-frame QP exceeds the 72-entry model table");
+    }
+    return PredictedFrameDecision{
+        qp,
+        !reference.has_feature() || (state.frame_index % 64U) == 1U,
+    };
+}
+
+Result<void> PredictedOrchestration::validate_decode_reference(
+    bool use_frame_reference,
+    const codec::SequenceStateView& state,
+    const ReferenceState& reference) const {
+    if (!reference.matches(state)) {
+        return Error(ErrorCode::invalid_state, "decoder device DPB is unavailable",
+                     "dcvcrt.orchestration");
+    }
+    if (!use_frame_reference && !reference.has_feature()) {
+        return Error(ErrorCode::invalid_state,
+                     "P-frame feature reference is unavailable",
+                     "dcvcrt.orchestration");
+    }
+    return {};
+}
+
+Result<void> PredictedOrchestration::begin_encode(bool use_two_coders) {
+    rans_.reset_encoder();
+    return rans_.set_use_two_coders(use_two_coders);
+}
+
+Result<void> PredictedOrchestration::encode_z(
+    std::span<const std::int8_t> symbols,
+    std::uint32_t qp,
+    std::size_t per_channel_size) {
+    return rans_.encode_z(
+        symbols, video_z_group_, static_cast<std::size_t>(qp) * 128U,
+        per_channel_size);
+}
+
+Result<void> PredictedOrchestration::encode_y(
+    std::span<const std::int16_t> indexes) {
+    return rans_.encode_y(indexes, gaussian_y_group_);
+}
+
+Result<std::vector<std::byte>> PredictedOrchestration::finish_encode(
+    std::uint32_t width,
+    std::uint32_t height,
+    std::uint32_t qp,
+    bool use_two_coders,
+    bool use_frame_reference) {
+    auto stream = rans_.finish_encode();
+    if (!stream) return stream.error();
+    return make_predicted_payload(
+        width, height, qp, use_two_coders, use_frame_reference, stream.value());
+}
+
+Result<PredictedPayload> PredictedOrchestration::parse_payload(
+    std::span<const std::byte> payload) const {
+    return parse_predicted_payload(payload);
+}
+
+Result<void> PredictedOrchestration::begin_decode(
+    const PredictedPayload& payload) {
+    rans_.reset_encoder();
+    auto mode = rans_.set_use_two_coders(payload.two_coders);
+    if (!mode) return mode.error();
+    return rans_.set_stream(payload.rans);
+}
+
+Result<std::vector<std::int8_t>> PredictedOrchestration::decode_z(
+    std::size_t symbol_count,
+    std::uint32_t qp,
+    std::size_t per_channel_size) {
+    return rans_.decode_z(
+        symbol_count, video_z_group_, static_cast<std::size_t>(qp) * 128U,
+        per_channel_size);
+}
+
+Result<std::vector<std::int8_t>> PredictedOrchestration::decode_y(
     std::span<const std::uint8_t> indexes) {
     return rans_.decode_y(indexes, gaussian_y_group_);
 }
