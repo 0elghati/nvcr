@@ -1,6 +1,6 @@
 # RFC: NVCR v2 codec/provider execution boundary
 
-Status: Accepted design direction; TensorRT extraction implemented, technical B4 gates pass, numeric performance acceptance pending
+Status: Accepted design direction; B4-B6 complete; B7 next
 Date: 2026-09-09
 Scope: Architecture and migration design only
 
@@ -240,8 +240,8 @@ The CPU Release/install, sanitizer/fuzz, TensorRT Release, six exact-profile
 GPU, pinned Python/native golden, lifecycle, B3/B4 byte parity, reconstruction,
 and measured performance gates pass. The retained records are the
 [performance comparison](../evidence/vision-b4-rtx4070-20260911.md) and
-[closure evidence](../evidence/vision-b4-closure-rtx4070-20260913.md). No
-numeric performance limit has been approved, so B4 remains open.
+[closure evidence](../evidence/vision-b4-closure-rtx4070-20260913.md). The
+recorded B4 result was explicitly accepted on 2026-09-13, completing B4.
 
 ### PR 3: I-frame orchestration
 
@@ -250,11 +250,20 @@ numeric performance limit has been approved, so B4 remains open.
 - Compare deterministic access-unit bytes and reconstructed output with the
   pre-extraction baseline.
 
-### B5 readiness note
+Implemented on `codex/b5-i-frame-orchestration`. The codec-side
+`IntraOrchestration` owns the named I-frame stage set, I-frame quantization and
+CDF assets, rANS state, and NVI1 parsing and assembly. The TensorRT session
+executes the selected stage handles and retains device allocation, CUDA
+transforms, copies, synchronization, graph caching, and profiling. The clean
+CPU, sanitizer/fuzz, TensorRT non-GPU, six exact-profile GPU, pinned golden,
+65-frame byte/reconstruction parity, and matched performance gates pass. See
+the [B5 evidence](../evidence/vision-b5-rtx4070-20260913.md). The recorded
+B5 result was explicitly accepted on 2026-09-13, completing B5.
 
-B5 must not begin until the recorded B4 performance result is explicitly
-accepted against an approved numeric limit. When approved, B5 is one ownership
-change with the following boundary.
+### B5 implementation boundary
+
+B5 was explicitly reprioritized before B4's recorded result was accepted. The
+change kept this boundary:
 
 Move these I-frame responsibilities out of
 `src/dcvcrt/backend/tensorrt/backend.cpp` and into a DCVC-RT codec-side
@@ -309,6 +318,19 @@ B5 must rerun the B4 gates with the same identities and boundaries:
 - Move P-frame stage ordering and reference semantics to the codec side.
 - Keep reference storage opaque and device-resident through BufferHandle.
 - Exercise GOP, reset, flush, repeated-session, and malformed-input cases.
+
+Implemented on `codex/b6-p-frame-orchestration`. The codec-side
+`PredictedOrchestration` owns the named P-frame stage set, effective QP and
+reference selection, P-frame quantization and CDF assets, rANS state, and NVP1
+parsing and assembly. Codec-side `ReferenceState` owns feature availability,
+reference generation/index matching, commit, and reset meaning. TensorRT keeps
+the physical reference tensors in provider-owned `BufferHandle` storage and
+retains CUDA transforms, stage execution, transfers, synchronization, graph
+caching, and profiling. The clean CPU, sanitizer/fuzz, TensorRT non-GPU, six
+exact-profile GPU, pinned golden, 65-frame byte/reconstruction parity, and
+matched performance gates pass. See
+[the B6 evidence](../evidence/vision-b6-rtx4070-20260913.md). The recorded
+B6 result was explicitly accepted on 2026-09-13, completing B6.
 
 ### PR 5: construction cleanup
 
