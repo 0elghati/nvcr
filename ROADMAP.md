@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-09-09
+Last reviewed: 2026-09-13
 
 ## Product direction
 
@@ -67,7 +67,7 @@ The table below is the execution record for the active provider-boundary work.
 | B1 | Vision and execution governance | Recorded | Vision tracked; roadmap and RFC cross-linked; performance limits remain an explicit pre-extraction decision |
 | B2 | Provider-session contracts and deterministic fixtures | Complete in [PR #148](https://github.com/0elghati/nvcr/pull/148) | Experimental contracts and deterministic tests cover ownership, bounds, dependencies, completion, reset, and errors without switching production |
 | B3 | Pre-refactor target baseline | RTX 4070 baseline captured; numeric limit approval pending | Exact inputs and bundles, per-run values, variance, copies/synchronization, peak memory, context policy, and approved acceptance limits recorded |
-| B4 | TensorRT execution session behind the facade | In progress; implementation, GPU, and performance gates pass | Engine/context, binding, allocation, stream/event, graph-cache, and enqueue ownership move behind the session contract while bundle validation and context policy remain intact |
+| B4 | TensorRT execution session behind the facade | In progress; all technical gates pass, numeric performance acceptance pending | Engine/context, binding, allocation, stream/event, graph-cache, and enqueue ownership move behind the session contract while bundle validation and context policy remain intact |
 | B5 | I-frame codec orchestration | Pending | DCVC-RT owns stage order, quantization, entropy, and payload assembly with byte and reconstructed-frame parity |
 | B6 | P-frame state and orchestration | Pending | DCVC-RT owns reference semantics; GOP, reset, flush, repeated-session, and malformed-input gates pass |
 | B7 | Production construction cleanup | Pending | A real adapter factory selects codec and provider; direct registration, component factory, and the unused stub are removed after their last callers |
@@ -89,13 +89,16 @@ provider-session contract and owns bundle/stage loading, runtime and contexts,
 opaque buffers, stream/events, dependencies/completions, graph caching, enqueue,
 and provider profiling. `TensorRTBackend` remains its only production caller and
 continues to own codec sequencing, entropy, payload, and reference meaning. The
-clean CPU Release, sanitizer, TensorRT Release build, TensorRT non-GPU, and all
-registered exact-profile GPU gates pass. Relative to B3, pooled B4 encode
-throughput changed by -0.294% for normal I/P and -0.640% for all-intra, while
-decode improved by 1.206% and 0.426%. Peak device memory and all provider
-copy/synchronization, context-policy, and graph-cache records are unchanged.
-Golden/byte parity and the remaining lifecycle gates still need to pass before
-B4 can be marked complete.
+clean CPU Release and install, sanitizer and bounded fuzz, TensorRT Release,
+TensorRT non-GPU, all six exact-profile GPU, pinned Python/native golden, and
+B3/B4 byte and reconstruction parity gates pass. The retained 65-frame GOP-8
+fixture produced identical full-stream and decoded-YUV hashes across B3 and B4.
+See [the B4 closure evidence](evidence/vision-b4-closure-rtx4070-20260913.md).
+Relative to B3, pooled B4 encode throughput changed by -0.294% for normal I/P
+and -0.640% for all-intra, while decode improved by 1.206% and 0.426%. Peak
+device memory and all provider copy/synchronization, context-policy, and
+graph-cache records are unchanged. B4 remains open only because no numeric
+performance acceptance limit has been approved.
 
 Generic packages exclude checkpoints, exported model assets, TensorRT plans,
 and datasets. Validated engine bundles use the separate rolling catalog and

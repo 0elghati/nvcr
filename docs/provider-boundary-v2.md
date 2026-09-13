@@ -1,6 +1,6 @@
 # RFC: NVCR v2 codec/provider execution boundary
 
-Status: Accepted design direction; TensorRT extraction implemented, GPU gates pending
+Status: Accepted design direction; TensorRT extraction implemented, technical B4 gates pass, numeric performance acceptance pending
 Date: 2026-09-09
 Scope: Architecture and migration design only
 
@@ -236,8 +236,12 @@ continues to use the existing provider facade.
 - Preserve context-policy selection and bundle validation.
 
 Implemented as a private production session used only by `TensorRTBackend`.
-The GPU correctness, byte-parity, lifecycle, and performance exit gates remain
-pending until the target device is idle.
+The CPU Release/install, sanitizer/fuzz, TensorRT Release, six exact-profile
+GPU, pinned Python/native golden, lifecycle, B3/B4 byte parity, reconstruction,
+and measured performance gates pass. The retained records are the
+[performance comparison](../evidence/vision-b4-rtx4070-20260911.md) and
+[closure evidence](../evidence/vision-b4-closure-rtx4070-20260913.md). No
+numeric performance limit has been approved, so B4 remains open.
 
 ### PR 3: I-frame orchestration
 
@@ -245,6 +249,60 @@ pending until the target device is idle.
   assembly into the DCVC-RT codec side.
 - Compare deterministic access-unit bytes and reconstructed output with the
   pre-extraction baseline.
+
+### B5 readiness note
+
+B5 must not begin until the recorded B4 performance result is explicitly
+accepted against an approved numeric limit. When approved, B5 is one ownership
+change with the following boundary.
+
+Move these I-frame responsibilities out of
+`src/dcvcrt/backend/tensorrt/backend.cpp` and into a DCVC-RT codec-side
+orchestrator:
+
+- the semantic stage order in `encode_intra` and `decode_intra`;
+- I-frame QP selection and the I-frame portions of `RuntimeAssets`,
+  `load_runtime_assets`, and `make_quant_tensor`;
+- I-frame symbol/index ordering and `RansCodec` session ownership;
+- calls to `make_intra_payload` and `parse_intra_payload`;
+- the meaning of the reconstructed I-frame and the reference state produced for
+  later predicted frames; and
+- the optional encode-side reconstruction verification path.
+
+Keep these responsibilities in the TensorRT provider session:
+
+- plan loading, runtime and execution contexts;
+- provider buffers, scratch allocation, pinned staging, streams, and events;
+- tensor shape/address binding and stage submission;
+- CUDA transforms needed to prepare or consume provider tensors;
+- completion, dependency, synchronization, graph-cache, and profiling
+  mechanics; and
+- provider/runtime/device compatibility and plan-integrity errors.
+
+The codec orchestrator must address stages by loaded stage handles and tensor
+contracts, not TensorRT engine indexes or CUDA objects. Intermediate tensors
+must remain provider-owned and device-resident.
+
+B5 leaves `video_qp`, `encode_predicted`, `decode_predicted`, predicted-frame
+reference selection, and `DeviceDpb` P-frame consumption for B6. The
+`TensorRTBackend` facade can remain as the transitional production caller while
+only its I-frame branch delegates to the codec orchestrator. The GOP decision,
+NVAU assembly, and sequence-state policy in `codec::Runtime` remain unchanged
+until the later codec-runtime genericization phase.
+
+B5 must rerun the B4 gates with the same identities and boundaries:
+
+- fixed B3/B5 full-stream byte equality and decoded-YUV equality for I-frame
+  and mixed I/P fixtures;
+- the pinned Python/native I-frame golden and static NVAU/rANS vectors;
+- clean CPU Release build/install/CTest and Clang ASan/UBSan plus bounded fuzz;
+- TensorRT Release non-GPU and every registered exact-profile GPU contract and
+  I/P round-trip test;
+- one warm-up and three clean measured runs, with profiling kept separate;
+- unchanged provider copy, synchronization, context-policy, graph-cache, and
+  peak-memory records unless a measured change is reviewed; and
+- an explicit check that no NVAU, NVI1, rANS, model, QP, or engine-manifest
+  identity changed.
 
 ### PR 4: P-frame state and orchestration
 
