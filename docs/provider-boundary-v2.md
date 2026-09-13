@@ -320,6 +320,19 @@ B5 must rerun the B4 gates with the same identities and boundaries:
 - Keep reference storage opaque and device-resident through BufferHandle.
 - Exercise GOP, reset, flush, repeated-session, and malformed-input cases.
 
+Implemented on `codex/b6-p-frame-orchestration`. The codec-side
+`PredictedOrchestration` owns the named P-frame stage set, effective QP and
+reference selection, P-frame quantization and CDF assets, rANS state, and NVP1
+parsing and assembly. Codec-side `ReferenceState` owns feature availability,
+reference generation/index matching, commit, and reset meaning. TensorRT keeps
+the physical reference tensors in provider-owned `BufferHandle` storage and
+retains CUDA transforms, stage execution, transfers, synchronization, graph
+caching, and profiling. The clean CPU, sanitizer/fuzz, TensorRT non-GPU, six
+exact-profile GPU, pinned golden, 65-frame byte/reconstruction parity, and
+matched performance gates pass. See
+[the B6 evidence](../evidence/vision-b6-rtx4070-20260913.md). Numeric performance
+acceptance remains unapproved, so B6 remains open.
+
 ### PR 5: construction cleanup
 
 - Register a real DCVC-RT adapter factory.

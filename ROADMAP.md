@@ -69,7 +69,7 @@ The table below is the execution record for the active provider-boundary work.
 | B3 | Pre-refactor target baseline | RTX 4070 baseline captured; numeric limit approval pending | Exact inputs and bundles, per-run values, variance, copies/synchronization, peak memory, context policy, and approved acceptance limits recorded |
 | B4 | TensorRT execution session behind the facade | In progress; all technical gates pass, numeric performance acceptance pending | Engine/context, binding, allocation, stream/event, graph-cache, and enqueue ownership move behind the session contract while bundle validation and context policy remain intact |
 | B5 | I-frame codec orchestration | In progress; all technical gates pass, numeric performance acceptance pending | DCVC-RT owns stage order, quantization, entropy, and payload assembly with byte and reconstructed-frame parity |
-| B6 | P-frame state and orchestration | Pending | DCVC-RT owns reference semantics; GOP, reset, flush, repeated-session, and malformed-input gates pass |
+| B6 | P-frame state and orchestration | In progress; all technical gates pass, numeric performance acceptance pending | DCVC-RT owns reference semantics; GOP, reset, flush, repeated-session, and malformed-input gates pass |
 | B7 | Production construction cleanup | Pending | A real adapter factory selects codec and provider; direct registration, component factory, and the unused stub are removed after their last callers |
 
 B2 was completed in PR #148. Its clean CPU Release build, test, install,
@@ -113,6 +113,22 @@ encode, +0.364% pooled I/P decode, +0.827% pooled all-intra encode, and +1.430%
 pooled all-intra decode. Provider counters and peak device memory are unchanged.
 See [the B5 evidence](evidence/vision-b5-rtx4070-20260913.md). B5 remains open
 until a numeric performance limit is approved and applied.
+
+B6 was explicitly started on top of B5 while the numeric acceptance decision
+remains open. The codec-side `PredictedOrchestration` now owns named P-frame
+stage selection, effective QP and reference choice, P-frame CDF and quantization
+assets, rANS state, and NVP1 parsing and assembly. Codec-side `ReferenceState`
+owns feature availability and reference generation/index meaning. TensorRT
+continues to own provider buffers, CUDA transforms, stage submission, transfers,
+synchronization, and profiling. Clean CPU Release/install, sanitizer/fuzz,
+TensorRT Release, all six exact-profile GPU contracts and I/P round trips, the
+pinned golden, and the 65-frame GOP-8 byte/reconstruction parity gates pass.
+Relative to B5, matched pooled throughput changed by +0.045% I/P encode,
+-0.160% I/P decode, -0.019% all-intra encode, and -0.360% all-intra decode.
+Payloads, quality, provider counters, engine/input identities, and peak device
+memory are unchanged. See
+[the B6 evidence](evidence/vision-b6-rtx4070-20260913.md). B6 remains open until
+a numeric performance limit is approved and applied.
 
 Generic packages exclude checkpoints, exported model assets, TensorRT plans,
 and datasets. Validated engine bundles use the separate rolling catalog and
