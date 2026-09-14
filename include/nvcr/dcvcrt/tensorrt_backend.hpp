@@ -2,6 +2,7 @@
 
 #include "nvcr/common/error.hpp"
 #include "nvcr/dcvcrt/backend.hpp"
+#include "nvcr/provider/experimental/session.hpp"
 #include "nvcr/provider/provider_api.hpp"
 
 #include <memory>
@@ -12,6 +13,8 @@ namespace nvcr::dcvcrt {
 // The returned backend owns engines, execution contexts, CUDA streams, and
 // binding buffers. No TensorRT type is exposed through this public boundary.
 [[nodiscard]] Result<std::unique_ptr<CodecBackend>> make_tensorrt_backend();
+[[nodiscard]] Result<std::unique_ptr<CodecBackend>> make_tensorrt_backend(
+    std::shared_ptr<provider::experimental::IProviderSession> provider_session);
 
 // Register the TensorRT execution-provider entry in the global registry.
 // Safe to call multiple times; re-registration is idempotent.

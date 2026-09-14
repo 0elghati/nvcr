@@ -1,9 +1,10 @@
 #pragma once
 
-// Provider API public types.
+// Legacy component-level provider API public types.
 // IExecutionProvider, IExecutable, and IArtifactCompiler define the boundary
 // between the codec adapter and the execution technology (TensorRT, ONNX
-// Runtime, etc.).  No TensorRT or CUDA types appear in this header.
+// Runtime, etc.). Production runtime construction uses the provider-session
+// contract. No TensorRT or CUDA types appear in this header.
 
 #include "nvcr/common/error.hpp"
 #include "nvcr/common/versions.hpp"

@@ -178,14 +178,9 @@ int main(int argc, char* argv[]) {
     }
     high_qp_backend.value().reset();
 
-    auto backend = nvcr::dcvcrt::make_tensorrt_backend();
-    if (!backend) {
-        std::cerr << backend.error().describe() << '\n';
-        return 1;
-    }
-    nvcr::codec::Components components;
-    components.codec = std::move(backend.value());
-    auto runtime = nvcr::Runtime::create(configuration, std::move(components));
+    nvcr::dcvcrt::register_codec();
+    nvcr::dcvcrt::register_tensorrt_provider();
+    auto runtime = nvcr::Runtime::create(configuration);
     if (!runtime) {
         std::cerr << runtime.error().describe() << '\n';
         return 1;

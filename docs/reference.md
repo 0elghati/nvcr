@@ -60,9 +60,12 @@ serialized per runtime because codec state is mutable.
 
 ## Construction and registration
 
-Applications select registered codec `dcvc-rt` and provider `tensorrt`.
-The selected adapter obtains provider-owned components through
-`RuntimeServices`; that construction is separate from the lifecycle loop.
+Applications register their built-in codec and provider entries, set
+`RuntimeConfiguration::codec_id` and `provider_id`, then call
+`Runtime::create(configuration)`. The runtime resolves the codec adapter and
+provider-session factories through `RuntimeServices` and gives the selected
+provider session to the adapter. Generic runtime code does not name DCVC-RT or
+TensorRT.
 
 The registry is static in the current release. Test codec/provider entries are
 linked only for contract coverage. They do not establish additional products
@@ -73,20 +76,21 @@ or CPU neural inference.
 `codec::ICodecAdapter` owns codec semantics: options, GOP/frame types,
 reference state, entropy meaning, and codec-private payloads.
 
-`provider::IExecutionProvider` owns executable artifacts, tensor bindings,
-memory, synchronization, execution, and provider failures. CUDA, TensorRT, and
-DCVC-RT implementation types do not cross the public provider headers.
+`provider::experimental::IProviderSession` owns executable stages, buffers,
+synchronization, execution, and provider failures. CUDA, TensorRT, and DCVC-RT
+implementation types do not cross the public provider headers.
 
-The TensorRT provider currently constructs one provider-owned monolithic
-DCVC-RT backend. Independent model-stage loading through
-`IExecutionProvider::load` returns `not_implemented`; the interface is
-transitional, not a completed production path.
+The TensorRT registry entry creates the real provider session used by
+production. The selected DCVC-RT adapter composes that session with its codec
+orchestration behind the current backend facade. The older component-level
+`IExecutionProvider` API remains available to artifact clients and fixtures,
+but TensorRT no longer registers an unused implementation of it.
 
 ## Configuration and errors
 
-Configuration covers public model/bitstream IDs, provider and device, engine
-selection, QP/GOP, packet bounds, memory policy, TensorRT mode, and diagnostics.
-It is validated before backend initialization.
+Configuration covers codec, public model/bitstream IDs, provider and device,
+engine selection, QP/GOP, packet bounds, memory policy, TensorRT mode, and
+diagnostics. It is validated before provider-session and backend initialization.
 
 Structured errors cover invalid state, malformed stream, missing artifact or
 provider, incompatible target/version/precision, digest mismatch, distribution

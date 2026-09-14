@@ -3885,6 +3885,9 @@ Result<void> TensorRTExecutionSession::initialize_codec_buffers(
 
 class TensorRTBackend final : public CodecBackend {
 public:
+    explicit TensorRTBackend(std::shared_ptr<TensorRTExecutionSession> session = {})
+        : session_(std::move(session)) {}
+
     ~TensorRTBackend() override {
         if (session_) {
             static_cast<void>(session_->reset());
@@ -3905,15 +3908,18 @@ public:
                 std::string(subsystem));
         }
         try {
-            auto session = std::make_unique<TensorRTExecutionSession>();
-            auto session_ready = session->initialize(configuration);
-            if (!session_ready) return session_ready.error();
+            if (!session_) {
+                auto session = std::make_shared<TensorRTExecutionSession>();
+                auto session_ready = session->initialize(configuration);
+                if (!session_ready) return session_ready.error();
+                session_ = std::move(session);
+            }
 
             IntraOrchestration intra_orchestration;
             auto intra_ready = intra_orchestration.initialize(
                 configuration.intra_engine_path);
             if (!intra_ready) return intra_ready.error();
-            const auto loaded_stages = session->loaded_stages();
+            const auto loaded_stages = session_->loaded_stages();
             auto stages_ready = intra_orchestration.bind_stages(loaded_stages);
             if (!stages_ready) return stages_ready.error();
 
@@ -3924,7 +3930,7 @@ public:
             stages_ready = predicted_orchestration.bind_stages(loaded_stages);
             if (!stages_ready) return stages_ready.error();
 
-            auto buffers_ready = session->initialize_codec_buffers(
+            auto buffers_ready = session_->initialize_codec_buffers(
                 intra_orchestration.encoder_quantization(),
                 intra_orchestration.decoder_quantization(),
                 predicted_orchestration.encoder_quantization(),
@@ -3933,7 +3939,6 @@ public:
                 predicted_orchestration.reconstruction_quantization());
             if (!buffers_ready) return buffers_ready.error();
 
-            session_ = std::move(session);
             intra_orchestration_ = std::move(intra_orchestration);
             predicted_orchestration_ = std::move(predicted_orchestration);
             intra_qp_ = configuration.intra_qp;
@@ -4053,7 +4058,7 @@ public:
     }
 
 private:
-    std::unique_ptr<TensorRTExecutionSession> session_;
+    std::shared_ptr<TensorRTExecutionSession> session_;
     IntraOrchestration intra_orchestration_;
     PredictedOrchestration predicted_orchestration_;
     DeviceDpb encoder_dpb_;
@@ -4076,6 +4081,32 @@ Result<std::unique_ptr<CodecBackend>> make_tensorrt_backend() {
     }
 }
 
+Result<std::unique_ptr<CodecBackend>> make_tensorrt_backend(
+    std::shared_ptr<provider::experimental::IProviderSession> provider_session) {
+    try {
+        auto tensorrt_session =
+            std::dynamic_pointer_cast<TensorRTExecutionSession>(provider_session);
+        if (!tensorrt_session) {
+            return Error(
+                ErrorCode::incompatible_target,
+                "DCVC-RT requires a TensorRT provider session",
+                std::string(subsystem));
+        }
+        return std::unique_ptr<CodecBackend>(
+            std::make_unique<TensorRTBackend>(std::move(tensorrt_session)));
+    } catch (const std::bad_alloc&) {
+        return Error(
+            ErrorCode::resource_exhausted,
+            "unable to allocate TensorRT backend",
+            std::string(subsystem));
+    } catch (const std::exception& exception) {
+        return backend_error(
+            std::string("failed to allocate TensorRT backend: ") + exception.what());
+    } catch (...) {
+        return backend_error("failed to allocate TensorRT backend");
+    }
+}
+
 provider::ProviderDescriptor tensorrt_provider_descriptor() {
     return {
         provider::ProviderKind::tensorrt,
@@ -4089,41 +4120,26 @@ provider::ProviderDescriptor tensorrt_provider_descriptor() {
 
 namespace {
 
-class TensorRTProvider final : public provider::IExecutionProvider {
-public:
-    [[nodiscard]] provider::ProviderDescriptor descriptor() const override {
-        return tensorrt_provider_descriptor();
-    }
-
-    [[nodiscard]] provider::ProviderCapabilities capabilities() const override {
-        return {
-            .supports_fp16 = true,
-            .supports_int8 = true,
-            .supports_dynamic_shapes = true,
-            .supports_cuda_graphs = true,
-            .target_device = "cuda",
-        };
-    }
-
-    [[nodiscard]] bool supports(const provider::ArtifactDescriptor& artifact) const override {
-        return artifact.provider_id == "tensorrt";
-    }
-
-    [[nodiscard]] Result<std::shared_ptr<provider::IExecutable>> load(
-        const provider::ArtifactDescriptor&) override {
+Result<std::shared_ptr<provider::experimental::IProviderSession>>
+make_tensorrt_session(const RuntimeConfiguration& configuration) {
+    try {
+        auto session = std::make_shared<TensorRTExecutionSession>();
+        auto initialized = session->initialize(configuration);
+        if (!initialized) return initialized.error();
+        return std::static_pointer_cast<provider::experimental::IProviderSession>(
+            std::move(session));
+    } catch (const std::bad_alloc&) {
         return Error(
-            ErrorCode::not_implemented,
-            "v1 component loading remains unused; TensorRTBackend owns the production session",
-            "dcvcrt.tensorrt");
+            ErrorCode::resource_exhausted,
+            "unable to allocate TensorRT provider session",
+            std::string(subsystem));
+    } catch (const std::exception& exception) {
+        return backend_error(
+            std::string("failed to create TensorRT provider session: ") +
+            exception.what());
+    } catch (...) {
+        return backend_error("failed to create TensorRT provider session");
     }
-};
-
-Result<codec::Components> make_tensorrt_components(const RuntimeConfiguration&) {
-    auto backend = make_tensorrt_backend();
-    if (!backend) return backend.error();
-    codec::Components components;
-    components.codec = std::move(backend.value());
-    return components;
 }
 
 }  // namespace
@@ -4138,10 +4154,8 @@ void register_tensorrt_provider() {
             .supports_cuda_graphs = true,
             .target_device = "cuda",
         },
-        []() -> std::shared_ptr<provider::IExecutionProvider> {
-            return std::make_shared<TensorRTProvider>();
-        },
-        make_tensorrt_components,
+        {},
+        make_tensorrt_session,
     });
 }
 

@@ -139,7 +139,14 @@ public:
     [[nodiscard]] Result<codec::Components>
     create_components(
         const RuntimeConfiguration&,
-        const runtime::RuntimeServices&) override {
+        std::shared_ptr<provider::experimental::IProviderSession>
+            provider_session) override {
+        if (!provider_session) {
+            return Error(
+                ErrorCode::dependency_unavailable,
+                "test codec requires a provider session",
+                "test-codec");
+        }
         codec::Components components;
         components.codec = std::make_unique<TestCodecBackend>();
         return components;

@@ -16,6 +16,7 @@
 #include "nvcr/codec/adapter.hpp"
 #include "nvcr/artifacts/resolver.hpp"
 #include "nvcr/configuration/configuration.hpp"
+#include "nvcr/provider/experimental/session.hpp"
 #include "nvcr/provider/provider_api.hpp"
 
 #include <functional>
@@ -49,10 +50,11 @@ struct ProviderEntry {
     provider::ProviderCapabilities capabilities;
     // Factory creates a live provider instance on demand.
     std::function<std::shared_ptr<provider::IExecutionProvider>()> factory;
-    // Factory creates codec runtime components owned by this provider family.
-    // This keeps codec adapters from constructing backend-specific concrete
-    // types while preserving the current codec-level runtime boundary.
-    std::function<Result<codec::Components>(const RuntimeConfiguration&)> component_factory{};
+    // Factory creates the provider-owned execution session selected for a
+    // codec runtime. The legacy executable factory above remains available to
+    // component-level artifact clients while that API is supported.
+    std::function<Result<std::shared_ptr<provider::experimental::IProviderSession>>(
+        const RuntimeConfiguration&)> session_factory{};
 };
 
 // ---------------------------------------------------------------------------
@@ -99,9 +101,9 @@ private:
 // RuntimeServices — codec adapter -> runtime bridge
 // ---------------------------------------------------------------------------
 //
-// Passed to ICodecAdapter::create_encoder / create_decoder so that the adapter
-// can request executable model components through the registry without
-// depending on TensorRT or any concrete provider type.
+// Resolves the configured provider to either the production session contract
+// or the legacy component-level executable API without exposing a concrete
+// provider type to generic runtime code.
 
 class RuntimeServices final {
 public:
@@ -121,8 +123,8 @@ public:
         const artifacts::Resolver& resolver,
         const artifacts::ArtifactRequest& request) const;
 
-    [[nodiscard]] Result<codec::Components>
-    create_components(const RuntimeConfiguration& configuration) const;
+    [[nodiscard]] Result<std::shared_ptr<provider::experimental::IProviderSession>>
+    create_provider_session(const RuntimeConfiguration& configuration) const;
 
     [[nodiscard]] const Registry& registry() const noexcept { return registry_; }
     [[nodiscard]] std::string_view preferred_provider() const noexcept {

@@ -3,6 +3,10 @@
 #include "nvcr/dcvcrt/backend.hpp"
 #include "nvcr/runtime/registry.hpp"
 
+#if defined(NVCR_HAS_TENSORRT)
+#include "nvcr/dcvcrt/tensorrt_backend.hpp"
+#endif
+
 #include <memory>
 
 namespace nvcr::dcvcrt {
@@ -35,9 +39,23 @@ public:
     [[nodiscard]] Result<codec::Components>
     create_components(
         const RuntimeConfiguration& configuration,
-        const runtime::RuntimeServices& services) override {
-        register_execution_providers();
-        return services.create_components(configuration);
+        std::shared_ptr<provider::experimental::IProviderSession>
+            provider_session) override {
+#if defined(NVCR_HAS_TENSORRT)
+        static_cast<void>(configuration);
+        auto backend = make_tensorrt_backend(std::move(provider_session));
+        if (!backend) return backend.error();
+        codec::Components components;
+        components.codec = std::move(backend.value());
+        return components;
+#else
+        static_cast<void>(configuration);
+        static_cast<void>(provider_session);
+        return Error(
+            ErrorCode::dependency_unavailable,
+            "DCVC-RT has no production execution provider in this build",
+            "dcvcrt");
+#endif
     }
 };
 

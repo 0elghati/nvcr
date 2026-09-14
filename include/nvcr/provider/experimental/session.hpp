@@ -3,8 +3,8 @@
 // Experimental provider-session vocabulary for the NVCR v2 boundary.
 //
 // This contract is intentionally separate from provider_api.hpp. Production
-// construction continues to use the v1 provider facade while this API is
-// exercised by deterministic fixtures and the TensorRT extraction is staged.
+// construction uses it through the registry while the API remains experimental
+// pending a public C++ API/ABI policy.
 
 #include "nvcr/common/error.hpp"
 #include "nvcr/provider/provider_api.hpp"

@@ -29,6 +29,7 @@ struct RuntimeConfiguration final {
     std::filesystem::path intra_engine_path;
     std::filesystem::path predicted_engine_path;
     std::filesystem::path entropy_model_path;
+    std::string codec_id{"dcvc-rt"};
     std::string model_id{"dcvcrt-cvpr2025"};
     std::string bitstream_model_id{"dcvcrt"};
     std::string provider_id{"tensorrt"};
