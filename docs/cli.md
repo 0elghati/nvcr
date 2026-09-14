@@ -114,7 +114,7 @@ nvcr encode \
 
 `--frames 0` processes complete frames to end of input. `--gop-size 1`
 explicitly selects all-intra development mode. Normal operation uses I/P
-coding. `--provider`, `--device-id`, `--engine-profile`, and
+coding. `--codec`, `--provider`, `--device-id`, `--engine-profile`, and
 `--engine-dir` override their defaults.
 
 The final payload-byte total is the complete packet payload passed by the
