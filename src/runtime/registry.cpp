@@ -55,7 +55,13 @@ std::optional<CodecEntry> Registry::find_codec(std::string_view id) const {
 Result<std::unique_ptr<codec::ICodecAdapter>> Registry::create_codec(
     std::string_view id) const {
     auto entry = find_codec(id);
-    if (!entry || !entry->factory) {
+    if (!entry) {
+        return Error(
+            ErrorCode::missing_codec,
+            "codec is not registered: " + std::string(id),
+            "registry");
+    }
+    if (!entry->factory) {
         return Error(
             ErrorCode::dependency_unavailable,
             "codec has no registered adapter factory: " + std::string(id),

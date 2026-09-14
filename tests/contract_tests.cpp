@@ -414,6 +414,10 @@ void runtime_construction_contract() {
     configuration.codec_id = "missing-codec";
     auto missing_codec = nvcr::Runtime::create(configuration);
     expect(!missing_codec.has_value(), "runtime rejects an unregistered codec selection");
+    if (!missing_codec) {
+        expect(missing_codec.error().code() == nvcr::ErrorCode::missing_codec,
+               "unregistered runtime codec maps to missing_codec");
+    }
 
     configuration.codec_id = "test-codec";
     configuration.provider_id = "missing-provider";
