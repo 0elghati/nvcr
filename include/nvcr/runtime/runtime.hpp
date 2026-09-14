@@ -32,6 +32,11 @@ public:
     Runtime(const Runtime&) = delete;
     Runtime& operator=(const Runtime&) = delete;
 
+    // Selects the registered codec and provider named by configuration, then
+    // composes their adapter and provider session into a runtime.
+    [[nodiscard]] static Result<Runtime> create(RuntimeConfiguration configuration);
+
+    // Low-level construction seam for tests and callers supplying components.
     [[nodiscard]] static Result<Runtime> create(
         RuntimeConfiguration configuration,
         codec::Components components);

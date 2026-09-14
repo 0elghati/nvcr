@@ -1,4 +1,5 @@
 #include "nvcr/dcvcrt/backend.hpp"
+#include "nvcr/dcvcrt/adapter.hpp"
 
 #if defined(NVCR_HAS_TENSORRT)
 #include "nvcr/dcvcrt/tensorrt_backend.hpp"
@@ -65,7 +66,10 @@ void register_codec() {
              "TensorRT execution policy: automatic | low_memory | performance",
              "automatic", {}, {}, false},
         }},
-        {},
+        []() -> std::unique_ptr<codec::ICodecAdapter> {
+            auto adapter = make_adapter();
+            return adapter ? std::move(adapter.value()) : nullptr;
+        },
     });
 }
 

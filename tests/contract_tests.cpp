@@ -41,6 +41,12 @@ void registry_contracts() {
     expect(!providers.empty(), "provider registry is non-empty");
     expect(registry.find_codec("dcvc-rt").has_value(), "dcvc-rt is registered");
     expect(registry.find_codec("test-codec").has_value(), "test codec is registered");
+    auto dcvcrt_adapter = registry.create_codec("dcvc-rt");
+    expect(dcvcrt_adapter.has_value(), "registered dcvc-rt creates an adapter");
+    if (dcvcrt_adapter) {
+        expect(dcvcrt_adapter.value()->descriptor().id == "dcvc-rt",
+               "registered dcvc-rt adapter matches its descriptor");
+    }
     auto registered_adapter = registry.create_codec("test-codec");
     expect(registered_adapter.has_value(), "registered test codec creates an adapter");
     if (registered_adapter) {
@@ -70,7 +76,10 @@ void registry_contracts() {
     }
     for (const auto& provider_entry : providers) {
         expect(!provider_entry.descriptor.id.empty(), "registered provider has an id");
-        expect(static_cast<bool>(provider_entry.factory), "registered provider has a factory");
+        expect(
+            provider_entry.factory || provider_entry.session_factory,
+            "registered provider has a construction factory");
+        if (!provider_entry.factory) continue;
         auto provider = provider_entry.factory();
         expect(provider != nullptr, "registered provider factory creates a provider");
         if (!provider) continue;
@@ -365,18 +374,17 @@ void runtime_services_contract() {
 
     nvcr::RuntimeConfiguration configuration;
     configuration.provider_id = "test-cpu";
-    auto components = services.create_components(configuration);
-    expect(components.has_value(), "runtime services creates provider-owned codec components");
-    if (components) {
-        expect(components.value().codec != nullptr, "provider-owned components include a codec backend");
-    }
+    auto provider_session = services.create_provider_session(configuration);
+    expect(
+        provider_session.has_value(),
+        "runtime services creates the selected provider session");
 
     configuration.provider_id = "no-such-provider";
-    auto missing_components = services.create_components(configuration);
-    expect(!missing_components.has_value(), "runtime services rejects missing component provider");
-    if (!missing_components) {
-        expect(missing_components.error().code() == nvcr::ErrorCode::missing_provider,
-               "missing component provider maps to missing_provider");
+    auto missing_session = services.create_provider_session(configuration);
+    expect(!missing_session.has_value(), "runtime services rejects missing session provider");
+    if (!missing_session) {
+        expect(missing_session.error().code() == nvcr::ErrorCode::missing_provider,
+               "missing session provider maps to missing_provider");
     }
 }
 
@@ -388,6 +396,33 @@ nvcr::Result<nvcr::Frame> make_frame(std::byte seed) {
     }
     return nvcr::Frame::copy_from(
         4U, 2U, nvcr::PixelFormat::yuv420p8, data, nvcr::Timestamp{7});
+}
+
+void runtime_construction_contract() {
+    nvcr::RuntimeConfiguration configuration;
+    configuration.codec_id = "test-codec";
+    configuration.provider_id = "test-cpu";
+    configuration.log_level = nvcr::LogLevel::off;
+
+    auto runtime = nvcr::Runtime::create(configuration);
+    expect(runtime.has_value(), "runtime selects registered codec and provider factories");
+    if (runtime) {
+        expect(runtime.value().state() == nvcr::RuntimeState::ready,
+               "factory-constructed runtime is ready");
+    }
+
+    configuration.codec_id = "missing-codec";
+    auto missing_codec = nvcr::Runtime::create(configuration);
+    expect(!missing_codec.has_value(), "runtime rejects an unregistered codec selection");
+
+    configuration.codec_id = "test-codec";
+    configuration.provider_id = "missing-provider";
+    auto missing_provider = nvcr::Runtime::create(configuration);
+    expect(!missing_provider.has_value(), "runtime rejects an unregistered provider selection");
+    if (!missing_provider) {
+        expect(missing_provider.error().code() == nvcr::ErrorCode::missing_provider,
+               "unregistered runtime provider maps to missing_provider");
+    }
 }
 
 void codec_adapter_contract() {
@@ -407,10 +442,11 @@ void codec_adapter_contract() {
     expect(frame.has_value(), "test contract frame is constructible");
     if (!frame) return;
 
-    nvcr::runtime::RuntimeServices services(
-        nvcr::runtime::Registry::instance(),
-        "test-cpu");
-    auto components = adapter->create_components({}, services);
+    nvcr::RuntimeConfiguration configuration;
+    configuration.codec_id = "test-codec";
+    configuration.provider_id = "test-cpu";
+    auto provider_session = nvcr::test_support::make_test_provider_session();
+    auto components = adapter->create_components(configuration, provider_session);
     expect(components.has_value(), "test adapter creates codec components");
     if (!components) return;
     expect(components.value().codec != nullptr, "test adapter returns a codec backend");
@@ -492,6 +528,7 @@ int main() {
     registry_contracts();
     provider_session_contract();
     runtime_services_contract();
+    runtime_construction_contract();
     codec_adapter_contract();
     session_lifecycle_contract();
     if (failures == 0) {

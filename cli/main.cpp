@@ -66,11 +66,11 @@ void usage(std::ostream& out) {
         << "Usage:\n"
         << "  nvcr --version\n"
         << "  nvcr encode -i INPUT.yuv -o OUTPUT.nvcr -s WIDTHxHEIGHT\n"
-        << "              [--provider ID] [--backend NAME] [--engine-profile NAME]\n"
+        << "              [--codec ID] [--provider ID] [--backend NAME] [--engine-profile NAME]\n"
         << "              [--frames N] [--qp N]\n"
         << "              [--gop-size N] [-r FPS] [--engine-dir DIR]\n"
         << "  nvcr decode -i INPUT.nvcr -o OUTPUT.yuv [--quality-metrics REFERENCE.yuv]\n"
-        << "              [--provider ID] [--backend NAME] [--engine-profile NAME] [--frames N]\n"
+        << "              [--codec ID] [--provider ID] [--backend NAME] [--engine-profile NAME] [--frames N]\n"
         << "              [--device-id N] [--engine-dir DIR]\n"
         << "  nvcr codec list\n"
         << "  nvcr codec describe CODEC_ID\n"
@@ -87,6 +87,7 @@ void usage(std::ostream& out) {
         << "      --width N             Raw input width (encode only)\n"
         << "      --height N            Raw input height (encode only)\n"
         << "      --backend NAME        Installed backend selector (default: NVCR_BACKEND or default)\n"
+        << "      --codec ID            Codec adapter id (default: dcvc-rt)\n"
         << "      --provider ID         Execution provider id (default: tensorrt)\n"
         << "      --engine-profile NAME Installed engine profile, for example 720p\n"
         << "                            (default: inferred from encoded dimensions)\n"
@@ -478,6 +479,10 @@ bool parse_options(int argc, char* argv[], Options& options) {
         return true;
     }
 
+    if (const char* codec = std::getenv("NVCR_CODEC")) {
+        if (*codec != '\0' && options.codec_id.empty()) options.codec_id = codec;
+    }
+    if (options.codec_id.empty()) options.codec_id = "dcvc-rt";
     if (const char* backend = std::getenv("NVCR_BACKEND")) {
         if (*backend != '\0' && options.backend == "default") options.backend = backend;
     }
@@ -684,10 +689,9 @@ nvcr::Result<nvcr::Runtime> create_runtime(
     if (options.verbose) {
         std::cout << "Using TensorRT engine bundle: " << engine_dir << '\n';
     }
-    auto adapter = nvcr::dcvcrt::make_adapter();
-    if (!adapter) return adapter.error();
     nvcr::RuntimeConfiguration configuration;
     configuration.intra_engine_path = engine_dir;
+    configuration.codec_id = options.codec_id;
     if (!options.provider_id.empty()) configuration.provider_id = options.provider_id;
     configuration.device_id = options.device_id;
     configuration.intra_qp = options.qp;
@@ -695,12 +699,7 @@ nvcr::Result<nvcr::Runtime> create_runtime(
     configuration.enable_profiling = options.profile;
     configuration.log_level = options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
     bootstrap_registry();
-    nvcr::runtime::RuntimeServices services(
-        nvcr::runtime::Registry::instance(),
-        configuration.provider_id);
-    auto components = adapter.value()->create_components(configuration, services);
-    if (!components) return components.error();
-    return nvcr::Runtime::create(configuration, std::move(components.value()));
+    return nvcr::Runtime::create(configuration);
 }
 
 int encode(const Options& options) {

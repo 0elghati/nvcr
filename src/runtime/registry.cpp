@@ -142,8 +142,8 @@ Result<std::shared_ptr<provider::IExecutable>> RuntimeServices::resolve(
     return resolve(selected.value().candidate.artifact);
 }
 
-Result<codec::Components>
-RuntimeServices::create_components(const RuntimeConfiguration& configuration) const {
+Result<std::shared_ptr<provider::experimental::IProviderSession>>
+RuntimeServices::create_provider_session(const RuntimeConfiguration& configuration) const {
     const std::string provider_id = configuration.provider_id.empty()
         ? std::string(preferred_provider_id_)
         : configuration.provider_id;
@@ -154,7 +154,8 @@ RuntimeServices::create_components(const RuntimeConfiguration& configuration) co
             "registry");
     }
 
-    std::function<Result<codec::Components>(const RuntimeConfiguration&)> component_factory;
+    std::function<Result<std::shared_ptr<provider::experimental::IProviderSession>>(
+        const RuntimeConfiguration&)> session_factory;
     {
         std::scoped_lock lock(registry_.mutex_);
         const auto provider = std::find_if(
@@ -166,15 +167,15 @@ RuntimeServices::create_components(const RuntimeConfiguration& configuration) co
                 "execution provider is not registered: " + provider_id,
                 "registry");
         }
-        component_factory = provider->component_factory;
+        session_factory = provider->session_factory;
     }
-    if (!component_factory) {
+    if (!session_factory) {
         return Error(
             ErrorCode::not_implemented,
-            "execution provider cannot create codec components: " + provider_id,
+            "execution provider cannot create a session: " + provider_id,
             "registry");
     }
-    return component_factory(configuration);
+    return session_factory(configuration);
 }
 
 }  // namespace nvcr::runtime
