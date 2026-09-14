@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-09-13
+Last reviewed: 2026-09-14
 
 ## Product direction
 
@@ -29,13 +29,13 @@ end-to-end integration is DCVC-RT through TensorRT FP16 on Linux/NVIDIA targets.
 DCVC-RT codec adapter -> TensorRT FP16 provider -> Linux/NVIDIA targets
 ```
 
-The intended boundary assigns GOP/reference semantics, native entropy coding,
-and codec-private payload syntax to the codec adapter, while TensorRT owns
-target-local plans, execution, synchronization, and provider errors. The v1.x
-production implementation does not yet realize that split: its provider factory
-creates a monolithic `TensorRTBackend` that also owns DCVC-RT orchestration,
-entropy, payload, and device-DPB behavior. The proposed v2 extraction is
-documented in [the provider-boundary RFC](docs/provider-boundary-v2.md).
+The production boundary assigns GOP/reference semantics, native entropy coding,
+codec-private payload syntax, and reference meaning to the registered DCVC-RT
+adapter. The registered TensorRT provider session owns target-local plans,
+device storage, execution, synchronization, and provider errors. The remaining
+`TensorRTBackend` is a private composition facade, not the provider factory. The
+completed staged extraction is documented in
+[the provider-boundary RFC](docs/provider-boundary-v2.md).
 
 The deterministic test codec and CPU provider are conformance fixtures. They do
 not count as additional production codecs/providers or performance baselines.
@@ -45,7 +45,7 @@ not count as additional production codecs/providers or performance baselines.
 | Area | Status | Remaining gate |
 |---|---|---|
 | Runtime and stream contracts | Implemented | Maintain parser, reset, flush, delayed-output, and I/P coverage |
-| TensorRT provider path | v1.x monolith shipped; v2 boundary design accepted | Proceed through the staged RFC gates without combining contract, extraction, and orchestration changes |
+| TensorRT provider path | v2 extraction complete through B7 | Maintain the accepted ownership, byte, lifecycle, target, and performance gates; a second provider remains separate |
 | Binary and container packaging | Implemented | Complete license, provenance, clean-package, and version-first container-tag checks |
 | Public documentation and onboarding | Implemented | Keep the project identity, contributions, reference comparisons, latest-release examples, and platform workflows current |
 | CLI and artifact-client build identity | Implemented | Keep `version.txt`, build metadata, both version commands, citation metadata, and package checks consistent |
@@ -70,7 +70,7 @@ The table below is the execution record for the active provider-boundary work.
 | B4 | TensorRT execution session behind the facade | Complete; measured regression accepted 2026-09-13 | Engine/context, binding, allocation, stream/event, graph-cache, and enqueue ownership moved behind the session contract while bundle validation and context policy remain intact |
 | B5 | I-frame codec orchestration | Complete; measured regression accepted 2026-09-13 | DCVC-RT owns stage order, quantization, entropy, and payload assembly with byte and reconstructed-frame parity |
 | B6 | P-frame state and orchestration | Complete; measured regression accepted 2026-09-13 | DCVC-RT owns reference semantics; GOP, reset, flush, repeated-session, and malformed-input gates pass |
-| B7 | Production construction cleanup | Next | A real adapter factory selects codec and provider; direct registration, component factory, and the unused stub are removed after their last callers |
+| B7 | Production construction cleanup | Complete; gates pass 2026-09-14 | Registered adapter and provider-session factories select both IDs; direct generic-runtime registration, component factory, and unused production stub are removed |
 
 B2 was completed in PR #148. Its clean CPU Release build, test, install,
 sanitizer, and TensorRT Release target gates passed. B3 was captured before
@@ -130,6 +130,24 @@ Payloads, quality, provider counters, engine/input identities, and peak device
 memory are unchanged. See
 [the B6 evidence](evidence/vision-b6-rtx4070-20260913.md). The recorded B6
 result was explicitly accepted on 2026-09-13, completing B6.
+
+B7 was completed on top of B6. `RuntimeConfiguration` now carries explicit
+codec and provider IDs, and `Runtime::create(configuration)` resolves both the
+registered codec adapter and provider-session factories. The CLI uses this
+path. The DCVC-RT entry has a real adapter factory, the TensorRT entry creates
+the real `TensorRTExecutionSession`, and generic runtime code no longer
+registers DCVC-RT directly. The production-only `component_factory`, unused
+TensorRT `IExecutionProvider::load` stub, and test-only component shim were
+removed after their last callers.
+
+Clean CPU Release/install, sanitizer/fuzz, clean TensorRT Release, all six
+exact-profile GPU contracts and I/P round trips, the pinned golden, and the
+65-frame GOP-8 byte/reconstruction parity gates pass. The matched five-profile
+normal-I/P result changed pooled encode throughput by -0.038% and decode by
++0.019% relative to B6; the worst per-profile decrease is -0.204%, and peak
+device memory remains 2,244 MiB. See
+[the B7 evidence](evidence/vision-b7-rtx4070-20260914.md). B7 completes the
+staged Phase B execution-boundary migration.
 
 Generic packages exclude checkpoints, exported model assets, TensorRT plans,
 and datasets. Validated engine bundles use the separate rolling catalog and

@@ -1058,9 +1058,9 @@ Goal:
 
 # 30. Phase B — Execution Boundary
 
-Status: Design accepted in
-[PR #145](https://github.com/0elghati/nvcr/pull/145); implementation is staged
-as B2 through B7 in the [roadmap](../ROADMAP.md#active-v2-work).
+Status: Complete through B7. The design was accepted in
+[PR #145](https://github.com/0elghati/nvcr/pull/145), and the staged implementation
+is recorded in the [roadmap](../ROADMAP.md#active-v2-work).
 
 Complete the generic provider model.
 

@@ -22,8 +22,8 @@ changed shell scripts and `python3 -m py_compile` for changed Python files.
 ## Architecture and documentation
 
 Keep codec semantics in a codec adapter and execution technology in a provider.
-Use `RuntimeServices` for provider-mediated construction, preserve bounded
-access-unit parsing, and add conformance tests for lifecycle, malformed input,
+Use `RuntimeServices` to select provider sessions, preserve bounded access-unit
+parsing, and add conformance tests for lifecycle, malformed input,
 artifact compatibility, and registration behavior. A new codec/provider is not
 production-supported until its target and evidence gates pass.
 

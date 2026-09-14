@@ -2,6 +2,7 @@
 intra_engine_path=/opt/nvcr/models/dcvcrt
 predicted_engine_path=/opt/nvcr/models/dcvcrt
 entropy_model_path=/opt/nvcr/models/dcvcrt
+codec_id=dcvc-rt
 model_id=dcvcrt-cvpr2025
 provider_id=tensorrt
 device_id=0

@@ -7,14 +7,14 @@
 
 #include <memory>
 
-namespace nvcr::runtime {
-class RuntimeServices;
+namespace nvcr::provider::experimental {
+class IProviderSession;
 }
 
 namespace nvcr::codec {
 
-// Transitional adapter boundary used to separate codec semantics from
-// execution-provider construction while preserving the existing backend runtime.
+// A codec adapter composes codec semantics with a provider-owned execution
+// session while preserving the common backend runtime.
 class ICodecAdapter {
 public:
     virtual ~ICodecAdapter() = default;
@@ -28,7 +28,7 @@ public:
     [[nodiscard]] virtual Result<Components>
     create_components(
         const RuntimeConfiguration& configuration,
-        const runtime::RuntimeServices& services) = 0;
+        std::shared_ptr<provider::experimental::IProviderSession> provider_session) = 0;
 };
 
 }  // namespace nvcr::codec

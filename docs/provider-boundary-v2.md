@@ -1,8 +1,9 @@
 # RFC: NVCR v2 codec/provider execution boundary
 
-Status: Accepted design direction; B4-B6 complete; B7 next
+Status: Implemented; B4-B7 complete
 Date: 2026-09-09
-Scope: Architecture and migration design only
+Last updated: 2026-09-14
+Scope: Architecture, migration, and completion record
 
 Related: [NVCR vision](NVCR_VISION.md) and
 [active v2 roadmap](../ROADMAP.md#active-v2-work)
@@ -10,8 +11,8 @@ Related: [NVCR vision](NVCR_VISION.md) and
 ## Decision summary
 
 Adopt a codec-owned orchestration layer over a provider-owned execution session.
-The codec layer will own DCVC-RT sequencing, quantization decisions, entropy
-coding, payload syntax, and reference semantics. The provider session will own
+The codec layer owns DCVC-RT sequencing, quantization decisions, entropy
+coding, payload syntax, and reference semantics. The provider session owns
 TensorRT engines and contexts, device allocation, streams and events, shape
 binding, graph capture, and model-stage execution.
 
@@ -35,10 +36,10 @@ The following invariants apply throughout migration:
 - Provider failures remain structured NVCR errors with useful subsystem context.
 - CPU fixtures remain contract tests, not a production neural provider.
 
-## Current production path
+## Pre-B7 production path
 
-The production CLI does not use the generic per-component load path. The
-source-traced path is:
+Before B7, the production CLI did not use the generic per-component load path. The
+source-traced path was:
 
     cli/main.cpp:create_runtime
       -> nvcr::dcvcrt::make_adapter
@@ -74,9 +75,9 @@ The C++ artifact resolver is likewise not the production CLI's bundle-selection
 path. The CLI resolves an engine directory, nvcr-artifacts manages the catalog,
 and TensorRTBackend validates the selected bundle before loading plans.
 
-## Ownership found in TensorRTBackend
+## Pre-B4 ownership found in TensorRTBackend
 
-TensorRTBackend currently combines two kinds of responsibility.
+Before extraction, TensorRTBackend combined two kinds of responsibility.
 
 Codec-specific responsibility:
 
@@ -100,7 +101,7 @@ The device DPB crosses both concerns. Its storage and synchronization are
 provider concerns; the meaning of a reference frame, reference feature,
 generation, and frame index is a codec concern.
 
-## Gaps in the existing generic API
+## Gaps in the pre-B7 generic API
 
 include/nvcr/provider/provider_api.hpp is provider-neutral at the type-name
 level, but it cannot describe the current production path precisely:
@@ -339,6 +340,17 @@ B6 result was explicitly accepted on 2026-09-13, completing B6.
 - Remove direct DCVC-RT registration from generic runtime code.
 - Retire component_factory and the unused production stub only after all
   production construction uses the session contract.
+
+Implemented on `codex/b7-production-construction`. Runtime configuration now
+selects both registered codec and provider IDs. The runtime creates the adapter
+and provider session through their registry factories, then passes the session
+to the adapter. The CLI uses that path; generic runtime code no longer registers
+DCVC-RT. TensorRT registration creates the real production execution session,
+and the component factory and unused legacy provider stub are removed. Clean
+CPU/install, sanitizer/fuzz, clean TensorRT Release, all six exact-profile GPU
+contracts and I/P round trips, the pinned golden, 65-frame byte/reconstruction
+parity, and five-profile performance/memory gates pass. See the
+[B7 evidence](../evidence/vision-b7-rtx4070-20260914.md).
 
 Each PR must be independently buildable and revertible. Compatibility shims
 should be deleted when their last production caller is gone.

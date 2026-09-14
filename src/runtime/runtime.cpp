@@ -1,9 +1,9 @@
 #include "nvcr/runtime/runtime.hpp"
 
 #include "nvcr/codec/runtime.hpp"
-#include "nvcr/dcvcrt/backend.hpp"
 #include "nvcr/logging/logger.hpp"
 #include "nvcr/memory/memory_pool.hpp"
+#include "nvcr/runtime/registry.hpp"
 
 #include <mutex>
 #include <new>
@@ -45,12 +45,32 @@ Runtime::~Runtime() = default;
 Runtime::Runtime(Runtime&&) noexcept = default;
 Runtime& Runtime::operator=(Runtime&&) noexcept = default;
 
+Result<Runtime> Runtime::create(RuntimeConfiguration configuration) {
+    auto valid = ConfigurationLoader::validate(configuration);
+    if (!valid) return valid.error();
+
+    auto& registry = runtime::Registry::instance();
+    auto adapter = registry.create_codec(configuration.codec_id);
+    if (!adapter) return adapter.error();
+    if (!registry.compatible(configuration.codec_id, configuration.provider_id)) {
+        return Error(
+            ErrorCode::missing_provider,
+            "codec/provider selection is not registered: " + configuration.codec_id +
+                "/" + configuration.provider_id,
+            "runtime");
+    }
+
+    runtime::RuntimeServices services(registry, configuration.provider_id);
+    auto provider_session = services.create_provider_session(configuration);
+    if (!provider_session) return provider_session.error();
+    auto components = adapter.value()->create_components(
+        configuration, std::move(provider_session.value()));
+    if (!components) return components.error();
+    return create(std::move(configuration), std::move(components.value()));
+}
+
 Result<Runtime> Runtime::create(
     RuntimeConfiguration configuration, codec::Components components) {
-    // Bootstrap built-in registry entries before validation and initialization.
-    dcvcrt::register_codec();
-    dcvcrt::register_execution_providers();
-
     auto valid = ConfigurationLoader::validate(configuration);
     if (!valid) {
         return valid.error();

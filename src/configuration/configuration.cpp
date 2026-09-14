@@ -83,6 +83,8 @@ Result<void> apply_setting(
         configuration.predicted_engine_path = value;
     } else if (key == "entropy_model_path") {
         configuration.entropy_model_path = value;
+    } else if (key == "codec_id") {
+        configuration.codec_id = value;
     } else if (key == "model_id") {
         configuration.model_id = value;
     } else if (key == "bitstream_model_id") {
@@ -189,6 +191,9 @@ Result<RuntimeConfiguration> ConfigurationLoader::from_file(
 }
 
 Result<void> ConfigurationLoader::validate(const RuntimeConfiguration& configuration) {
+    if (!valid_identifier(configuration.codec_id)) {
+        return Error(ErrorCode::invalid_argument, "invalid codec_id", "configuration");
+    }
     if (!valid_identifier(configuration.model_id)) {
         return Error(ErrorCode::invalid_argument, "invalid model_id", "configuration");
     }
