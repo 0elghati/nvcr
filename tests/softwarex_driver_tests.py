@@ -21,14 +21,14 @@ import benchmark_softwarex_matrix as softwarex  # noqa: E402
 class OutputParsingTests(unittest.TestCase):
     def test_parses_encode_decode_latency_and_quality(self) -> None:
         encoded = """\
-frame 0: encoded 100 payload bytes in 1.25 ms
-frame 1: encoded 80 payload bytes in 0.75 ms
+input frame 0: codec operations emitted 1 access unit(s), 100 payload bytes in 1.25 ms
+input frame 1: codec operations emitted 1 access unit(s), 80 payload bytes in 0.75 ms
 Encoded 2 frame(s), 180 payload bytes, codec time 0.002 s (1000.000 fps)
 Wrote stream.nvcr
 """
         decoded = """\
-frame 0: decoded in 2.50 ms
-frame 1: decoded in 1.50 ms
+access unit 0: codec operations emitted 1 frame(s) in 2.50 ms
+access unit 1: codec operations emitted 1 frame(s) in 1.50 ms
 Decoded 2 frame(s), codec time 0.004 s (500.000 fps)
 Quality 2 frame(s): PSNR-Y 35.000000 dB, PSNR-U 36.000000 dB, PSNR-V 37.000000 dB, PSNR-YUV 35.375000 dB
 Wrote YUV420p8 4x2 to output.yuv
@@ -229,8 +229,10 @@ class AggregationTests(unittest.TestCase):
         def profile_result(command: list[str], **_: object) -> softwarex.CommandResult:
             if command[1] == "encode":
                 output = (
-                    "frame 0: encoded 60 payload bytes in 1.00 ms\n"
-                    "frame 1: encoded 40 payload bytes in 2.00 ms\n"
+                    "input frame 0: codec operations emitted 1 access unit(s), "
+                    "60 payload bytes in 1.00 ms\n"
+                    "input frame 1: codec operations emitted 1 access unit(s), "
+                    "40 payload bytes in 2.00 ms\n"
                     "Encoded 2 frame(s), 100 payload bytes, "
                     "codec time 2.000 s (1.000 fps)\n"
                 )
@@ -238,8 +240,8 @@ class AggregationTests(unittest.TestCase):
                 host, gpu = 20.0, 30.0
             else:
                 output = (
-                    "frame 0: decoded in 2.00 ms\n"
-                    "frame 1: decoded in 4.00 ms\n"
+                    "access unit 0: codec operations emitted 1 frame(s) in 2.00 ms\n"
+                    "access unit 1: codec operations emitted 1 frame(s) in 4.00 ms\n"
                     "Decoded 2 frame(s), codec time 4.000 s (0.500 fps)\n"
                     "Quality 2 frame(s): PSNR-Y 30.000000 dB, "
                     "PSNR-U 31.000000 dB, PSNR-V 32.000000 dB, "

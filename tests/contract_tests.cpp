@@ -1,5 +1,6 @@
 #include "support/test_codec/test_codec.hpp"
 #include "support/test_provider/test_provider.hpp"
+#include "../cli/session_driver.hpp"
 
 #include <nvcr/dcvcrt/backend.hpp>
 #if defined(NVCR_TEST_HAS_TENSORRT)
@@ -12,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <span>
 #include <vector>
 
@@ -565,6 +567,139 @@ void registered_grouped_session_contract() {
            "the repeated codec session produces its own output");
 }
 
+void cli_session_driver_contract() {
+    nvcr::RuntimeConfiguration configuration;
+    configuration.codec.id = "test-codec";
+    configuration.provider.id = "test-cpu";
+    configuration.runtime.log_level = nvcr::LogLevel::off;
+
+    auto runtime = nvcr::Runtime::create(configuration);
+    expect(runtime.has_value(), "CLI driver runtime constructs through registered factories");
+    if (!runtime) return;
+
+    constexpr std::array<std::int64_t, 9> input_timestamps{
+        1'000, 2'100, 3'700, 5'000, 8'200, 8'900, 12'500, 17'300, 20'000};
+    std::vector<nvcr::Frame> inputs;
+    for (std::size_t index = 0; index < input_timestamps.size(); ++index) {
+        auto frame = make_frame(
+            static_cast<std::byte>(0x30U + index),
+            nvcr::Timestamp{input_timestamps[index]});
+        expect(frame.has_value(), "CLI driver input frame is constructible");
+        if (!frame) return;
+        inputs.push_back(std::move(frame.value()));
+    }
+
+    std::chrono::nanoseconds codec_time{};
+    std::vector<nvcr::Packet> packets;
+    auto collect_packet = [&](nvcr::Packet&& packet) -> nvcr::Result<void> {
+        auto wire = nvcr::PacketIO::serialize(packet);
+        if (!wire) return wire.error();
+        auto restored = nvcr::PacketIO::deserialize(wire.value());
+        if (!restored) return restored.error();
+        packets.push_back(std::move(restored.value()));
+        return {};
+    };
+
+    for (std::size_t index = 0; index < inputs.size(); ++index) {
+        auto drained = nvcr::cli::send_frame_and_drain(
+            runtime.value(), inputs[index], collect_packet, codec_time);
+        expect(drained && drained.value() == nvcr::cli::DrainState::needs_input,
+               "CLI encoder driver treats try_again as normal input flow");
+        if (!drained) return;
+        if (index < 7U) {
+            expect(packets.empty(), "CLI encoder driver accepts input before output is ready");
+        } else if (index == 7U) {
+            expect(packets.size() == 1U,
+                   "CLI encoder driver drains the full grouped access unit");
+        } else {
+            expect(packets.size() == 1U,
+                   "CLI encoder driver leaves the short group pending until flush");
+        }
+    }
+    auto encoder_end = nvcr::cli::flush_and_drain_encoder(
+        runtime.value(), collect_packet, codec_time);
+    expect(encoder_end && encoder_end.value() == nvcr::cli::DrainState::end_of_stream,
+           "CLI encoder driver drains through end of stream");
+    expect(packets.size() == 2U, "CLI encoder driver retains the flush-only access unit");
+    if (!encoder_end || packets.size() != 2U) return;
+
+    std::vector<nvcr::Frame> outputs;
+    auto collect_frame = [&](nvcr::Frame&& frame) -> nvcr::Result<void> {
+        outputs.push_back(std::move(frame));
+        return {};
+    };
+    for (const auto& packet : packets) {
+        auto drained = nvcr::cli::send_access_unit_and_drain(
+            runtime.value(),
+            packet,
+            collect_frame,
+            std::numeric_limits<std::size_t>::max(),
+            codec_time);
+        expect(drained && drained.value() == nvcr::cli::DrainState::needs_input,
+               "CLI decoder driver drains every frame available from one access unit");
+        if (!drained) return;
+    }
+    auto decoder_end = nvcr::cli::flush_and_drain_decoder(
+        runtime.value(),
+        collect_frame,
+        std::numeric_limits<std::size_t>::max(),
+        codec_time);
+    expect(decoder_end && decoder_end.value() == nvcr::cli::DrainState::end_of_stream,
+           "CLI decoder driver drains through end of stream");
+    expect(outputs.size() == inputs.size(),
+           "CLI driver preserves full and short grouped frame counts");
+    if (!decoder_end || outputs.size() != inputs.size()) return;
+    for (std::size_t index = 0; index < outputs.size(); ++index) {
+        expect(std::equal(
+                   outputs[index].data().begin(), outputs[index].data().end(),
+                   inputs[index].data().begin()),
+               "CLI driver preserves grouped frame order and bytes");
+        expect(outputs[index].timestamp() == inputs[index].timestamp(),
+               "CLI driver preserves grouped frame timestamps");
+    }
+
+    expect(runtime.value().reset_decoder().has_value(),
+           "CLI driver decoder resets after full drain");
+    outputs.clear();
+    auto limited = nvcr::cli::send_access_unit_and_drain(
+        runtime.value(), packets.front(), collect_frame, 3U, codec_time);
+    expect(limited && limited.value() == nvcr::cli::DrainState::output_limit,
+           "CLI decoder driver stops at the requested output-frame limit");
+    expect(outputs.size() == 3U,
+           "CLI decoder frame limit counts outputs rather than access units");
+
+    expect(runtime.value().reset_encoder().has_value(),
+           "CLI driver encoder resets after full drain");
+    expect(runtime.value().reset_decoder().has_value(),
+           "CLI driver decoder resets with queued outputs discarded");
+    packets.clear();
+    outputs.clear();
+    auto reused_send = nvcr::cli::send_frame_and_drain(
+        runtime.value(), inputs.back(), collect_packet, codec_time);
+    auto reused_encoder_end = nvcr::cli::flush_and_drain_encoder(
+        runtime.value(), collect_packet, codec_time);
+    expect(reused_send && reused_encoder_end && packets.size() == 1U,
+           "CLI encoder driver supports reset and reuse with a short group");
+    if (!reused_send || !reused_encoder_end || packets.size() != 1U) return;
+    auto reused_decode = nvcr::cli::send_access_unit_and_drain(
+        runtime.value(),
+        packets.front(),
+        collect_frame,
+        std::numeric_limits<std::size_t>::max(),
+        codec_time);
+    auto reused_decoder_end = nvcr::cli::flush_and_drain_decoder(
+        runtime.value(),
+        collect_frame,
+        std::numeric_limits<std::size_t>::max(),
+        codec_time);
+    expect(reused_decode && reused_decoder_end && outputs.size() == 1U,
+           "CLI decoder driver supports reset and reuse");
+    if (outputs.size() == 1U) {
+        expect(outputs.front().timestamp() == inputs.back().timestamp(),
+               "CLI driver reuse preserves the short-group timestamp");
+    }
+}
+
 void codec_adapter_contract() {
     auto adapter = nvcr::test_support::make_test_codec_adapter();
     expect(adapter != nullptr, "test codec adapter is constructible");
@@ -677,6 +812,7 @@ int main() {
     runtime_services_contract();
     runtime_construction_contract();
     registered_grouped_session_contract();
+    cli_session_driver_contract();
     codec_adapter_contract();
     session_lifecycle_contract();
     if (failures == 0) {

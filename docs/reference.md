@@ -56,9 +56,10 @@ After the final input, flush the relevant direction and keep receiving until
 independently. The facade's `flush()` and `reset()` remain shared compatibility
 operations. `try_again` means output is not ready; it is not a backend failure.
 
-Convenience `encode(const Frame&)` and `decode(const Packet&)` methods
-remain available for the current immediate-output CLI path. Calls are
-serialized per runtime because codec state is mutable.
+Convenience `encode(const Frame&)` and `decode(const Packet&)` methods remain
+available to callers that require exactly one immediate output. The CLI uses
+the session lifecycle above so it can drive delayed and multi-output codecs.
+Calls are serialized per runtime because codec state is mutable.
 
 ## Construction and registration
 

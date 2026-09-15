@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-09-14
+Last reviewed: 2026-09-15
 
 ## Product direction
 
@@ -163,9 +163,10 @@ and gap classifications are recorded in
 | C2 | Buffered/delayed-output lifecycle | Complete 2026-09-14 | Registered eight-input/one-packet and one-packet/eight-frame fixture passes full/short drain, reset, reuse, repeated-session, and independent-direction checks |
 | C3 | Configuration ownership split | Complete 2026-09-14 | Runtime, codec, provider, artifact-selection, and stream-policy scopes are distinct while existing CLI/config keys and validation behavior remain intact |
 | C4 | Grouped-AU timing prototype | Complete 2026-09-14 | A registered grouped codec preserves distinct non-uniform frame timestamps across the serialized `PacketIO` boundary without a chunk API or NVAU change; see [the C4 evidence](evidence/phase-c4-grouped-au-timing-20260914.md) |
-| C5 | MLVC reference/export feasibility | Complete; candidate rejected 2026-09-14 | The pinned public MLVC-S model was compared through its PyTorch CPU reference and a proven ONNX Runtime CUDA session; the default FP16 export exceeded the predeclared PSNR and BPP limits; see [the C5 evidence](evidence/phase-c5-mlvc-reference-export-20260914.md) |
-| C6 | MLVC CUDA equivalence diagnosis | Complete; candidate rejected 2026-09-14 | The first stream-relevant divergence is in FP16 encoder raw symbols before entropy coding; the tested MLVC/ORT-CUDA pair is rejected as the next production axis; see [the C6 evidence](evidence/phase-c6-mlvc-cuda-equivalence-20260914.md) |
-| C7 | DCVC-UF fused-operator feasibility | Next | One fused operator and one frame-specific high-throughput branch match a pinned upstream encode/decode vector without generic runtime code owning UF branch semantics |
+| C5 | MLVC reference/export feasibility | Complete; strict reference-consistency target failed 2026-09-14 | The pinned MLVC-S/default generic FP16 ONNX/ORT-CUDA pair exceeded the predeclared PSNR and BPP limits against the PyTorch CPU reference; see [the C5 evidence](evidence/phase-c5-mlvc-reference-export-20260914.md) |
+| C6 | MLVC CUDA equivalence diagnosis | Complete; tested reference-interchange path rejected 2026-09-14 | FP16 encoder raw symbols diverged before entropy coding, so the tested pair is not byte/payload interchangeable with the reference path; see [the C6 evidence](evidence/phase-c6-mlvc-cuda-equivalence-20260914.md) |
+| C6.5 | Generic CLI session driving | Complete 2026-09-15 | Encode/decode use session send, full receive drain, directional flush, and final drain through the same driver exercised by the grouped fixture; see [the C6.5 evidence](evidence/phase-c6-5-cli-session-driver-20260915.md) |
+| C7 | DCVC-UF fused-operator feasibility | Pending; separate codec axis | One fused operator and one frame-specific high-throughput branch match a pinned upstream encode/decode vector without generic runtime code owning UF branch semantics |
 
 C0 confirmed that C1 could proceed without a new chunk API. The existing
 session verbs were sufficient. C1 now routes the production path through
@@ -184,12 +185,17 @@ See [the Phase C1-C3 evidence](evidence/phase-c1-c3-runtime-ownership-20260914.m
 The C4 prototype shows that `PacketIO` can preserve per-frame timing for a
 grouped access unit; it does not define a standard-container mapping. C5 tested
 the public MLVC-S checkpoint with the upstream default generic ONNX FP16 export.
-A real ONNX Runtime CUDA session ran, but the result exceeded the predeclared
-numerical limits at both rate points. C6 traced the first stream-relevant
-difference to FP16 encoder raw symbols before entropy coding. The tested
-MLVC/ORT-CUDA pair is rejected as the next production axis, and no NVCR provider
-or codec adapter was started. C7 now tests DCVC-UF export feasibility. The
-minimum capability vocabulary remains open in
+A real ONNX Runtime CUDA session ran, but the pair exceeded the predeclared
+strict reference-consistency limits at both rate points. C6 traced the first
+stream-relevant difference to FP16 encoder raw symbols before entropy coding,
+so the tested pair is not byte/payload interchangeable with the reference path.
+MLVC self-conformance, MLVC's general suitability, and ONNX Runtime CUDA's
+suitability as an NVCR provider remain unresolved.
+
+C6.5 brings the CLI into line with the existing session contract. The next
+experiment holds DCVC-RT constant and tests a second provider, with ONNX Runtime
+CUDA as the current candidate. C7 remains a pending, separate DCVC-UF codec-axis
+experiment. The minimum capability vocabulary remains open in
 [the cross-codec audit](docs/cross-codec-requirements.md#open-questions-requiring-prototypes).
 
 Energy measurement remains optional downstream evidence, not a release gate.
