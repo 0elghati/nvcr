@@ -29,11 +29,13 @@ operations, and common error types.
 
 The session contract permits lookahead, grouped access units, multiple decoded
 frames per access unit, and delayed output even though the current DCVC-RT path
-emits one access unit per input frame. A codec may return `try_again` when
-output is not ready. `flush()` signals end of input; callers must drain
-`receive_access_unit()` or `receive_frame()` until `end_of_stream`. `reset()`
-must discard all state for that direction and make the next sequence start
-from frame index zero.
+emits one access unit per input frame. A successful `send_frame()` or
+`send_access_unit()` consumes its input, so callers must not resubmit it.
+Output readiness is reported by `receive_access_unit()` or `receive_frame()`;
+`try_again` means no output is ready and more input may be required. `flush()`
+signals end of input; callers must drain the receive method until
+`end_of_stream`. `reset()` must discard all state for that direction and make
+the next sequence start from frame index zero.
 
 Return both initialized directions in `codec::Sessions`. If they share a
 backend, the implementation must still preserve independent encoder and decoder

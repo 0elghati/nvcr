@@ -118,10 +118,11 @@ explicitly selects all-intra development mode. Normal operation uses I/P
 coding. `--codec`, `--provider`, `--device-id`, `--engine-profile`, and
 `--engine-dir` override their defaults.
 
-The encoder submits each frame, receives every access unit currently available,
-and treats `try_again` as a request for more input. At end of input it flushes
-only the encoder and receives through `end_of_stream`, including access units
-created from delayed or short final groups.
+Each successful encoder submission consumes that frame. The CLI then receives
+every access unit currently available and treats receive-side `try_again` as a
+request for more input. At end of input it flushes only the encoder and
+receives through `end_of_stream`, including access units created from delayed
+or short final groups.
 
 The final payload-byte total is the complete packet payload passed by the
 runtime—currently a bounded `NVAU` access unit. It excludes the outer
@@ -147,8 +148,9 @@ PSNR against a raw reference with matching frames and dimensions.
 For decode, `--frames N` limits decoded output frames, not input access units.
 If one access unit contains more outputs than remain under the limit, decode
 writes the requested outputs and stops without reading more input. With
-`--frames 0`, decode reads every access unit, receives every available frame,
-then flushes only the decoder and receives through `end_of_stream`.
+`--frames 0`, decode reads every access unit exactly once. Each successful send
+consumes that unit; receive-side `try_again` requests another unit. Decode then
+flushes only the decoder and receives through `end_of_stream`.
 
 ## Diagnostics and timing boundary
 

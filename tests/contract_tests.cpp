@@ -488,21 +488,10 @@ void registered_grouped_session_contract() {
 
     expect(runtime.value().send_access_unit(restored_full_group.value()).has_value(),
            "registered decoder accepts one grouped access unit");
-    for (unsigned index = 0; index < 8U; ++index) {
-        auto output = runtime.value().receive_frame();
-        expect(output.has_value(), "grouped access unit produces each decoded frame");
-        if (output) {
-            expect(std::equal(
-                   output.value().data().begin(), output.value().data().end(),
-                   inputs[index].data().begin()),
-                   "grouped decoder preserves frame order and bytes");
-            expect(output.value().timestamp() == inputs[index].timestamp(),
-                   "grouped decoder preserves each non-uniform frame timestamp");
-        }
-    }
-    auto no_ninth_frame = runtime.value().receive_frame();
-    expect(!no_ninth_frame && no_ninth_frame.error().code() == nvcr::ErrorCode::try_again,
-           "decoder returns try_again after all grouped outputs are drained");
+    auto decoder_delayed = runtime.value().receive_frame();
+    expect(!decoder_delayed &&
+               decoder_delayed.error().code() == nvcr::ErrorCode::try_again,
+           "decoder needs another access unit before producing output");
 
     expect(runtime.value().send_frame(inputs[8]).has_value(),
            "grouped encoder buffers a short final group");
@@ -527,9 +516,25 @@ void registered_grouped_session_contract() {
     if (!restored_short_group) return;
 
     expect(runtime.value().send_access_unit(restored_short_group.value()).has_value(),
-           "decoder remains usable after encoder-only flush");
+           "decoder consumes the second access unit without resubmitting the first");
+    for (unsigned index = 0; index < 8U; ++index) {
+        auto output = runtime.value().receive_frame();
+        expect(output.has_value(), "second access unit releases the delayed decoded frames");
+        if (output) {
+            expect(std::equal(
+                   output.value().data().begin(), output.value().data().end(),
+                   inputs[index].data().begin()),
+                   "grouped decoder preserves frame order and bytes");
+            expect(output.value().timestamp() == inputs[index].timestamp(),
+                   "grouped decoder preserves each non-uniform frame timestamp");
+        }
+    }
+    auto decoder_open = runtime.value().receive_frame();
+    expect(!decoder_open && decoder_open.error().code() == nvcr::ErrorCode::try_again,
+           "second access unit remains buffered until decoder flush");
+    expect(runtime.value().flush_decoder().has_value(), "directional decoder flush succeeds");
     auto final_frame = runtime.value().receive_frame();
-    expect(final_frame.has_value(), "short grouped access unit emits its valid frame");
+    expect(final_frame.has_value(), "decoder flush emits the final delayed frame");
     if (final_frame) {
         expect(std::equal(
                    final_frame.value().data().begin(), final_frame.value().data().end(),
@@ -538,10 +543,6 @@ void registered_grouped_session_contract() {
         expect(final_frame.value().timestamp() == inputs[8].timestamp(),
                "short final group preserves its frame timestamp");
     }
-    auto decoder_open = runtime.value().receive_frame();
-    expect(!decoder_open && decoder_open.error().code() == nvcr::ErrorCode::try_again,
-           "encoder flush does not flush the decoder direction");
-    expect(runtime.value().flush_decoder().has_value(), "directional decoder flush succeeds");
     auto decoder_end = runtime.value().receive_frame();
     expect(!decoder_end && decoder_end.error().code() == nvcr::ErrorCode::end_of_stream,
            "decoder reports end of stream only after decoder flush");
@@ -628,16 +629,23 @@ void cli_session_driver_contract() {
         outputs.push_back(std::move(frame));
         return {};
     };
-    for (const auto& packet : packets) {
+    for (std::size_t index = 0; index < packets.size(); ++index) {
         auto drained = nvcr::cli::send_access_unit_and_drain(
             runtime.value(),
-            packet,
+            packets[index],
             collect_frame,
             std::numeric_limits<std::size_t>::max(),
             codec_time);
         expect(drained && drained.value() == nvcr::cli::DrainState::needs_input,
                "CLI decoder driver drains every frame available from one access unit");
         if (!drained) return;
+        if (index == 0U) {
+            expect(outputs.empty(),
+                   "CLI decoder accepts the first access unit before output is ready");
+        } else {
+            expect(outputs.size() == 8U,
+                   "CLI decoder sends the second access unit once and drains delayed output");
+        }
     }
     auto decoder_end = nvcr::cli::flush_and_drain_decoder(
         runtime.value(),
@@ -661,8 +669,18 @@ void cli_session_driver_contract() {
     expect(runtime.value().reset_decoder().has_value(),
            "CLI driver decoder resets after full drain");
     outputs.clear();
+    auto delayed_limited = nvcr::cli::send_access_unit_and_drain(
+        runtime.value(),
+        packets.front(),
+        collect_frame,
+        std::numeric_limits<std::size_t>::max(),
+        codec_time);
+    expect(delayed_limited &&
+               delayed_limited.value() == nvcr::cli::DrainState::needs_input &&
+               outputs.empty(),
+           "CLI decoder frame-limit path accepts delayed input exactly once");
     auto limited = nvcr::cli::send_access_unit_and_drain(
-        runtime.value(), packets.front(), collect_frame, 3U, codec_time);
+        runtime.value(), packets.back(), collect_frame, 3U, codec_time);
     expect(limited && limited.value() == nvcr::cli::DrainState::output_limit,
            "CLI decoder driver stops at the requested output-frame limit");
     expect(outputs.size() == 3U,
@@ -739,6 +757,11 @@ void codec_adapter_contract() {
     if (!encoded) return;
     expect(sessions.value().decoder->send_access_unit(encoded.value()).has_value(),
            "adapter decoder accepts the encoded access unit");
+    auto delayed_decode = sessions.value().decoder->receive_frame();
+    expect(!delayed_decode &&
+               delayed_decode.error().code() == nvcr::ErrorCode::try_again,
+           "adapter decoder reports delayed output through receive");
+    expect(sessions.value().decoder->flush().has_value(), "adapter decoder flushes");
     auto decoded = sessions.value().decoder->receive_frame();
     expect(decoded.has_value(), "adapter decoder emits a frame");
     if (decoded) {
