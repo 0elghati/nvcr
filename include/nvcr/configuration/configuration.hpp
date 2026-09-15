@@ -25,31 +25,51 @@ enum class TensorRTExecutionMode : std::uint8_t {
     performance,
 };
 
-struct RuntimeConfiguration final {
+struct RuntimeOptions final {
+    std::size_t memory_pool_bytes{256U * 1024U * 1024U};
+    std::size_t max_packet_bytes{64U * 1024U * 1024U};
+    LogLevel log_level{LogLevel::info};
+};
+
+struct CodecConfiguration final {
+    std::string id{"dcvc-rt"};
+    std::uint32_t intra_qp{32};
+    std::uint32_t gop_size{32};
+    bool verify_encoder_reconstruction{false};
+};
+
+struct ProviderConfiguration final {
+    std::string id{"tensorrt"};
+    std::int32_t device_id{0};
+    std::size_t device_arena_bytes{512U * 1024U * 1024U};
+    TensorRTExecutionMode tensorrt_execution_mode{TensorRTExecutionMode::automatic};
+    bool enable_profiling{false};
+};
+
+struct ArtifactSelection final {
     std::filesystem::path intra_engine_path;
     std::filesystem::path predicted_engine_path;
     std::filesystem::path entropy_model_path;
-    std::string codec_id{"dcvc-rt"};
     std::string model_id{"dcvcrt-cvpr2025"};
-    std::string bitstream_model_id{"dcvcrt"};
-    std::string provider_id{"tensorrt"};
     CodecApiVersion codec_api_version{1};
     ProviderApiVersion provider_api_version{1};
-    StreamFormatVersion stream_format_version{1, 0};
-    PayloadSyntaxVersion payload_syntax_version{1};
     ModelSetVersion model_set_version{1, 0};
     ManifestSchemaVersion manifest_schema_version{2, 0};
-    std::int32_t device_id{0};
-    std::uint32_t intra_qp{32};
-    std::uint32_t gop_size{32};
-    std::size_t memory_pool_bytes{256U * 1024U * 1024U};
-    std::size_t device_arena_bytes{512U * 1024U * 1024U};
-    std::size_t max_packet_bytes{64U * 1024U * 1024U};
-    LogLevel log_level{LogLevel::info};
-    TensorRTExecutionMode tensorrt_execution_mode{TensorRTExecutionMode::automatic};
+};
+
+struct StreamPolicy final {
+    std::string bitstream_model_id{"dcvcrt"};
+    StreamFormatVersion stream_format_version{1, 0};
+    PayloadSyntaxVersion payload_syntax_version{1};
     bool allow_legacy_access_units{true};
-    bool verify_encoder_reconstruction{false};
-    bool enable_profiling{false};
+};
+
+struct RuntimeConfiguration final {
+    RuntimeOptions runtime;
+    CodecConfiguration codec;
+    ProviderConfiguration provider;
+    ArtifactSelection artifacts;
+    StreamPolicy stream;
 };
 
 class ConfigurationLoader final {

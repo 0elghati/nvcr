@@ -1,13 +1,14 @@
 #include "test_codec.hpp"
 
 #include "nvcr/bitstream/access_unit.hpp"
-#include "nvcr/codec/backend.hpp"
 #include "nvcr/runtime/registry.hpp"
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cstdint>
 #include <deque>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -17,6 +18,10 @@ namespace {
 
 constexpr std::array<std::byte, 4> test_payload_magic{
     std::byte{'T'}, std::byte{'E'}, std::byte{'S'}, std::byte{'T'}};
+constexpr std::array<std::byte, 4> chunk_payload_magic{
+    std::byte{'C'}, std::byte{'H'}, std::byte{'N'}, std::byte{'K'}};
+constexpr std::size_t test_group_size = 8U;
+constexpr std::string_view chunk_timestamps_key = "test_codec.frame_timestamps_us";
 
 void write_u32(std::vector<std::byte>& bytes, std::uint32_t value) {
     for (unsigned shift = 0; shift < 32U; shift += 8U) {
@@ -66,50 +71,6 @@ Result<Frame> decode_payload(std::span<const std::byte> payload, Timestamp times
     return Frame::copy_from(width.value(), height.value(), PixelFormat::yuv420p8, data, timestamp);
 }
 
-class TestCodecBackend final : public codec::CodecBackend {
-public:
-    [[nodiscard]] Result<void> initialize(const RuntimeConfiguration&) override {
-        initialized_ = true;
-        return {};
-    }
-
-    [[nodiscard]] Result<codec::CodecEncodeResult> encode(
-        const Frame& frame,
-        FrameType frame_type,
-        const codec::SequenceStateView&) override {
-        static_cast<void>(frame_type);
-        if (!initialized_) {
-            return Error(ErrorCode::invalid_state, "test codec is not initialized", "test-codec");
-        }
-        auto payload = encode_payload(frame);
-        if (!payload) return payload.error();
-        auto reconstructed = Frame::copy_from(
-            frame.width(), frame.height(), frame.pixel_format(), frame.data(), frame.timestamp());
-        if (!reconstructed) return reconstructed.error();
-        return codec::CodecEncodeResult{
-            std::move(payload.value()), std::move(reconstructed.value()), {}, 0U};
-    }
-
-    [[nodiscard]] Result<codec::CodecDecodeResult> decode(
-        std::span<const std::byte> payload,
-        FrameType,
-        Timestamp timestamp,
-        const codec::SequenceStateView&) override {
-        if (!initialized_) {
-            return Error(ErrorCode::invalid_state, "test codec is not initialized", "test-codec");
-        }
-        auto frame = decode_payload(payload, timestamp);
-        if (!frame) return frame.error();
-        return codec::CodecDecodeResult{std::move(frame.value()), {}};
-    }
-
-    [[nodiscard]] Result<void> flush() override { return {}; }
-    void reset() noexcept override { initialized_ = false; }
-
-private:
-    bool initialized_{false};
-};
-
 class TestCodecAdapter final : public codec::ICodecAdapter {
 public:
     [[nodiscard]] codec::CodecDescriptor descriptor() const override {
@@ -129,15 +90,15 @@ public:
     }
 
     [[nodiscard]] codec::OptionSchema encoder_options() const override {
-        return {{{"test_codec.delay", "uint", "frames delayed before output", "1", "0", "16", false}}};
+        return {{{"test_codec.group_size", "uint", "frames grouped per access unit", "8", "1", "8", false}}};
     }
 
     [[nodiscard]] codec::OptionSchema decoder_options() const override {
         return {{{"test_codec.strict_payload", "bool", "reject malformed payloads", "true", {}, {}, false}}};
     }
 
-    [[nodiscard]] Result<codec::Components>
-    create_components(
+    [[nodiscard]] Result<codec::Sessions>
+    create_sessions(
         const RuntimeConfiguration&,
         std::shared_ptr<provider::experimental::IProviderSession>
             provider_session) override {
@@ -147,9 +108,10 @@ public:
                 "test codec requires a provider session",
                 "test-codec");
         }
-        codec::Components components;
-        components.codec = std::make_unique<TestCodecBackend>();
-        return components;
+        codec::Sessions sessions;
+        sessions.encoder = make_grouped_test_encoder_session();
+        sessions.decoder = make_grouped_test_decoder_session();
+        return sessions;
     }
 };
 
@@ -279,6 +241,258 @@ private:
     bool flushed_{false};
 };
 
+Result<Packet> make_chunk_packet(
+    const std::deque<Frame>& frames,
+    std::size_t frame_count,
+    std::uint64_t chunk_index) {
+    if (frame_count == 0U || frame_count > test_group_size || frames.size() < frame_count) {
+        return Error(ErrorCode::invalid_argument, "invalid test chunk size", "test-codec");
+    }
+    const auto& first = frames.front();
+    std::vector<std::byte> payload;
+    payload.reserve(16U + frame_count * first.size_bytes());
+    payload.insert(payload.end(), chunk_payload_magic.begin(), chunk_payload_magic.end());
+    write_u32(payload, first.width());
+    write_u32(payload, first.height());
+    write_u32(payload, static_cast<std::uint32_t>(frame_count));
+    for (std::size_t index = 0; index < frame_count; ++index) {
+        const auto& frame = frames[index];
+        if (frame.width() != first.width() || frame.height() != first.height() ||
+            frame.pixel_format() != first.pixel_format() ||
+            frame.size_bytes() != first.size_bytes()) {
+            return Error(
+                ErrorCode::invalid_argument,
+                "test chunk frames must share one format",
+                "test-codec");
+        }
+        payload.insert(payload.end(), frame.data().begin(), frame.data().end());
+    }
+
+    const auto frame_type = chunk_index == 0U ? FrameType::intra : FrameType::predicted;
+    AccessUnit access_unit{
+        "test-codec",
+        first.width(),
+        first.height(),
+        0U,
+        frame_type,
+        frame_type == FrameType::intra,
+        std::move(payload)};
+    auto wire = AccessUnitIO::serialize(access_unit);
+    if (!wire) return wire.error();
+
+    std::string timestamps;
+    for (std::size_t index = 0; index < frame_count; ++index) {
+        if (!timestamps.empty()) timestamps.push_back(',');
+        timestamps += std::to_string(frames[index].timestamp().count());
+    }
+    return Packet(
+        std::move(wire.value()),
+        first.timestamp(),
+        frame_type,
+        {{"codec_id", "test-codec"},
+         {"payload_syntax", "test-chunk-v1"},
+         {std::string(chunk_timestamps_key), std::move(timestamps)}});
+}
+
+Result<std::vector<Timestamp>> decode_chunk_timestamps(
+    const Packet& packet, std::uint32_t frame_count) {
+    const auto entry = packet.metadata().find(chunk_timestamps_key);
+    if (entry == packet.metadata().end() || entry->second.empty() || entry->second.back() == ',') {
+        return Error(
+            ErrorCode::malformed_bitstream,
+            "grouped test codec timestamps are missing or malformed",
+            "test-codec");
+    }
+
+    std::vector<Timestamp> timestamps;
+    timestamps.reserve(frame_count);
+    std::string_view remaining = entry->second;
+    while (!remaining.empty()) {
+        const auto delimiter = remaining.find(',');
+        const auto token = remaining.substr(0U, delimiter);
+        std::int64_t value = 0;
+        const auto parsed = std::from_chars(token.data(), token.data() + token.size(), value);
+        if (token.empty() || parsed.ec != std::errc{} ||
+            parsed.ptr != token.data() + token.size()) {
+            return Error(
+                ErrorCode::malformed_bitstream,
+                "grouped test codec timestamp is invalid",
+                "test-codec");
+        }
+        timestamps.emplace_back(value);
+        if (delimiter == std::string_view::npos) break;
+        remaining.remove_prefix(delimiter + 1U);
+    }
+    if (timestamps.size() != frame_count || timestamps.front() != packet.timestamp()) {
+        return Error(
+            ErrorCode::malformed_bitstream,
+            "grouped test codec timestamp count or primary timestamp is invalid",
+            "test-codec");
+    }
+    return timestamps;
+}
+
+Result<std::vector<Frame>> decode_chunk_packet(const Packet& packet) {
+    auto access_unit = AccessUnitIO::deserialize(packet.data());
+    if (!access_unit) return access_unit.error();
+    if (access_unit.value().model_id != "test-codec") {
+        return Error(
+            ErrorCode::malformed_bitstream,
+            "unexpected grouped test codec model id",
+            "test-codec");
+    }
+    const auto payload = std::span<const std::byte>(access_unit.value().payload);
+    if (payload.size() < 16U ||
+        !std::equal(chunk_payload_magic.begin(), chunk_payload_magic.end(), payload.begin())) {
+        return Error(
+            ErrorCode::malformed_bitstream,
+            "grouped test codec payload header is invalid",
+            "test-codec");
+    }
+    auto width = read_u32(payload, 4U);
+    auto height = read_u32(payload, 8U);
+    auto frame_count = read_u32(payload, 12U);
+    if (!width) return width.error();
+    if (!height) return height.error();
+    if (!frame_count) return frame_count.error();
+    if (frame_count.value() == 0U || frame_count.value() > test_group_size) {
+        return Error(
+            ErrorCode::malformed_bitstream,
+            "grouped test codec frame count is invalid",
+            "test-codec");
+    }
+    auto timestamps = decode_chunk_timestamps(packet, frame_count.value());
+    if (!timestamps) return timestamps.error();
+    auto frame_bytes = frame_size_bytes(
+        width.value(), height.value(), PixelFormat::yuv420p8);
+    if (!frame_bytes) return frame_bytes.error();
+    if (payload.size() - 16U != frame_bytes.value() * frame_count.value()) {
+        return Error(
+            ErrorCode::malformed_bitstream,
+            "grouped test codec payload size is invalid",
+            "test-codec");
+    }
+
+    std::vector<Frame> frames;
+    frames.reserve(frame_count.value());
+    for (std::uint32_t index = 0; index < frame_count.value(); ++index) {
+        auto frame = Frame::copy_from(
+            width.value(),
+            height.value(),
+            PixelFormat::yuv420p8,
+            payload.subspan(16U + index * frame_bytes.value(), frame_bytes.value()),
+            timestamps.value()[index]);
+        if (!frame) return frame.error();
+        frames.push_back(std::move(frame.value()));
+    }
+    return frames;
+}
+
+class GroupedTestEncoderSession final : public IEncoderSession {
+public:
+    [[nodiscard]] Result<void> send_frame(const Frame& frame) override {
+        if (flushed_) {
+            return Error(ErrorCode::invalid_state, "grouped encoder is flushed", "test-codec");
+        }
+        if (frame.size_bytes() == 0U) {
+            return Error(ErrorCode::invalid_argument, "grouped encoder received empty frame", "test-codec");
+        }
+        pending_.push_back(frame);
+        auto emitted = emit_ready(false);
+        if (!emitted) {
+            pending_.pop_back();
+            return emitted.error();
+        }
+        return {};
+    }
+
+    [[nodiscard]] Result<Packet> receive_access_unit() override {
+        if (!outputs_.empty()) {
+            Packet output = std::move(outputs_.front());
+            outputs_.pop_front();
+            return output;
+        }
+        if (flushed_) {
+            return Error(ErrorCode::end_of_stream, "grouped encoder is drained", "test-codec");
+        }
+        return Error(ErrorCode::try_again, "grouped encoder needs more input", "test-codec");
+    }
+
+    [[nodiscard]] Result<void> flush() override {
+        if (flushed_) return {};
+        auto emitted = emit_ready(true);
+        if (!emitted) return emitted.error();
+        flushed_ = true;
+        return {};
+    }
+
+    [[nodiscard]] Result<void> reset() override {
+        pending_.clear();
+        outputs_.clear();
+        chunk_index_ = 0U;
+        flushed_ = false;
+        return {};
+    }
+
+private:
+    [[nodiscard]] Result<void> emit_ready(bool drain) {
+        while (pending_.size() >= test_group_size || (drain && !pending_.empty())) {
+            const auto count = std::min(test_group_size, pending_.size());
+            auto packet = make_chunk_packet(pending_, count, chunk_index_);
+            if (!packet) return packet.error();
+            outputs_.push_back(std::move(packet.value()));
+            for (std::size_t index = 0; index < count; ++index) pending_.pop_front();
+            ++chunk_index_;
+        }
+        return {};
+    }
+
+    std::deque<Frame> pending_;
+    std::deque<Packet> outputs_;
+    std::uint64_t chunk_index_{0U};
+    bool flushed_{false};
+};
+
+class GroupedTestDecoderSession final : public IDecoderSession {
+public:
+    [[nodiscard]] Result<void> send_access_unit(const Packet& packet) override {
+        if (flushed_) {
+            return Error(ErrorCode::invalid_state, "grouped decoder is flushed", "test-codec");
+        }
+        auto frames = decode_chunk_packet(packet);
+        if (!frames) return frames.error();
+        for (auto& frame : frames.value()) outputs_.push_back(std::move(frame));
+        return {};
+    }
+
+    [[nodiscard]] Result<Frame> receive_frame() override {
+        if (!outputs_.empty()) {
+            Frame output = std::move(outputs_.front());
+            outputs_.pop_front();
+            return output;
+        }
+        if (flushed_) {
+            return Error(ErrorCode::end_of_stream, "grouped decoder is drained", "test-codec");
+        }
+        return Error(ErrorCode::try_again, "grouped decoder has no output", "test-codec");
+    }
+
+    [[nodiscard]] Result<void> flush() override {
+        flushed_ = true;
+        return {};
+    }
+
+    [[nodiscard]] Result<void> reset() override {
+        outputs_.clear();
+        flushed_ = false;
+        return {};
+    }
+
+private:
+    std::deque<Frame> outputs_;
+    bool flushed_{false};
+};
+
 }  // namespace
 
 void register_test_codec() {
@@ -304,6 +518,14 @@ std::unique_ptr<IEncoderSession> make_test_encoder_session(std::size_t delay_fra
 
 std::unique_ptr<IDecoderSession> make_test_decoder_session() {
     return std::make_unique<TestDecoderSession>();
+}
+
+std::unique_ptr<IEncoderSession> make_grouped_test_encoder_session() {
+    return std::make_unique<GroupedTestEncoderSession>();
+}
+
+std::unique_ptr<IDecoderSession> make_grouped_test_decoder_session() {
+    return std::make_unique<GroupedTestDecoderSession>();
 }
 
 }  // namespace nvcr::test_support

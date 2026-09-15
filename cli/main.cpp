@@ -690,14 +690,15 @@ nvcr::Result<nvcr::Runtime> create_runtime(
         std::cout << "Using TensorRT engine bundle: " << engine_dir << '\n';
     }
     nvcr::RuntimeConfiguration configuration;
-    configuration.intra_engine_path = engine_dir;
-    configuration.codec_id = options.codec_id;
-    if (!options.provider_id.empty()) configuration.provider_id = options.provider_id;
-    configuration.device_id = options.device_id;
-    configuration.intra_qp = options.qp;
-    configuration.gop_size = options.gop_size;
-    configuration.enable_profiling = options.profile;
-    configuration.log_level = options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
+    configuration.artifacts.intra_engine_path = engine_dir;
+    configuration.codec.id = options.codec_id;
+    if (!options.provider_id.empty()) configuration.provider.id = options.provider_id;
+    configuration.provider.device_id = options.device_id;
+    configuration.codec.intra_qp = options.qp;
+    configuration.codec.gop_size = options.gop_size;
+    configuration.provider.enable_profiling = options.profile;
+    configuration.runtime.log_level =
+        options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
     bootstrap_registry();
     return nvcr::Runtime::create(configuration);
 }
