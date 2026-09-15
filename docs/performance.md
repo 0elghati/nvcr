@@ -80,6 +80,11 @@ Resolution-matrix diagnostic rows retain codec duration but do not publish FPS
 or wrapper wall-time fields. This avoids conflating source frame rate,
 codec-loop throughput, and process-level timing in review-facing results.
 
+CLI codec duration sums session input, receive, and final directional
+flush/drain calls. It excludes packet serialization and raw file I/O. A bounded
+decode that reaches `--frames N` stops at N output frames and does not include
+work for unread access units.
+
 Profiling and memory sampling can add synchronization or polling overhead.
 Keep profiled repetitions separate from clean throughput repetitions, and do
 not substitute profile-pass FPS for clean-pass FPS.
