@@ -166,6 +166,7 @@ and gap classifications are recorded in
 | C5 | MLVC reference/export feasibility | Complete; strict reference-consistency target failed 2026-09-14 | The pinned MLVC-S/default generic FP16 ONNX/ORT-CUDA pair exceeded the predeclared PSNR and BPP limits against the PyTorch CPU reference; see [the C5 evidence](evidence/phase-c5-mlvc-reference-export-20260914.md) |
 | C6 | MLVC CUDA equivalence diagnosis | Complete; tested reference-interchange path rejected 2026-09-14 | FP16 encoder raw symbols diverged before entropy coding, so the tested pair is not byte/payload interchangeable with the reference path; see [the C6 evidence](evidence/phase-c6-mlvc-cuda-equivalence-20260914.md) |
 | C6.5 | Generic CLI session driving | Complete 2026-09-15 | Encode/decode use session send, full receive drain, directional flush, and final drain through the same driver exercised by the grouped fixture; see [the C6.5 evidence](evidence/phase-c6-5-cli-session-driver-20260915.md) |
+| C6.6 | Session send/receive contract clarification | Complete 2026-09-15 | Send success consumes input, receive-side `try_again` reports delayed readiness, and a registered multi-input decoder fixture proves order, timestamps, flush/drain, and reset/reuse without changing production behavior; see [the C6.6 evidence](evidence/phase-c6-6-session-contract-20260915.md) |
 | C7 | DCVC-UF fused-operator feasibility | Pending; separate codec axis | One fused operator and one frame-specific high-throughput branch match a pinned upstream encode/decode vector without generic runtime code owning UF branch semantics |
 
 C0 confirmed that C1 could proceed without a new chunk API. The existing
@@ -197,6 +198,12 @@ experiment holds DCVC-RT constant and tests a second provider, with ONNX Runtime
 CUDA as the current candidate. C7 remains a pending, separate DCVC-UF codec-axis
 experiment. The minimum capability vocabulary remains open in
 [the cross-codec audit](docs/cross-codec-requirements.md#open-questions-requiring-prototypes).
+
+C6.6 makes the pre-1.1 session contract explicit: successful sends consume
+input, and receive-side `try_again` reports that output is not ready. The
+registered grouped decoder now delays its first access unit until another unit
+arrives, then preserves order and timestamps through flush, final drain, reset,
+and reuse. DCVC-RT behavior and the C6.5 CLI driver remain unchanged.
 
 Energy measurement remains optional downstream evidence, not a release gate.
 

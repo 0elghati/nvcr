@@ -23,7 +23,9 @@ facade also exposes aggregate state and statistics. Draining means receiving
 until `end_of_stream` after `flush()`; there is no separate `drain()` method.
 The generic contract permits delayed output, grouped access units, multiple
 decoded frames per access unit, and frame reordering even though the current
-DCVC-RT runtime emits one output per input.
+DCVC-RT runtime emits one output per input. A successful send consumes its
+input; output readiness is reported by the matching receive method. Callers
+must not resubmit input after receive returns `try_again`.
 
 ```cpp
 #include <nvcr/nvcr.hpp>
