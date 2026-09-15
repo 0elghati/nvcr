@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.0](https://github.com/0elghati/nvcr/compare/v1.0.6...v1.1.0) (2026-09-15)
+
+
+### Features
+
+* Add P-frame orchestration and document provider boundaries ([#153](https://github.com/0elghati/nvcr/issues/153)) ([afae79f](https://github.com/0elghati/nvcr/commit/afae79f0c30f84d6f5c4774eb412b4ff5a44d4f7))
+* establish v2 baseline and provider boundary RFC ([#145](https://github.com/0elghati/nvcr/issues/145)) ([a325864](https://github.com/0elghati/nvcr/commit/a3258642bb19e035e07497211f81160fb6428140))
+* **experiments:** establish B3 provider baseline recording ([#149](https://github.com/0elghati/nvcr/issues/149)) ([11208d1](https://github.com/0elghati/nvcr/commit/11208d1e23824f69045027af8aa0f17eeae5d6c4))
+* Implement codec sessions and runtime ownership for phase C1 ([#155](https://github.com/0elghati/nvcr/issues/155)) ([5d05bd8](https://github.com/0elghati/nvcr/commit/5d05bd815dd56d2d7e873c505f620605edd409ac))
+* Promote production provider construction and runtime boundaries ([#154](https://github.com/0elghati/nvcr/issues/154)) ([fe6cb8e](https://github.com/0elghati/nvcr/commit/fe6cb8e9db0d90cf2ac33a6f1030a2600bd413e2))
+
+
+### Bug Fixes
+
+* drive CLI codec sessions generically ([#156](https://github.com/0elghati/nvcr/issues/156)) ([f727491](https://github.com/0elghati/nvcr/commit/f727491f9335c5add423058ce56c39bc0cb0b630))
+
 ## [1.0.6](https://github.com/0elghati/nvcr/compare/v1.0.5...v1.0.6) (2026-08-17)
 
 
