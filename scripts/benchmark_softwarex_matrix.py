@@ -93,11 +93,13 @@ QUALITY_SUMMARY = re.compile(
     re.MULTILINE,
 )
 ENCODE_LATENCY = re.compile(
-    rf"^frame [0-9]+: encoded [0-9]+ payload bytes in ({NUMBER}) ms$",
+    rf"^input frame [0-9]+: codec operations emitted [0-9]+ access unit\(s\), "
+    rf"[0-9]+ payload bytes in ({NUMBER}) ms$",
     re.MULTILINE,
 )
 DECODE_LATENCY = re.compile(
-    rf"^frame [0-9]+: decoded in ({NUMBER}) ms$",
+    rf"^access unit [0-9]+: codec operations emitted [0-9]+ frame\(s\) in "
+    rf"({NUMBER}) ms$",
     re.MULTILINE,
 )
 PROVIDER_PROFILE = re.compile(

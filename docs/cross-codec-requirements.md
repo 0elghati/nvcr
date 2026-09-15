@@ -493,8 +493,8 @@ PyTorch CPU reference, and a proven ONNX Runtime 1.26.0 CUDA session. The
 acceptance limits were fixed before the run at 0.05 dB absolute drift for every
 reported PSNR aggregate and 0.0001 absolute mean-BPP drift at every rate point.
 The two-frame QCIF vector failed: the largest PSNR drift was 0.1608 dB and
-mean-BPP drift was 0.001736. The candidate is not accepted for an NVCR provider
-or codec adapter. See
+mean-BPP drift was 0.001736. The tested artifact/provider pair is not accepted
+for that strict reference-consistency target. See
 [the C5 evidence](../evidence/phase-c5-mlvc-reference-export-20260914.md).
 
 C6 found that MLVC records `--torch-device cuda` without moving the in-memory
@@ -502,14 +502,16 @@ export reference off CPU. The named-state comparison remains a valid
 CPU-reference/ORT-CUDA comparison. On the first frame, the paths have identical
 `z_raw`, but 2 of 2,376 `y_raw_0` symbols and 7 of 2,376 `y_raw_1` symbols
 differ by one before entropy coding. The entropy and decoder differences are
-downstream. This rejects the tested MLVC/ORT-CUDA pair as the next production
-axis; see
+downstream, so the tested pair is not byte/payload interchangeable with the
+reference path. MLVC's general suitability, an MLVC ORT self-conformant path,
+and ONNX Runtime CUDA's suitability as an NVCR provider remain unresolved. See
 [the C6 evidence](../evidence/phase-c6-mlvc-cuda-equivalence-20260914.md).
 
 ## Open questions requiring prototypes
 
 | Question | Proposed experiment | Answer/decision rule |
 |---|---|---|
+| DCVC-RT second-provider feasibility | Hold DCVC-RT codec semantics constant and run a bounded ONNX Runtime CUDA provider experiment. | Continue only if the provider passes a separately declared self-conformance and reference-consistency gate; state cross-provider and byte-interchange claims independently. |
 | DCVC-UF fused-operator export | Export one bounded fused operator and one frame-specific HT branch, then compare a pinned upstream encode/decode vector with the provider-stage prototype. | Continue only if the prototype preserves the selected bitstream/reconstruction contract and does not require generic runtime code to understand UF branch semantics. |
 | Minimum capability vocabulary | Integrate a second real codec session behind the current descriptor and record each application admission decision that cannot be made. | Add only facts required by a failing admission test shared by at least two real codecs; do not create a speculative taxonomy. |
 
@@ -519,8 +521,8 @@ axis; see
   admission after two real codec sessions exist? C0 shows current omissions but
   does not justify a new capability taxonomy.
 
-None of these questions was needed to complete C1-C6. They are the decision
-boundary for the next codec/provider integration work.
+None of these questions was needed to complete C1-C6. The provider and codec
+experiments remain separate axes.
 
 ## Recommended Phase C sequence
 
@@ -547,14 +549,24 @@ boundary for the next codec/provider integration work.
 6. **C6 — MLVC CUDA equivalence diagnosis.** Trace the first divergent state in
    the pinned C5 vector. Preserve its acceptance limits and do not start NVCR
    integration unless a concrete artifact/provider pair passes.
-7. **C7 — DCVC-UF fused-operator feasibility.** Compare one fused operator and
+7. **C6.5 — Generic CLI session driving.** Drive codec sessions through send,
+   receive-until-`try_again`, directional flush, and final drain using the same
+   helper exercised by the grouped fixture.
+8. **Provider-axis handoff.** Hold DCVC-RT codec semantics constant and test a
+   separately defined provider path, with ONNX Runtime CUDA as the current
+   candidate.
+9. **C7 — DCVC-UF fused-operator feasibility.** Keep this as a pending,
+   separate codec-axis experiment. Compare one fused operator and
    one frame-specific high-throughput branch against a pinned upstream vector
    without moving UF branch semantics into generic runtime code.
 
-**Inference.** C1-C6 are complete. C5 and C6 reject the tested default FP16
-MLVC/ORT-CUDA pair as the next production axis. C7 should remain an upstream
-feasibility experiment until a concrete DCVC-UF operator path preserves the
-selected bitstream and reconstruction contract.
+**Inference.** C5 and C6 reject the tested default FP16 MLVC/ORT-CUDA pair for
+strict reference consistency and byte/payload interchange with the reference
+path. They leave MLVC self-conformance and ONNX Runtime CUDA provider
+suitability unresolved. After C6.5, the next bounded experiment holds DCVC-RT
+constant while testing the provider axis. C7 remains pending until a concrete
+DCVC-UF operator path preserves the selected bitstream and reconstruction
+contract.
 
 ## Explicit non-goals
 

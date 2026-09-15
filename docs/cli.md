@@ -112,10 +112,16 @@ nvcr encode \
   --frames 4 --gop-size 2 --qp 32 --verbose
 ```
 
+For encode, `--frames N` limits the number of input frames submitted.
 `--frames 0` processes complete frames to end of input. `--gop-size 1`
 explicitly selects all-intra development mode. Normal operation uses I/P
 coding. `--codec`, `--provider`, `--device-id`, `--engine-profile`, and
 `--engine-dir` override their defaults.
+
+The encoder submits each frame, receives every access unit currently available,
+and treats `try_again` as a request for more input. At end of input it flushes
+only the encoder and receives through `end_of_stream`, including access units
+created from delayed or short final groups.
 
 The final payload-byte total is the complete packet payload passed by the
 runtime—currently a bounded `NVAU` access unit. It excludes the outer
@@ -138,17 +144,29 @@ Decode reads dimensions from the first access unit and rejects resolution
 changes in raw output. The quality option reports per-plane and weighted YUV
 PSNR against a raw reference with matching frames and dimensions.
 
+For decode, `--frames N` limits decoded output frames, not input access units.
+If one access unit contains more outputs than remain under the limit, decode
+writes the requested outputs and stops without reading more input. With
+`--frames 0`, decode reads every access unit, receives every available frame,
+then flushes only the decoder and receives through `end_of_stream`.
+
 ## Diagnostics and timing boundary
 
 `--verbose` prints the chosen TensorRT bundle before backend initialization,
-then reports per-frame progress. Treat successful frame processing, not the
-selection line alone, as execution evidence. `--profile` prints TensorRT/CUDA
-stage counters and adds synchronization, so do not use profiling repetitions
-for throughput.
+then reports submitted input frames, emitted access units, submitted access
+units, emitted output frames, and directional flush output without assuming
+one-to-one cardinality. Treat successful frame processing, not the selection
+line alone, as execution evidence. `--profile` prints TensorRT/CUDA stage
+counters and adds synchronization, so do not use profiling repetitions for
+throughput.
 
-CLI FPS uses time around the runtime encode/decode call. It does not include
-process startup, file/container orchestration, or the full subprocess boundary.
-Use [Performance and benchmarking](performance.md) when comparing end-to-end
+CLI codec time covers session calls that may perform codec work: input sends,
+all receive attempts, and final directional flush/drain when the input is read
+to completion. Packet serialization, raw file I/O, process startup, and the
+full subprocess boundary are excluded. This boundary supersedes the pre-1.1
+one-call-per-frame timing description, so do not compare the values directly
+unless the measurement boundaries match. Use
+[Performance and benchmarking](performance.md) when comparing end-to-end
 workflows.
 
 The `.nvcr` file is an application sequence wrapper (`NVCS` records
