@@ -12,36 +12,46 @@ Implement a codec adapter that provides:
 2. `CodecCapabilities` for frame types, delay, QP/rate controls, and supported
    ordering behavior.
 3. Namespaced encoder and decoder `OptionSchema` declarations.
-4. `ICodecAdapter::create_components`, accepting the provider session selected
+4. `ICodecAdapter::create_sessions`, accepting the provider session selected
    from the configured codec and provider IDs.
-5. A `CodecBackend` that translates codec semantics into `CodecEncodeResult`
-   and `CodecDecodeResult`, owns codec reference/latent state, and converts
-   backend exceptions into `Result` errors.
+5. Paired `IEncoderSession` and `IDecoderSession` implementations that own
+   codec state, buffering, output cardinality, and directional drain/reset.
+6. Any internal backend needed to translate model execution into codec results
+   while converting provider exceptions into `Result` errors.
 
 The adapter owns GOP and frame-type meaning, reference-state transitions,
 entropy semantics, codec-private payload syntax, and the compatibility position
-of that payload. The runtime owns session lifecycle and common error behavior.
+of that payload. Codec sessions own directional lifecycle behavior. The generic
+runtime owns registry construction, facade serialization, shared compatibility
+operations, and common error types.
 
 ### Session obligations
 
-The session contract permits lookahead and delayed output even though the
-current DCVC-RT path emits one access unit per input frame. A codec may return
-`try_again` when output is not ready. `flush()` signals end of input; callers
-must drain `receive_access_unit()` or `receive_frame()` until
-`end_of_stream`. `reset()` must discard all reference state and make the next
-sequence start from frame index zero.
+The session contract permits lookahead, grouped access units, multiple decoded
+frames per access unit, and delayed output even though the current DCVC-RT path
+emits one access unit per input frame. A codec may return `try_again` when
+output is not ready. `flush()` signals end of input; callers must drain
+`receive_access_unit()` or `receive_frame()` until `end_of_stream`. `reset()`
+must discard all state for that direction and make the next sequence start
+from frame index zero.
+
+Return both initialized directions in `codec::Sessions`. If they share a
+backend, the implementation must still preserve independent encoder and decoder
+flush/reset behavior. Keep pending packets and frames inside the codec sessions,
+not in the generic runtime facade.
 
 Document whether the codec reorders frames, delays output, requires a reference
 for predicted frames, or has codec-specific reset/discontinuity rules.
 
 ### Access units and payloads
 
-The adapter supplies codec identity, frame type, dimensions, model/profile
+The codec sessions supply codec identity, frame type, dimensions, model/profile
 identity, dependencies, and bounded codec-private sections to the `NVAU`
-contract. It must not put TensorRT plan names, CUDA device IDs, binding indexes,
-or local filesystem paths into the normative stream identity. State whether
-the payload is self-conformant only, reference-consistent, cross-provider
-conformant, or byte/payload interchangeable with another implementation.
+contract. They must not put TensorRT plan names, CUDA device IDs, binding
+indexes, or local filesystem paths into the normative stream identity. State
+whether the payload is self-conformant only, reference-consistent,
+cross-provider conformant, or byte/payload interchangeable with another
+implementation.
 
 ### Codec registration and tests
 
@@ -102,11 +112,11 @@ Required tests include:
 ## Current TensorRT boundary
 
 TensorRT is the only production provider. Its registry entry creates the real
-provider session, and the selected DCVC-RT adapter composes that session with
-codec-owned I/P orchestration behind the current backend facade. TensorRT does
-not register the older component-level `IExecutionProvider` path. Independent
-use of each loaded neural model stage outside the codec remains transitional
-work.
+provider session. The selected DCVC-RT adapter composes it into codec-owned
+encoder and decoder sessions containing I/P orchestration, `SequenceState`,
+NVAU handling, and output queues. TensorRT does not register the older
+component-level `IExecutionProvider` path. Independent use of each loaded
+neural model stage outside the codec remains transitional work.
 
 ## Build and contribution checklist
 

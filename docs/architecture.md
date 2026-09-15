@@ -30,10 +30,12 @@ flowchart TB
     end
 ```
 
-For encoding, NVCR passes frames to the selected codec integration. DCVC-RT
-uses TensorRT for learned-model execution and rANS for entropy coding; NVCR
-places the result in an `NVAU` access unit. Decoding follows the same path in
-reverse.
+For encoding, the NVCR facade passes frames to the selected codec session.
+DCVC-RT chooses I/P semantics, uses TensorRT for learned-model execution and
+rANS for entropy coding, then writes the result through the common bounded
+`NVAU` format. Decoding follows the same ownership path in reverse. Buffering
+and output queues stay in the codec sessions, so the facade does not assume one
+output per input.
 
 ## Extensibility
 

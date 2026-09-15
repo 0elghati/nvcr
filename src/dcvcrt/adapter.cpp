@@ -3,6 +3,8 @@
 #include "nvcr/dcvcrt/backend.hpp"
 #include "nvcr/runtime/registry.hpp"
 
+#include "session.hpp"
+
 #if defined(NVCR_HAS_TENSORRT)
 #include "nvcr/dcvcrt/tensorrt_backend.hpp"
 #endif
@@ -36,8 +38,8 @@ public:
         return entry ? entry->decoder_options : codec::OptionSchema{};
     }
 
-    [[nodiscard]] Result<codec::Components>
-    create_components(
+    [[nodiscard]] Result<codec::Sessions>
+    create_sessions(
         const RuntimeConfiguration& configuration,
         std::shared_ptr<provider::experimental::IProviderSession>
             provider_session) override {
@@ -45,9 +47,7 @@ public:
         static_cast<void>(configuration);
         auto backend = make_tensorrt_backend(std::move(provider_session));
         if (!backend) return backend.error();
-        codec::Components components;
-        components.codec = std::move(backend.value());
-        return components;
+        return make_sessions(configuration, std::move(backend.value()));
 #else
         static_cast<void>(configuration);
         static_cast<void>(provider_session);

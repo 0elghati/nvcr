@@ -149,10 +149,48 @@ device memory remains 2,244 MiB. See
 [the B7 evidence](evidence/vision-b7-rtx4070-20260914.md). B7 completes the
 staged Phase B execution-boundary migration.
 
+## Phase C — Cross-codec runtime ownership
+
+Phase C executes the existing multi-codec direction in
+[`docs/NVCR_VISION.md`](docs/NVCR_VISION.md). The source-grounded requirements
+and gap classifications are recorded in
+[`docs/cross-codec-requirements.md`](docs/cross-codec-requirements.md).
+
+| Sequence | Work item | Status | Exit evidence |
+|---|---|---|---|
+| C0 | Cross-codec requirements audit | Complete 2026-09-14 | DCVC-RT, MLVC, and DCVC-UF requirements, current NVCR gaps, exact upstream revisions, and next-step decisions recorded |
+| C1 | Codec-runtime ownership cleanup | Complete 2026-09-14 | Registered DCVC-RT sessions own sequence policy, state, output queues, and codec-specific AU handling; the 65-frame GOP-8 stream and reconstruction match the B7 hashes |
+| C2 | Buffered/delayed-output lifecycle | Complete 2026-09-14 | Registered eight-input/one-packet and one-packet/eight-frame fixture passes full/short drain, reset, reuse, repeated-session, and independent-direction checks |
+| C3 | Configuration ownership split | Complete 2026-09-14 | Runtime, codec, provider, artifact-selection, and stream-policy scopes are distinct while existing CLI/config keys and validation behavior remain intact |
+| C4 | Grouped-AU timing prototype | Complete 2026-09-14 | A registered grouped codec preserves distinct non-uniform frame timestamps across the serialized `PacketIO` boundary without a chunk API or NVAU change; see [the C4 evidence](evidence/phase-c4-grouped-au-timing-20260914.md) |
+| C5 | MLVC reference/export feasibility | Complete; candidate rejected 2026-09-14 | The pinned public MLVC-S model was compared through its PyTorch CPU reference and a proven ONNX Runtime CUDA session; the default FP16 export exceeded the predeclared PSNR and BPP limits; see [the C5 evidence](evidence/phase-c5-mlvc-reference-export-20260914.md) |
+| C6 | MLVC CUDA equivalence diagnosis | Complete; candidate rejected 2026-09-14 | The first stream-relevant divergence is in FP16 encoder raw symbols before entropy coding; the tested MLVC/ORT-CUDA pair is rejected as the next production axis; see [the C6 evidence](evidence/phase-c6-mlvc-cuda-equivalence-20260914.md) |
+| C7 | DCVC-UF fused-operator feasibility | Next | One fused operator and one frame-specific high-throughput branch match a pinned upstream encode/decode vector without generic runtime code owning UF branch semantics |
+
+C0 confirmed that C1 could proceed without a new chunk API. The existing
+session verbs were sufficient. C1 now routes the production path through
+codec-owned sessions instead of preserving shared fixed-GOP and one-to-one
+backend semantics. C2 proves DCVC-UF-shaped lifecycle behavior with
+deterministic fixtures before a second codec is integrated.
+
 Generic packages exclude checkpoints, exported model assets, TensorRT plans,
 and datasets. Validated engine bundles use the separate rolling catalog and
 remain bound to their recorded GPU, CUDA, TensorRT, model, profile, digest, and
 redistribution status.
+
+C1-C4 are verified by the clean CUDA 12.8/TensorRT 10.9 Release suite, the
+registered grouped-session contracts, and exact B7 byte/reconstruction parity.
+See [the Phase C1-C3 evidence](evidence/phase-c1-c3-runtime-ownership-20260914.md).
+The C4 prototype shows that `PacketIO` can preserve per-frame timing for a
+grouped access unit; it does not define a standard-container mapping. C5 tested
+the public MLVC-S checkpoint with the upstream default generic ONNX FP16 export.
+A real ONNX Runtime CUDA session ran, but the result exceeded the predeclared
+numerical limits at both rate points. C6 traced the first stream-relevant
+difference to FP16 encoder raw symbols before entropy coding. The tested
+MLVC/ORT-CUDA pair is rejected as the next production axis, and no NVCR provider
+or codec adapter was started. C7 now tests DCVC-UF export feasibility. The
+minimum capability vocabulary remains open in
+[the cross-codec audit](docs/cross-codec-requirements.md#open-questions-requiring-prototypes).
 
 Energy measurement remains optional downstream evidence, not a release gate.
 

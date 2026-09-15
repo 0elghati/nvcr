@@ -55,11 +55,11 @@ int main(int argc, char* argv[]) {
     }
 
     nvcr::RuntimeConfiguration configuration;
-    configuration.intra_engine_path = std::filesystem::path(argv[1]);
-    configuration.device_id = 0;
-    configuration.intra_qp = 32;
-    configuration.verify_encoder_reconstruction = true;
-    configuration.gop_size = 2;
+    configuration.artifacts.intra_engine_path = std::filesystem::path(argv[1]);
+    configuration.provider.device_id = 0;
+    configuration.codec.intra_qp = 32;
+    configuration.codec.verify_encoder_reconstruction = true;
+    configuration.codec.gop_size = 2;
 
     constexpr nvcr::Timestamp timestamp{41'667};
     auto frame = nvcr::Frame::create(
@@ -130,7 +130,7 @@ int main(int argc, char* argv[]) {
     verification_backend.value().reset();
 
     nvcr::RuntimeConfiguration high_qp_configuration = configuration;
-    high_qp_configuration.intra_qp = 63;
+    high_qp_configuration.codec.intra_qp = 63;
     auto high_qp_backend = nvcr::dcvcrt::make_tensorrt_backend();
     if (!high_qp_backend) {
         std::cerr << high_qp_backend.error().describe() << '\n';

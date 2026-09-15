@@ -20,6 +20,7 @@
 #include "nvcr/common/error.hpp"
 #include "nvcr/runtime/frame.hpp"
 #include "nvcr/runtime/packet.hpp"
+#include "nvcr/statistics/statistics.hpp"
 
 #include <memory>
 
@@ -73,3 +74,15 @@ public:
 };
 
 }  // namespace nvcr
+
+namespace nvcr::codec {
+
+// Complete codec-owned session pair returned by a registered adapter.
+// Statistics is shared with the generic Runtime facade when supplied.
+struct Sessions final {
+    std::unique_ptr<IEncoderSession> encoder;
+    std::unique_ptr<IDecoderSession> decoder;
+    std::shared_ptr<Statistics> statistics;
+};
+
+}  // namespace nvcr::codec

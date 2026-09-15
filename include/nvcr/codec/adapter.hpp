@@ -1,7 +1,7 @@
 #pragma once
 
-#include "nvcr/codec/backend.hpp"
 #include "nvcr/codec/descriptor.hpp"
+#include "nvcr/codec/session.hpp"
 #include "nvcr/common/error.hpp"
 #include "nvcr/configuration/configuration.hpp"
 
@@ -13,8 +13,8 @@ class IProviderSession;
 
 namespace nvcr::codec {
 
-// A codec adapter composes codec semantics with a provider-owned execution
-// session while preserving the common backend runtime.
+// A codec adapter composes codec-owned encoder/decoder sessions with a
+// provider-owned execution session.
 class ICodecAdapter {
 public:
     virtual ~ICodecAdapter() = default;
@@ -24,9 +24,9 @@ public:
     [[nodiscard]] virtual OptionSchema encoder_options() const = 0;
     [[nodiscard]] virtual OptionSchema decoder_options() const = 0;
 
-    // Creates runtime components for the given session configuration.
-    [[nodiscard]] virtual Result<Components>
-    create_components(
+    // Creates initialized codec-owned sessions for the given configuration.
+    [[nodiscard]] virtual Result<Sessions>
+    create_sessions(
         const RuntimeConfiguration& configuration,
         std::shared_ptr<provider::experimental::IProviderSession> provider_session) = 0;
 };
