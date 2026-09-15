@@ -116,13 +116,15 @@ enum class ContextPolicy : std::uint8_t {
 };
 
 Result<ContextPolicy> determine_context_policy(const RuntimeConfiguration& configuration) {
-    if (configuration.tensorrt_execution_mode == TensorRTExecutionMode::low_memory) {
+    if (configuration.provider.tensorrt_execution_mode ==
+        TensorRTExecutionMode::low_memory) {
         return ContextPolicy::per_engine;
     }
-    if (configuration.tensorrt_execution_mode == TensorRTExecutionMode::performance) {
+    if (configuration.provider.tensorrt_execution_mode ==
+        TensorRTExecutionMode::performance) {
         return ContextPolicy::persistent;
     }
-    const auto device_id = configuration.device_id;
+    const auto device_id = configuration.provider.device_id;
     if (const char* raw = std::getenv("NVCR_TENSORRT_LOW_MEMORY_MODE"); raw != nullptr) {
         const std::string_view value(raw);
         if (value == "1" || value == "true" || value == "TRUE" ||
@@ -2437,33 +2439,36 @@ Result<void> TensorRTExecutionSession::initialize(
             "TensorRT session is already initialized",
             std::string(subsystem));
     }
-    if (configuration.intra_engine_path.empty()) {
+    if (configuration.artifacts.intra_engine_path.empty()) {
         return Error(
             ErrorCode::invalid_argument,
             "intra_engine_path must name the I-frame plan directory",
             std::string(subsystem));
     }
     std::error_code filesystem_error;
-    if (!fs::is_directory(configuration.intra_engine_path, filesystem_error)) {
+    if (!fs::is_directory(
+            configuration.artifacts.intra_engine_path, filesystem_error)) {
         return Error(
             ErrorCode::dependency_unavailable,
             "I-frame plan directory is unavailable: " +
-                configuration.intra_engine_path.string(),
+                configuration.artifacts.intra_engine_path.string(),
             std::string(subsystem));
     }
 
-    const auto device_status = cudaSetDevice(configuration.device_id);
+    const auto device_status = cudaSetDevice(configuration.provider.device_id);
     if (device_status != cudaSuccess) return cuda_error("cudaSetDevice", device_status);
     auto selected_policy = determine_context_policy(configuration);
     if (!selected_policy) return selected_policy.error();
     auto manifest = validate_engine_manifest(
-        configuration.intra_engine_path, configuration.device_id, configuration.model_id);
+        configuration.artifacts.intra_engine_path,
+        configuration.provider.device_id,
+        configuration.artifacts.model_id);
     if (!manifest) return manifest.error();
 
-    bundle_root_ = configuration.intra_engine_path;
+    bundle_root_ = configuration.artifacts.intra_engine_path;
     fixed_shape_profile_ = manifest.value().shape_profile == "fixed";
     context_policy_ = selected_policy.value();
-    profiling_enabled_ = configuration.enable_profiling;
+    profiling_enabled_ = configuration.provider.enable_profiling;
     profiler_ = BackendProfiler(profiling_enabled_);
 
     runtime_.reset(nvinfer1::createInferRuntime(logger_));
@@ -2476,7 +2481,8 @@ Result<void> TensorRTExecutionSession::initialize(
         return cuda_error("cudaStreamCreateWithFlags", stream_status);
     }
     stream_ = stream_owner_->stream;
-    auto scratch_ready = scratch_arena_.initialize(configuration.device_arena_bytes);
+    auto scratch_ready = scratch_arena_.initialize(
+        configuration.provider.device_arena_bytes);
     if (!scratch_ready) return scratch_ready.error();
 
     engines_.reserve(engine_specs.size());
@@ -2536,7 +2542,7 @@ Result<void> TensorRTExecutionSession::initialize(
     if (context_policy_ == ContextPolicy::shared_workspace_persistent) {
         for (auto& engine : engines_) engine.use_cuda_graphs = true;
     }
-    if (configuration.log_level <= LogLevel::info) {
+    if (configuration.runtime.log_level <= LogLevel::info) {
         std::clog << "[nvcr.dcvcrt] [info] TensorRT mode: "
                   << context_policy_name(context_policy_) << '\n';
     }
@@ -3917,7 +3923,7 @@ public:
 
             IntraOrchestration intra_orchestration;
             auto intra_ready = intra_orchestration.initialize(
-                configuration.intra_engine_path);
+                configuration.artifacts.intra_engine_path);
             if (!intra_ready) return intra_ready.error();
             const auto loaded_stages = session_->loaded_stages();
             auto stages_ready = intra_orchestration.bind_stages(loaded_stages);
@@ -3925,7 +3931,7 @@ public:
 
             PredictedOrchestration predicted_orchestration;
             auto predicted_ready = predicted_orchestration.initialize(
-                configuration.intra_engine_path);
+                configuration.artifacts.intra_engine_path);
             if (!predicted_ready) return predicted_ready.error();
             stages_ready = predicted_orchestration.bind_stages(loaded_stages);
             if (!stages_ready) return stages_ready.error();
@@ -3941,8 +3947,9 @@ public:
 
             intra_orchestration_ = std::move(intra_orchestration);
             predicted_orchestration_ = std::move(predicted_orchestration);
-            intra_qp_ = configuration.intra_qp;
-            verify_encoder_reconstruction_ = configuration.verify_encoder_reconstruction;
+            intra_qp_ = configuration.codec.intra_qp;
+            verify_encoder_reconstruction_ =
+                configuration.codec.verify_encoder_reconstruction;
             initialized_ = true;
             return {};
         } catch (const std::exception& exception) {
@@ -4054,6 +4061,16 @@ public:
     void reset() noexcept override {
         if (session_) static_cast<void>(session_->reset());
         encoder_dpb_.clear();
+        decoder_dpb_.clear();
+    }
+
+    void reset_encoder() noexcept override {
+        if (session_) static_cast<void>(session_->reset());
+        encoder_dpb_.clear();
+    }
+
+    void reset_decoder() noexcept override {
+        if (session_) static_cast<void>(session_->reset());
         decoder_dpb_.clear();
     }
 

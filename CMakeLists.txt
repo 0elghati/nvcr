@@ -88,7 +88,6 @@ target_sources(
         src/bitstream/packet_io.cpp
         src/artifacts/catalog.cpp
         src/artifacts/resolver.cpp
-        src/codec/runtime.cpp
         src/codec/sequence_state.cpp
         src/common/error.cpp
         src/common/sha256.cpp
@@ -98,6 +97,7 @@ target_sources(
         src/dcvcrt/payload.cpp
         src/dcvcrt/rans_codec.cpp
         src/dcvcrt/registration.cpp
+        src/dcvcrt/session.cpp
         src/logging/logger.cpp
         src/memory/memory_pool.cpp
         src/runtime/frame.cpp

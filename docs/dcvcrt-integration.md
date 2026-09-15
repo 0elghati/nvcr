@@ -1,23 +1,29 @@
 # DCVC-RT integration
 
 DCVC-RT is NVCR's first codec integration. This page explains how it fits into
-NVCR; it is not the definition of NVCR itself. NVCR provides the runtime,
-engine selection, and stream handling. DCVC-RT provides the learned compression
-logic. TensorRT is the current execution provider.
+NVCR; it is not the definition of NVCR itself. NVCR provides discovery,
+construction, common lifecycle/error contracts, artifact selection, and bounded
+access-unit framing. DCVC-RT sessions provide sequence policy, state, entropy,
+codec-private payloads, and access-unit semantics. TensorRT is the current
+execution provider.
 
 ## What happens when a session starts
 
-NVCR chooses the requested model profile, finds a compatible engine for the
-machine, and then checks the bundle before loading it. The user-facing tool is
-`nvcr-artifacts`. The exporters and builders under `scripts/backends/dcvcrt/`
-are source-maintainer tools, not a normal installation path.
+The runtime resolves the requested codec adapter and provider. Artifact
+selection finds a compatible engine for the machine and checks the complete
+bundle before loading it. The DCVC-RT adapter then composes that provider
+session into encoder and decoder sessions. The user-facing artifact tool is
+`nvcr-artifacts`. Exporters and builders under `scripts/backends/dcvcrt/` are
+source-maintainer tools, not a normal installation path.
 
 ## How frames are handled
 
 An I-frame starts a group of pictures. Later P-frames use the previous decoded
-state. DCVC-RT performs learned-model processing with TensorRT and uses native
-rANS entropy coding. Reset clears the stored reference state; flush finishes
-pending work and resets the session.
+state. The codec sessions own the GOP decision and separate encoder/decoder
+`SequenceState`; TensorRT owns learned-model execution, and native rANS handles
+entropy coding. Directional reset clears only that direction's state.
+Directional flush finishes its pending work and makes it drainable to
+`end_of_stream`.
 
 ## Stream compatibility
 
@@ -28,7 +34,9 @@ implementation.
 
 ## Current limits
 
-TensorRT currently creates the DCVC-RT backend as one provider-owned component.
-Additional production codecs and providers, stable public plane/stride
-ownership, and the provider-boundary work proposed for v2 remain future work.
-The v1.x release line is already published.
+TensorRT currently creates the production provider session, and the DCVC-RT
+adapter owns the codec sessions composed around it. Additional production
+codecs and providers, stable public plane/stride ownership, and the timing and
+portability prototypes in the
+[cross-codec audit](cross-codec-requirements.md#open-questions-requiring-prototypes)
+remain future work. The v1.x release line is already published.

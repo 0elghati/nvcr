@@ -8,6 +8,7 @@
 #include <nvcr/nvcr.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -373,13 +374,13 @@ void runtime_services_contract() {
     }
 
     nvcr::RuntimeConfiguration configuration;
-    configuration.provider_id = "test-cpu";
+    configuration.provider.id = "test-cpu";
     auto provider_session = services.create_provider_session(configuration);
     expect(
         provider_session.has_value(),
         "runtime services creates the selected provider session");
 
-    configuration.provider_id = "no-such-provider";
+    configuration.provider.id = "no-such-provider";
     auto missing_session = services.create_provider_session(configuration);
     expect(!missing_session.has_value(), "runtime services rejects missing session provider");
     if (!missing_session) {
@@ -388,21 +389,22 @@ void runtime_services_contract() {
     }
 }
 
-nvcr::Result<nvcr::Frame> make_frame(std::byte seed) {
+nvcr::Result<nvcr::Frame> make_frame(
+    std::byte seed, nvcr::Timestamp timestamp = nvcr::Timestamp{7}) {
     std::vector<std::byte> data(12U);
     for (std::size_t index = 0; index < data.size(); ++index) {
         data[index] = static_cast<std::byte>(
             std::to_integer<unsigned char>(seed) + static_cast<unsigned char>(index));
     }
     return nvcr::Frame::copy_from(
-        4U, 2U, nvcr::PixelFormat::yuv420p8, data, nvcr::Timestamp{7});
+        4U, 2U, nvcr::PixelFormat::yuv420p8, data, timestamp);
 }
 
 void runtime_construction_contract() {
     nvcr::RuntimeConfiguration configuration;
-    configuration.codec_id = "test-codec";
-    configuration.provider_id = "test-cpu";
-    configuration.log_level = nvcr::LogLevel::off;
+    configuration.codec.id = "test-codec";
+    configuration.provider.id = "test-cpu";
+    configuration.runtime.log_level = nvcr::LogLevel::off;
 
     auto runtime = nvcr::Runtime::create(configuration);
     expect(runtime.has_value(), "runtime selects registered codec and provider factories");
@@ -411,7 +413,7 @@ void runtime_construction_contract() {
                "factory-constructed runtime is ready");
     }
 
-    configuration.codec_id = "missing-codec";
+    configuration.codec.id = "missing-codec";
     auto missing_codec = nvcr::Runtime::create(configuration);
     expect(!missing_codec.has_value(), "runtime rejects an unregistered codec selection");
     if (!missing_codec) {
@@ -419,14 +421,148 @@ void runtime_construction_contract() {
                "unregistered runtime codec maps to missing_codec");
     }
 
-    configuration.codec_id = "test-codec";
-    configuration.provider_id = "missing-provider";
+    configuration.codec.id = "test-codec";
+    configuration.provider.id = "missing-provider";
     auto missing_provider = nvcr::Runtime::create(configuration);
     expect(!missing_provider.has_value(), "runtime rejects an unregistered provider selection");
     if (!missing_provider) {
         expect(missing_provider.error().code() == nvcr::ErrorCode::missing_provider,
                "unregistered runtime provider maps to missing_provider");
     }
+}
+
+void registered_grouped_session_contract() {
+    nvcr::RuntimeConfiguration configuration;
+    configuration.codec.id = "test-codec";
+    configuration.provider.id = "test-cpu";
+    configuration.runtime.log_level = nvcr::LogLevel::off;
+
+    auto runtime = nvcr::Runtime::create(configuration);
+    expect(runtime.has_value(), "grouped runtime constructs through registered factories");
+    if (!runtime) return;
+
+    constexpr std::array<std::int64_t, 9> input_timestamps{
+        1'000, 2'100, 3'700, 5'000, 8'200, 8'900, 12'500, 17'300, 20'000};
+    std::vector<nvcr::Frame> inputs;
+    for (unsigned index = 0; index < 9U; ++index) {
+        auto frame = make_frame(
+            static_cast<std::byte>(0x10U + index),
+            nvcr::Timestamp{input_timestamps[index]});
+        expect(frame.has_value(), "grouped lifecycle input frame is constructible");
+        if (!frame) return;
+        inputs.push_back(std::move(frame.value()));
+    }
+
+    for (unsigned index = 0; index < 7U; ++index) {
+        expect(runtime.value().send_frame(inputs[index]).has_value(),
+               "grouped encoder accepts buffered input");
+    }
+    auto delayed = runtime.value().receive_access_unit();
+    expect(!delayed && delayed.error().code() == nvcr::ErrorCode::try_again,
+           "registered encoder emits nothing before a full group");
+
+    expect(runtime.value().send_frame(inputs[7]).has_value(),
+           "grouped encoder accepts the eighth input");
+    auto full_group = runtime.value().receive_access_unit();
+    expect(full_group.has_value(), "eighth input produces one grouped access unit");
+    auto no_second_packet = runtime.value().receive_access_unit();
+    expect(!no_second_packet && no_second_packet.error().code() == nvcr::ErrorCode::try_again,
+           "one full input group produces exactly one access unit");
+    if (!full_group) return;
+
+    auto full_group_wire = nvcr::PacketIO::serialize(full_group.value());
+    expect(full_group_wire.has_value(), "grouped access unit serializes through PacketIO");
+    if (!full_group_wire) return;
+    auto restored_full_group = nvcr::PacketIO::deserialize(full_group_wire.value());
+    expect(restored_full_group.has_value(), "grouped access unit deserializes through PacketIO");
+    if (!restored_full_group) return;
+
+    auto malformed_group = restored_full_group.value();
+    malformed_group.metadata()["test_codec.frame_timestamps_us"] = "1000,bad";
+    auto malformed_result = runtime.value().send_access_unit(malformed_group);
+    expect(!malformed_result &&
+               malformed_result.error().code() == nvcr::ErrorCode::malformed_bitstream,
+           "grouped decoder rejects malformed per-frame timestamps");
+
+    expect(runtime.value().send_access_unit(restored_full_group.value()).has_value(),
+           "registered decoder accepts one grouped access unit");
+    for (unsigned index = 0; index < 8U; ++index) {
+        auto output = runtime.value().receive_frame();
+        expect(output.has_value(), "grouped access unit produces each decoded frame");
+        if (output) {
+            expect(std::equal(
+                   output.value().data().begin(), output.value().data().end(),
+                   inputs[index].data().begin()),
+                   "grouped decoder preserves frame order and bytes");
+            expect(output.value().timestamp() == inputs[index].timestamp(),
+                   "grouped decoder preserves each non-uniform frame timestamp");
+        }
+    }
+    auto no_ninth_frame = runtime.value().receive_frame();
+    expect(!no_ninth_frame && no_ninth_frame.error().code() == nvcr::ErrorCode::try_again,
+           "decoder returns try_again after all grouped outputs are drained");
+
+    expect(runtime.value().send_frame(inputs[8]).has_value(),
+           "grouped encoder buffers a short final group");
+    auto short_delayed = runtime.value().receive_access_unit();
+    expect(!short_delayed && short_delayed.error().code() == nvcr::ErrorCode::try_again,
+           "short final group remains buffered before drain");
+    expect(runtime.value().flush_encoder().has_value(),
+           "directional encoder flush emits the short group");
+    auto short_group = runtime.value().receive_access_unit();
+    expect(short_group.has_value(), "encoder drain produces the short final access unit");
+    auto encoder_end = runtime.value().receive_access_unit();
+    expect(!encoder_end && encoder_end.error().code() == nvcr::ErrorCode::end_of_stream,
+           "encoder reports end of stream after its output queue drains");
+    if (!short_group) return;
+
+    auto short_group_wire = nvcr::PacketIO::serialize(short_group.value());
+    expect(short_group_wire.has_value(), "short grouped access unit serializes through PacketIO");
+    if (!short_group_wire) return;
+    auto restored_short_group = nvcr::PacketIO::deserialize(short_group_wire.value());
+    expect(restored_short_group.has_value(),
+           "short grouped access unit deserializes through PacketIO");
+    if (!restored_short_group) return;
+
+    expect(runtime.value().send_access_unit(restored_short_group.value()).has_value(),
+           "decoder remains usable after encoder-only flush");
+    auto final_frame = runtime.value().receive_frame();
+    expect(final_frame.has_value(), "short grouped access unit emits its valid frame");
+    if (final_frame) {
+        expect(std::equal(
+                   final_frame.value().data().begin(), final_frame.value().data().end(),
+                   inputs[8].data().begin()),
+               "short final group preserves its valid frame bytes");
+        expect(final_frame.value().timestamp() == inputs[8].timestamp(),
+               "short final group preserves its frame timestamp");
+    }
+    auto decoder_open = runtime.value().receive_frame();
+    expect(!decoder_open && decoder_open.error().code() == nvcr::ErrorCode::try_again,
+           "encoder flush does not flush the decoder direction");
+    expect(runtime.value().flush_decoder().has_value(), "directional decoder flush succeeds");
+    auto decoder_end = runtime.value().receive_frame();
+    expect(!decoder_end && decoder_end.error().code() == nvcr::ErrorCode::end_of_stream,
+           "decoder reports end of stream only after decoder flush");
+
+    expect(runtime.value().reset_encoder().has_value(), "encoder resets after drain");
+    expect(runtime.value().send_frame(inputs.front()).has_value(),
+           "encoder accepts a new sequence after reset");
+    auto decoder_still_flushed = runtime.value().send_access_unit(full_group.value());
+    expect(!decoder_still_flushed &&
+               decoder_still_flushed.error().code() == nvcr::ErrorCode::invalid_state,
+           "encoder reset does not reset the decoder direction");
+    expect(runtime.value().reset_decoder().has_value(), "decoder resets independently");
+
+    auto repeated_runtime = nvcr::Runtime::create(configuration);
+    expect(repeated_runtime.has_value(),
+           "a fresh codec session constructs after the first session completes");
+    if (!repeated_runtime) return;
+    expect(repeated_runtime.value().send_frame(inputs.front()).has_value(),
+           "the repeated codec session accepts input independently");
+    expect(repeated_runtime.value().flush_encoder().has_value(),
+           "the repeated codec session drains its short group");
+    expect(repeated_runtime.value().receive_access_unit().has_value(),
+           "the repeated codec session produces its own output");
 }
 
 void codec_adapter_contract() {
@@ -447,29 +583,36 @@ void codec_adapter_contract() {
     if (!frame) return;
 
     nvcr::RuntimeConfiguration configuration;
-    configuration.codec_id = "test-codec";
-    configuration.provider_id = "test-cpu";
+    configuration.codec.id = "test-codec";
+    configuration.provider.id = "test-cpu";
     auto provider_session = nvcr::test_support::make_test_provider_session();
-    auto components = adapter->create_components(configuration, provider_session);
-    expect(components.has_value(), "test adapter creates codec components");
-    if (!components) return;
-    expect(components.value().codec != nullptr, "test adapter returns a codec backend");
-    if (!components.value().codec) return;
-    expect(components.value().codec->initialize({}).has_value(), "test backend initializes");
-    auto encoded = components.value().codec->encode(
-        frame.value(), nvcr::FrameType::intra, {});
-    expect(encoded.has_value(), "test backend encodes a frame");
+    auto sessions = adapter->create_sessions(configuration, provider_session);
+    expect(sessions.has_value(), "test adapter creates codec sessions");
+    if (!sessions) return;
+    expect(sessions.value().encoder != nullptr, "test adapter returns an encoder session");
+    expect(sessions.value().decoder != nullptr, "test adapter returns a decoder session");
+    if (!sessions.value().encoder || !sessions.value().decoder) return;
+
+    expect(sessions.value().encoder->send_frame(frame.value()).has_value(),
+           "adapter encoder accepts a frame");
+    auto delayed = sessions.value().encoder->receive_access_unit();
+    expect(!delayed && delayed.error().code() == nvcr::ErrorCode::try_again,
+           "adapter encoder preserves delayed-output behavior");
+    expect(sessions.value().encoder->flush().has_value(), "adapter encoder flushes");
+    auto encoded = sessions.value().encoder->receive_access_unit();
+    expect(encoded.has_value(), "adapter encoder emits its drained access unit");
     if (!encoded) return;
-    auto decoded = components.value().codec->decode(
-        encoded.value().payload, nvcr::FrameType::intra, frame.value().timestamp(), {});
-    expect(decoded.has_value(), "test backend decodes its private payload");
+    expect(sessions.value().decoder->send_access_unit(encoded.value()).has_value(),
+           "adapter decoder accepts the encoded access unit");
+    auto decoded = sessions.value().decoder->receive_frame();
+    expect(decoded.has_value(), "adapter decoder emits a frame");
     if (decoded) {
-        expect(decoded.value().frame.data().size() == frame.value().data().size(),
-               "test backend preserves frame size");
+        expect(decoded.value().data().size() == frame.value().data().size(),
+               "adapter sessions preserve frame size");
         expect(std::equal(
-                   decoded.value().frame.data().begin(), decoded.value().frame.data().end(),
+                   decoded.value().data().begin(), decoded.value().data().end(),
                    frame.value().data().begin()),
-               "test backend preserves frame bytes");
+               "adapter sessions preserve frame bytes");
     }
 }
 
@@ -533,6 +676,7 @@ int main() {
     provider_session_contract();
     runtime_services_contract();
     runtime_construction_contract();
+    registered_grouped_session_contract();
     codec_adapter_contract();
     session_lifecycle_contract();
     if (failures == 0) {

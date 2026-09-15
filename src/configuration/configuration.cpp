@@ -78,63 +78,63 @@ Result<void> apply_setting(
     std::string_view key,
     std::string_view value) {
     if (key == "intra_engine_path") {
-        configuration.intra_engine_path = value;
+        configuration.artifacts.intra_engine_path = value;
     } else if (key == "predicted_engine_path") {
-        configuration.predicted_engine_path = value;
+        configuration.artifacts.predicted_engine_path = value;
     } else if (key == "entropy_model_path") {
-        configuration.entropy_model_path = value;
+        configuration.artifacts.entropy_model_path = value;
     } else if (key == "codec_id") {
-        configuration.codec_id = value;
+        configuration.codec.id = value;
     } else if (key == "model_id") {
-        configuration.model_id = value;
+        configuration.artifacts.model_id = value;
     } else if (key == "bitstream_model_id") {
-        configuration.bitstream_model_id = value;
+        configuration.stream.bitstream_model_id = value;
     } else if (key == "provider_id") {
-        configuration.provider_id = value;
+        configuration.provider.id = value;
     } else if (key == "device_id") {
         auto parsed = parse_integer<std::int32_t>(value, key);
         if (!parsed) return parsed.error();
-        configuration.device_id = parsed.value();
+        configuration.provider.device_id = parsed.value();
     } else if (key == "intra_qp") {
         auto parsed = parse_integer<std::uint32_t>(value, key);
         if (!parsed) return parsed.error();
-        configuration.intra_qp = parsed.value();
+        configuration.codec.intra_qp = parsed.value();
     } else if (key == "gop_size") {
         auto parsed = parse_integer<std::uint32_t>(value, key);
         if (!parsed) return parsed.error();
-        configuration.gop_size = parsed.value();
+        configuration.codec.gop_size = parsed.value();
     } else if (key == "memory_pool_bytes") {
         auto parsed = parse_integer<std::size_t>(value, key);
         if (!parsed) return parsed.error();
-        configuration.memory_pool_bytes = parsed.value();
+        configuration.runtime.memory_pool_bytes = parsed.value();
     } else if (key == "device_arena_bytes") {
         auto parsed = parse_integer<std::size_t>(value, key);
         if (!parsed) return parsed.error();
-        configuration.device_arena_bytes = parsed.value();
+        configuration.provider.device_arena_bytes = parsed.value();
     } else if (key == "max_packet_bytes") {
         auto parsed = parse_integer<std::size_t>(value, key);
         if (!parsed) return parsed.error();
-        configuration.max_packet_bytes = parsed.value();
+        configuration.runtime.max_packet_bytes = parsed.value();
     } else if (key == "enable_profiling") {
         auto parsed = parse_bool(value, key);
         if (!parsed) return parsed.error();
-        configuration.enable_profiling = parsed.value();
+        configuration.provider.enable_profiling = parsed.value();
     } else if (key == "allow_legacy_access_units") {
         auto parsed = parse_bool(value, key);
         if (!parsed) return parsed.error();
-        configuration.allow_legacy_access_units = parsed.value();
+        configuration.stream.allow_legacy_access_units = parsed.value();
     } else if (key == "verify_encoder_reconstruction") {
         auto parsed = parse_bool(value, key);
         if (!parsed) return parsed.error();
-        configuration.verify_encoder_reconstruction = parsed.value();
+        configuration.codec.verify_encoder_reconstruction = parsed.value();
     } else if (key == "tensorrt_execution_mode") {
         auto parsed = parse_execution_mode(value);
         if (!parsed) return parsed.error();
-        configuration.tensorrt_execution_mode = parsed.value();
+        configuration.provider.tensorrt_execution_mode = parsed.value();
     } else if (key == "log_level") {
         auto parsed = parse_log_level(value);
         if (!parsed) return parsed.error();
-        configuration.log_level = parsed.value();
+        configuration.runtime.log_level = parsed.value();
     } else {
         return Error(
             ErrorCode::invalid_argument,
@@ -191,28 +191,30 @@ Result<RuntimeConfiguration> ConfigurationLoader::from_file(
 }
 
 Result<void> ConfigurationLoader::validate(const RuntimeConfiguration& configuration) {
-    if (!valid_identifier(configuration.codec_id)) {
+    if (!valid_identifier(configuration.codec.id)) {
         return Error(ErrorCode::invalid_argument, "invalid codec_id", "configuration");
     }
-    if (!valid_identifier(configuration.model_id)) {
+    if (!valid_identifier(configuration.artifacts.model_id)) {
         return Error(ErrorCode::invalid_argument, "invalid model_id", "configuration");
     }
-    if (!valid_identifier(configuration.bitstream_model_id)) {
+    if (!valid_identifier(configuration.stream.bitstream_model_id)) {
         return Error(ErrorCode::invalid_argument, "invalid bitstream_model_id", "configuration");
     }
-    if (!valid_identifier(configuration.provider_id)) {
+    if (!valid_identifier(configuration.provider.id)) {
         return Error(ErrorCode::invalid_argument, "invalid provider_id", "configuration");
     }
-    if (configuration.device_id < 0) {
+    if (configuration.provider.device_id < 0) {
         return Error(ErrorCode::invalid_argument, "device_id cannot be negative", "configuration");
     }
-    if (configuration.gop_size == 0) {
+    if (configuration.codec.gop_size == 0) {
         return Error(ErrorCode::invalid_argument, "gop_size must be greater than zero", "configuration");
     }
-    if (configuration.intra_qp >= 64) {
+    if (configuration.codec.intra_qp >= 64) {
         return Error(ErrorCode::invalid_argument, "intra_qp must be in [0, 63]", "configuration");
     }
-    if (configuration.memory_pool_bytes == 0 || configuration.device_arena_bytes == 0 || configuration.max_packet_bytes == 0) {
+    if (configuration.runtime.memory_pool_bytes == 0 ||
+        configuration.provider.device_arena_bytes == 0 ||
+        configuration.runtime.max_packet_bytes == 0) {
         return Error(
             ErrorCode::invalid_argument,
             "memory and packet limits must be greater than zero",

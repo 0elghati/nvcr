@@ -56,11 +56,11 @@ int main(int argc, char* argv[]) {
 
     const fs::path engine_root = fs::absolute(argv[1]);
     nvcr::RuntimeConfiguration configuration;
-    configuration.intra_engine_path = engine_root;
-    configuration.device_id = 0;
+    configuration.artifacts.intra_engine_path = engine_root;
+    configuration.provider.device_id = 0;
 
     auto wrong_model = configuration;
-    wrong_model.model_id = "different-dcvcrt-model";
+    wrong_model.artifacts.model_id = "different-dcvcrt-model";
     if (!initialize_is_rejected(wrong_model, "wrong-model engine bundle")) return 1;
 
     const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -78,7 +78,7 @@ int main(int argc, char* argv[]) {
         manifest << "{\"format\": 2, \"schema\": \"corrupt\"}\n";
     }
     auto corrupt_manifest = configuration;
-    corrupt_manifest.intra_engine_path = temporary.path;
+    corrupt_manifest.artifacts.intra_engine_path = temporary.path;
     if (!initialize_is_rejected(corrupt_manifest, "corrupt engine manifest")) return 1;
 
     for (const auto name : runtime_files) {

@@ -150,9 +150,9 @@ Result<std::shared_ptr<provider::IExecutable>> RuntimeServices::resolve(
 
 Result<std::shared_ptr<provider::experimental::IProviderSession>>
 RuntimeServices::create_provider_session(const RuntimeConfiguration& configuration) const {
-    const std::string provider_id = configuration.provider_id.empty()
+    const std::string provider_id = configuration.provider.id.empty()
         ? std::string(preferred_provider_id_)
-        : configuration.provider_id;
+        : configuration.provider.id;
     if (provider_id.empty()) {
         return Error(
             ErrorCode::missing_provider,
