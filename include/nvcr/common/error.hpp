@@ -20,7 +20,7 @@ enum class ErrorCode {
     internal_error,
     // Session-API status values. Returned by send/receive calls;
     // these are not error conditions but signals about the codec pipeline state.
-    try_again,            // no output available yet; send more input
+    try_again,            // receive only: no output ready; more input may be required
     end_of_stream,        // codec has emitted all output after flush()
     missing_artifact,     // required engine/model artifact is absent
     missing_codec,        // no artifact is registered for the requested codec

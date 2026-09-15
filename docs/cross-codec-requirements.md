@@ -68,10 +68,12 @@ behavior:
   and the shared runtime has not been flushed. It does not currently report
   genuine codec lookahead or input accumulation.
 
-The public API comments say encoder `send_frame()` never returns `try_again`.
-Decoder `send_access_unit()` may return it when more units are required. The
-current production implementation returns neither form because both operations
-complete synchronously.
+The public API comments define successful `send_frame()` and
+`send_access_unit()` calls as consuming their input. Send methods never return
+`try_again` in v1. Receive methods return `try_again` when no output is ready
+and more input may be required. The current production implementation uses
+successful sends followed by receive-side readiness because both codec
+operations complete synchronously.
 
 **Inference.** The public send/receive method shape is broader than its only
 production implementation. Passing lifecycle fixture tests therefore does not

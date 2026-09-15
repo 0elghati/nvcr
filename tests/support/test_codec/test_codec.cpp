@@ -461,7 +461,8 @@ public:
         }
         auto frames = decode_chunk_packet(packet);
         if (!frames) return frames.error();
-        for (auto& frame : frames.value()) outputs_.push_back(std::move(frame));
+        emit_pending();
+        pending_ = std::move(frames.value());
         return {};
     }
 
@@ -478,17 +479,25 @@ public:
     }
 
     [[nodiscard]] Result<void> flush() override {
+        emit_pending();
         flushed_ = true;
         return {};
     }
 
     [[nodiscard]] Result<void> reset() override {
+        pending_.clear();
         outputs_.clear();
         flushed_ = false;
         return {};
     }
 
 private:
+    void emit_pending() {
+        for (auto& frame : pending_) outputs_.push_back(std::move(frame));
+        pending_.clear();
+    }
+
+    std::vector<Frame> pending_;
     std::deque<Frame> outputs_;
     bool flushed_{false};
 };
