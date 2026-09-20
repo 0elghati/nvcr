@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-08-11
+Last reviewed: 2026-09-20
 
 ## Product direction
 
@@ -49,7 +49,7 @@ not count as additional production codecs/providers or performance baselines.
 | CLI and artifact-client build identity | Follow-up | Add `nvcr --version` and `nvcr-artifacts --version`, and reconcile the legacy `current_software_version` constant; until then use package manifests, source revisions, or OCI metadata |
 | Linux container GPU injection | Follow-up | Validate and document configured `nvidia` runtime, Docker `--gpus`, and CDI paths across supported Docker and NVIDIA Container Toolkit versions |
 | Exact-target artifacts | In progress | Produce current warning-free profile sets and target-local evidence |
-| Reproducible evaluation | In progress | Complete exact native and direct-Docker matrices plus pinned Python comparisons |
+| Reproducible evaluation | In progress | User-run NVCR smoke and all 3,024 configured operations passed; offline records audited. Investigate persistent TensorRT device-model warnings and complete the deferred Python comparison |
 | Compatibility classes | Experimental | Compare against complete exact baselines |
 | Public C++ API/ABI | Transitional | Freeze only after ownership and compatibility contracts are accepted |
 
@@ -57,6 +57,22 @@ Generic packages exclude checkpoints, exported model assets, TensorRT plans,
 and datasets. Validated engine bundles use the separate rolling catalog and
 remain bound to their recorded GPU, CUDA, TensorRT, model, profile, digest, and
 redistribution status.
+
+## Current evaluation priority
+
+The common measurement contract and executable campaign are in
+[measurement-contract.md](docs/experiments/measurement-contract.md) and
+[measurement-runbook.md](docs/experiments/measurement-runbook.md). Quality now
+uses common decoded bytes; new observations separate timing, memory, actual
+stream components and statistical units. The configured QPs and repetition
+count are retained. The [assessment](docs/experiments/measurement-readiness/assessment.md)
+and [validation](docs/experiments/measurement-readiness/validation.md) distinguish
+software checks from pending hardware gates. No evaluation milestone or v1 exit
+criterion is marked complete by these changes.
+
+`scripts/measurement_jetson.sh` provides logged preparation, smoke, campaign,
+resume and analysis commands. The focused software suite passes; the current
+NVCR execution evidence is summarized below. Python validation remains pending.
 
 ## Later codec integrations
 
@@ -95,3 +111,15 @@ redistribution.
 4. Complete reproducible evaluation results.
 5. Final dependency, model, dataset, and package-license review.
 6. Installation and external-consumer verification from published artifacts.
+
+## Current NVCR measurement evidence (2026-09-20)
+
+The completed NVCR-only matrix in `output/peer-review/` covers six
+resolutions, four configured QPs, three GOPs and ten throughput/memory repetitions.
+All 3,024 operations passed; the preceding eight-operation smoke/reset gate
+passed. The [current review](results/jetson-orin/measurement/summary.md) records the
+independent numerical audit and exports mean/sample SD and descriptive intervals.
+No raw runs are committed. Timing variability remains explicit (maximum FPS
+CV 9.74%); every operation contains a TensorRT device-model warning. The Python
+comparison, warning-free artifact gate and overall evaluation milestone remain
+open. No new GPU execution was launched during review.

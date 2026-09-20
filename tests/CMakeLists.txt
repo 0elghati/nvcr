@@ -187,3 +187,17 @@ if(TARGET dcvcrt_reference)
         add_test(NAME dcvcrt_reference_doctor COMMAND dcvcrt_reference doctor)
     endif()
 endif()
+
+# Cross-check the offline byte accountant against the production writers.
+add_executable(nvcr_measurement_wire_fixture measurement_wire_fixture.cpp)
+target_include_directories(nvcr_measurement_wire_fixture PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcrt")
+target_link_libraries(nvcr_measurement_wire_fixture PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_measurement_wire_fixture)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME nvcr_measurement_semantics
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "NVCR_WIRE_FIXTURE=$<TARGET_FILE:nvcr_measurement_wire_fixture>"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/measurement_tests.py")
+    add_test(NAME nvcr_legacy_consolidation
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/consolidate_runtime_results_tests.py")
+endif()

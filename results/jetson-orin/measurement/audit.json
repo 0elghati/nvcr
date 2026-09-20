@@ -1,0 +1,49 @@
+{
+  "status": "passed",
+  "issues": [],
+  "campaign": "/home/oelghati/nvcr/output/peer-review",
+  "fingerprint": "f798aa57364d384bb2d9cf679807143286d88937a689c95bfda2d88646ee27b1",
+  "operations": 3024,
+  "expected_operations": 3024,
+  "raw_metric_files_verified": 3024,
+  "quality_records_recomputed_from_sse": 72,
+  "condition_operation_groups": 432,
+  "timing_memory_groups_with_n10": 288,
+  "statistics_recomputed": 576,
+  "unique_encoded_streams_per_condition": [
+    1
+  ],
+  "rd_curves_monotonic": 18,
+  "stderr_warning_operations": {
+    "TensorRT device-model warning": 3024,
+    "GOP1 comparison warning": 504
+  },
+  "smoke_directory": "/home/oelghati/nvcr/evidence/measurement-nvcr-smoke.Uc3WAn",
+  "smoke_reset_checks": [
+    {
+      "comparison": "cold versus warmed/reset output SHA256",
+      "implementation": "nvcr",
+      "operation": "encode",
+      "status": "passed"
+    },
+    {
+      "comparison": "cold versus warmed/reset output SHA256",
+      "implementation": "nvcr",
+      "operation": "decode",
+      "status": "passed"
+    }
+  ],
+  "source_hashes": {
+    "run.json": "b93fd9d314817c79cda4b8d32a8b32573affd2246f6f95ad3306a266aecf428c",
+    "observations.jsonl": "f8ab158d6548d5ce3250a9ba21de1aed58e5612b59b4c9d32777963be4836087",
+    "analysis.json": "2e08f2edf29adba97a2c8bb13de608c6c35dc1958fc28980bfdf9ff6454a74b9",
+    "rd-points.json": "aba9a402890082dc89cc5bab1482f36eaae9d3aa7229e04e29a16203dd18be57"
+  },
+  "ci_method": "mean +/- t(0.975,df=9) * sample SD/sqrt(10); independent stationary execution assumption, no multiplicity correction",
+  "limits": [
+    "Deleted bitstreams/reconstructions cannot be re-decoded; stored hashes/accounting/SSE checked.",
+    "All observations are NVCR; no new Python speedup or memory-ratio comparison.",
+    "TensorRT device-model warnings persist despite manifest compatibility; warning-free target gate remains open.",
+    "Before/after power and sensor snapshots cannot exclude intervening DVFS or throttling."
+  ]
+}

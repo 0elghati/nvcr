@@ -1,5 +1,12 @@
 # Result schema
 
+For new implementation comparisons, use the versioned
+[measurement contract](measurement-contract.md) and
+[measurement runbook](measurement-runbook.md). The historical driver/schema
+below remain available; their old quality and timing definitions must not be
+silently promoted to the common decoded-output/completed-frame protocol.
+
+
 Each experiment row is one JSON object in a JSONL file. Required rows use the
 legacy schema identifier `nvcr.softwarex.result.v1`, which remains unchanged
 for tooling compatibility.

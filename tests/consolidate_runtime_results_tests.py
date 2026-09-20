@@ -110,7 +110,7 @@ class RuntimeResultValidationTests(unittest.TestCase):
             nvcr_checkout_state="dirty",
         )
         self.assertIn(
-            "| QCIF | 1 | 0.160000 | 0.157828 | -1.36% | 34.800 | 35.000 | -0.200 |",
+            "| QCIF | 1 | 0.160000 | 0.157828 | -1.36% | 34.800 | 35.000 | — |",
             report,
         )
         self.assertNotIn("| QCIF | 30 | 0.160000 |", report)
@@ -119,6 +119,8 @@ class RuntimeResultValidationTests(unittest.TestCase):
         self.assertIn("inter-coded GOPs 30 are excluded", report)
         self.assertIn("### Aggregate comparison", report)
         self.assertIn("PSNR delta", report)
+        self.assertIn("without matching common decoded-output quality contracts", report)
+        self.assertNotIn("-0.200", report)
         self.assertIn("## Throughput", report)
         self.assertIn("Python encode FPS", report)
         self.assertIn("NVCR encode FPS", report)

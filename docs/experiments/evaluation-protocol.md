@@ -1,5 +1,12 @@
 # Reproducible evaluation protocol
 
+For new implementation comparisons, use the versioned
+[measurement contract](measurement-contract.md) and
+[measurement runbook](measurement-runbook.md). The historical driver/schema
+below remain available; their old quality and timing definitions must not be
+silently promoted to the common decoded-output/completed-frame protocol.
+
+
 ## Purpose
 
 The evaluation has two parts: core runtime tests and target execution with the

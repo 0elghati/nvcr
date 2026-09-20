@@ -1,5 +1,12 @@
 # Reproducible evaluation runbook
 
+For new implementation comparisons, use the versioned
+[measurement contract](measurement-contract.md) and
+[measurement runbook](measurement-runbook.md). The historical driver/schema
+below remain available; their old quality and timing definitions must not be
+silently promoted to the common decoded-output/completed-frame protocol.
+
+
 Run from a clean repository root on the machine named by the target profile.
 Do not substitute another GPU, invent an input, or reuse an engine after any
 bound profile changes.

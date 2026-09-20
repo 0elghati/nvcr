@@ -1,0 +1,29 @@
+{
+  "schema": "nvcr.measurement.campaign.v1",
+  "qps": [0, 21, 42, 63],
+  "gops": [1, 30, 100],
+  "repetitions": 10,
+  "warmup_frames": 10,
+  "reference_reset_interval": 64,
+  "modes": ["throughput", "memory", "quality"],
+  "quality_repetitions": 1,
+  "order_seed": 20260919,
+  "timeout_seconds": 1800,
+  "target_profile": "configs/targets/orin-nano-l4t3647.json",
+  "model_profile": "configs/models/dcvcrt-cvpr2025.json",
+  "nvcr": "build-release/cli/nvcr",
+  "build_dir": "build-release",
+  "engine_root": "build/engines/dcvcrt-cvpr2025/orin-nano-l4t3647-clean-20260810T195100Z",
+  "reference_root": "assets",
+  "reference_python": "/home/oelghati/DCVC-RT/.venv-jetson/bin/python",
+  "execution": {"mode": "native", "container_digest": null},
+  "sequences": [
+    {"sequence_id":"akiyo-qcif","content_id":"akiyo","profile":"qcif","path":"../datasets/qcif/akiyo_qcif.yuv","width":176,"height":144,"fps":30,"frames":100,"pixel_format":"yuv420p8","provenance":{"status":"unknown","acquisition":null,"preprocessing":null}},
+    {"sequence_id":"waterfall-cif","content_id":"waterfall","profile":"cif","path":"../datasets/cif/waterfall_cif.yuv","width":352,"height":288,"fps":30,"frames":100,"pixel_format":"yuv420p8","provenance":{"status":"unknown","acquisition":null,"preprocessing":null}},
+    {"sequence_id":"basketball-360p","content_id":"basketball-drive","profile":"360p","path":"../datasets/360p/BasketballDrive_640x360_50.yuv","width":640,"height":360,"fps":50,"frames":100,"pixel_format":"yuv420p8","provenance":{"status":"unknown","acquisition":null,"preprocessing":null}},
+    {"sequence_id":"basketball-540p","content_id":"basketball-drive","profile":"540p","path":"../datasets/540p/BasketballDrive_960x540_50.yuv","width":960,"height":540,"fps":50,"frames":100,"pixel_format":"yuv420p8","provenance":{"status":"unknown","acquisition":null,"preprocessing":null}},
+    {"sequence_id":"fourpeople-720p","content_id":"fourpeople","profile":"720p","path":"../datasets/720p/FourPeople_1280x720_60.yuv","width":1280,"height":720,"fps":30,"frames":100,"pixel_format":"yuv420p8","provenance":{"status":"unknown","acquisition":null,"preprocessing":null}},
+    {"sequence_id":"basketball-1080p","content_id":"basketball-drive","profile":"1080p","path":"../datasets/hd/BasketballDrive_1920x1080_50.yuv","width":1920,"height":1080,"fps":60,"frames":100,"pixel_format":"yuv420p8","provenance":{"status":"unknown","acquisition":null,"preprocessing":null}}
+  ],
+  "provenance_note": "Source paths and fps metadata retain the archived native matrix. Content grouping follows the prior study description, not statistical independence. Original acquisition/resize commands and source fps verification are unavailable. No preprocessing is performed by this campaign."
+}
