@@ -4,6 +4,24 @@ NVCR separates functional validation, measurements from one environment,
 controlled comparisons, and regeneration of retained summaries. Use the
 workflow whose measurement boundary matches the claim being evaluated.
 
+## New comparable measurements
+
+Use the [measurement contract](experiments/measurement-contract.md) and
+[execution runbook](experiments/measurement-runbook.md) for new NVCR-versus-Python
+experiments. `scripts/measurement_campaign.py` preserves the configured QPs and
+repetitions while collecting common decoded-output quality, completed host-frame
+timing, process RSS high-water, parsed full-file byte accounting, independent
+observations and mean/sample-SD summaries. Its preflight and bounded smoke are
+required before a full launch. The [current validation record](experiments/measurement-readiness/validation.md)
+identifies outstanding GPU/artifact failures; no target is yet qualified under
+this new contract.
+
+The commands below remain available for diagnostics and historical schema
+reproduction. Their older timing, quality and byte fields do not automatically
+satisfy the new common measurement contract. Historical quality values are
+retained, but regenerated legacy comparisons suppress PSNR deltas unless both
+rows explicitly declare the same common decoded-output definition.
+
 ## Functional round-trip validation
 
 Follow [First run](first-run.md) to verify installation, artifact selection,

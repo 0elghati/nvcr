@@ -169,3 +169,15 @@ For target-specific details, read [First run](../docs/first-run.md),
 [Model and engine preparation](../docs/dcvcrt-artifacts.md),
 [Performance](../docs/performance.md), and
 [Release policy](../docs/releasing.md).
+
+## Common implementation measurements
+
+`measurement_campaign.py` provides environment capture, preflight/dry-run,
+bounded smoke, compatible resume, the configured campaign, and statistical/RD
+outputs. `measure_python_reference.py` is the explicitly identified new pinned
+reference wrapper. `measurement_metrics.py` evaluates decoded output and
+reconciles actual serialized bytes. See the
+[contract](../docs/experiments/measurement-contract.md) and
+[commands](../docs/experiments/measurement-runbook.md). The full launch requires
+passing compatible smoke evidence; imported CUDA extensions alone are not a
+validated reference execution.
