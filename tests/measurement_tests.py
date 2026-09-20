@@ -143,6 +143,15 @@ class MeasurementTests(unittest.TestCase):
         self.assertFalse(Path(raw['reference_python']).is_absolute())
         m=campaign.load_manifest(path)
         self.assertEqual(2*len(campaign.jobs(m)),6048)
+    def test_reference_revision_override_still_requires_clean_source(self):
+        expected='expected'; actual='fork'
+        with self.assertRaises(ValueError):
+            campaign.validate_reference_revision(actual,expected,'',False)
+        accepted=campaign.validate_reference_revision(actual,expected,'',True)
+        self.assertFalse(accepted['commit_matches_profile'])
+        self.assertEqual(accepted['source_policy'],'explicit-clean-fork-override')
+        with self.assertRaises(ValueError):
+            campaign.validate_reference_revision(actual,expected,'M src/models/video_model.py',True)
     def test_profile_line_endings_require_exact_published_digest(self):
         import hashlib
         p=self.root/'model.json'; p.write_bytes(b'{\r\n "model": 1\r\n}\r\n')

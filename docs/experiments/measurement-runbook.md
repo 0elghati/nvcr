@@ -75,6 +75,25 @@ python3 scripts/measurement_campaign.py run \
 ## Full NVCR-versus-Python path on this Jetson
 
 All further builds, validation and measurements are launched by the operator.
+To use a clean fork revision instead of the model-profile commit, make the
+deviation explicit while preparing the local manifest and keep the opt-in set
+for smoke and run:
+
+```bash
+export NVCR_REFERENCE_ROOT=/home/oelghati/DCVC-RT
+export NVCR_REFERENCE_PYTHON=/home/oelghati/DCVC-RT/src/venv/bin/python
+export NVCR_ALLOW_REFERENCE_SOURCE_MISMATCH=1
+bash scripts/measurement_jetson.sh prepare
+bash scripts/measurement_jetson.sh smoke
+bash scripts/measurement_jetson.sh run
+```
+
+The override accepts a different commit only when tracked source is clean. The
+actual and expected commits, the mismatch policy, extension hashes and Python
+environment remain in preflight identity. It does not permit CPU fallback or
+disable the customized CUDA path. `run` retains all six resolutions, QPs
+0/21/42/63, GOPs 1/30/100, 100 timed frames, ten warm-up frames and ten separate
+throughput/memory repetitions. It launches 6,048 encode/decode operations.
 The convenience entry point saves a separate log on every invocation and stops
 on failure. It preserves existing model/engine bundles and datasets:
 

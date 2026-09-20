@@ -56,6 +56,16 @@ def hash_object(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,allow_nan=False).encode()).hexdigest()
 
 
+def validate_reference_revision(revision,expected,dirty,allow_mismatch=False):
+    if dirty:
+        raise ValueError('reference source must have no tracked changes')
+    matches=revision==expected
+    if not matches and not allow_mismatch:
+        raise ValueError('reference source revision does not match the model profile')
+    return {'commit':revision,'expected_commit':expected,'commit_matches_profile':matches,
+            'source_policy':'model-profile-pin' if matches else 'explicit-clean-fork-override'}
+
+
 def load_manifest(path):
     m=json.loads(path.read_text())
     if m.get('schema')!='nvcr.measurement.campaign.v1': raise ValueError('unsupported campaign schema')
@@ -124,7 +134,7 @@ def commands(m,j,directory):
     return enc,dec,stream,reconstruction
 
 
-def preflight(m,output):
+def preflight(m,output,allow_reference_source_mismatch=False):
     output.mkdir(parents=True,exist_ok=True)
     env=capture(ROOT,Path(m['reference_python'] if 'python' in implementations(m) else sys.executable),Path(m['reference_root']),Path(m['build_dir']),Path(m['nvcr']))
     write_json(output/'environment.json',env)
@@ -153,16 +163,18 @@ def preflight(m,output):
         root=Path(m['reference_root'])
         revision=command(['git','-C',root,'rev-parse','HEAD']).get('stdout','').strip()
         dirty=command(['git','-C',root,'status','--porcelain','--untracked-files=no'])
-        if revision!=model['upstream']['commit'] or dirty.get('returncode')!=0 or dirty.get('stdout','').strip():
-            raise ValueError('reference must be clean pinned upstream source; historical modified wrapper is not accepted')
+        if dirty.get('returncode')!=0: raise ValueError('reference source status unavailable')
+        source_identity=validate_reference_revision(revision,model['upstream']['commit'],
+            dirty.get('stdout','').strip(),allow_reference_source_mismatch)
         for name,spec in model['checkpoints'].items():
             p=root/'checkpoints'/spec['file']; actual=digest(p)
             if actual!=spec['sha256']: raise ValueError(f'{name} checkpoint digest mismatch')
             identities['checkpoints'][name]=actual
         # Python imports an untracked source file ahead of a pinned one only if installed
         # explicitly; record the actual imported extension binaries in the doctor output.
-        return {'commit':revision,'wrapper_sha256':digest(ROOT/'scripts/measure_python_reference.py')}
-    if 'python' in implementations(m): check('pinned Python source/checkpoints',reference)
+        return {**source_identity,'wrapper_sha256':digest(ROOT/'scripts/measure_python_reference.py')}
+    reference_identity=(check('Python source/checkpoints',reference) if 'python' in implementations(m)
+                        else {'status':'not_selected'})
     def doctor():
         result=command([m['reference_python'],ROOT/'scripts/measure_python_reference.py','--root',m['reference_root'],
                         '--operation','doctor','--metrics',output/'python-doctor.json'],90)
@@ -201,6 +213,7 @@ def preflight(m,output):
     relevant=list((ROOT/'scripts').glob('measurement*.py'))+[ROOT/'scripts/measure_python_reference.py',ROOT/'cli/main.cpp']
     identity={'manifest':m,'assets':identities,'binary':env['executable'],
               'source_head':env['source']['head'],'source_diff':env['source']['diff'],
+              'reference_source':env['reference_source'],'reference_source_policy':reference_identity,
               'measurement_sources':{str(p.relative_to(ROOT)):digest(p) for p in relevant},
               'device':device,'python_device':python_device,'build':env['build'],
               'python_dependencies':[c for c in env['commands'] if c['command'][1:]==['-m','pip','freeze']],
@@ -390,7 +403,7 @@ def validate_smoke_evidence(path,pre):
     result=analyze(path)  # Recompute from observations, never trust a status-only summary.
     if not run.get('smoke') or result['status']!='complete': raise ValueError('smoke is not complete')
     old=run['preflight_identity']; current=pre['identity']
-    for field in ['binary','source_head','source_diff','measurement_sources','device','python_device','build','execution_environment','power_configuration','python_dependencies','platform','host_identity','governors']:
+    for field in ['binary','source_head','source_diff','reference_source','reference_source_policy','measurement_sources','device','python_device','build','execution_environment','power_configuration','python_dependencies','platform','host_identity','governors']:
         if old[field]!=current[field]: raise ValueError('smoke incompatible with current '+field)
     if old['assets']['checkpoints']!=current['assets']['checkpoints']: raise ValueError('smoke checkpoint mismatch')
     for profile,identity in old['assets']['engines'].items():
@@ -410,6 +423,8 @@ def main(argv=None):
     ap.add_argument('--dry-run',action='store_true')
     ap.add_argument('--resume',action='store_true')
     ap.add_argument('--smoke-evidence',type=Path,help='complete compatible smoke package required for full launch')
+    ap.add_argument('--allow-reference-source-mismatch',action='store_true',
+                    help='accept a different clean Python reference commit and record the mismatch explicitly')
     ap.add_argument('--curves',type=Path,help='BD input JSON: reference and candidate [[rate,quality],...] in increasing order')
     args=ap.parse_args(argv); root=args.output.resolve()
     if args.action=='analyze':
@@ -434,7 +449,7 @@ def main(argv=None):
     if root.exists() and any(root.iterdir()) and not args.resume: raise ValueError('output must be new/empty; compatible resume requires --resume')
     root.mkdir(parents=True,exist_ok=True)
     preflight_dir=root/'preflight'/str(uuid.uuid4())
-    pre=preflight(m,preflight_dir); schedule=jobs(m)
+    pre=preflight(m,preflight_dir,args.allow_reference_source_mismatch); schedule=jobs(m)
     if args.action=='smoke':
         schedule += [{**j,'warmup_override':0} for j in list(schedule) if j['mode']=='quality']
     if (root/'run.json').exists():

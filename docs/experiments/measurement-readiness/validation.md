@@ -25,12 +25,12 @@ ctest --test-dir build-release-rtx4070 --output-on-failure \
   -R 'nvcr_measurement_semantics|nvcr_legacy_consolidation|nvcr_softwarex_driver|nvcr_contract_tests|nvcr_format_contract_tests|nvcr_dcvcrt_payloads|nvcr_cli_accepts_inter_gop'
 ```
 
-The measurement suite contains 24 tests, covering independently known PSNR,
+The measurement suite contains 25 tests, covering independently known PSNR,
 exact reconstruction, malformed dimensions/lengths, real production-writer byte
 reconciliation, sample SD, duplicate/incomplete observations, child failures and
 timeouts, coding schedules, NVCR-only selection, bound profile line endings,
 device-name alias constraints, portable RTX campaign identity and RD validation.
-The three requested Python suites pass 46 tests with two expected optional
+The three requested Python suites pass 47 tests with two expected optional
 skips. The two shell launchers pass `bash -n` and ShellCheck.
 
 ## Completed NVCR campaign
