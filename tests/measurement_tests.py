@@ -133,6 +133,16 @@ class MeasurementTests(unittest.TestCase):
         self.assertEqual(2*len(jobs),3024)
         self.assertEqual({j['qp'] for j in jobs},{0,21,42,63})
         self.assertEqual({j['repeat'] for j in jobs if j['mode']=='throughput'},set(range(10)))
+    def test_rtx_manifest_keeps_matched_matrix_and_portable_reference_paths(self):
+        path=campaign.ROOT/'docs/experiments/measurement-campaign-rtx4070.json'
+        raw=json.loads(path.read_text())
+        self.assertEqual(raw['implementations'],['nvcr','python'])
+        self.assertEqual(raw['qps'],[0,21,42,63]); self.assertEqual(raw['repetitions'],10)
+        self.assertEqual(raw['target_profile'],'configs/targets/rtx4070-ubuntu2404.json')
+        self.assertFalse(Path(raw['reference_root']).is_absolute())
+        self.assertFalse(Path(raw['reference_python']).is_absolute())
+        m=campaign.load_manifest(path)
+        self.assertEqual(2*len(campaign.jobs(m)),6048)
     def test_profile_line_endings_require_exact_published_digest(self):
         import hashlib
         p=self.root/'model.json'; p.write_bytes(b'{\r\n "model": 1\r\n}\r\n')

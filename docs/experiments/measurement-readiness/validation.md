@@ -18,19 +18,20 @@ The original seven-suite selection passed measurement semantics, legacy
 consolidation, SoftwareX orchestration, runtime contracts, format contracts,
 DCVC-RT payloads and CLI inter-GOP acceptance.
 
-The final focused CPU-only checks passed 3/3 on 2026-09-20:
+The final focused Release checks passed 7/7 on 2026-09-20:
 
 ```bash
-ctest --test-dir build-release --output-on-failure \
-  -R 'nvcr_measurement_semantics|nvcr_legacy_consolidation|nvcr_softwarex_driver'
+ctest --test-dir build-release-rtx4070 --output-on-failure \
+  -R 'nvcr_measurement_semantics|nvcr_legacy_consolidation|nvcr_softwarex_driver|nvcr_contract_tests|nvcr_format_contract_tests|nvcr_dcvcrt_payloads|nvcr_cli_accepts_inter_gop'
 ```
 
-The measurement suite contains 23 tests, covering independently known PSNR,
+The measurement suite contains 24 tests, covering independently known PSNR,
 exact reconstruction, malformed dimensions/lengths, real production-writer byte
 reconciliation, sample SD, duplicate/incomplete observations, child failures and
 timeouts, coding schedules, NVCR-only selection, bound profile line endings,
-device-name alias constraints and RD validation. The two shell launchers pass
-`bash -n`. No GPU experiment was repeated for these software checks.
+device-name alias constraints, portable RTX campaign identity and RD validation.
+The three requested Python suites pass 46 tests with two expected optional
+skips. The two shell launchers pass `bash -n` and ShellCheck.
 
 ## Completed NVCR campaign
 
@@ -73,6 +74,44 @@ The measured source was `fbcc19b1bc12e74c3d89517b1941ef68ddf75af4` plus the
 measurement changes recorded by the run's source diff and file hashes. The
 result audit preserves run and source-result SHA256 identities. A later commit
 must not be represented as the measured source revision without these records.
+
+## RTX 4070 NVCR readiness gate
+
+The RTX workstation validation used NVCR source
+`a444fb62e5351930d6c7a388b527acb7ad8da46e` plus the captured working-tree diff.
+The host is Ubuntu 24.04.4 LTS with kernel 7.0.0-31, an AMD Ryzen 7 5800X,
+31 GiB system RAM and an NVIDIA GeForce RTX 4070 with 12,282 MiB memory,
+compute capability 8.9 and 46 SMs. The driver is 580.173.02; `nvidia-smi`
+reports driver capability CUDA 13.0, while the measured CUDA runtime identity is
+12.8. The build uses nvcc 12.8.93, TensorRT 10.9.0, GCC 13.3.0 and CMake
+3.28.3. Python 3.13.13 is the campaign-control interpreter, not the deferred
+PyTorch reference environment.
+
+`build-release-rtx4070` is a fresh Release build explicitly targeting SM 8.9.
+Its CLI SHA256 is
+`d22754daa957bc9dfc7aa65dab5732cd698c5bba369014400588c108e7b27596`.
+The previous `build-release` cache recorded nvcc 12.6, so it was preserved but
+not used. The six catalog-selected bundles all passed inventory, model/profile,
+exact target, SM-count, CUDA-runtime and TensorRT validation. They were already
+built for RTX 4070, SM 8.9, CUDA 12.8 and TensorRT 10.9.0; no engine rebuild or
+compatibility bypass was needed. The exact bundle and plan hashes remain in the
+local preflight evidence.
+
+The NVCR-only preflight and dry-run passed and resolved all 3,024 operations in
+the local `evidence/measurement-nvcr-check.*` package. The bounded NVCR smoke,
+whose package path is retained in
+`evidence/measurement-rtx4070.smoke-path.txt`, completed all eight encode/decode
+operations for QCIF QP 0, GOP 30, three measured frames and two warm-up frames.
+There were no failed, skipped or missing observations. The metric schema,
+completed-frame timing contract, per-frame synchronization, reset interval,
+byte reconciliation and decoded quality checks passed. Cold versus warmed/reset
+encoded-stream and decoded-output SHA256 comparisons both matched, and all
+operation stderr files were empty. No full RTX campaign was launched.
+
+This gate selected only NVCR. The portable RTX manifest retains both
+implementations and the complete configured matrix, but the clean pinned source,
+CUDA-enabled reference interpreter, Python doctor, matched smoke and one-condition
+matched sanity gate remain pending.
 
 ## Reference and historical comparison limits
 
