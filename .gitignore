@@ -75,3 +75,9 @@ venv
 /infra/aws-cdk/.cdk.staging/
 
 /results/**/*.nvcr
+
+# Local measurement observations, failures, and large reconstruction products.
+/evidence/measurement-*/
+/evidence/measurement-*.smoke-path.txt
+/output/peer-review/
+/output/peer-review.smoke-path.txt
