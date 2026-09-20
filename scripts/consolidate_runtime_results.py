@@ -312,7 +312,12 @@ def build_report(
             py_psnr = number(python[key], "ave_all_frame_psnr")
             nv_psnr = number(nvcr[key], "psnr_yuv")
             psnr_delta = None
-            if py_psnr is not None and nv_psnr is not None:
+            # Historical float/frame-mean and serialized/pooled PSNR are distinct.
+            # Preserve both reported values, but never manufacture a comparison.
+            quality_contract = python[key].get("quality_contract")
+            if (quality_contract == "decoded-yuv420p8-pooled-plane-6-1-1-v1"
+                    and nvcr[key].get("quality_contract") == quality_contract
+                    and py_psnr is not None and nv_psnr is not None):
                 psnr_delta = nv_psnr - py_psnr
                 psnr_deltas.append(psnr_delta)
                 psnr_deltas_by_gop[gop].append(psnr_delta)
@@ -389,7 +394,7 @@ def build_report(
     lines = [
         f"# {hardware_title(python_hardware)} {python_label} vs {nvcr_label}",
         "",
-        "This completed execution report is generated from the recorded Python DCVC-RT and NVCR JSONL datasets.",
+        "This historical report preserves the recorded Python DCVC-RT and NVCR values; it does not establish common timing or quality boundaries.",
         "",
         "## Inputs and coverage",
         "",
@@ -408,7 +413,7 @@ def build_report(
         lines.extend(
             [
                 f"Python BPP is the decode row's inner `bit_stream` value. NVCR inner-entropy BPP is derived as `(payload_bytes - frames × {nvcr_frame_overhead_bytes}) × 8 / (width × height × frames)`.",
-                f"The derivation removes the fixed {nvcr_frame_overhead_bytes}-byte non-entropy overhead in every retained NVCR access unit.",
+                f"This legacy derivation assumes {nvcr_frame_overhead_bytes} non-entropy bytes per access unit; source stream versions must independently justify that assumption. New measurements use parsed file-size reconciliation.",
                 "`Relative difference` is `(NVCR inner-entropy BPP / Python inner-bitstream BPP) - 1`.",
                 "",
                 "| Resolution | GOP | Python BPP | NVCR BPP | BPP delta | NVCR PSNR-YUV | Python PSNR-YUV | PSNR delta (dB) |",
@@ -434,7 +439,7 @@ def build_report(
                     f"{signed(min(psnr_deltas))} to {signed(max(psnr_deltas))} dB; "
                     f"the median is {signed(statistics.median(psnr_deltas))} dB."
                     if psnr_deltas
-                    else "No paired PSNR values were available for the selected cases."
+                    else "PSNR deltas are unavailable without matching common decoded-output quality contracts."
                 ),
                 "",
                 reset_text,
