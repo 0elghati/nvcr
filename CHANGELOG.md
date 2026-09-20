@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.7](https://github.com/0elghati/nvcr/compare/v1.0.6...v1.0.7) (2026-09-20)
+
+
+### Bug Fixes
+
+* Peer review measurement statistics ([#158](https://github.com/0elghati/nvcr/issues/158)) ([a444fb6](https://github.com/0elghati/nvcr/commit/a444fb62e5351930d6c7a388b527acb7ad8da46e))
+
 ## [1.0.6](https://github.com/0elghati/nvcr/compare/v1.0.5...v1.0.6) (2026-08-17)
 
 
