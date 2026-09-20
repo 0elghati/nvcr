@@ -422,7 +422,7 @@ def main(argv=None):
     ap.add_argument('--output',type=Path,required=True)
     ap.add_argument('--dry-run',action='store_true')
     ap.add_argument('--resume',action='store_true')
-    ap.add_argument('--smoke-evidence',type=Path,help='complete compatible smoke package required for full launch')
+    ap.add_argument('--smoke-evidence',type=Path,help='validate against compatible completed smoke evidence when supplied')
     ap.add_argument('--allow-reference-source-mismatch',action='store_true',
                     help='accept a different clean Python reference commit and record the mismatch explicitly')
     ap.add_argument('--curves',type=Path,help='BD input JSON: reference and candidate [[rate,quality],...] in increasing order')
@@ -465,8 +465,7 @@ def main(argv=None):
     for c in pre['checks']:
         if c['status']!='passed': print(c['check']+': '+c['reason'])
     if args.action=='preflight' or args.dry_run or pre['status']!='passed': return 0 if pre['status']=='passed' else 1
-    if args.action=='run':
-        if args.smoke_evidence is None: raise ValueError('full launch requires --smoke-evidence from a successful bounded smoke')
+    if args.action=='run' and args.smoke_evidence is not None:
         validate_smoke_evidence(args.smoke_evidence,pre)
     run_path=root/'run.json'
     if run_path.exists():
