@@ -81,7 +81,7 @@ for smoke and run:
 
 ```bash
 export NVCR_REFERENCE_ROOT=/home/oelghati/DCVC-RT
-export NVCR_REFERENCE_PYTHON=/home/oelghati/DCVC-RT/src/venv/bin/python
+export NVCR_REFERENCE_PYTHON=/home/oelghati/DCVC-RT/.venv-jetson/bin/python
 export NVCR_ALLOW_REFERENCE_SOURCE_MISMATCH=1
 bash scripts/measurement_jetson.sh prepare
 bash scripts/measurement_jetson.sh smoke
