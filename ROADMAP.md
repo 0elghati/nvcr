@@ -78,9 +78,12 @@ pending.
 desktop NVCR-only launcher using the local x86_64 engine set. Its bounded
 NVCR smoke passed. The full RTX 4070 matched NVCR/Python campaign was
 subsequently run directly and audited in
-[the current RTX result](results/rtx4070/measurement/summary.md). Its compact
-export retains all 6,048 scalar operation measurements without committing raw
-runs; matched smoke/reset and pinned-source publication gates remain pending.
+[the current RTX result](results/rtx4070/measurement/summary.md). Its current
+compact CSV/JSONL exports retain 6,048 full-matrix and 640 labelled targeted
+repeat operations. Process-level 100-frame job FPS is reported alongside
+completed-frame codec FPS; the targeted repeats remain separate from the
+balanced full-matrix aggregates. Raw runs remain local; matched smoke/reset
+and pinned-source publication gates remain pending.
 
 ## Later codec integrations
 
