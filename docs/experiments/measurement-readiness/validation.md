@@ -66,6 +66,23 @@ raw observations. The Python checkout was at commit
 edits and differed from the model-profile commit; the explicit source policy
 and changed paths are recorded in the package audit.
 
+## Paired quality and rate comparison
+
+The committed [`quality-comparison.csv`](../../../results/jetson-orin/measurement/quality-comparison.csv)
+matches 72 common sequence/QP/GOP conditions between the two result packages.
+It uses the common `decoded-yuv420p8-pooled-plane-6-1-1-v1` quality contract.
+Python minus NVCR pooled decoded-YUV PSNR is +0.0286 dB on average, with a
+range of −0.1270 to +0.1294 dB. Entropy BPP differs by −0.20% on average,
+with a range of −2.03% to +1.47%. File BPP is retained for audit but is not
+used as the codec-rate comparison because the two wrappers have different
+fixed overheads. Quality was measured once per condition; the ten repetitions
+apply to throughput and memory.
+
+This is a paired empirical compatibility result. The NVCR and Python runs keep
+separate implementation/source identities, and it does not support a claim of
+internal implementation identity or replace the pending matched speedup and
+memory analysis.
+
 ## Artifact and source identity
 
 The device reports Orin, AArch64, compute capability 8.7, eight SMs, CUDA 12.6

@@ -68,6 +68,34 @@ Process-level FPS is frames divided by isolated process wall time, including mod
 | 1280×720 | 5.55–12.78 | 6.61–14.14 |
 | 1920×1080 | 2.43–5.65 | 2.94–6.33 |
 
+## Paired Python-versus-NVCR quality and rate
+
+The 72 common conditions have a paired quality comparison in
+[`quality-comparison.csv`](quality-comparison.csv). Both implementations use
+the `decoded-yuv420p8-pooled-plane-6-1-1-v1` contract; each condition has one
+quality pass, so these values are descriptive paired differences rather than
+ten-repetition confidence intervals.
+
+Python minus NVCR pooled decoded-YUV PSNR averages **+0.0286 dB** (median
+`+0.0215 dB`, range `−0.1270` to `+0.1294 dB`, mean absolute difference
+`0.0347 dB`). The corresponding entropy-BPP difference averages **−0.20%**
+(median `−0.15%`, range `−2.03%` to `+1.47%`). Per-resolution means are:
+
+| Resolution | PSNR difference (dB) | Entropy-BPP difference |
+|---|---:|---:|
+| 176×144 | +0.033 | −0.58% |
+| 352×288 | +0.017 | +0.04% |
+| 640×360 | +0.016 | −0.08% |
+| 960×540 | +0.014 | −0.14% |
+| 1280×720 | +0.080 | −0.25% |
+| 1920×1080 | +0.011 | −0.19% |
+
+File-BPP differences are not used for the codec-rate conclusion because the
+NVCR container and Python stream wrapper have different fixed overheads. The
+comparison is empirical evidence under the recorded implementation and source
+identities; it does not establish that the two implementations are internally
+identical.
+
 ## Interpretation limits
 
 1. **TensorRT device-model warning in all 3,024 operations.** Catalog/bundle checks and codec execution passed, but TensorRT still reports use of a plan across different device models. This is a reproducibility caveat requiring investigation before claiming a warning-free exact-target setup. The warning is in each operation’s stderr, not in the main nohup progress output.
@@ -82,6 +110,7 @@ Process-level FPS is frames divided by isolated process wall time, including mod
 - `nvcr/results.jsonl`: 3,024 compact latest-operation NVCR observations.
 - `condition-statistics.csv`: 576 condition/operation/metric rows with n=10.
 - `audit.json`: audit results and SHA256 identities of source result files.
+- `quality-comparison.csv`: 72 paired Python/NVCR PSNR and rate observations.
 - Original `observations.jsonl`, `analysis.json` and `rd-points.json` remain unchanged in the local raw campaign directory.
 
 No repetition or outlier was excluded, and no further benchmark was run.

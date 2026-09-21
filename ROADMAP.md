@@ -72,7 +72,8 @@ criterion is marked complete by these changes.
 
 `scripts/measurement_jetson.sh` provides logged preparation, smoke, campaign,
 resume and analysis commands. The focused software suite passes; the current
-NVCR execution evidence is summarized below. Python validation remains pending.
+NVCR and Python execution evidence is summarized below. The paired quality
+comparison is recorded; matched speed and memory interpretation remains open.
 `scripts/measurement_x86_64.sh` provides the corresponding exact RTX 4070
 desktop campaign using the local x86_64 engine set. Its NVCR-only preflight and
 eight-operation bounded smoke pass on a fresh CUDA 12.8 Release build; no full
@@ -125,9 +126,11 @@ All 3,024 operations passed; the preceding eight-operation smoke/reset gate
 passed. The [current review](results/jetson-orin/measurement/summary.md) records the
 independent numerical audit and exports mean/sample SD and descriptive intervals.
 No raw runs are committed. Timing variability remains explicit (maximum FPS
-CV 9.74%); every operation contains a TensorRT device-model warning. The Python
-comparison, warning-free artifact gate and overall evaluation milestone remain
-open. No new GPU execution was launched during review.
+CV 9.74%); every operation contains a TensorRT device-model warning. The paired
+Python/NVCR quality and entropy-rate comparison is recorded; matched
+process-speedup and memory-ratio conclusions, the warning-free artifact gate
+and the overall evaluation milestone remain open. No new GPU execution was
+launched during review.
 
 The separate RTX 4070 readiness gate uses source `a444fb6` plus the captured
 working diff, a fresh SM-8.9/CUDA-12.8 Release build and the exact catalog

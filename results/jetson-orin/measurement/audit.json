@@ -7,6 +7,24 @@
   "expected_operations": 3024,
   "raw_metric_files_verified": 3024,
   "quality_records_recomputed_from_sse": 72,
+  "paired_quality_comparison": {
+    "rows": 72,
+    "quality_contract": "decoded-yuv420p8-pooled-plane-6-1-1-v1",
+    "psnr_delta_python_minus_nvcr_db": {
+      "mean": 0.0285770654,
+      "median": 0.0214676907,
+      "min": -0.1270301258,
+      "max": 0.1294153813,
+      "mean_absolute": 0.0346738304
+    },
+    "entropy_bpp_delta_python_minus_nvcr_percent": {
+      "mean": -0.1997065278,
+      "median": -0.1537111608,
+      "min": -2.0255863539,
+      "max": 1.4667106131
+    },
+    "rate_metric": "entropy_bpp; file_bpp retained but affected by wrapper overhead"
+  },
   "condition_operation_groups": 432,
   "timing_memory_groups_with_n10": 288,
   "statistics_recomputed": 576,
@@ -42,7 +60,7 @@
   "ci_method": "mean +/- t(0.975,df=9) * sample SD/sqrt(10); independent stationary execution assumption, no multiplicity correction",
   "limits": [
     "Deleted bitstreams/reconstructions cannot be re-decoded; stored hashes/accounting/SSE checked.",
-    "All observations are NVCR; no new Python speedup or memory-ratio comparison.",
+    "Paired Python/NVCR quality and entropy-rate comparison is recorded; no paired process-speedup or memory-ratio result is stored in this audit.",
     "TensorRT device-model warnings persist despite manifest compatibility; warning-free target gate remains open.",
     "Before/after power and sensor snapshots cannot exclude intervening DVFS or throttling."
   ],
