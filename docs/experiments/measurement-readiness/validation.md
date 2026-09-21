@@ -1,15 +1,15 @@
 # Measurement validation record
 
-Date: 2026-09-20. The NVCR-only campaign is complete: all 3,024 configured
-operations and the preceding eight-operation smoke passed. The
-[current result](../../../results/jetson-orin/measurement/summary.md),
-[aggregate statistics](../../../results/jetson-orin/measurement/condition-statistics.csv)
-and [audit](../../../results/jetson-orin/measurement/audit.json) retain compact
-evidence. Raw runs and logs remain local under `output/peer-review/`.
+Date: 2026-09-21. The NVCR campaign and the matched Python reference campaign
+are complete: each has 3,024 latest configured operations and a passing
+eight-operation smoke. The [NVCR result](../../../results/jetson-orin/measurement/summary.md)
+and [Python result](../../../results/jetson-orin/measurement/python-reference/summary.md)
+retain compact evidence. Raw runs and logs remain local under the evidence
+directories.
 
-The complete NVCR-versus-Python evaluation remains open. The pinned Python
-reference requires a passing GPU smoke, and persistent TensorRT device-model
-warnings prevent a warning-free exact-target qualification.
+The execution gates pass, while direct speedup/memory interpretation remains
+subject to the recorded implementation identities and the persistent TensorRT
+device-model warnings in the NVCR run.
 
 ## Software verification
 
@@ -54,6 +54,17 @@ contains a TensorRT device-model warning. These observations remain visible;
 no outliers were excluded. Memory values are whole-process RSS high-water in
 MiB, not isolated GPU allocation. Before/after snapshots cannot establish fixed
 clocks or absence of throttling throughout the experiment.
+
+## Completed Python reference campaign
+
+The Python result package retains 576 condition/operation/metric rows with
+n=10, 72 common-contract quality/rate points, a sanitized campaign manifest,
+and an audit record. The latest 3,024 operations passed after resuming an
+interrupted launch; two failed/skipped attempts remain retained in the local
+raw observations. The Python checkout was at commit
+`48ab0ac5e5199d78fffb944bfbafafb2b6142f7b` with tracked energy-measurement
+edits and differed from the model-profile commit; the explicit source policy
+and changed paths are recorded in the package audit.
 
 ## Artifact and source identity
 
@@ -115,14 +126,11 @@ matched sanity gate remain pending.
 
 ## Reference and historical comparison limits
 
-The clean `assets` checkout is pinned at
-`1feb52a592a9ff2c4e4ba2e5122e2da49a211466`; checkpoint hashes passed. The selected
-reference interpreter is `/home/oelghati/DCVC-RT/.venv-jetson/bin/python`.
-CUDA PyTorch and the required inference/entropy extensions imported successfully,
-but the bounded reference attempt failed during warm-up with
-`CUDA error: misaligned address`. The captured stderr remains local at
-`evidence/measurement-readiness/python-smoke/encode.stderr`. A rebuilt extension
-is a diagnostic option, not an established fix.
+The selected reference interpreter is `/home/oelghati/DCVC-RT/.venv-jetson/bin/python`.
+CUDA PyTorch and the required inference/entropy extensions imported
+successfully. The first interrupted launch had an allocation failure, but the
+resumed run completed every latest operation; the retained failed attempt and
+its stderr remain local and are counted in the Python audit.
 
 Historical RTX4070 Python data contain QP32 summaries using
 `ave_all_frame_psnr`, without the common decoded-output quality contract or
