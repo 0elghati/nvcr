@@ -45,5 +45,11 @@
     "All observations are NVCR; no new Python speedup or memory-ratio comparison.",
     "TensorRT device-model warnings persist despite manifest compatibility; warning-free target gate remains open.",
     "Before/after power and sensor snapshots cannot exclude intervening DVFS or throttling."
-  ]
+  ],
+  "published_dataset": {
+    "path": "nvcr/results.jsonl",
+    "rows": 3024,
+    "sha256": "3ea419d3443c3a91fe8a81118269a8c4d6df9683f1f384706412a2ffe8da0a1b",
+    "schema": "nvcr.measurement.compact-observation.v2"
+  }
 }

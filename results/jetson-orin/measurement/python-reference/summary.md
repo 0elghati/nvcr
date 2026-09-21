@@ -46,6 +46,8 @@ The largest throughput CV is waterfall-cif, QP63, GOP1, decode: **24.91 ± 1.54 
 
 ## Review artifacts
 
+- `results.jsonl`: 3,024 compact latest-operation observations using the
+  measurement schema; raw paths, commands and per-frame products are omitted.
 - `condition-statistics.csv`: 576 condition/operation/metric rows with n=10.
 - `rd-points.json`: 72 quality/rate points using the common decoded-output contract.
 - `manifest.json`: sanitized campaign controls and Python source identity.

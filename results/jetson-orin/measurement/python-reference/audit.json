@@ -139,5 +139,11 @@
     "The Python checkout contains tracked energy-measurement edits and differs from the model-profile commit; both facts are recorded in the reference source policy.",
     "Process RSS high-water is a whole-process memory measure, not isolated CUDA allocation or total board memory.",
     "Quality has one pass per condition; ten repetitions apply to throughput and memory only."
-  ]
+  ],
+  "published_dataset": {
+    "path": "python-reference/results.jsonl",
+    "rows": 3024,
+    "sha256": "c3ff1163cd39392e260bd1da157ce7e1a12405839f0c846faf33d3bd724e2e72",
+    "schema": "nvcr.measurement.compact-observation.v2"
+  }
 }

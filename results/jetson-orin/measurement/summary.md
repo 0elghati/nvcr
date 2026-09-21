@@ -64,6 +64,7 @@ Each range below spans the 12 separate condition means (four QPs × three GOPs) 
 
 ## Review artifacts
 
+- `nvcr/results.jsonl`: 3,024 compact latest-operation NVCR observations.
 - `condition-statistics.csv`: 576 condition/operation/metric rows with n=10.
 - `audit.json`: audit results and SHA256 identities of source result files.
 - Original `observations.jsonl`, `analysis.json` and `rd-points.json` remain unchanged in the local raw campaign directory.
