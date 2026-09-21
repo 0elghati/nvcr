@@ -49,7 +49,7 @@ not count as additional production codecs/providers or performance baselines.
 | CLI and artifact-client build identity | Follow-up | Add `nvcr --version` and `nvcr-artifacts --version`, and reconcile the legacy `current_software_version` constant; until then use package manifests, source revisions, or OCI metadata |
 | Linux container GPU injection | Follow-up | Validate and document configured `nvidia` runtime, Docker `--gpus`, and CDI paths across supported Docker and NVIDIA Container Toolkit versions |
 | Exact-target artifacts | In progress | RTX 4070 catalog bundles and bounded execution pass exact CUDA 12.8/TensorRT 10.9 checks; retain the Jetson warning investigation and complete matched target evidence |
-| Reproducible evaluation | In progress | NVCR campaign evidence is audited; RTX 4070 NVCR preflight/dry-run and bounded smoke pass. Complete the user-authorized clean-fork Python and matched gates |
+| Reproducible evaluation | In progress | NVCR campaign evidence is audited; RTX 4070 NVCR preflight/dry-run and bounded smoke pass. Complete the user-authorized Python and matched gates while retaining explicit reference source-state identity for approved forks or local measurement edits |
 | Compatibility classes | Experimental | Compare against complete exact baselines |
 | Public C++ API/ABI | Transitional | Freeze only after ownership and compatibility contracts are accepted |
 

@@ -21,6 +21,9 @@ reference_args=()
 if [[ "${NVCR_ALLOW_REFERENCE_SOURCE_MISMATCH:-0}" == 1 ]]; then
   reference_args+=(--allow-reference-source-mismatch)
 fi
+if [[ "${NVCR_ALLOW_REFERENCE_SOURCE_DIRTY:-0}" == 1 ]]; then
+  reference_args+=(--allow-reference-source-dirty)
+fi
 
 if [[ "$action" == prepare ]]; then
   cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release

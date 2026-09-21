@@ -152,6 +152,15 @@ class MeasurementTests(unittest.TestCase):
         self.assertEqual(accepted['source_policy'],'explicit-clean-fork-override')
         with self.assertRaises(ValueError):
             campaign.validate_reference_revision(actual,expected,'M src/models/video_model.py',True)
+
+    def test_reference_revision_can_record_explicit_dirty_source(self):
+        expected='expected'; actual='fork'; dirty='M energy.py\nM runner/executor.py'
+        with self.assertRaises(ValueError):
+            campaign.validate_reference_revision(actual,expected,dirty,True)
+        accepted=campaign.validate_reference_revision(actual,expected,dirty,True,True)
+        self.assertFalse(accepted['commit_matches_profile'])
+        self.assertEqual(accepted['source_policy'],'explicit-dirty-source-and-fork-override')
+        self.assertEqual(accepted['tracked_source_changes'],dirty.splitlines())
     def test_profile_line_endings_require_exact_published_digest(self):
         import hashlib
         p=self.root/'model.json'; p.write_bytes(b'{\r\n "model": 1\r\n}\r\n')

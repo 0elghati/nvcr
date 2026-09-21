@@ -56,14 +56,24 @@ def hash_object(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,allow_nan=False).encode()).hexdigest()
 
 
-def validate_reference_revision(revision,expected,dirty,allow_mismatch=False):
-    if dirty:
+def validate_reference_revision(revision,expected,dirty,allow_mismatch=False,allow_dirty=False):
+    has_dirty=bool(dirty)
+    if has_dirty and not allow_dirty:
         raise ValueError('reference source must have no tracked changes')
     matches=revision==expected
     if not matches and not allow_mismatch:
         raise ValueError('reference source revision does not match the model profile')
+    if has_dirty and not matches:
+        policy='explicit-dirty-source-and-fork-override'
+    elif has_dirty:
+        policy='explicit-dirty-source-override'
+    elif not matches:
+        policy='explicit-clean-fork-override'
+    else:
+        policy='model-profile-pin'
     return {'commit':revision,'expected_commit':expected,'commit_matches_profile':matches,
-            'source_policy':'model-profile-pin' if matches else 'explicit-clean-fork-override'}
+            'tracked_source_changes':dirty.splitlines() if has_dirty else [],
+            'source_policy':policy}
 
 
 def load_manifest(path):
@@ -134,7 +144,7 @@ def commands(m,j,directory):
     return enc,dec,stream,reconstruction
 
 
-def preflight(m,output,allow_reference_source_mismatch=False):
+def preflight(m,output,allow_reference_source_mismatch=False,allow_reference_source_dirty=False):
     output.mkdir(parents=True,exist_ok=True)
     env=capture(ROOT,Path(m['reference_python'] if 'python' in implementations(m) else sys.executable),Path(m['reference_root']),Path(m['build_dir']),Path(m['nvcr']))
     write_json(output/'environment.json',env)
@@ -165,7 +175,8 @@ def preflight(m,output,allow_reference_source_mismatch=False):
         dirty=command(['git','-C',root,'status','--porcelain','--untracked-files=no'])
         if dirty.get('returncode')!=0: raise ValueError('reference source status unavailable')
         source_identity=validate_reference_revision(revision,model['upstream']['commit'],
-            dirty.get('stdout','').strip(),allow_reference_source_mismatch)
+            dirty.get('stdout','').strip(),allow_reference_source_mismatch,
+            allow_reference_source_dirty)
         for name,spec in model['checkpoints'].items():
             p=root/'checkpoints'/spec['file']; actual=digest(p)
             if actual!=spec['sha256']: raise ValueError(f'{name} checkpoint digest mismatch')
@@ -425,6 +436,8 @@ def main(argv=None):
     ap.add_argument('--smoke-evidence',type=Path,help='complete compatible smoke package required for full launch')
     ap.add_argument('--allow-reference-source-mismatch',action='store_true',
                     help='accept a different clean Python reference commit and record the mismatch explicitly')
+    ap.add_argument('--allow-reference-source-dirty',action='store_true',
+                    help='accept tracked Python reference edits and record their paths/diff explicitly')
     ap.add_argument('--curves',type=Path,help='BD input JSON: reference and candidate [[rate,quality],...] in increasing order')
     args=ap.parse_args(argv); root=args.output.resolve()
     if args.action=='analyze':
@@ -449,7 +462,8 @@ def main(argv=None):
     if root.exists() and any(root.iterdir()) and not args.resume: raise ValueError('output must be new/empty; compatible resume requires --resume')
     root.mkdir(parents=True,exist_ok=True)
     preflight_dir=root/'preflight'/str(uuid.uuid4())
-    pre=preflight(m,preflight_dir,args.allow_reference_source_mismatch); schedule=jobs(m)
+    pre=preflight(m,preflight_dir,args.allow_reference_source_mismatch,
+                  args.allow_reference_source_dirty); schedule=jobs(m)
     if args.action=='smoke':
         schedule += [{**j,'warmup_override':0} for j in list(schedule) if j['mode']=='quality']
     if (root/'run.json').exists():
