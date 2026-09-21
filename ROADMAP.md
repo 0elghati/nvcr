@@ -134,3 +134,5 @@ working diff, a fresh SM-8.9/CUDA-12.8 Release build and the exact catalog
 bundles. Preflight, the 3,024-operation NVCR-only dry-run plan and all eight
 bounded smoke operations pass, including cold versus warmed/reset stream and
 reconstruction hashes. Full and matched RTX campaigns remain unstarted.
+Smoke evidence remains supported but is no longer mandatory when the operator
+explicitly authorizes a direct campaign run.
