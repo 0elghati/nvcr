@@ -51,5 +51,9 @@
     "rows": 3024,
     "sha256": "3ea419d3443c3a91fe8a81118269a8c4d6df9683f1f384706412a2ffe8da0a1b",
     "schema": "nvcr.measurement.compact-observation.v2"
+  },
+  "metric_definitions": {
+    "primary_process_fps": "frames / process_seconds; isolated process wall time including initialization and warm-up",
+    "secondary_codec_fps": "metrics.throughput_fps; synchronized completed-codec interval"
   }
 }

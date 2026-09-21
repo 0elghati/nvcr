@@ -31,18 +31,33 @@ CV = 100 × sample SD / mean. Values below summarize the CVs of the 72 condition
 
 | Quantity | Operation | Median CV | Maximum CV |
 |---|---|---:|---:|
-| Completed codec throughput | encode | 0.71% | 6.18% |
-| Completed codec throughput | decode | 1.50% | 9.74% |
+| Process-level FPS | encode | 0.76% | 2.50% |
+| Process-level FPS | decode | 1.40% | 3.07% |
 | Process RSS high-water | encode | 0.13% | 1.73% |
 | Process RSS high-water | decode | 0.10% | 3.96% |
 
-The largest throughput CV is QCIF, QP42, GOP100, decode: **176.12 ± 17.16 FPS** (mean ± sample SD, n=10), range 148.56–197.46 FPS, CV 9.74%. Its descriptive 95% Student-t interval for the mean is 163.85–188.40 FPS. Keep all ten observations; additional repetitions reveal this variability rather than eliminating it.
+The largest process-level FPS CV is 360p, QP21, GOP100, decode: **18.00 ± 0.55 FPS** (mean ± sample SD, n=10), CV 3.07%. Keep all ten observations; additional repetitions reveal this variability rather than eliminating it.
+
+The archived completed-codec FPS has a larger maximum CV: QCIF, QP42, GOP100, decode is **176.12 ± 17.16 FPS**, CV 9.74%. It remains available in the JSONL and CSV as a secondary implementation metric.
 
 The CSV includes mean, sample SD, CV, minimum/maximum and 95% Student-t intervals for each time, FPS and RSS quantity. Intervals use df=9 and assume independent, stationary executions; they are not adjusted for multiple conditions and do not establish absence of thermal or clock drift. The original paper’s 7.09% within-condition variation should not be compared directly to CV unless its denominator/definition matches.
 
-## Throughput overview
+## Primary narrative: process-level FPS
 
-Each range below spans the 12 separate condition means (four QPs × three GOPs) for that sequence. It is not a confidence interval or a pooled mean.
+Process-level FPS is frames divided by isolated process wall time, including model initialization and warm-up. The means below pool the 12 QP/GOP conditions and ten throughput repetitions per resolution.
+
+| Resolution | Encode FPS | Decode FPS |
+|---|---:|---:|
+| 176×144 | 29.15 | 27.23 |
+| 352×288 | 23.35 | 21.66 |
+| 640×360 | 15.78 | 15.98 |
+| 960×540 | 10.48 | 11.18 |
+| 1280×720 | 7.20 | 7.85 |
+| 1920×1080 | 3.60 | 4.05 |
+
+## Secondary archive: completed-codec FPS
+
+`metrics.throughput_fps` is the synchronized completed-codec interval, excluding process initialization. Each range below spans the 12 separate condition means (four QPs × three GOPs) for that sequence. It is not a confidence interval or a pooled mean.
 
 | Resolution | Encode FPS range | Decode FPS range |
 |---|---:|---:|
@@ -58,7 +73,7 @@ Each range below spans the 12 separate condition means (four QPs × three GOPs) 
 1. **TensorRT device-model warning in all 3,024 operations.** Catalog/bundle checks and codec execution passed, but TensorRT still reports use of a plan across different device models. This is a reproducibility caveat requiring investigation before claiming a warning-free exact-target setup. The warning is in each operation’s stderr, not in the main nohup progress output.
 2. **Memory is whole-process RSS high-water in MiB**, including initialization and warm-up. It is not isolated CUDA allocation or total Jetson memory. Median memory CV is low, but 1080p QP42 GOP1 decode has mean 1,070.00 MiB and SD 42.39 MiB (3.96% CV); keep that variation visible.
 3. Power-mode snapshots agree on MAXN_SUPER. Governors remain CPU `schedutil` / GPU `nvhost_podgov`; snapshots do not establish fixed clocks throughout. Available temperatures rose from roughly 50–52°C to 62–64°C. These readings do not prove the cause of timing variation or exclude throttling.
-4. FPS refers to the new synchronized completed-codec interval. Process elapsed time is exported separately. Do not mix these values with older codec-loop timing definitions.
+4. Process-level FPS is the primary narrative metric. Completed-codec FPS is retained as a secondary archive metric; do not mix the two timing definitions.
 5. The matched Python campaign is complete and retained in the companion package. Historical input acquisition/preprocessing and some FPS metadata remain unverified as recorded in the manifest; direct speedup and relative-memory conclusions must preserve the separate implementation/source identities.
 6. Successful encoded and decoded products were deleted by the original runner after evaluation. The review checks retained hashes, accounting and SSE; it cannot re-decode those deleted products.
 
