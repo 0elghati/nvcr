@@ -132,9 +132,12 @@ The completed NVCR-only matrix in `output/peer-review/` covers six
 resolutions, four configured QPs, three GOPs and ten throughput/memory repetitions.
 All 3,024 operations passed; the preceding eight-operation smoke/reset gate
 passed. The [current review](results/jetson-orin/measurement/summary.md) records the
-independent numerical audit and exports mean/sample SD and descriptive intervals.
-No raw runs are committed. Timing variability remains explicit (maximum FPS
-CV 9.74%); every operation contains a TensorRT device-model warning. The paired
+independent numerical audit. NVCR and Python compact observations now
+regenerate 720 condition statistics each: n, mean, median, sample SD, extrema,
+CV and descriptive Student-t intervals. Pooled process throughput remains
+distinct from the condition means. No raw runs are committed. Timing variability
+remains explicit (maximum completed-codec FPS CV 9.74%, process FPS CV 3.07%
+for NVCR); every operation contains a TensorRT device-model warning. The paired
 Python/NVCR quality and entropy-rate comparison is recorded; matched
 process-speedup and memory-ratio conclusions, the warning-free artifact gate
 and the overall evaluation milestone remain open. No new GPU execution was

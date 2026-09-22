@@ -19,3 +19,32 @@ field reports the synchronized completed-codec interval separately.
 Raw per-operation observations, logs, bitstreams and reconstructions remain in
 the operator's local evidence directories. The committed files are the compact
 publication datasets and their provenance records.
+
+## Regenerate the statistical exports
+
+Each file has one row per sequence/QP/GOP/implementation/operation/mode/metric
+in `campaign=full`: 720 rows per implementation, including 144 process-FPS
+rows from throughput-mode observations and 144 process RSS rows from memory-mode
+observations. The process execution is the statistical unit. Both packages
+retain all four QPs and ten repetitions per condition. The exporter checks
+all 144 encode/decode conditions and ten distinct repeats in each mode.
+
+From the repository root, regenerate both files from the committed compact
+latest-operation observations (no benchmark run):
+
+```bash
+python3 scripts/export_observation_statistics.py --campaign full --expected-conditions 144 \
+  results/jetson-orin/measurement/nvcr/results.jsonl \
+  results/jetson-orin/measurement/condition-statistics.csv
+python3 scripts/export_observation_statistics.py --campaign full --expected-conditions 144 \
+  results/jetson-orin/measurement/python-reference/results.jsonl \
+  results/jetson-orin/measurement/python-reference/condition-statistics.csv
+```
+
+The CSV reports n, arithmetic mean, median, sample SD, extrema, CV and a
+two-sided Student-t 95% interval for each condition mean. It assumes
+independent, stationary fresh-process repetitions; intervals are descriptive
+and unadjusted for multiple conditions. Resolution overview tables use pooled
+throughput (`sum(frames) / sum(process_seconds)`), which is separate from the
+per-condition arithmetic FPS means and their intervals. Completed-frame codec
+FPS remains secondary evidence.

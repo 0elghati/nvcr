@@ -26,18 +26,34 @@ The largest process-level FPS CV is waterfall-cif, QP63, GOP1, decode: **7.04 ±
 
 The archived completed-codec FPS has a maximum CV of 6.18% for the same condition and remains available in the JSONL and CSV as a secondary implementation metric.
 
+The [condition CSV](condition-statistics.csv) has `campaign=full` and reports
+n, arithmetic mean, median, sample SD (`ddof=1`), minimum, maximum, CV, and
+a two-sided 95% Student-t interval for each throughput-mode time/FPS metric
+and memory-mode process RSS high-water. Process FPS is recomputed per run as
+`frames / process_seconds`. The interval is `mean ± t(0.975, 9) × SD / sqrt(10)`
+with `t(0.975, 9) = 2.2621571628540993`. It assumes independent, stationary
+process executions; it is descriptive and unadjusted for multiple conditions.
+
 ## Primary narrative: process-level FPS
 
-Process-level FPS is frames divided by isolated process wall time, including model initialization and warm-up. The means below pool the 12 QP/GOP conditions and ten throughput repetitions per resolution.
+Process FPS for one run is measured frames divided by whole-process wall
+time, including initialization and warm-up. The table reports **pooled process
+throughput** from `campaign=full`: 12,000 frames (12 QP/GOP conditions × ten
+100-frame runs) divided by the sum of their process durations for each
+resolution and operation. These ratios differ from arithmetic means of
+per-run FPS; the earlier overview used the latter. The per-condition means,
+medians, variation and intervals are in `condition-statistics.csv`. No
+confidence interval for a pooled resolution result is inferred from the
+condition intervals.
 
-| Resolution | Encode FPS | Decode FPS |
+| Resolution | Pooled encode FPS | Pooled decode FPS |
 |---|---:|---:|
-| 176×144 | 8.31 | 8.40 |
-| 352×288 | 8.04 | 8.17 |
-| 640×360 | 7.04 | 7.52 |
-| 960×540 | 5.18 | 6.12 |
-| 1280×720 | 3.74 | 4.90 |
-| 1920×1080 | 2.29 | 3.08 |
+| 176×144 | 8.29 | 8.39 |
+| 352×288 | 8.03 | 8.14 |
+| 640×360 | 6.98 | 7.46 |
+| 960×540 | 5.05 | 5.99 |
+| 1280×720 | 3.59 | 4.72 |
+| 1920×1080 | 2.12 | 2.91 |
 
 ## Secondary archive: completed-codec FPS
 
@@ -67,7 +83,8 @@ Process-level FPS is frames divided by isolated process wall time, including mod
   measurement schema; raw paths, commands and per-frame products are omitted.
   Throughput rows include derived `process_fps`; `metrics.throughput_fps` is
   retained as the completed-codec archive metric.
-- `condition-statistics.csv`: 576 condition/operation/metric rows with n=10.
+- `condition-statistics.csv`: 720 condition/operation/metric rows with n=10;
+  144 process-FPS rows are added to the 576 existing timing/RSS metric groups.
 - `rd-points.json`: 72 quality/rate points using the common decoded-output contract.
 - `manifest.json`: sanitized campaign controls and Python source identity.
 - `audit.json`: compact audit, source hashes and interpretation limits.

@@ -40,20 +40,37 @@ The largest process-level FPS CV is 360p, QP21, GOP100, decode: **18.00 ± 0.55 
 
 The archived completed-codec FPS has a larger maximum CV: QCIF, QP42, GOP100, decode is **176.12 ± 17.16 FPS**, CV 9.74%. It remains available in the JSONL and CSV as a secondary implementation metric.
 
-The CSV includes mean, sample SD, CV, minimum/maximum and 95% Student-t intervals for each time, FPS and RSS quantity. Intervals use df=9 and assume independent, stationary executions; they are not adjusted for multiple conditions and do not establish absence of thermal or clock drift. The original paper’s 7.09% within-condition variation should not be compared directly to CV unless its denominator/definition matches.
+The [condition CSV](condition-statistics.csv) has `campaign=full` and reports
+n, arithmetic mean, median, sample SD (`ddof=1`), minimum, maximum, CV, and
+a two-sided 95% Student-t interval for each throughput-mode time/FPS metric
+and memory-mode process RSS high-water. Process FPS is recomputed per run as
+`frames / process_seconds`. The interval is `mean ± t(0.975, 9) × SD / sqrt(10)`
+with `t(0.975, 9) = 2.2621571628540993`. It assumes independent, stationary
+process executions; it is descriptive, unadjusted for multiple conditions,
+and does not establish absence of thermal or clock drift. The original paper’s
+7.09% within-condition variation should not be compared directly to CV unless
+its denominator/definition matches.
 
 ## Primary narrative: process-level FPS
 
-Process-level FPS is frames divided by isolated process wall time, including model initialization and warm-up. The means below pool the 12 QP/GOP conditions and ten throughput repetitions per resolution.
+Process FPS for one run is measured frames divided by whole-process wall
+time, including initialization and warm-up. The table reports **pooled process
+throughput** from `campaign=full`: 12,000 frames (12 QP/GOP conditions × ten
+100-frame runs) divided by the sum of their process durations for each
+resolution and operation. These ratios differ from arithmetic means of
+per-run FPS; the earlier overview used the latter. The per-condition means,
+medians, variation and intervals are in `condition-statistics.csv`. No
+confidence interval for a pooled resolution result is inferred from the
+condition intervals.
 
-| Resolution | Encode FPS | Decode FPS |
+| Resolution | Pooled encode FPS | Pooled decode FPS |
 |---|---:|---:|
-| 176×144 | 29.15 | 27.23 |
-| 352×288 | 23.35 | 21.66 |
-| 640×360 | 15.78 | 15.98 |
-| 960×540 | 10.48 | 11.18 |
-| 1280×720 | 7.20 | 7.85 |
-| 1920×1080 | 3.60 | 4.05 |
+| 176×144 | 29.05 | 26.95 |
+| 352×288 | 22.95 | 21.15 |
+| 640×360 | 15.10 | 15.48 |
+| 960×540 | 9.73 | 10.59 |
+| 1280×720 | 6.55 | 7.29 |
+| 1920×1080 | 3.20 | 3.70 |
 
 ## Secondary archive: completed-codec FPS
 
@@ -108,7 +125,8 @@ identical.
 ## Review artifacts
 
 - `nvcr/results.jsonl`: 3,024 compact latest-operation NVCR observations.
-- `condition-statistics.csv`: 576 condition/operation/metric rows with n=10.
+- `condition-statistics.csv`: 720 condition/operation/metric rows with n=10;
+  144 process-FPS rows are added to the 576 existing timing/RSS metric groups.
 - `audit.json`: audit results and SHA256 identities of source result files.
 - `quality-comparison.csv`: 72 paired Python/NVCR PSNR and rate observations.
 - Original `observations.jsonl`, `analysis.json` and `rd-points.json` remain unchanged in the local raw campaign directory.
