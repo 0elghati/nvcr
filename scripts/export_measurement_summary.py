@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Export compact, shareable CSVs from a complete measurement campaign."""
+"""Export compact, shareable measurements from a complete campaign."""
 
 import argparse
 import csv
 import json
+import math
+import statistics
+from collections import defaultdict
 from pathlib import Path
 
 
@@ -46,6 +49,83 @@ def validate_repeat_campaign(base, repeat):
             raise ValueError(f"repeat campaign differs in {kind}")
 
 
+# Two-sided Student-t 95% critical value for ten independent process runs.
+T95_DF9 = 2.2621571628540993
+
+
+def append_analysis_stats(stats, analysis, manifest, campaign):
+    cases = {
+        f'{sequence["sequence_id"]}-q{qp}-g{gop}': (sequence, qp, gop)
+        for sequence in manifest["sequences"] for qp in manifest["qps"]
+        for gop in manifest["gops"]
+    }
+    metrics = {
+        "throughput": ("codec_seconds", "throughput_fps", "process_seconds"),
+        "memory": ("process_peak_rss_mib",),
+    }
+    for item in analysis["aggregates"]:
+        if item["mode"] == "quality":
+            continue
+        sequence, qp, gop = cases[item["case_id"]]
+        for metric in metrics[item["mode"]]:
+            value = item[metric]
+            stats.append({
+                "campaign": campaign,
+                "sequence": sequence["sequence_id"], "width": sequence["width"],
+                "height": sequence["height"], "qp": qp, "gop": gop,
+                "implementation": item["implementation"],
+                "operation": item["operation"], "mode": item["mode"],
+                "metric": metric, "n": value["n"], "mean": value["mean"],
+                "sample_std": value["sample_std"],
+                "cv_percent": 100 * value["sample_std"] / value["mean"] if value["mean"] else "",
+                "minimum": value["minimum"], "maximum": value["maximum"],
+                "ci95_low": "", "ci95_high": "",
+            })
+
+
+def append_process_fps_stats(stats, observations, campaigns):
+    runs = {label: run for label, _, run in campaigns}
+    groups = defaultdict(list)
+    for row in observations:
+        if row["mode"] == "throughput":
+            key = (row["campaign"], row["case_id"], row["implementation"],
+                   row["operation"])
+            groups[key].append(row)
+    expected_groups = {
+        (label, f'{sequence["sequence_id"]}-q{qp}-g{gop}', implementation,
+         operation)
+        for label, _, run in campaigns
+        for sequence in run["manifest"]["sequences"]
+        for qp in run["manifest"]["qps"]
+        for gop in run["manifest"]["gops"]
+        for implementation in run["manifest"]["implementations"]
+        for operation in ("encode", "decode")
+    }
+    if groups.keys() != expected_groups:
+        raise ValueError("process FPS condition coverage mismatch")
+    for (campaign, _, implementation, operation), rows in groups.items():
+        expected = runs[campaign]["manifest"]["repetitions"]
+        if expected != 10 or len(rows) != expected or (
+                {row["repeat"] for row in rows} != set(range(expected))):
+            raise ValueError("process FPS requires all ten distinct repetitions")
+        values = [row["process_fps"] for row in rows]
+        mean = statistics.mean(values)
+        sample_std = statistics.stdev(values)
+        margin = T95_DF9 * sample_std / math.sqrt(expected)
+        first = rows[0]
+        stats.append({
+            "campaign": campaign,
+            "sequence": first["sequence"], "width": first["width"],
+            "height": first["height"], "qp": first["qp"], "gop": first["gop"],
+            "implementation": implementation, "operation": operation,
+            "mode": "throughput", "metric": "process_fps", "n": expected,
+            "mean": mean, "sample_std": sample_std,
+            "cv_percent": 100 * sample_std / mean,
+            "minimum": min(values), "maximum": max(values),
+            "ci95_low": mean - margin, "ci95_high": mean + margin,
+        })
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("campaign", type=Path)
@@ -67,28 +147,7 @@ def main():
         for gop in manifest["gops"]
     }
     stats = []
-    metrics = {
-        "throughput": ("codec_seconds", "throughput_fps", "process_seconds"),
-        "memory": ("process_peak_rss_mib",),
-    }
-    for item in analysis["aggregates"]:
-        if item["mode"] == "quality":
-            continue
-        sequence, qp, gop = cases[item["case_id"]]
-        for metric in metrics[item["mode"]]:
-            value = item[metric]
-            stats.append({
-                "sequence": sequence["sequence_id"], "width": sequence["width"],
-                "height": sequence["height"], "qp": qp, "gop": gop,
-                "implementation": item["implementation"],
-                "operation": item["operation"], "mode": item["mode"],
-                "metric": metric, "n": value["n"], "mean": value["mean"],
-                "sample_std": value["sample_std"],
-                "cv_percent": 100 * value["sample_std"] / value["mean"] if value["mean"] else "",
-                "minimum": value["minimum"], "maximum": value["maximum"],
-            })
-    stats.sort(key=lambda r: (r["sequence"], r["qp"], r["gop"],
-                              r["implementation"], r["operation"], r["mode"], r["metric"]))
+    append_analysis_stats(stats, analysis, manifest, "full")
     expected_stats = len(cases) * len(manifest["implementations"]) * 2 * 4
     expected_rd = len(cases) * len(manifest["implementations"])
     if len(stats) != expected_stats or len(rd["points"]) != expected_rd:
@@ -102,6 +161,12 @@ def main():
         if extra_analysis["status"] != "complete":
             raise ValueError("repeat campaign analysis must be complete")
         validate_repeat_campaign(run, extra)
+        before = len(stats)
+        append_analysis_stats(stats, extra_analysis, extra["manifest"], label)
+        repeat_cases = (len(extra["manifest"]["sequences"]) *
+                        len(extra["manifest"]["qps"]) * len(extra["manifest"]["gops"]))
+        if len(stats) - before != repeat_cases * len(extra["manifest"]["implementations"]) * 2 * 3:
+            raise ValueError("repeat aggregate coverage mismatch")
         campaigns.append((label, path, extra))
     if len({label for label, _, _ in campaigns}) != len(campaigns):
         raise ValueError("campaign labels must be unique")
@@ -128,7 +193,7 @@ def main():
                 size = item.get("bytes", {})
                 quality = item.get("quality", {})
                 process_seconds = item["process_seconds"]
-                if process_seconds <= 0:
+                if not math.isfinite(process_seconds) or process_seconds <= 0:
                     raise ValueError("nonpositive process duration")
                 observations.append({
                     "campaign": label,
@@ -161,6 +226,11 @@ def main():
                                      r["sequence"], r["qp"], r["gop"],
                                      r["implementation"], r["mode"],
                                      r["repeat"], r["operation"]))
+    append_process_fps_stats(stats, observations, campaigns)
+    stats.sort(key=lambda r: (campaign_order[r["campaign"]],
+                              r["sequence"], r["qp"], r["gop"],
+                              r["implementation"], r["operation"], r["mode"],
+                              r["metric"]))
     rd_rows = sorted(rd["points"], key=lambda r: (
         r["sequence"], r["gop"], r["implementation"], r["qp"]))
     args.output.mkdir(parents=True, exist_ok=True)
@@ -170,9 +240,10 @@ def main():
         for row in observations:
             stream.write(json.dumps(row, allow_nan=False) + "\n")
     write_csv(args.output / "condition-statistics.csv",
-              ["sequence", "width", "height", "qp", "gop", "implementation",
-               "operation", "mode", "metric", "n", "mean", "sample_std",
-               "cv_percent", "minimum", "maximum"], stats)
+              ["campaign", "sequence", "width", "height", "qp", "gop",
+               "implementation", "operation", "mode", "metric", "n", "mean",
+               "sample_std", "cv_percent", "minimum", "maximum",
+               "ci95_low", "ci95_high"], stats)
     write_csv(args.output / "rd-points.csv",
               ["sequence", "width", "height", "gop", "qp", "implementation",
                "content_id", "input_sha256", "frames", "entropy_bpp",

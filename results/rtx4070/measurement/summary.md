@@ -52,10 +52,26 @@ imports, engine/model loading, warm-up/reset, source and bitstream file I/O,
 codec work with per-frame CUDA synchronization, and teardown. Offline quality
 evaluation and hashing are outside the codec process.
 
+The [condition statistics](condition-statistics.csv) contain a separate
+`campaign`-labelled `process_fps` row for every
+sequence/QP/GOP/implementation/operation: 288 in `campaign=full` and 64 in
+the two targeted cohorts. Each row reports `n=10`, the arithmetic mean of
+ten per-run process FPS values, sample SD (`ddof=1`), and a two-sided 95%
+Student-t confidence interval for that mean:
+`mean ± t(0.975, 9) × sample_SD / sqrt(10)`, with
+`t(0.975, 9) = 2.2621571628540993`. The interval assumes independent
+fresh-process repetitions and describes the condition mean; it is not an
+interval for a pooled resolution result or an NVCR/Python ratio. Other
+metric rows leave the CI columns blank.
+
 The table pools the 12 QP/GOP conditions and ten fresh-process repetitions
 per condition from `campaign=full`: 12,000 frames divided by the sum of
 process durations for each implementation, resolution, and operation.
-The speedup is the ratio of those pooled FPS values.
+The speedup is the ratio of those pooled FPS values. Pooled throughput
+uses total frames divided by total process seconds; the per-condition mean
+above instead gives every repetition equal weight in FPS space. Neither
+the condition-level mean nor its confidence interval is substituted for
+the pooled table.
 
 | Resolution | NVCR encode FPS | Python encode FPS | NVCR/Python | NVCR decode FPS | Python decode FPS | NVCR/Python |
 |---|---:|---:|---:|---:|---:|---:|
@@ -70,7 +86,10 @@ NVCR has higher process FPS in all 72 encode and all 72 decode matched
 conditions. The median condition-level NVCR/Python ratio is 2.69× for encode
 (range 1.59–3.14×) and 2.35× for decode (range 1.14–3.11×).
 These are 100-frame job results, not steady-state codec FPS; a different
-job length changes the weight of startup and warm-up.
+job length changes the weight of startup and warm-up. For one concrete
+condition, full-campaign QCIF QP 0/GOP 1 NVCR decode has a per-run FPS mean
+of 79.88 (95% CI 79.07–80.70), while its pooled condition throughput is
+79.87 FPS.
 
 ### Synchronized completed-frame codec FPS
 
@@ -113,21 +132,23 @@ both implementations and both operations. All 640 operations passed.
 Python again leads in synchronized completed-frame decode FPS in 16/16;
 NVCR leads in process-level decode FPS in 16/16 (1.14–1.95×), with
 nonoverlapping observed per-run ranges. NVCR also leads in process-level
-encode FPS in 16/16. These selected repeats corroborate the reversal and
-are not pooled into the balanced six-resolution table above.
+encode FPS in 16/16. Their 64 process-FPS condition rows have separate
+`campaign` labels and confidence intervals; these selected repeats corroborate
+the reversal and are not pooled into the balanced six-resolution table above.
 
 Memory is Linux `wait4` whole-process RSS high-water, including imports,
 model/engine loading and warm-up—not CUDA allocation. Across the same 72
 conditions per operation, the median ratio of NVCR mean RSS to Python mean RSS
 is **0.40 encode** (range 0.36–0.43) and **0.41 decode** (range 0.36–0.44).
-All 1,152 full-campaign per-condition timing/RSS statistics are in
-[condition-statistics.csv](condition-statistics.csv). Individual values for
-all operation modes and the targeted repeats are in the merged
+The [condition statistics](condition-statistics.csv) retain all 1,152
+original full-campaign timing/RSS rows, add 288 full-campaign process-FPS
+rows, and keep 192 targeted timing rows plus 64 targeted process-FPS rows
+separate by `campaign` (1,696 rows total). Individual values for all
+operation modes and the targeted repeats remain in the merged
 [CSV](operation-measurements.csv) and [JSONL](operation-measurements.jsonl);
 only `mode=throughput` rows should be used for FPS comparisons.
 `throughput_fps` is the completed-frame codec metric; `process_fps` is
-the 100-frame process metric. The condition statistics and RD points
-are from `campaign=full` only.
+the 100-frame process metric. RD points are from `campaign=full` only.
 Each local campaign retains its own `analysis.json` and
 `observations.jsonl` source records.
 No repetition was excluded.
@@ -242,7 +263,7 @@ they do not contain raw commands, per-frame arrays, or logs.
 |---|---|
 | `operation-measurements.csv` | `69e939eb9f29f3820e5dd5dc200a62bffdd13a6da53e951ab0c1dc3523f2ef56` |
 | `operation-measurements.jsonl` | `576346627a4bed69c463b93a43e19ab7e068c6e8a27fdb359e4f7fd0a0b2e077` |
-| `condition-statistics.csv` | `604445284a80f09591fb659dba73f582b66e8ba9be2fe42e36b408c8c4f3b936` |
+| `condition-statistics.csv` | `bdcfd4e5f8994dca6a08dd330f0dfe3d3029c95b6861313c3cc9a782395dd548` |
 | `rd-points.csv` | `34a91b5b23d78d9de8e5adfb5ec256954da33c0d24cdee9c9c51312bd6125316` |
 
 Reproduce the compact exports from the three local source packages with:

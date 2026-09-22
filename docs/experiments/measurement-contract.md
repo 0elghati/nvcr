@@ -90,6 +90,15 @@ a new common interval. `process_seconds` includes process creation, imports,
 loading, warm-up, file I/O, and teardown; the parent observes termination with
 10 ms resolution. It is reported separately, never as steady-state codec FPS.
 
+For the fixed 100-measured-frame job, `process_fps = frames / process_seconds`
+includes the ten warm-up frames in elapsed time but excludes them from the
+numerator. The RTX result reports the arithmetic mean, sample SD and two-sided
+Student-t 95% interval of ten independent per-run process FPS values for each
+condition. Its pooled throughput is instead `sum(frames) / sum(process_seconds)`
+over the stated equal-work runs; that pooled ratio is not the arithmetic mean
+or the confidence interval. Full-matrix and targeted-repeat campaigns remain
+separate statistical cohorts.
+
 Warm-up runs the first ten frames in the SAME model/runtime session, flushes and
 resets reference state, rewinds to frame zero, and retains loaded execution
 resources. Encode and decode each have an isolated process and independent
