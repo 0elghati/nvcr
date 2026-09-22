@@ -1,6 +1,6 @@
 # Measurement validation record
 
-Date: 2026-09-21. The NVCR campaign and the matched Python reference campaign
+Date: 2026-09-22. The NVCR campaign and the matched Python reference campaign
 are complete: each has 3,024 latest configured operations and a passing
 eight-operation smoke. The [NVCR result](../../../results/jetson-orin/measurement/summary.md)
 and [Python result](../../../results/jetson-orin/measurement/python-reference/summary.md)
@@ -25,7 +25,8 @@ ctest --test-dir build-release-rtx4070 --output-on-failure \
   -R 'nvcr_measurement_semantics|nvcr_legacy_consolidation|nvcr_softwarex_driver|nvcr_contract_tests|nvcr_format_contract_tests|nvcr_dcvcrt_payloads|nvcr_cli_accepts_inter_gop'
 ```
 
-The measurement suite contains 25 tests, covering independently known PSNR,
+The focused measurement suite now runs 29 tests (two optional skips), covering
+independently known PSNR,
 exact reconstruction, malformed dimensions/lengths, real production-writer byte
 reconciliation, sample SD, duplicate/incomplete observations, child failures and
 timeouts, coding schedules, NVCR-only selection, bound profile line endings,
@@ -46,10 +47,13 @@ The offline audit found no missing, failed or duplicated observations. It
 verified all 3,024 retained metric files, recalculated 576 mean/sample-SD
 summaries and recomputed quality from per-frame plane SSE/sample counts. All
 repeated encoded streams within each condition have identical recorded hashes.
-All 18 four-point RD curves are monotonic. Descriptive Student-t intervals are
-included in the CSV, with their assumptions recorded in the audit.
+All 18 four-point RD curves are monotonic. The expanded statistical export
+recomputes 720 rows from the retained compact observations, including
+per-run process FPS, process RSS, median, CV and descriptive Student-t intervals.
+Its assumptions and reproduction commands are in the [Orin package](../../../results/jetson-orin/measurement/README.md).
 
-The maximum throughput CV is 9.74% (QCIF, QP42, GOP100 decode). Every operation
+The maximum completed-codec throughput CV is 9.74% (QCIF, QP42, GOP100 decode).
+Every operation
 contains a TensorRT device-model warning. These observations remain visible;
 no outliers were excluded. Memory values are whole-process RSS high-water in
 MiB, not isolated GPU allocation. Before/after snapshots cannot establish fixed
@@ -57,7 +61,7 @@ clocks or absence of throttling throughout the experiment.
 
 ## Completed Python reference campaign
 
-The Python result package retains 576 condition/operation/metric rows with
+The Python result package retains 720 condition/operation/metric rows with
 n=10, 72 common-contract quality/rate points, a sanitized campaign manifest,
 and an audit record. The latest 3,024 operations passed after resuming an
 interrupted launch; two failed/skipped attempts remain retained in the local
@@ -65,6 +69,23 @@ raw observations. The Python checkout was at commit
 `48ab0ac5e5199d78fffb944bfbafafb2b6142f7b` with tracked energy-measurement
 edits and differed from the model-profile commit; the explicit source policy
 and changed paths are recorded in the package audit.
+
+## Paired quality and rate comparison
+
+The committed [`quality-comparison.csv`](../../../results/jetson-orin/measurement/quality-comparison.csv)
+matches 72 common sequence/QP/GOP conditions between the two result packages.
+It uses the common `decoded-yuv420p8-pooled-plane-6-1-1-v1` quality contract.
+Python minus NVCR pooled decoded-YUV PSNR is +0.0286 dB on average, with a
+range of −0.1270 to +0.1294 dB. Entropy BPP differs by −0.20% on average,
+with a range of −2.03% to +1.47%. File BPP is retained for audit but is not
+used as the codec-rate comparison because the two wrappers have different
+fixed overheads. Quality was measured once per condition; the ten repetitions
+apply to throughput and memory.
+
+This is a paired empirical compatibility result. The NVCR and Python runs keep
+separate implementation/source identities, and it does not support a claim of
+internal implementation identity or replace the pending matched speedup and
+memory analysis.
 
 ## Artifact and source identity
 
