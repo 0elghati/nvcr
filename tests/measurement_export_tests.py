@@ -3,6 +3,7 @@ import csv
 import io
 import json
 import math
+import statistics
 import sys
 import tempfile
 import unittest
@@ -24,21 +25,30 @@ class MeasurementExportTests(unittest.TestCase):
                 "sequences": [{"sequence_id": "sample", "width": 176, "height": 144}],
                 "qps": [0], "gops": [1], "implementations": ["python"],
                 "repetitions": 10, "warmup_frames": 10,
+                "modes": ["throughput", "memory"],
             }
             (campaign / "run.json").write_text(json.dumps({
-                "manifest": manifest, "fingerprint": "def", "expected_operations": 20}))
-            value = {"n": 10, "mean": 2.0, "sample_std": 0.2,
-                     "minimum": 1.5, "maximum": 2.5}
+                "manifest": manifest, "fingerprint": "def", "expected_operations": 40}))
+            durations = [2.0, 4.0] + [3.0] * 8
+            rss = [1000.0 + repeat for repeat in range(10)]
+            def aggregate(values):
+                return {"n": 10, "mean": statistics.mean(values),
+                        "sample_std": statistics.stdev(values),
+                        "minimum": min(values), "maximum": max(values)}
+            values = {"codec_seconds": aggregate([2.0] * 10),
+                      "throughput_fps": aggregate([50.0] * 10),
+                      "process_seconds": aggregate(durations),
+                      "process_peak_rss_mib": aggregate(rss)}
             aggregates = []
             for operation in ("encode", "decode"):
                 aggregates.extend([
                     {"case_id": "sample-q0-g1", "implementation": "python",
                      "operation": operation, "mode": "throughput",
-                     **{field: value for field in
+                     **{field: values[field] for field in
                         ("codec_seconds", "throughput_fps", "process_seconds")}},
                     {"case_id": "sample-q0-g1", "implementation": "python",
                      "operation": operation, "mode": "memory",
-                     "process_peak_rss_mib": value},
+                     "process_peak_rss_mib": values["process_peak_rss_mib"]},
                 ])
             analysis = {"status": "complete", "aggregates": aggregates}
             (campaign / "analysis.json").write_text(json.dumps(analysis))
@@ -49,25 +59,26 @@ class MeasurementExportTests(unittest.TestCase):
                      "quality_contract": "test", "fingerprint": "def"}
             (campaign / "rd-points.json").write_text(json.dumps({
                 "schema": "nvcr.measurement.rd.v1", "points": [point]}))
-            durations = [2.0, 4.0] + [3.0] * 8
             observations = []
             for operation in ("encode", "decode"):
-                for repeat, seconds in enumerate(durations):
-                    observations.append({
-                        "execution_id": f"{operation}-{repeat}",
-                        "case_id": "sample-q0-g1", "sequence": "sample",
-                        "width": 176, "height": 144, "qp": 0, "gop": 1,
-                        "implementation": "python", "operation": operation,
-                        "mode": "throughput", "repeat": repeat, "frames": 100,
-                        "status": "passed", "fingerprint": "def",
-                        "timing_contract": "host-yuv420p8-completed-frame-v1",
-                        "process_seconds": seconds,
-                        "metrics": {"timed_frames": 100, "warmup_frames": 10,
-                                    "codec_seconds": 2.0, "throughput_fps": 50.0,
-                                    "initialization_seconds": 0.5},
-                        "bytes": {"file_bytes": 1000, "entropy_bytes": 900,
-                                  "file_bpp": 0.2, "entropy_bpp": 0.18},
-                    })
+                for mode in ("throughput", "memory"):
+                    for repeat, seconds in enumerate(durations):
+                        observations.append({
+                            "execution_id": f"{operation}-{mode}-{repeat}",
+                            "case_id": "sample-q0-g1", "sequence": "sample",
+                            "width": 176, "height": 144, "qp": 0, "gop": 1,
+                            "implementation": "python", "operation": operation,
+                            "mode": mode, "repeat": repeat, "frames": 100,
+                            "status": "passed", "fingerprint": "def",
+                            "timing_contract": "host-yuv420p8-completed-frame-v1",
+                            "process_seconds": seconds,
+                            "process_peak_rss_mib": rss[repeat] if mode == "memory" else None,
+                            "metrics": {"timed_frames": 100, "warmup_frames": 10,
+                                        "codec_seconds": 2.0, "throughput_fps": 50.0,
+                                        "initialization_seconds": 0.5},
+                            "bytes": {"file_bytes": 1000, "entropy_bytes": 900,
+                                      "file_bpp": 0.2, "entropy_bpp": 0.18},
+                        })
             (campaign / "observations.jsonl").write_text(
                 "".join(json.dumps(row) + "\n" for row in observations))
             with patch.object(sys, "argv", ["export", str(campaign), str(output)]):
@@ -80,10 +91,19 @@ class MeasurementExportTests(unittest.TestCase):
                 process = next(row for row in rows if row["metric"] == "process_fps"
                                and row["operation"] == "encode")
                 self.assertEqual(int(process["n"]), 10)
+                self.assertAlmostEqual(float(process["median"]), 100 / 3)
+                rss_stat = next(row for row in rows if row["metric"] == "process_peak_rss_mib"
+                                and row["operation"] == "encode")
+                self.assertEqual(float(rss_stat["median"]), 1004.5)
+                self.assertTrue(rss_stat["ci95_low"] and rss_stat["ci95_high"])
+                codec_stat = next(row for row in rows if row["metric"] == "throughput_fps"
+                                  and row["operation"] == "encode")
+                self.assertEqual(float(codec_stat["median"]), 50.0)
+                self.assertEqual(float(codec_stat["ci95_low"]), 50.0)
                 self.assertAlmostEqual(float(process["mean"]), 34.166666666666664)
                 sample_sd = float(process["sample_std"])
                 self.assertGreater(sample_sd, 0)
-                margin = exporter.T95_DF9 * sample_sd / math.sqrt(10)
+                margin = 2.2621571628540993 * sample_sd / math.sqrt(10)
                 self.assertAlmostEqual(float(process["ci95_low"]),
                                        float(process["mean"]) - margin)
                 self.assertAlmostEqual(float(process["ci95_high"]),
@@ -94,7 +114,7 @@ class MeasurementExportTests(unittest.TestCase):
                     self.assertEqual(len(list(csv.DictReader(stream))), 1)
                 with (output / "operation-measurements.csv").open() as stream:
                     measurements = list(csv.DictReader(stream))
-                self.assertEqual(len(measurements), 20)
+                self.assertEqual(len(measurements), 40)
                 self.assertEqual(float(measurements[0]["throughput_fps"]), 50.0)
                 self.assertEqual(measurements[0]["entropy_bytes"], "900")
                 analysis["status"] = "incomplete"

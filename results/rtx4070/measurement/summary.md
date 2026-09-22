@@ -55,14 +55,16 @@ evaluation and hashing are outside the codec process.
 The [condition statistics](condition-statistics.csv) contain a separate
 `campaign`-labelled `process_fps` row for every
 sequence/QP/GOP/implementation/operation: 288 in `campaign=full` and 64 in
-the two targeted cohorts. Each row reports `n=10`, the arithmetic mean of
-ten per-run process FPS values, sample SD (`ddof=1`), and a two-sided 95%
-Student-t confidence interval for that mean:
+the two targeted cohorts. Each row reports `n=10`, arithmetic mean,
+median, sample SD (`ddof=1`), minimum, maximum, CV (`100 × SD / mean`),
+and a two-sided 95% Student-t confidence interval for the mean:
 `mean ± t(0.975, 9) × sample_SD / sqrt(10)`, with
-`t(0.975, 9) = 2.2621571628540993`. The interval assumes independent
-fresh-process repetitions and describes the condition mean; it is not an
-interval for a pooled resolution result or an NVCR/Python ratio. Other
-metric rows leave the CI columns blank.
+`t(0.975, 9) = 2.2621571628540993`. The interval assumes independent,
+stationary fresh-process repetitions. It is descriptive, unadjusted for
+multiple conditions, and is not an interval for a pooled resolution result
+or an NVCR/Python ratio. The same columns are populated for memory-mode
+`process_peak_rss_mib` and for throughput-mode `codec_seconds`,
+`throughput_fps` and `process_seconds`; these remain distinct metrics.
 
 The table pools the 12 QP/GOP conditions and ten fresh-process repetitions
 per condition from `campaign=full`: 12,000 frames divided by the sum of
@@ -263,7 +265,7 @@ they do not contain raw commands, per-frame arrays, or logs.
 |---|---|
 | `operation-measurements.csv` | `69e939eb9f29f3820e5dd5dc200a62bffdd13a6da53e951ab0c1dc3523f2ef56` |
 | `operation-measurements.jsonl` | `576346627a4bed69c463b93a43e19ab7e068c6e8a27fdb359e4f7fd0a0b2e077` |
-| `condition-statistics.csv` | `bdcfd4e5f8994dca6a08dd330f0dfe3d3029c95b6861313c3cc9a782395dd548` |
+| `condition-statistics.csv` | `f1ce479b1da6a4a514be8fd9ab3d7db518d8245a84bdb531d823cb67e1f61128` |
 | `rd-points.csv` | `34a91b5b23d78d9de8e5adfb5ec256954da33c0d24cdee9c9c51312bd6125316` |
 
 Reproduce the compact exports from the three local source packages with:

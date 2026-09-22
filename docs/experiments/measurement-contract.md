@@ -92,12 +92,18 @@ loading, warm-up, file I/O, and teardown; the parent observes termination with
 
 For the fixed 100-measured-frame job, `process_fps = frames / process_seconds`
 includes the ten warm-up frames in elapsed time but excludes them from the
-numerator. The RTX result reports the arithmetic mean, sample SD and two-sided
-Student-t 95% interval of ten independent per-run process FPS values for each
-condition. Its pooled throughput is instead `sum(frames) / sum(process_seconds)`
-over the stated equal-work runs; that pooled ratio is not the arithmetic mean
-or the confidence interval. Full-matrix and targeted-repeat campaigns remain
-separate statistical cohorts.
+numerator. The statistical unit is one independent process execution. For each
+sequence/QP/GOP/implementation/operation/campaign, the throughput-mode runs
+supply process FPS, codec FPS and timing statistics; the separate memory-mode
+runs supply process RSS high-water statistics. Each ten-run condition reports
+n, arithmetic mean, median, sample SD (`ddof=1`), minimum, maximum, CV
+(`100 × sample SD / mean`) and a two-sided 95% Student-t interval for the mean
+(`mean ± t(0.975, 9) × sample SD / sqrt(10)`). The intervals assume independent,
+stationary repetitions; they are descriptive, unadjusted for multiple
+conditions, and do not give intervals for implementation ratios. Pooled
+throughput is instead `sum(frames) / sum(process_seconds)` over the stated
+equal-work runs; it is distinct from the arithmetic mean and its interval.
+Full-matrix and targeted-repeat campaigns remain separate statistical cohorts.
 
 Warm-up runs the first ten frames in the SAME model/runtime session, flushes and
 resets reference state, rewinds to frame zero, and retains loaded execution

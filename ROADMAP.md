@@ -81,9 +81,10 @@ subsequently run directly and audited in
 [the current RTX result](results/rtx4070/measurement/summary.md). Its current
 compact CSV/JSONL exports retain 6,048 full-matrix and 640 labelled targeted
 repeat operations. Process-level 100-frame job FPS now has cohort-labelled
-per-condition n, mean, sample SD and 95% Student-t intervals; the
-per-resolution pooled throughput remains distinct from those statistics and
-completed-frame codec FPS remains secondary evidence. Targeted repeats stay
+per-condition n, mean, median, sample SD, extrema, CV and 95% Student-t
+intervals. Process RSS has the same per-condition statistics; per-resolution
+pooled throughput remains distinct and completed-frame codec FPS remains
+secondary evidence. Targeted repeats stay
 separate from balanced full-matrix aggregates. Raw runs remain local;
 matched smoke/reset and pinned-source publication gates remain pending.
 

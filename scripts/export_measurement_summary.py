@@ -5,9 +5,10 @@ import argparse
 import csv
 import json
 import math
-import statistics
 from collections import defaultdict
 from pathlib import Path
+
+from measurement_metrics import condition_statistics
 
 
 def write_csv(path, fields, rows):
@@ -49,10 +50,6 @@ def validate_repeat_campaign(base, repeat):
             raise ValueError(f"repeat campaign differs in {kind}")
 
 
-# Two-sided Student-t 95% critical value for ten independent process runs.
-T95_DF9 = 2.2621571628540993
-
-
 def append_analysis_stats(stats, analysis, manifest, campaign):
     cases = {
         f'{sequence["sequence_id"]}-q{qp}-g{gop}': (sequence, qp, gop)
@@ -77,9 +74,7 @@ def append_analysis_stats(stats, analysis, manifest, campaign):
                 "operation": item["operation"], "mode": item["mode"],
                 "metric": metric, "n": value["n"], "mean": value["mean"],
                 "sample_std": value["sample_std"],
-                "cv_percent": 100 * value["sample_std"] / value["mean"] if value["mean"] else "",
                 "minimum": value["minimum"], "maximum": value["maximum"],
-                "ci95_low": "", "ci95_high": "",
             })
 
 
@@ -108,22 +103,48 @@ def append_process_fps_stats(stats, observations, campaigns):
         if expected != 10 or len(rows) != expected or (
                 {row["repeat"] for row in rows} != set(range(expected))):
             raise ValueError("process FPS requires all ten distinct repetitions")
-        values = [row["process_fps"] for row in rows]
-        mean = statistics.mean(values)
-        sample_std = statistics.stdev(values)
-        margin = T95_DF9 * sample_std / math.sqrt(expected)
         first = rows[0]
         stats.append({
             "campaign": campaign,
             "sequence": first["sequence"], "width": first["width"],
             "height": first["height"], "qp": first["qp"], "gop": first["gop"],
             "implementation": implementation, "operation": operation,
-            "mode": "throughput", "metric": "process_fps", "n": expected,
-            "mean": mean, "sample_std": sample_std,
-            "cv_percent": 100 * sample_std / mean,
-            "minimum": min(values), "maximum": max(values),
-            "ci95_low": mean - margin, "ci95_high": mean + margin,
+            "mode": "throughput", "metric": "process_fps",
+            **condition_statistics([row["process_fps"] for row in rows]),
         })
+
+
+def enrich_analysis_stats(stats, observations, campaigns):
+    metrics = {
+        "throughput": ("codec_seconds", "throughput_fps", "process_seconds"),
+        "memory": ("process_peak_rss_mib",),
+    }
+    fields = ("campaign", "sequence", "qp", "gop", "implementation",
+              "operation", "mode", "metric")
+    existing = {tuple(row[field] for field in fields): row
+                for row in stats if row["metric"] != "process_fps"}
+    if len(existing) != len(stats) - sum(row["metric"] == "process_fps" for row in stats):
+        raise ValueError("duplicate aggregate statistic")
+    groups = defaultdict(list)
+    for row in observations:
+        for metric in metrics.get(row["mode"], ()):
+            key = tuple(row[field] for field in fields[:-1]) + (metric,)
+            groups[key].append(row)
+    if groups.keys() != existing.keys():
+        raise ValueError("aggregate observation coverage mismatch")
+    runs = {label: run for label, _, run in campaigns}
+    for key, rows in groups.items():
+        expected = runs[key[0]]["manifest"]["repetitions"]
+        if expected != 10 or len(rows) != expected or (
+                {row["repeat"] for row in rows} != set(range(expected))):
+            raise ValueError("statistics require all ten distinct repetitions")
+        metric = key[-1]
+        calculated = condition_statistics([row[metric] for row in rows])
+        original = existing[key]
+        for field in ("n", "mean", "sample_std", "minimum", "maximum"):
+            if not math.isclose(original[field], calculated[field], rel_tol=1e-12):
+                raise ValueError("analysis aggregate differs from observations")
+        original.update(calculated)
 
 
 def main():
@@ -227,6 +248,7 @@ def main():
                                      r["implementation"], r["mode"],
                                      r["repeat"], r["operation"]))
     append_process_fps_stats(stats, observations, campaigns)
+    enrich_analysis_stats(stats, observations, campaigns)
     stats.sort(key=lambda r: (campaign_order[r["campaign"]],
                               r["sequence"], r["qp"], r["gop"],
                               r["implementation"], r["operation"], r["mode"],
@@ -242,7 +264,7 @@ def main():
     write_csv(args.output / "condition-statistics.csv",
               ["campaign", "sequence", "width", "height", "qp", "gop",
                "implementation", "operation", "mode", "metric", "n", "mean",
-               "sample_std", "cv_percent", "minimum", "maximum",
+               "median", "sample_std", "cv_percent", "minimum", "maximum",
                "ci95_low", "ci95_high"], stats)
     write_csv(args.output / "rd-points.csv",
               ["sequence", "width", "height", "gop", "qp", "implementation",

@@ -90,7 +90,13 @@ class MeasurementTests(unittest.TestCase):
         p.write_bytes(data.replace(b'NVAU\x01\x00',b'NVAU\x03\x00'))
         with self.assertRaises(ValueError): metrics.nvcr_bytes(p)
     def test_sample_sd_and_invalid_observations(self):
-        s=metrics.summary([1.,2.,3.]); self.assertEqual(s['sample_std'],1.); self.assertEqual(s['n'],3)
+        s=metrics.summary([1.,2.,3.]); self.assertEqual(s['sample_std'],1.); self.assertEqual(s['n'],3); self.assertEqual(s['median'],2.)
+        repeated=metrics.condition_statistics([1.,2.]+[3.]*8)
+        self.assertEqual(repeated['median'],3.)
+        self.assertAlmostEqual(repeated['mean'],2.7)
+        self.assertLess(repeated['ci95_low'],repeated['mean'])
+        self.assertGreater(repeated['ci95_high'],repeated['mean'])
+        with self.assertRaises(ValueError): metrics.condition_statistics([1.,2.,3.])
         for values in ([],[math.nan],[math.inf],[None],[True]):
             with self.assertRaises(ValueError): metrics.summary(values)
         self.assertIsNone(metrics.summary([1])['sample_std'])
@@ -208,6 +214,7 @@ class MeasurementTests(unittest.TestCase):
         self.assertEqual(result['status'],'incomplete')
         self.assertEqual(len(result['missing_observations']),3)
         self.assertEqual(result['aggregates'][0]['throughput_fps']['mean'],20.)
+        self.assertEqual(result['aggregates'][0]['throughput_fps']['median'],20.)
         self.assertEqual(result['aggregates'][0]['throughput_fps']['sample_std'],10.)
         self.assertEqual(result['aggregates'][0]['n'],3)
 
