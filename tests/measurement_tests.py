@@ -90,7 +90,13 @@ class MeasurementTests(unittest.TestCase):
         p.write_bytes(data.replace(b'NVAU\x01\x00',b'NVAU\x03\x00'))
         with self.assertRaises(ValueError): metrics.nvcr_bytes(p)
     def test_sample_sd_and_invalid_observations(self):
-        s=metrics.summary([1.,2.,3.]); self.assertEqual(s['sample_std'],1.); self.assertEqual(s['n'],3)
+        s=metrics.summary([1.,2.,3.]); self.assertEqual(s['sample_std'],1.); self.assertEqual(s['n'],3); self.assertEqual(s['median'],2.)
+        repeated=metrics.condition_statistics([1.,2.]+[3.]*8)
+        self.assertEqual(repeated['median'],3.)
+        self.assertAlmostEqual(repeated['mean'],2.7)
+        self.assertLess(repeated['ci95_low'],repeated['mean'])
+        self.assertGreater(repeated['ci95_high'],repeated['mean'])
+        with self.assertRaises(ValueError): metrics.condition_statistics([1.,2.,3.])
         for values in ([],[math.nan],[math.inf],[None],[True]):
             with self.assertRaises(ValueError): metrics.summary(values)
         self.assertIsNone(metrics.summary([1])['sample_std'])
@@ -133,6 +139,34 @@ class MeasurementTests(unittest.TestCase):
         self.assertEqual(2*len(jobs),3024)
         self.assertEqual({j['qp'] for j in jobs},{0,21,42,63})
         self.assertEqual({j['repeat'] for j in jobs if j['mode']=='throughput'},set(range(10)))
+    def test_rtx_manifest_keeps_matched_matrix_and_portable_reference_paths(self):
+        path=campaign.ROOT/'docs/experiments/measurement-campaign-rtx4070.json'
+        raw=json.loads(path.read_text())
+        self.assertEqual(raw['implementations'],['nvcr','python'])
+        self.assertEqual(raw['qps'],[0,21,42,63]); self.assertEqual(raw['repetitions'],10)
+        self.assertEqual(raw['target_profile'],'configs/targets/rtx4070-ubuntu2404.json')
+        self.assertFalse(Path(raw['reference_root']).is_absolute())
+        self.assertFalse(Path(raw['reference_python']).is_absolute())
+        m=campaign.load_manifest(path)
+        self.assertEqual(2*len(campaign.jobs(m)),6048)
+    def test_reference_revision_override_still_requires_clean_source(self):
+        expected='expected'; actual='fork'
+        with self.assertRaises(ValueError):
+            campaign.validate_reference_revision(actual,expected,'',False)
+        accepted=campaign.validate_reference_revision(actual,expected,'',True)
+        self.assertFalse(accepted['commit_matches_profile'])
+        self.assertEqual(accepted['source_policy'],'explicit-clean-fork-override')
+        with self.assertRaises(ValueError):
+            campaign.validate_reference_revision(actual,expected,'M src/models/video_model.py',True)
+
+    def test_reference_revision_can_record_explicit_dirty_source(self):
+        expected='expected'; actual='fork'; dirty='M energy.py\nM runner/executor.py'
+        with self.assertRaises(ValueError):
+            campaign.validate_reference_revision(actual,expected,dirty,True)
+        accepted=campaign.validate_reference_revision(actual,expected,dirty,True,True)
+        self.assertFalse(accepted['commit_matches_profile'])
+        self.assertEqual(accepted['source_policy'],'explicit-dirty-source-and-fork-override')
+        self.assertEqual(accepted['tracked_source_changes'],dirty.splitlines())
     def test_profile_line_endings_require_exact_published_digest(self):
         import hashlib
         p=self.root/'model.json'; p.write_bytes(b'{\r\n "model": 1\r\n}\r\n')
@@ -180,6 +214,7 @@ class MeasurementTests(unittest.TestCase):
         self.assertEqual(result['status'],'incomplete')
         self.assertEqual(len(result['missing_observations']),3)
         self.assertEqual(result['aggregates'][0]['throughput_fps']['mean'],20.)
+        self.assertEqual(result['aggregates'][0]['throughput_fps']['median'],20.)
         self.assertEqual(result['aggregates'][0]['throughput_fps']['sample_std'],10.)
         self.assertEqual(result['aggregates'][0]['n'],3)
 

@@ -2,6 +2,11 @@
 
 The NVCR campaign is complete and its retained numerical records pass an independent offline audit.
 
+The matched Python reference campaign is also complete. Its compact package is
+in [python-reference/](python-reference/summary.md); direct implementation
+ratios should use both packages while preserving their recorded source and
+runtime identities.
+
 The local raw campaign is `output/peer-review/`. This directory contains the
 current compact summary and aggregate statistics; raw observations, per-operation
 logs and generated products remain outside source control. Historical result
@@ -54,7 +59,7 @@ Each range below spans the 12 separate condition means (four QPs × three GOPs) 
 2. **Memory is whole-process RSS high-water in MiB**, including initialization and warm-up. It is not isolated CUDA allocation or total Jetson memory. Median memory CV is low, but 1080p QP42 GOP1 decode has mean 1,070.00 MiB and SD 42.39 MiB (3.96% CV); keep that variation visible.
 3. Power-mode snapshots agree on MAXN_SUPER. Governors remain CPU `schedutil` / GPU `nvhost_podgov`; snapshots do not establish fixed clocks throughout. Available temperatures rose from roughly 50–52°C to 62–64°C. These readings do not prove the cause of timing variation or exclude throttling.
 4. FPS refers to the new synchronized completed-codec interval. Process elapsed time is exported separately. Do not mix these values with older codec-loop timing definitions.
-5. This campaign contains NVCR only. New Python comparison, speedup, and relative-memory conclusions remain pending. Historical input acquisition/preprocessing and some FPS metadata remain unverified as recorded in the manifest.
+5. The matched Python campaign is complete and retained in the companion package. Historical input acquisition/preprocessing and some FPS metadata remain unverified as recorded in the manifest; direct speedup and relative-memory conclusions must preserve the separate implementation/source identities.
 6. Successful encoded and decoded products were deleted by the original runner after evaluation. The review checks retained hashes, accounting and SSE; it cannot re-decode those deleted products.
 
 ## Review artifacts

@@ -10,6 +10,7 @@ from pathlib import Path
 
 QUALITY_CONTRACT = 'decoded-yuv420p8-pooled-plane-6-1-1-v1'
 TIMING_CONTRACT = 'host-yuv420p8-completed-frame-v1'
+T95_DF9 = 2.2621571628540993
 
 
 def digest(path: Path, count: int | None = None) -> str:
@@ -172,10 +173,23 @@ def nvcr_bytes(path: Path) -> dict:
 def summary(values: list[float]) -> dict:
     if not values or any(isinstance(v, bool) or not isinstance(v, (int,float)) or not math.isfinite(v) for v in values):
         raise ValueError('statistics require finite observations; missing/exact values cannot be dropped')
-    return {'n':len(values),'mean':statistics.mean(values),
+    return {'n':len(values),'mean':statistics.mean(values),'median':statistics.median(values),
             'sample_std':statistics.stdev(values) if len(values)>1 else None,
-            'minimum':min(values),'maximum':max(values),'method':'arithmetic mean; sample SD (ddof=1)',
+            'minimum':min(values),'maximum':max(values),'method':'arithmetic mean; median; sample SD (ddof=1)',
             'unit_of_analysis':'independent process execution'}
+
+
+def condition_statistics(values: list[float]) -> dict:
+    result = summary(values)
+    if result['n'] != 10:
+        raise ValueError('condition statistics require ten independent repetitions')
+    mean, sd = result['mean'], result['sample_std']
+    margin = T95_DF9 * sd / math.sqrt(result['n'])
+    return {key: result[key] for key in ('n', 'mean', 'median', 'sample_std',
+                                         'minimum', 'maximum')} | {
+        'cv_percent': 100 * sd / mean if mean else None,
+        'ci95_low': mean - margin, 'ci95_high': mean + margin,
+    }
 
 
 def bd_rate(reference, candidate) -> dict:

@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-09-20
+Last reviewed: 2026-09-22
 
 ## Product direction
 
@@ -48,8 +48,8 @@ not count as additional production codecs/providers or performance baselines.
 | Public documentation and onboarding | Implemented | Keep the project identity, contributions, reference comparisons, latest-release examples, and platform workflows current |
 | CLI and artifact-client build identity | Follow-up | Add `nvcr --version` and `nvcr-artifacts --version`, and reconcile the legacy `current_software_version` constant; until then use package manifests, source revisions, or OCI metadata |
 | Linux container GPU injection | Follow-up | Validate and document configured `nvidia` runtime, Docker `--gpus`, and CDI paths across supported Docker and NVIDIA Container Toolkit versions |
-| Exact-target artifacts | In progress | Produce current warning-free profile sets and target-local evidence |
-| Reproducible evaluation | In progress | User-run NVCR smoke and all 3,024 configured operations passed; offline records audited. Investigate persistent TensorRT device-model warnings and complete the deferred Python comparison |
+| Exact-target artifacts | In progress | RTX 4070 catalog bundles and bounded execution pass exact CUDA 12.8/TensorRT 10.9 checks; retain the Jetson warning investigation and complete matched target evidence |
+| Reproducible evaluation | In progress | RTX 4070 matched NVCR/Python campaign is complete and audited with explicit fork source-state identity, but had no matched smoke. Resolve pinned-source/reset gates before publication claims |
 | Compatibility classes | Experimental | Compare against complete exact baselines |
 | Public C++ API/ABI | Transitional | Freeze only after ownership and compatibility contracts are accepted |
 
@@ -72,7 +72,21 @@ criterion is marked complete by these changes.
 
 `scripts/measurement_jetson.sh` provides logged preparation, smoke, campaign,
 resume and analysis commands. The focused software suite passes; the current
-NVCR execution evidence is summarized below. Python validation remains pending.
+NVCR execution evidence is summarized below. Jetson Python validation remains
+pending.
+`scripts/measurement_x86_64.sh` provides the corresponding exact RTX 4070
+desktop NVCR-only launcher using the local x86_64 engine set. Its bounded
+NVCR smoke passed. The full RTX 4070 matched NVCR/Python campaign was
+subsequently run directly and audited in
+[the current RTX result](results/rtx4070/measurement/summary.md). Its current
+compact CSV/JSONL exports retain 6,048 full-matrix and 640 labelled targeted
+repeat operations. Process-level 100-frame job FPS now has cohort-labelled
+per-condition n, mean, median, sample SD, extrema, CV and 95% Student-t
+intervals. Process RSS has the same per-condition statistics; per-resolution
+pooled throughput remains distinct and completed-frame codec FPS remains
+secondary evidence. Targeted repeats stay
+separate from balanced full-matrix aggregates. Raw runs remain local;
+matched smoke/reset and pinned-source publication gates remain pending.
 
 ## Later codec integrations
 
@@ -123,3 +137,13 @@ No raw runs are committed. Timing variability remains explicit (maximum FPS
 CV 9.74%); every operation contains a TensorRT device-model warning. The Python
 comparison, warning-free artifact gate and overall evaluation milestone remain
 open. No new GPU execution was launched during review.
+
+The separate RTX 4070 readiness gate uses source `a444fb6` plus the captured
+working diff, a fresh SM-8.9/CUDA-12.8 Release build and the exact catalog
+bundles. Preflight, the 3,024-operation NVCR-only dry-run plan and all eight
+bounded smoke operations pass, including cold versus warmed/reset stream and
+reconstruction hashes. The later direct full matched campaign passed all
+6,048 operations; its fork-source and no-matched-smoke limitations are
+recorded in [the RTX result](results/rtx4070/measurement/summary.md).
+Smoke evidence remains supported but is no longer mandatory when the operator
+explicitly authorizes a direct campaign run.
