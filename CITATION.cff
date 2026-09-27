@@ -1,10 +1,12 @@
 cff-version: 1.2.0
 message: "If you use NVCR, please cite the v1.0.7 software release using these metadata."
-title: "NVCR: Native runtime architecture for neural video codecs"
+title: "NVCR: An extensible native runtime for deploying neural video codecs"
 abstract: >-
-  NVCR provides a native C++ runtime architecture for neural video codecs,
-  including stateful sessions, codec/provider contracts, target-aware artifact
-  resolution, bounded access units, and reproducible validation tooling.
+  NVCR provides an extensible native C++ runtime for deploying neural video
+  codecs, including stateful sessions, codec-adapter and execution-provider
+  interfaces, target-qualified artifact selection, and bounded access units.
+  Its sole production integration is DCVC-RT with TensorRT FP16 on NVIDIA
+  hardware.
 authors:
   - family-names: "El Ghati"
     given-names: "Omar"
@@ -21,7 +23,7 @@ license: MIT
 version: 1.0.7
 preferred-citation:
   type: software
-  title: "NVCR: Native runtime architecture for neural video codecs"
+  title: "NVCR: An extensible native runtime for deploying neural video codecs"
   authors:
     - family-names: "El Ghati"
       given-names: "Omar"
