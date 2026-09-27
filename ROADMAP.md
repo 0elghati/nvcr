@@ -18,7 +18,7 @@ end-to-end integration is DCVC-RT through TensorRT FP16 on Linux/NVIDIA targets.
   provider-mediated `RuntimeServices`.
 - Artifact descriptors, catalog parsing, resolver ranking, version/digest/
   license checks, and target compatibility classes.
-- Bounded `NVAU` v1 and generalized sectioned `NVAU` v2 parsing/serialization.
+- Bounded `NVAU` v1 and experimental sectioned `NVAU` v2 parsing/serialization.
 - Deterministic test codec and CPU provider for conformance fixtures.
 - CLI, CMake package, native installer, Docker/Compose surfaces, and evidence
   generation tooling.
