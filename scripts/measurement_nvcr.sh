@@ -8,7 +8,13 @@ output="${2:-evidence/measurement-nvcr}"
 mkdir -p evidence/measurement-assets/logs
 log_path="$(mktemp "$PWD/evidence/measurement-assets/logs/nvcr-$action.XXXXXX.log")"
 exec > >(tee -a "$log_path") 2>&1
-trap 'result=$?; if (( result != 0 )); then echo "Stopped (exit $result). Log: $log_path"; fi' EXIT
+on_exit() {
+  local result=$?
+  if (( result != 0 )); then
+    echo "Stopped (exit $result). Log: $log_path"
+  fi
+}
+trap on_exit EXIT
 echo "Log: $log_path"
 common=(--implementation nvcr --engine-root "$PWD/build/engines-measurement-published")
 case "$action" in
