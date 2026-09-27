@@ -9,9 +9,12 @@ identifies the codec and carries the compressed payload. NVCR uses `NVAU` to
 keep codec data separate from application or container metadata. All integers
 in the layouts below are little-endian.
 
-Version 1 is the current stream format. Version 2 is a more general envelope
-that the runtime can also read. Neither version is an upstream DCVC-RT stream
-or a standard multimedia container.
+The writer defaults to NVAU v1 to preserve compatibility with the evaluated
+production path. NVAU v2 is experimental, with no stable public format guarantee.
+`AccessUnitIO::serialize` writes v1; `serialize_sectioned` writes v2. The current
+reader accepts v1 and v2 and rejects other versions. Compatibility with older
+readers or future format versions is not guaranteed.
+Neither version is an upstream DCVC-RT stream or a standard multimedia container.
 
 ## Codec access unit: `NVAU` version 1
 
@@ -52,11 +55,12 @@ DCVC-RT streams.
 
 ## Sectioned codec access unit: `NVAU` version 2
 
-`NVAU` version 2 is an implemented NVCR-side sectioned envelope that can be
+`NVAU` version 2 is an implemented experimental NVCR-side sectioned envelope that can be
 mapped to future NVIF or standard-container work. It keeps codec samples independent of file/container concerns while
 adding codec identity, ordering, dependency, and typed-section metadata. The
 current runtime can parse v1 and v2 access units. `AccessUnitIO::serialize` still
 writes v1 for compatibility; `AccessUnitIO::serialize_sectioned` writes v2.
+Version 2 has no stable public format guarantee.
 
 Fixed header, 64 bytes:
 
