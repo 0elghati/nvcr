@@ -78,65 +78,31 @@ reconstruction is not expected to be byte-identical to the input.
 
 ## Results
 
-NVCR has been executed on the following NVIDIA targets. The completed results
-are retained in the repository and show the strongest measured FPS for each
-resolution, with the matching configuration named beside it.
+The matched evaluation compares NVCR/TensorRT FP16 with Python/PyTorch FP16
+on RTX 4070 and Jetson Orin. Each platform covers 6 resolutions, QPs
+0/21/42/63 and GOPs 1/30/100, with 10 independent process executions per
+condition. Each job processes 100 measured frames after 10 warm-up frames.
 
-### Jetson Orin
+Process throughput includes startup, initialization, warm-up, file I/O, codec
+execution and termination. The following ranges describe pooled NVCR/Python
+throughput ratios across resolutions.
 
-This is the inter-coded comparison point. The strongest recorded FPS comes from
-GOP 100 at every resolution, and the linked report keeps GOP 30 visible too.
-"Python" is Microsoft's official DCVC-RT reference implementation, run at the
-same QP and GOP so its reconstruction quality (PSNR) and compressed size (BPP,
-bits per pixel) can be compared directly against NVCR's own measured PSNR/BPP
-and throughput.
+| Platform | Encode | Decode |
+|---|---:|---:|
+| [RTX 4070](https://github.com/0elghati/nvcr/blob/c2480e8fdbf6b06be481c33d27d09c4c55e95f24/results/rtx4070/measurement/summary.md) | 1.96–3.05× | 1.37–3.01× |
+| [Jetson Orin](https://github.com/0elghati/nvcr/blob/c2480e8fdbf6b06be481c33d27d09c4c55e95f24/results/jetson-orin/measurement/summary.md) | 1.51–3.50× | 1.27–3.21× |
 
-| Resolution | Encode FPS | Decode FPS | NVCR PSNR | NVCR BPP | Python PSNR | Python BPP |
-|---|---:|---:|---:|---:|---:|---:|
-| QCIF | 248.052 | 254.457 | 37.922 | 0.013570 | 38.241 | 0.013516 |
-| CIF | 103.946 | 106.835 | 34.775 | 0.021574 | 34.872 | 0.021428 |
-| 360p | 49.607 | 54.628 | 34.697 | 0.025051 | 34.931 | 0.025091 |
-| 540p | 22.527 | 25.112 | 35.692 | 0.019467 | 35.935 | 0.019452 |
-| 720p | 12.749 | 14.467 | 40.358 | 0.006146 | 40.702 | 0.006081 |
-| 1080p | 5.830 | 6.566 | 36.325 | 0.012927 | 36.488 | 0.012919 |
+NVCR has higher mean process throughput in every evaluated condition on both
+platforms. These finite-job measurements compare complete implementations and
+do not isolate the contribution of runtime architecture.
 
-The full report keeps the entropy comparison and the per-GOP FPS table.
-[Results](results/jetson-orin/summary.md)
+Separate [RTX 3050](results/rtx3050/summary.md) and
+[RTX 5060](results/rtx5060/summary.md) runs demonstrate deployment from QCIF to
+1080p at QP 32 and GOPs 1/30/100, with 2 repetitions. Their codec-loop timings
+describe separate deployments.
 
-### RTX 4070
-
-This is an inter-coded comparison point, like Jetson Orin above. The linked
-report also shows the strongest inter-coded FPS per resolution. The strongest
-recorded FPS comes from GOP 100 at every resolution. "Python" is Microsoft's
-official DCVC-RT reference implementation, run at the same QP and GOP so its
-reconstruction quality (PSNR) and compressed size (BPP, bits per pixel) can be
-compared directly against NVCR's own measured PSNR/BPP and throughput.
-
-| Resolution | Encode FPS | Decode FPS | NVCR PSNR | NVCR BPP | Python PSNR | Python BPP |
-|---:|---:|---:|---:|---:|---:|---:|
-| QCIF | 957.692 | 1021.886 | 38.018 | 0.013564 | 38.209 | 0.013185 |
-| CIF | 576.553 | 606.987 | 34.740 | 0.021488 | 34.858 | 0.021358 |
-| 360p | 408.543 | 399.723 | 34.690 | 0.025029 | 34.915 | 0.025131 |
-| 540p | 225.741 | 211.098 | 35.700 | 0.019471 | 35.920 | 0.019431 |
-| 720p | 102.380 | 107.388 | 40.371 | 0.006164 | 40.710 | 0.006080 |
-| 1080p | 50.303 | 51.689 | 36.325 | 0.012938 | 36.484 | 0.012898 |
-
-The full report keeps the entropy comparison and the per-GOP FPS table. [Results](results/rtx4070/summary.md)
-
-### RTX 5060
-
-The RTX 4070 and Jetson Orin results above are the main measurement points.
-To check that NVCR is not tied to one specific GPU, the same NVCR build was
-also installed and run unmodified on an RTX 5060, a different GPU architecture
-from either of those two. It correctly encoded and decoded every resolution
-from QCIF to 1080p across GOP settings 1, 8, and 265 on that new hardware,
-with no code changes. This is a portability check, not a third performance
-comparison. [Results](results/rtx5060/summary.md)
-
-### RTX 3050
-
-Reserved as a future completion target.
-
+The [result inventory](results/README.md) links the matched records and
+historical reports.
 
 | Environment | Procedure |
 |---|---|

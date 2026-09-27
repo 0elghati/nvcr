@@ -1,5 +1,8 @@
 # Measurement validation record
 
+Historical record dated 2026-09-20. For the completed matched comparison,
+see the [current result inventory](../../../results/README.md).
+
 Date: 2026-09-20. The NVCR-only campaign is complete: all 3,024 configured
 operations and the preceding eight-operation smoke passed. The
 [current result](../../../results/jetson-orin/measurement/summary.md),
