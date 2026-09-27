@@ -31,18 +31,50 @@ CV = 100 × sample SD / mean. Values below summarize the CVs of the 72 condition
 
 | Quantity | Operation | Median CV | Maximum CV |
 |---|---|---:|---:|
-| Completed codec throughput | encode | 0.71% | 6.18% |
-| Completed codec throughput | decode | 1.50% | 9.74% |
+| Process-level FPS | encode | 0.76% | 2.50% |
+| Process-level FPS | decode | 1.40% | 3.07% |
 | Process RSS high-water | encode | 0.13% | 1.73% |
 | Process RSS high-water | decode | 0.10% | 3.96% |
 
-The largest throughput CV is QCIF, QP42, GOP100, decode: **176.12 ± 17.16 FPS** (mean ± sample SD, n=10), range 148.56–197.46 FPS, CV 9.74%. Its descriptive 95% Student-t interval for the mean is 163.85–188.40 FPS. Keep all ten observations; additional repetitions reveal this variability rather than eliminating it.
+The largest process-level FPS CV is 360p, QP21, GOP100, decode: **18.00 ± 0.55 FPS** (mean ± sample SD, n=10), CV 3.07%. Keep all ten observations; additional repetitions reveal this variability rather than eliminating it.
 
-The CSV includes mean, sample SD, CV, minimum/maximum and 95% Student-t intervals for each time, FPS and RSS quantity. Intervals use df=9 and assume independent, stationary executions; they are not adjusted for multiple conditions and do not establish absence of thermal or clock drift. The original paper’s 7.09% within-condition variation should not be compared directly to CV unless its denominator/definition matches.
+The archived completed-codec FPS has a larger maximum CV: QCIF, QP42, GOP100, decode is **176.12 ± 17.16 FPS**, CV 9.74%. It remains available in the JSONL and CSV as a secondary implementation metric.
 
-## Throughput overview
+The [condition CSV](condition-statistics.csv) has `campaign=full` and reports
+n, arithmetic mean, median, sample SD (`ddof=1`), minimum, maximum, CV, and
+a two-sided 95% Student-t interval for each throughput-mode time/FPS metric
+and memory-mode process RSS high-water. Process FPS is recomputed per run as
+`frames / process_seconds`. The interval is `mean ± t(0.975, 9) × SD / sqrt(10)`
+with `t(0.975, 9) = 2.2621571628540993`. It assumes independent, stationary
+process executions; it is descriptive, unadjusted for multiple conditions,
+and does not establish absence of thermal or clock drift. The original paper’s
+7.09% within-condition variation should not be compared directly to CV unless
+its denominator/definition matches.
 
-Each range below spans the 12 separate condition means (four QPs × three GOPs) for that sequence. It is not a confidence interval or a pooled mean.
+## Primary narrative: process-level FPS
+
+Process FPS for one run is measured frames divided by whole-process wall
+time, including initialization and warm-up. The table reports **pooled process
+throughput** from `campaign=full`: 12,000 frames (12 QP/GOP conditions × ten
+100-frame runs) divided by the sum of their process durations for each
+resolution and operation. These ratios differ from arithmetic means of
+per-run FPS; the earlier overview used the latter. The per-condition means,
+medians, variation and intervals are in `condition-statistics.csv`. No
+confidence interval for a pooled resolution result is inferred from the
+condition intervals.
+
+| Resolution | Pooled encode FPS | Pooled decode FPS |
+|---|---:|---:|
+| 176×144 | 29.05 | 26.95 |
+| 352×288 | 22.95 | 21.15 |
+| 640×360 | 15.10 | 15.48 |
+| 960×540 | 9.73 | 10.59 |
+| 1280×720 | 6.55 | 7.29 |
+| 1920×1080 | 3.20 | 3.70 |
+
+## Secondary archive: completed-codec FPS
+
+`metrics.throughput_fps` is the synchronized completed-codec interval, excluding process initialization. Each range below spans the 12 separate condition means (four QPs × three GOPs) for that sequence. It is not a confidence interval or a pooled mean.
 
 | Resolution | Encode FPS range | Decode FPS range |
 |---|---:|---:|
@@ -53,19 +85,50 @@ Each range below spans the 12 separate condition means (four QPs × three GOPs) 
 | 1280×720 | 5.55–12.78 | 6.61–14.14 |
 | 1920×1080 | 2.43–5.65 | 2.94–6.33 |
 
+## Paired Python-versus-NVCR quality and rate
+
+The 72 common conditions have a paired quality comparison in
+[`quality-comparison.csv`](quality-comparison.csv). Both implementations use
+the `decoded-yuv420p8-pooled-plane-6-1-1-v1` contract; each condition has one
+quality pass, so these values are descriptive paired differences rather than
+ten-repetition confidence intervals.
+
+Python minus NVCR pooled decoded-YUV PSNR averages **+0.0286 dB** (median
+`+0.0215 dB`, range `−0.1270` to `+0.1294 dB`, mean absolute difference
+`0.0347 dB`). The corresponding entropy-BPP difference averages **−0.20%**
+(median `−0.15%`, range `−2.03%` to `+1.47%`). Per-resolution means are:
+
+| Resolution | PSNR difference (dB) | Entropy-BPP difference |
+|---|---:|---:|
+| 176×144 | +0.033 | −0.58% |
+| 352×288 | +0.017 | +0.04% |
+| 640×360 | +0.016 | −0.08% |
+| 960×540 | +0.014 | −0.14% |
+| 1280×720 | +0.080 | −0.25% |
+| 1920×1080 | +0.011 | −0.19% |
+
+File-BPP differences are not used for the codec-rate conclusion because the
+NVCR container and Python stream wrapper have different fixed overheads. The
+comparison is empirical evidence under the recorded implementation and source
+identities; it does not establish that the two implementations are internally
+identical.
+
 ## Interpretation limits
 
 1. **TensorRT device-model warning in all 3,024 operations.** Catalog/bundle checks and codec execution passed, but TensorRT still reports use of a plan across different device models. This is a reproducibility caveat requiring investigation before claiming a warning-free exact-target setup. The warning is in each operation’s stderr, not in the main nohup progress output.
 2. **Memory is whole-process RSS high-water in MiB**, including initialization and warm-up. It is not isolated CUDA allocation or total Jetson memory. Median memory CV is low, but 1080p QP42 GOP1 decode has mean 1,070.00 MiB and SD 42.39 MiB (3.96% CV); keep that variation visible.
 3. Power-mode snapshots agree on MAXN_SUPER. Governors remain CPU `schedutil` / GPU `nvhost_podgov`; snapshots do not establish fixed clocks throughout. Available temperatures rose from roughly 50–52°C to 62–64°C. These readings do not prove the cause of timing variation or exclude throttling.
-4. FPS refers to the new synchronized completed-codec interval. Process elapsed time is exported separately. Do not mix these values with older codec-loop timing definitions.
+4. Process-level FPS is the primary narrative metric. Completed-codec FPS is retained as a secondary archive metric; do not mix the two timing definitions.
 5. The matched Python campaign is complete and retained in the companion package. Historical input acquisition/preprocessing and some FPS metadata remain unverified as recorded in the manifest; direct speedup and relative-memory conclusions must preserve the separate implementation/source identities.
 6. Successful encoded and decoded products were deleted by the original runner after evaluation. The review checks retained hashes, accounting and SSE; it cannot re-decode those deleted products.
 
 ## Review artifacts
 
-- `condition-statistics.csv`: 576 condition/operation/metric rows with n=10.
+- `nvcr/results.jsonl`: 3,024 compact latest-operation NVCR observations.
+- `condition-statistics.csv`: 720 condition/operation/metric rows with n=10;
+  144 process-FPS rows are added to the 576 existing timing/RSS metric groups.
 - `audit.json`: audit results and SHA256 identities of source result files.
+- `quality-comparison.csv`: 72 paired Python/NVCR PSNR and rate observations.
 - Original `observations.jsonl`, `analysis.json` and `rd-points.json` remain unchanged in the local raw campaign directory.
 
 No repetition or outlier was excluded, and no further benchmark was run.

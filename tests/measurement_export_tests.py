@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import export_measurement_summary as exporter
+import export_observation_statistics as compact_exporter
 
 
 class MeasurementExportTests(unittest.TestCase):
@@ -150,6 +151,39 @@ class MeasurementExportTests(unittest.TestCase):
                             for row in stats))
         with self.assertRaisesRegex(ValueError, "all ten distinct repetitions"):
             exporter.append_process_fps_stats([], observations[:-1], campaigns)
+
+    def test_compact_observation_statistics(self):
+        durations = [2.0, 4.0] + [3.0] * 8
+        rows = []
+        for mode in ("throughput", "memory"):
+            for repeat, seconds in enumerate(durations):
+                rows.append({
+                    "status": "passed", "fingerprint": "source",
+                    "execution_id": f"{mode}-{repeat}", "sequence": "sample",
+                    "width": 176, "height": 144, "qp": 0, "gop": 1,
+                    "implementation": "nvcr", "operation": "encode", "mode": mode,
+                    "repeat": repeat, "frames": 100, "process_seconds": seconds,
+                    "process_fps": 100 / seconds if mode == "throughput" else None,
+                    "process_peak_rss_mib": 1000 + repeat if mode == "memory" else None,
+                    "timing_contract": "host-yuv420p8-completed-frame-v1",
+                    "metrics": {"timed_frames": 100, "codec_seconds": 2.0,
+                                "throughput_fps": 50.0},
+                })
+        stats = compact_exporter.export(rows, "full", 1)
+        self.assertEqual(len(stats), 5)
+        process = next(row for row in stats if row["metric"] == "process_fps")
+        self.assertEqual(process["campaign"], "full")
+        self.assertEqual(process["n"], 10)
+        self.assertAlmostEqual(process["mean"], 34.166666666666664)
+        self.assertAlmostEqual(process["median"], 100 / 3)
+        self.assertNotAlmostEqual(process["mean"], 1000 / sum(durations))
+        rss = next(row for row in stats if row["metric"] == "process_peak_rss_mib")
+        self.assertEqual(rss["median"], 1004.5)
+        self.assertLess(rss["ci95_low"], rss["mean"])
+        with self.assertRaisesRegex(ValueError, "condition coverage"):
+            compact_exporter.export(rows, "full", 2)
+        with self.assertRaisesRegex(ValueError, "all ten distinct repetitions"):
+            compact_exporter.export(rows[:-1], "full", 1)
 
 
 if __name__ == "__main__":

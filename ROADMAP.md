@@ -116,11 +116,16 @@ The completed NVCR-only matrix in `output/peer-review/` covers six
 resolutions, four configured QPs, three GOPs and ten throughput/memory repetitions.
 All 3,024 operations passed; the preceding eight-operation smoke/reset gate
 passed. The [current review](results/jetson-orin/measurement/summary.md) records the
-independent numerical audit and exports mean/sample SD and descriptive intervals.
-No raw runs are committed. Timing variability remains explicit (maximum FPS
-CV 9.74%); every operation contains a TensorRT device-model warning. The Python
-comparison, warning-free artifact gate and overall evaluation milestone remain
-open. No new GPU execution was launched during review.
+independent numerical audit. NVCR and Python compact observations now
+regenerate 720 condition statistics each: n, mean, median, sample SD, extrema,
+CV and descriptive Student-t intervals. Pooled process throughput remains
+distinct from the condition means. No raw runs are committed. Timing variability
+remains explicit (maximum completed-codec FPS CV 9.74%, process FPS CV 3.07%
+for NVCR); every operation contains a TensorRT device-model warning. The paired
+Python/NVCR quality and entropy-rate comparison is recorded; matched
+process-speedup and memory-ratio conclusions, the warning-free artifact gate
+and the overall evaluation milestone remain open. No new GPU execution was
+launched during review.
 
 The separate RTX 4070 readiness gate uses source `a444fb6` plus the captured
 working diff, a fresh SM-8.9/CUDA-12.8 Release build and the exact catalog
