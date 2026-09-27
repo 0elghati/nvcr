@@ -60,8 +60,9 @@ cmake --install build-cpu --prefix "$PWD/install-cpu"
 find "$PWD/install-cpu" -maxdepth 3 -type f | sort
 ```
 
-The installed library/API is not ABI-frozen. Keep the
-consumer and NVCR revision together.
+Rebuild applications when upgrading NVCR; cross-release ABI compatibility is
+not guaranteed. Public API compatibility follows the
+[release policy](reference.md#stability-boundary).
 
 ## TensorRT runtime build
 
@@ -159,6 +160,21 @@ cmake -S . -B build-release \
 ```
 
 Only list bundles that exist on this machine.
+
+## Recorded validation
+
+CPU validation passed 15 CTest entries: 8 C++ suites and 7 Python-based suites.
+C++ tests, including deterministic parser mutation tests, used AddressSanitizer
+and UndefinedBehaviorSanitizer with leak detection disabled.
+
+Desktop GPU validation passed 14 CTest entries: 1 CUDA-operator test,
+6 engine-contract tests, 6 I/P-frame round-trip tests and 1 comparison with the
+Python reference. The engine-contract and round-trip tests covered QCIF, CIF,
+360p, 540p, 720p and 1080p.
+
+These counts describe recorded executions. The tests registered in another
+build depend on its configuration and supplied engines. Numerical line and
+branch coverage was not collected; these records do not include a libFuzzer run.
 
 ## Manual TensorRT configuration
 

@@ -15,7 +15,7 @@ needed for each completed platform.
 
 | Dimension | Meaning in NVCR |
 |---|---|
-| Software/API | C++ headers, session contracts, codec/provider API versions, and CLI behavior; not ABI-frozen |
+| Software/API | Public C++ API compatibility follows semantic versioning: patch and minor releases preserve compatibility; breaking changes require a major release. Cross-release ABI compatibility is not guaranteed; rebuild applications when upgrading. |
 | Artifact schema | Manifest/catalog/model-set versions and required files |
 | Provider runtime | CUDA/TensorRT/provider version and execution capabilities |
 | Hardware target | Device name, compute capability, architecture, memory, and target profile |
@@ -40,14 +40,30 @@ userspace.
 
 ## Format and codec position
 
-- `NVAU` is the versioned, bounded codec access-unit contract; v1 and v2 are
-  implemented.
+- `NVAU` is the versioned, bounded codec access-unit contract. Version 1 is the
+  production default; version 2 is implemented but experimental, with no stable
+  public format guarantee.
 - `NVCR`/`NVCS` and `.nvcr` are development/application wrappers with no claim
   to be standard multimedia containers.
 - The DCVC-RT inner payload is an NVCR implementation format, not an upstream
   Python bitstream contract.
 - Reference consistency is a reconstruction/rate-distortion claim; payload
   interchangeability requires bidirectional cross-runtime golden tests.
+
+## Current format compatibility
+
+| Format | Writer | Current reader |
+|---|---|---|
+| NVAU v1 | Default writer | Accepted |
+| NVAU v2 | Explicit sectioned writer; experimental | Accepted |
+| Other NVAU versions | None | Rejected |
+| NVCR packet envelope | Version 1 | Version 1 only |
+| NVCS sequence wrapper | Version 1, flags 0 | Version 1, flags 0 |
+| Private codec payload | NVI1 / NVP1 | Corresponding syntax and supported fields |
+
+Acceptance means parsing valid, bounded data. It does not establish support for
+every v2 feature in production decoding or interchangeability with upstream
+Python streams.
 
 See [compatibility levels](experiments/compatibility-levels.md) for the
 experiment-specific acceptance rules and [scope and support](scope-and-support.md)

@@ -18,7 +18,7 @@ end-to-end integration is DCVC-RT through TensorRT FP16 on Linux/NVIDIA targets.
   provider-mediated `RuntimeServices`.
 - Artifact descriptors, catalog parsing, resolver ranking, version/digest/
   license checks, and target compatibility classes.
-- Bounded `NVAU` v1 and generalized sectioned `NVAU` v2 parsing/serialization.
+- Bounded `NVAU` v1 and experimental sectioned `NVAU` v2 parsing/serialization.
 - Deterministic test codec and CPU provider for conformance fixtures.
 - CLI, CMake package, native installer, Docker/Compose surfaces, and evidence
   generation tooling.
@@ -49,9 +49,9 @@ not count as additional production codecs/providers or performance baselines.
 | CLI and artifact-client build identity | Follow-up | Add `nvcr --version` and `nvcr-artifacts --version`, and reconcile the legacy `current_software_version` constant; until then use package manifests, source revisions, or OCI metadata |
 | Linux container GPU injection | Follow-up | Validate and document configured `nvidia` runtime, Docker `--gpus`, and CDI paths across supported Docker and NVIDIA Container Toolkit versions |
 | Exact-target artifacts | In progress | Produce current warning-free profile sets and target-local evidence |
-| Reproducible evaluation | In progress | User-run NVCR smoke and all 3,024 configured operations passed; offline records audited. Investigate persistent TensorRT device-model warnings and complete the deferred Python comparison |
+| Reproducible evaluation | Matched measurements complete | Process throughput is the primary comparison; codec-interval measurements are reported separately. See the [result inventory](results/README.md) for coverage and retained records. |
 | Compatibility classes | Experimental | Compare against complete exact baselines |
-| Public C++ API/ABI | Transitional | Freeze only after ownership and compatibility contracts are accepted |
+| Public C++ API/ABI | Release policy adopted | Preserve public API compatibility in patch and minor releases; require a major release for breaking changes. Rebuild applications when upgrading; cross-release ABI compatibility is not guaranteed. |
 
 Generic packages exclude checkpoints, exported model assets, TensorRT plans,
 and datasets. Validated engine bundles use the separate rolling catalog and
@@ -60,19 +60,14 @@ redistribution status.
 
 ## Current evaluation priority
 
-The common measurement contract and executable campaign are in
-[measurement-contract.md](docs/experiments/measurement-contract.md) and
-[measurement-runbook.md](docs/experiments/measurement-runbook.md). Quality now
-uses common decoded bytes; new observations separate timing, memory, actual
-stream components and statistical units. The configured QPs and repetition
-count are retained. The [assessment](docs/experiments/measurement-readiness/assessment.md)
-and [validation](docs/experiments/measurement-readiness/validation.md) distinguish
-software checks from pending hardware gates. No evaluation milestone or v1 exit
-criterion is marked complete by these changes.
+Matched NVCR/Python measurements are complete on RTX 4070 and Jetson Orin.
+Process throughput is the primary comparison; codec-interval measurements are
+reported separately. See the [result inventory](results/README.md) for coverage and retained
+records.
 
-`scripts/measurement_jetson.sh` provides logged preparation, smoke, campaign,
-resume and analysis commands. The focused software suite passes; the current
-NVCR execution evidence is summarized below. Python validation remains pending.
+The measurement contract and execution commands are documented in
+[measurement-contract.md](docs/experiments/measurement-contract.md) and
+[measurement-runbook.md](docs/experiments/measurement-runbook.md).
 
 ## Later codec integrations
 
@@ -112,7 +107,10 @@ redistribution.
 5. Final dependency, model, dataset, and package-license review.
 6. Installation and external-consumer verification from published artifacts.
 
-## Current NVCR measurement evidence (2026-09-20)
+## Historical NVCR measurement evidence (2026-09-20)
+
+Historical record dated 2026-09-20. For the completed matched comparison,
+see the [current result inventory](results/README.md).
 
 The completed NVCR-only matrix in `output/peer-review/` covers six
 resolutions, four configured QPs, three GOPs and ten throughput/memory repetitions.

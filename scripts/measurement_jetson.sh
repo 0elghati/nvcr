@@ -10,7 +10,13 @@ assets_dir="$PWD/evidence/measurement-assets"
 mkdir -p "$assets_dir/logs"
 log_path="$(mktemp "$assets_dir/logs/$action.XXXXXX.log")"
 exec > >(tee -a "$log_path") 2>&1
-trap 'result=$?; if (( result != 0 )); then echo "Stopped (exit $result). Keep this log: $log_path"; fi' EXIT
+on_exit() {
+  local result=$?
+  if (( result != 0 )); then
+    echo "Stopped (exit $result). Keep this log: $log_path"
+  fi
+}
+trap on_exit EXIT
 echo "Log: $log_path"
 manifest="$assets_dir/campaign.json"
 

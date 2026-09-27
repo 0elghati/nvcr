@@ -6,15 +6,15 @@ workflow whose measurement boundary matches the claim being evaluated.
 
 ## New comparable measurements
 
+Matched NVCR/Python measurements are complete on RTX 4070 and Jetson Orin.
+Process throughput is the primary comparison; codec-interval measurements are
+reported separately. See the [result inventory](../results/README.md) for coverage and retained
+records.
+
 Use the [measurement contract](experiments/measurement-contract.md) and
 [execution runbook](experiments/measurement-runbook.md) for new NVCR-versus-Python
-experiments. `scripts/measurement_campaign.py` preserves the configured QPs and
-repetitions while collecting common decoded-output quality, completed host-frame
-timing, process RSS high-water, parsed full-file byte accounting, independent
-observations and mean/sample-SD summaries. Its preflight and bounded smoke are
-required before a full launch. The [current validation record](experiments/measurement-readiness/validation.md)
-identifies outstanding GPU/artifact failures; no target is yet qualified under
-this new contract.
+experiments. The [readiness record](experiments/measurement-readiness/validation.md)
+describes the checks dated 2026-09-20.
 
 The commands below remain available for diagnostics and historical schema
 reproduction. Their older timing, quality and byte fields do not automatically

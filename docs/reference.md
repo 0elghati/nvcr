@@ -1,9 +1,9 @@
 # C++ API
 
 The public C++ surface is a runtime API for neural video codecs, not a
-DCVC-RT-specific wrapper. It is transitional and not ABI-frozen. Pin the NVCR
-revision, codec/provider IDs, stream versions, and artifact manifest when
-integrating.
+DCVC-RT-specific wrapper. Public API compatibility follows the release policy
+below. Pin the NVCR revision, codec/provider IDs, stream versions, and artifact
+manifest when integrating.
 
 ## Values and ownership
 
@@ -95,7 +95,12 @@ when mapping errors into an application.
 
 ## Stability boundary
 
-Headers and behavior may change before v1. A stable C ABI, FFmpeg integration,
+NVCR follows semantic versioning: patch and minor releases preserve public API
+compatibility, while breaking changes require a major release. Applications
+should be rebuilt when upgrading; cross-release ABI compatibility is not
+guaranteed.
+
+A stable C ABI, FFmpeg integration,
 hardware-frame ownership contract, native Windows interface, and standard
 container mapping are planned work, not current API guarantees. See
 [Architecture](architecture.md) and [Scope and support](scope-and-support.md).

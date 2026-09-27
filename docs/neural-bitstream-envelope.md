@@ -4,8 +4,8 @@ NVCR already implements a bounded codec access-unit contract. This page records
 the architectural direction for extending that contract across neural codecs;
 it does not turn the current development wrapper into a standard container or
 claim that multiple production codecs already exist. `NVAU` v1 is the narrow
-DCVC-RT-shaped representation and `NVAU` v2 is the implemented generalized
-sectioned representation.
+DCVC-RT-shaped representation and `NVAU` v2 is the implemented experimental
+sectioned representation, with no stable public format guarantee.
 
 The design keeps a common outer access-unit contract while allowing each codec
 adapter to keep the payload syntax required by its model.
@@ -122,7 +122,7 @@ Required common fields:
 
 The current `NVAU` version 1 contains a narrow subset of this model for the
 DCVC-RT backend: model identity, dimensions, frame type, effective QP, reset
-state, and bounded payload length. `NVAU` v2 implements the sectioned form. The
+state, and bounded payload length. Experimental `NVAU` v2 implements the sectioned form. The
 remaining work is integration and validation across additional codec families,
 not a claim that those families are already production-supported.
 
@@ -240,7 +240,10 @@ packets, Matroska blocks, or a future MP4 sample-entry mapping.
 
 ## Versioning
 
-The envelope should use explicit major/minor versioning:
+Current NVAU formats use a single version number. The major/minor scheme below
+is a future design proposal, not the implemented versioning contract.
+
+Proposed rules:
 
 - A major version change may alter required parsing semantics.
 - A minor version change may add optional fields or sections.
