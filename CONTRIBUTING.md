@@ -19,6 +19,9 @@ Use a Release TensorRT build, target-local artifacts, and the documented
 registered GPU tests for production changes. Run `bash -n` and `shellcheck` for
 changed shell scripts and `python3 -m py_compile` for changed Python files.
 
+See [Recorded validation](docs/building-from-source.md#recorded-validation) for
+executed test counts, sanitizer settings and coverage availability.
+
 ## Architecture and documentation
 
 Keep codec semantics in a codec adapter and execution technology in a provider.
