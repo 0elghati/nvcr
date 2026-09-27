@@ -10,11 +10,13 @@ engine_root="${NVCR_MEASUREMENT_ENGINE_ROOT:-$PWD/build/engines-measurement-publ
 mkdir -p evidence/measurement-assets/logs
 log_path="$(mktemp "$PWD/evidence/measurement-assets/logs/nvcr-$action.XXXXXX.log")"
 exec > >(tee -a "$log_path") 2>&1
-report_failure() {
-  local status=$?
-  if (( status != 0 )); then echo "Stopped (exit $status). Log: $log_path"; fi
+on_exit() {
+  local result=$?
+  if (( result != 0 )); then
+    echo "Stopped (exit $result). Log: $log_path"
+  fi
 }
-trap report_failure EXIT
+trap on_exit EXIT
 echo "Log: $log_path"
 common=(--manifest "$manifest" --implementation nvcr --engine-root "$engine_root")
 case "$action" in
