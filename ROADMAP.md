@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-09-20
+Last reviewed: 2026-09-22
 
 ## Product direction
 
@@ -49,7 +49,7 @@ not count as additional production codecs/providers or performance baselines.
 | CLI and artifact-client build identity | Follow-up | Add `nvcr --version` and `nvcr-artifacts --version`, and reconcile the legacy `current_software_version` constant; until then use package manifests, source revisions, or OCI metadata |
 | Linux container GPU injection | Follow-up | Validate and document configured `nvidia` runtime, Docker `--gpus`, and CDI paths across supported Docker and NVIDIA Container Toolkit versions |
 | Exact-target artifacts | In progress | Produce current warning-free profile sets and target-local evidence |
-| Reproducible evaluation | Matched measurements complete | Process throughput is the primary comparison; codec-interval measurements are reported separately. See the [result inventory](results/README.md) for coverage and retained records. |
+| Reproducible evaluation | Matched measurements complete | Process throughput is the primary comparison; codec-interval measurements are reported separately. See the [result inventory](results/README.md) for coverage and retained records. The RTX 4070 matched campaign predates the current stricter preflight gate: it was captured under a forked/unpinned reference source and without a matched smoke. Rerun with a clean pinned reference and a passing matched smoke before further publication claims |
 | Compatibility classes | Experimental | Compare against complete exact baselines |
 | Public C++ API/ABI | Release policy adopted | Preserve public API compatibility in patch and minor releases; require a major release for breaking changes. Rebuild applications when upgrading; cross-release ABI compatibility is not guaranteed. |
 
@@ -121,3 +121,13 @@ No raw runs are committed. Timing variability remains explicit (maximum FPS
 CV 9.74%); every operation contains a TensorRT device-model warning. The Python
 comparison, warning-free artifact gate and overall evaluation milestone remain
 open. No new GPU execution was launched during review.
+
+The separate RTX 4070 readiness gate uses source `a444fb6` plus the captured
+working diff, a fresh SM-8.9/CUDA-12.8 Release build and the exact catalog
+bundles. Preflight, the 3,024-operation NVCR-only dry-run plan and all eight
+bounded smoke operations pass, including cold versus warmed/reset stream and
+reconstruction hashes. The later direct full matched campaign passed all
+6,048 operations; its fork-source and no-matched-smoke limitations are
+recorded in [the RTX result](results/rtx4070/measurement/summary.md). Preflight
+again requires a clean pinned reference source and a passing matched smoke
+before a full `run`; that campaign predates this stricter gate.

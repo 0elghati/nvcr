@@ -26,12 +26,16 @@ if [[ "$action" == prepare ]]; then
   ctest --test-dir build-release --output-on-failure \
     -R 'nvcr_measurement_semantics|nvcr_legacy_consolidation|nvcr_softwarex_driver|nvcr_contract_tests|nvcr_format_contract_tests|nvcr_dcvcrt_payloads|nvcr_cli_accepts_inter_gop'
   python3 - <<'PY'
-import json
+import json, os
 from pathlib import Path
 root = Path.cwd()
 base = root/'evidence/measurement-assets'
 m = json.loads((root/'docs/experiments/measurement-campaign.json').read_text())
 m['engine_root'] = str(root/'build/engines-measurement-published')
+if os.environ.get('NVCR_REFERENCE_ROOT'):
+    m['reference_root'] = os.environ['NVCR_REFERENCE_ROOT']
+if os.environ.get('NVCR_REFERENCE_PYTHON'):
+    m['reference_python'] = os.environ['NVCR_REFERENCE_PYTHON']
 (base/'campaign.json').write_text(json.dumps(m, indent=2)+'\n')
 PY
   python3 scripts/nvcr_artifacts.py install \

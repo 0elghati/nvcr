@@ -38,9 +38,49 @@ Results are in `evidence/measurement-nvcr/`, including `observations.jsonl`,
 for compatible interrupted work, `check` for a dry-run, or `analyze` to regenerate
 summaries. A failed smoke stops before the full campaign.
 
+## NVCR-only launch on the local x86_64 RTX 4070
+
+This checkout also contains an exact RTX 4070 desktop bundle. On that target,
+run the desktop-specific launcher:
+
+```bash
+bash scripts/measurement_x86_64.sh check
+bash scripts/measurement_x86_64.sh smoke
+```
+
+It uses `rtx4070-ubuntu2404`, `build-release-rtx4070`,
+`build/engines-measurement-published`, and the
+same four QPs and ten throughput/memory repetitions. The exact device check
+still rejects another GPU; use a matching target profile and engine set rather
+than bypassing it. These commands select only NVCR, so the portable placeholder
+paths for the later clean Python reference do not block RTX artifact validation.
+The full NVCR-only matrix remains an explicit
+`bash scripts/measurement_x86_64.sh run`; do not use it for the matched campaign.
+
+After the clean pinned source and CUDA-enabled interpreter are installed at the
+manifest's local evidence paths, run the matched gate directly:
+
+```bash
+python3 scripts/measurement_campaign.py smoke \
+  --manifest docs/experiments/measurement-campaign-rtx4070.json \
+  --output evidence/measurement-rtx4070-matched-smoke
+
+# Only after that smoke is complete and reviewed:
+python3 scripts/measurement_campaign.py run \
+  --manifest docs/experiments/measurement-campaign-rtx4070.json \
+  --smoke-evidence evidence/measurement-rtx4070-matched-smoke \
+  --output evidence/measurement-rtx4070-matched-campaign
+```
+
 ## Full NVCR-versus-Python path on this Jetson
 
 All further builds, validation and measurements are launched by the operator.
+The reference checkout must stay at the pinned upstream commit recorded in the
+model profile, with no tracked changes; preflight rejects a mismatched or dirty
+reference source. It does not permit CPU fallback or disable the customized
+CUDA path. `run` retains all six resolutions, QPs 0/21/42/63, GOPs 1/30/100,
+100 timed frames, ten warm-up frames and ten separate throughput/memory
+repetitions. It launches 6,048 encode/decode operations.
 The convenience entry point saves a separate log on every invocation and stops
 on failure. It preserves existing model/engine bundles and datasets:
 
