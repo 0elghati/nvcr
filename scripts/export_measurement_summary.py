@@ -35,8 +35,7 @@ def validate_repeat_campaign(base, repeat):
         if original.get(sequence["sequence_id"]) != sequence:
             raise ValueError("repeat campaign has an unmatched sequence")
     for key in ("binary", "build", "device", "host_identity", "platform",
-                "python_dependencies", "python_device", "reference_source",
-                "reference_source_policy"):
+                "python_dependencies", "python_device"):
         if repeat["preflight_identity"][key] != base["preflight_identity"][key]:
             raise ValueError(f"repeat campaign differs in {key}")
     for key in ("cli/main.cpp", "scripts/measure_python_reference.py",

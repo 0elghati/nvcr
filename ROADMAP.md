@@ -49,7 +49,7 @@ not count as additional production codecs/providers or performance baselines.
 | CLI and artifact-client build identity | Follow-up | Add `nvcr --version` and `nvcr-artifacts --version`, and reconcile the legacy `current_software_version` constant; until then use package manifests, source revisions, or OCI metadata |
 | Linux container GPU injection | Follow-up | Validate and document configured `nvidia` runtime, Docker `--gpus`, and CDI paths across supported Docker and NVIDIA Container Toolkit versions |
 | Exact-target artifacts | In progress | RTX 4070 catalog bundles and bounded execution pass exact CUDA 12.8/TensorRT 10.9 checks; retain the Jetson warning investigation and complete matched target evidence |
-| Reproducible evaluation | In progress | RTX 4070 matched NVCR/Python campaign is complete and audited with explicit fork source-state identity, but had no matched smoke. Resolve pinned-source/reset gates before publication claims |
+| Reproducible evaluation | In progress | RTX 4070 matched NVCR/Python campaign is complete, but was captured under a forked/unpinned reference source and without a matched smoke. Rerun with a clean pinned reference and a passing matched smoke before publication claims |
 | Compatibility classes | Experimental | Compare against complete exact baselines |
 | Public C++ API/ABI | Transitional | Freeze only after ownership and compatibility contracts are accepted |
 
@@ -144,6 +144,6 @@ bundles. Preflight, the 3,024-operation NVCR-only dry-run plan and all eight
 bounded smoke operations pass, including cold versus warmed/reset stream and
 reconstruction hashes. The later direct full matched campaign passed all
 6,048 operations; its fork-source and no-matched-smoke limitations are
-recorded in [the RTX result](results/rtx4070/measurement/summary.md).
-Smoke evidence remains supported but is no longer mandatory when the operator
-explicitly authorizes a direct campaign run.
+recorded in [the RTX result](results/rtx4070/measurement/summary.md). Preflight
+again requires a clean pinned reference source and a passing matched smoke
+before a full `run`; that campaign predates this stricter gate.
