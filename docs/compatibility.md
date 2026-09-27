@@ -15,7 +15,7 @@ needed for each completed platform.
 
 | Dimension | Meaning in NVCR |
 |---|---|
-| Software/API | C++ headers, session contracts, codec/provider API versions, and CLI behavior; not ABI-frozen |
+| Software/API | Public C++ API compatibility follows semantic versioning: patch and minor releases preserve compatibility; breaking changes require a major release. Cross-release ABI compatibility is not guaranteed; rebuild applications when upgrading. |
 | Artifact schema | Manifest/catalog/model-set versions and required files |
 | Provider runtime | CUDA/TensorRT/provider version and execution capabilities |
 | Hardware target | Device name, compute capability, architecture, memory, and target profile |

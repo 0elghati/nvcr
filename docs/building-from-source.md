@@ -60,8 +60,9 @@ cmake --install build-cpu --prefix "$PWD/install-cpu"
 find "$PWD/install-cpu" -maxdepth 3 -type f | sort
 ```
 
-The installed library/API is not ABI-frozen. Keep the
-consumer and NVCR revision together.
+Rebuild applications when upgrading NVCR; cross-release ABI compatibility is
+not guaranteed. Public API compatibility follows the
+[release policy](reference.md#stability-boundary).
 
 ## TensorRT runtime build
 

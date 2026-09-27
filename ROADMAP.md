@@ -51,7 +51,7 @@ not count as additional production codecs/providers or performance baselines.
 | Exact-target artifacts | In progress | Produce current warning-free profile sets and target-local evidence |
 | Reproducible evaluation | In progress | User-run NVCR smoke and all 3,024 configured operations passed; offline records audited. Investigate persistent TensorRT device-model warnings and complete the deferred Python comparison |
 | Compatibility classes | Experimental | Compare against complete exact baselines |
-| Public C++ API/ABI | Transitional | Freeze only after ownership and compatibility contracts are accepted |
+| Public C++ API/ABI | Release policy adopted | Preserve public API compatibility in patch and minor releases; require a major release for breaking changes. Rebuild applications when upgrading; cross-release ABI compatibility is not guaranteed. |
 
 Generic packages exclude checkpoints, exported model assets, TensorRT plans,
 and datasets. Validated engine bundles use the separate rolling catalog and
