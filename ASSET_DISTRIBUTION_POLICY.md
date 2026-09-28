@@ -21,15 +21,18 @@ generic binary packages:
 
 ## Engine bundles
 
-A validated engine bundle may be distributed as a separate, explicitly named
-asset only after its target identity, TensorRT/CUDA compatibility, model
-provenance, checksums, and redistribution terms have been reviewed. The bundle
-must retain its manifest and checksum file. It must not be silently placed in a
-generic architecture package.
+A validated engine bundle is distributed as a separate, explicitly named asset.
+The MIT licensing basis for NVCR and the DCVC-RT materials is recorded in
+`MODEL_LICENSES.md`. Each bundle must retain its target identity, TensorRT/CUDA
+compatibility, model provenance, manifests and checksums, together with the
+applicable Microsoft licence, upstream notice and NVCR licence. It must not be
+silently placed in a generic architecture package. NVIDIA runtime components
+and third-party datasets retain their own terms.
 
 ## Release gate
 
-Unresolved licensing or provenance status is a release blocker for the affected
-asset. Packaging and release automation must exclude restricted checkpoints,
-model bundles, engine plans, and test data until the review is recorded. A local
-validation result is not permission to redistribute an asset.
+Before publishing an asset, check its provenance and inclusion of the applicable
+licences and notices. The recorded MIT licensing basis does not remove these
+attribution requirements. Components outside that basis require their own
+applicable terms. A local validation result or public download URL is not an
+attribution check.
