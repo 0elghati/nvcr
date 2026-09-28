@@ -1,50 +1,43 @@
 # Model and checkpoint licensing
 
-Status: checkpoint redistribution is unresolved; engine bundles require a
-separate, recorded review.
+## Licensing basis
+
+NVCR's licensing basis is MIT for its own code and the Microsoft DCVC-RT
+source, pretrained checkpoints and derived model assets used by this project.
+Retain the copyright and permission notices when distributing these materials.
+Applicable third-party notices also remain in force. This declaration does not
+apply the MIT licence to CUDA, TensorRT or third-party datasets.
+
+Microsoft's pinned [LICENSE.txt](https://github.com/microsoft/DCVC/blob/1feb52a592a9ff2c4e4ba2e5122e2da49a211466/LICENSE.txt)
+and [NOTICE .txt](https://github.com/microsoft/DCVC/blob/1feb52a592a9ff2c4e4ba2e5122e2da49a211466/NOTICE%20.txt)
+are retained as [LICENSE.MIT](third_party/dcvc_rt/LICENSE.MIT) and
+[NOTICE.txt](third_party/dcvc_rt/NOTICE.txt). The space in the upstream notice
+filename is intentional. That notice records incorporated third-party material;
+its individual terms are not replaced by NVCR's licence.
 
 ## Pinned DCVC-RT model set
 
-The current model profile is `dcvcrt-cvpr2025`, defined in
-`configs/models/dcvcrt-cvpr2025.json`. Its provenance is pinned to:
+The model profile is `dcvcrt-cvpr2025`, defined in
+`configs/models/dcvcrt-cvpr2025.json`:
 
 - Repository: https://github.com/microsoft/DCVC.git
 - Commit: `1feb52a592a9ff2c4e4ba2e5122e2da49a211466`
 - Image checkpoint: `cvpr2025_image.pth.tar`
 - Video checkpoint: `cvpr2025_video.pth.tar`
 
-The checkpoint SHA-256 values and source URLs are documented in
-`docs/dcvcrt-artifacts.md` and the model profile. NVCR does not assume that
-source-code licensing grants permission to redistribute checkpoints or derived
-model assets.
+Checkpoint SHA-256 values are recorded in the model profile. Acquisition and
+conversion instructions are in [DCVC-RT artifacts](docs/dcvcrt-artifacts.md).
 
-## Observed review status
+## Derived assets and distribution
 
-The official Microsoft repository was verified on 2026-08-06. Its
-`LICENSE.txt` applies the MIT License to the repository software, and its
-`NOTICE.txt` records licenses and attribution for incorporated third-party
-software. The official README links the DCVC-RT checkpoints, but neither the
-repository license nor the checkpoint download page states a separate grant to
-redistribute pretrained weights. Source use is therefore governed by the MIT
-License and applicable NOTICE obligations; checkpoint redistribution remains
-unresolved.
+ONNX graphs, entropy/quantization files and TensorRT plans retain the model
+provenance and applicable attribution. TensorRT plans are distributed separately
+from generic NVCR packages for specific GPU and CUDA/TensorRT configurations.
+CUDA and TensorRT remain subject to NVIDIA's terms; distributing a generated
+plan does not relicense NVIDIA's SDK or runtime libraries.
 
-## Derived assets
-
-Exported ONNX graphs, entropy/quant assets, and TensorRT plans are derived from
-the pinned model set. Their redistribution status depends on the upstream model
-terms, checkpoint terms, target/runtime terms, and any applicable dataset or
-vendor restrictions. They are excluded from generic NVCR binary packages. A
-TensorRT engine bundle may be published only as a separate asset after the
-review and release gate in `ASSET_DISTRIBUTION_POLICY.md` passes for that
-bundle. This file does not grant blanket redistribution permission for derived
-assets.
-
-## Decision rule
-
-Model checkpoints, ONNX graphs, entropy/quant assets, and other model exports
-remain restricted to local validation until an explicit review records
-permission and required notices. An engine bundle remains restricted unless its
-separate distribution review records the applicable model, checkpoint, runtime,
-and vendor terms. Release automation must fail or exclude an unreviewed asset
-rather than infer permission from a URL, filename, or source-code license.
+Include the applicable Microsoft licence, upstream notice and NVCR licence
+with derived bundles. Keep their checkpoint, target and digest records intact.
+The [asset distribution policy](ASSET_DISTRIBUTION_POLICY.md) records the package
+requirements. Public availability and checksum verification do not demonstrate
+that a particular package includes all required notices.
