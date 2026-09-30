@@ -337,6 +337,11 @@ class CatalogTests(unittest.TestCase):
                 },
             }
             (bundle / "engine_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            (bundle / "LICENSE").write_text("NVCR MIT\n", encoding="utf-8")
+            notice_dir = bundle / "third_party" / "dcvc_rt"
+            notice_dir.mkdir(parents=True)
+            (notice_dir / "LICENSE.MIT").write_text("DCVC MIT\n", encoding="utf-8")
+            (notice_dir / "NOTICE.txt").write_text("DCVC notice\n", encoding="utf-8")
             return bundle
 
         with tempfile.TemporaryDirectory() as temporary, mock.patch.object(
@@ -359,6 +364,20 @@ class CatalogTests(unittest.TestCase):
                 requested_profiles=["720p"],
                 engine_root=Path(temporary),
             )
+            installed_bundle = (
+                Path(temporary)
+                / "bundles"
+                / "dcvcrt"
+                / str(same_cc["target_profile_id"])
+                / "720p"
+                / str(same_cc["sha256"])
+            )
+            for relative in (
+                "LICENSE",
+                "third_party/dcvc_rt/LICENSE.MIT",
+                "third_party/dcvc_rt/NOTICE.txt",
+            ):
+                self.assertTrue((installed_bundle / relative).is_file(), relative)
         self.assertEqual(installed, ["720p"])
         self.assertEqual(download.call_count, 1)
         self.assertEqual(Path(download.call_args.args[1]).name, same_cc["filename"])

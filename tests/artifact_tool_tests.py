@@ -79,7 +79,7 @@ def check_engine_package(root: Path) -> None:
         files = {entry.name.removeprefix(prefix): package.extractfile(entry).read()
                  for entry in package.getmembers() if entry.isfile()}
     for name in ("LICENSE", "third_party/dcvc_rt/LICENSE.MIT", "third_party/dcvc_rt/NOTICE.txt"):
-        assert files[name] == (REPOSITORY_ROOT / name).read_bytes(), name
+        assert files["dcvcrt/" + name] == (REPOSITORY_ROOT / name).read_bytes(), name
     for name in ("engine_manifest.json", "engine.sha256") + artifacts.REQUIRED_PLANS + artifacts.RUNTIME_ASSETS:
         assert files["dcvcrt/" + name] == (root / name).read_bytes(), name
     recorded = set()

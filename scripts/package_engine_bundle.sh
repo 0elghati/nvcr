@@ -65,8 +65,8 @@ staging_root="$(mktemp -d "${TMPDIR:-/tmp}/nvcr-engine-package.XXXXXX")"
 trap 'rm -rf -- "$staging_root"' EXIT
 bundle_root="$staging_root/$asset_name/dcvcrt"
 mkdir -p "$bundle_root"
-cp -p "$script_dir/../LICENSE" "$staging_root/$asset_name/LICENSE"
-notice_dir="$staging_root/$asset_name/third_party/dcvc_rt"
+cp -p "$script_dir/../LICENSE" "$bundle_root/LICENSE"
+notice_dir="$bundle_root/third_party/dcvc_rt"
 mkdir -p "$notice_dir"
 cp -p "$script_dir/../third_party/dcvc_rt/LICENSE.MIT" \
     "$script_dir/../third_party/dcvc_rt/NOTICE.txt" "$notice_dir/"
