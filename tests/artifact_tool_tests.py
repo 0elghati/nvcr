@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
+import tarfile
 import tempfile
 from pathlib import Path
 
@@ -59,6 +61,34 @@ def expect_invalid(operation: object, message: str) -> None:
     except artifacts.ValidationError:
         return
     raise AssertionError(message)
+
+
+def check_engine_package(root: Path) -> None:
+    output = root / "dist"
+    subprocess.run(
+        ["bash", str(REPOSITORY_ROOT / "scripts/package_engine_bundle.sh"),
+         "--engine-dir", str(root), "--output-dir", str(output)],
+        check=True,
+    )
+    archives = list(output.glob("*.tar.gz"))
+    assert len(archives) == 1
+    archive = archives[0]
+    assert archive.with_name(archive.name + ".sha256").read_text().split()[0] == artifacts.sha256(archive)
+    with tarfile.open(archive) as package:
+        prefix = archive.name.removesuffix(".tar.gz") + "/"
+        files = {entry.name.removeprefix(prefix): package.extractfile(entry).read()
+                 for entry in package.getmembers() if entry.isfile()}
+    for name in ("LICENSE", "third_party/dcvc_rt/LICENSE.MIT", "third_party/dcvc_rt/NOTICE.txt"):
+        assert files["dcvcrt/" + name] == (REPOSITORY_ROOT / name).read_bytes(), name
+    for name in ("engine_manifest.json", "engine.sha256") + artifacts.REQUIRED_PLANS + artifacts.RUNTIME_ASSETS:
+        assert files["dcvcrt/" + name] == (root / name).read_bytes(), name
+    recorded = set()
+    for line in files["ENGINE-ASSET-MANIFEST.sha256"].decode().splitlines():
+        digest, name = line.split(maxsplit=1)
+        name = name.removeprefix("*").removeprefix("./")
+        recorded.add(name)
+        assert hashlib.sha256(files[name]).hexdigest() == digest, name
+    assert recorded == files.keys() - {"ENGINE-ASSET-MANIFEST.sha256"}
 
 
 def main() -> int:
@@ -174,6 +204,7 @@ def main() -> int:
         validated = artifacts.validate_engine_bundle(root)
         assert validated["model_profile_id"] == "dcvcrt-cvpr2025"
         assert artifacts.inspect_bundle(root)["file_count"] == 20
+        check_engine_package(root)
 
         bad_profile_digest = dict(engine_manifest)
         bad_profile_digest["target_profile_sha256"] = "z" * 64
