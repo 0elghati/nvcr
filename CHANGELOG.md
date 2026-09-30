@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.7](https://github.com/0elghati/nvcr/compare/v1.0.6...v1.0.7) (2026-09-30)
+
+
+### Bug Fixes
+
+* Peer review measurement statistics ([#158](https://github.com/0elghati/nvcr/issues/158)) ([a444fb6](https://github.com/0elghati/nvcr/commit/a444fb62e5351930d6c7a388b527acb7ad8da46e))
+* retain licence notices in engine bundles ([#165](https://github.com/0elghati/nvcr/issues/165)) ([ae9828d](https://github.com/0elghati/nvcr/commit/ae9828d61d90353144cecaec7f1ed56aaf3cf21e))
+
 ## [1.0.6](https://github.com/0elghati/nvcr/compare/v1.0.5...v1.0.6) (2026-08-17)
 
 
