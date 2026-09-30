@@ -1,10 +1,12 @@
 cff-version: 1.2.0
-message: "If you use NVCR, please cite the v1.0.6 software release using these metadata."
-title: "NVCR: Native runtime architecture for neural video codecs"
+message: "If you use NVCR, please cite the v1.0.7 software release using these metadata."
+title: "NVCR: An extensible native runtime for deploying neural video codecs"
 abstract: >-
-  NVCR provides a native C++ runtime architecture for neural video codecs,
-  including stateful sessions, codec/provider contracts, target-aware artifact
-  resolution, bounded access units, and reproducible validation tooling.
+  NVCR provides an extensible native C++ runtime for deploying neural video
+  codecs, including stateful sessions, codec-adapter and execution-provider
+  interfaces, target-qualified artifact selection, and bounded access units.
+  Its sole production integration is DCVC-RT with TensorRT FP16 on NVIDIA
+  hardware.
 authors:
   - family-names: "El Ghati"
     given-names: "Omar"
@@ -18,10 +20,10 @@ authors:
     given-names: "Walid"
 repository-code: https://github.com/0elghati/nvcr
 license: MIT
-version: 1.0.6
+version: 1.0.7
 preferred-citation:
   type: software
-  title: "NVCR: Native runtime architecture for neural video codecs"
+  title: "NVCR: An extensible native runtime for deploying neural video codecs"
   authors:
     - family-names: "El Ghati"
       given-names: "Omar"
@@ -34,6 +36,6 @@ preferred-citation:
     - family-names: "Bouarifi"
       given-names: "Walid"
   year: 2026
-  version: "1.0.6"
-  url: https://github.com/0elghati/nvcr/releases/tag/v1.0.6
-date-released: 2026-08-14
+  version: "1.0.7"
+  url: https://github.com/0elghati/nvcr/releases/tag/v1.0.7
+date-released: 2026-09-27
