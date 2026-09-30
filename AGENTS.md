@@ -1,5 +1,10 @@
 # Codex repository workflow
 
+## Branch naming
+
+- Never use the `codex/*` pattern for branch names. Use a descriptive,
+  task-specific prefix such as `fix/`, `docs/`, or `test/`.
+
 ## Roadmap discipline
 
 For every task affecting codec behavior, CUDA/TensorRT execution, entropy,
