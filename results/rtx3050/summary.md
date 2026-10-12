@@ -1,135 +1,116 @@
-# NVCR Performance Run
+# RTX 3050 Laptop portability result
 
-- Commit: b4d0f8b5e2eb8b6d09261d498effc3ef7bc01d0b
-- Dirty: true
-- Hardware: rtx3050
-- Execution mode: docker
-- Container image: omarelghati/nvcr:latest-amd64-cuda12.8-trt10.9
-- Container digest: omarelghati/nvcr@sha256:40f215cd15d424f2f86971523ffff9c5a321081b9ffe68c898116254dcf971de
-- Resolutions: qcif cif 360p 540p 720p 1080p
-- QP: 32
-- GOPs: 1 30 100
-- Frames: 100
-- Warm-up frames: 10
-- Measured repetitions: 2
-- Memory profiling: false
-- Memory sample interval ms: 100
+Current result: 2026-10-12, NVCR 1.0.7 through Docker Desktop/WSL 2 on Windows.
 
-The CSV and JSONL files in this directory contain individual repetitions and
-average rows. Payload BPP is codec payload bits divided by width * height * frames.
-When memory profiling is enabled, peak memory is the profiled nvcr process
-RAM peak from /proc; Jetson system RAM and largest-free-block values come from
-tegrastats when available.
+All 1,440 retained source observations cover six resolutions, QPs 0/21/42/63,
+GOPs 1/30/100, encode/decode, and ten repetitions of 100 frames after ten
+warm-up frames. A separate 24-operation smoke covers three frames at QP 0,
+GOPs 1/3 and two warm-up frames. The audit verifies the complete condition
+and repetition grids and recomputes every retained average.
 
-## Results
+The launcher label and local folder names originally said RTX 5060. The user
+confirmed the naming mistake; live detection records RTX 3050 Laptop, SM 8.6,
+16 multiprocessors, CUDA runtime 12080 and TensorRT 10.9.0. Local folders and
+publication metadata now say RTX 3050. Numeric observations are unchanged.
 
-| Operation | Resolution | Run | GOP | Payload bytes | Payload BPP | Codec seconds | FPS | PSNR-YUV | Peak RAM MB | System RAM MB | Min LFB MB |
-|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| encode | qcif | 1 | 1 | 65261 | 0.206000631 | 0.847 | 117.999 | null | null | null | null |
-| decode | qcif | 1 | 1 | 65261 | 0.206000631 | 0.639 | 156.510 | 35.792242 | null | null | null |
-| encode | qcif | 2 | 1 | 65261 | 0.206000631 | 0.700 | 142.884 | null | null | null | null |
-| decode | qcif | 2 | 1 | 65261 | 0.206000631 | 0.664 | 150.505 | 35.792242 | null | null | null |
-| encode | qcif | average | 1 | 65261 | 0.206000631 | 0.773500 | 130.441500 | null | null | null | null |
-| decode | qcif | average | 1 | 65261 | 0.206000631 | 0.651500 | 153.507500 | 35.792242 | null | null | null |
-| encode | cif | 1 | 1 | 368364 | 0.290691288 | 1.548 | 64.592 | null | null | null | null |
-| decode | cif | 1 | 1 | 368364 | 0.290691288 | 1.336 | 74.852 | 31.960618 | null | null | null |
-| encode | cif | 2 | 1 | 368364 | 0.290691288 | 1.290 | 77.546 | null | null | null | null |
-| decode | cif | 2 | 1 | 368364 | 0.290691288 | 1.121 | 89.202 | 31.960618 | null | null | null |
-| encode | cif | average | 1 | 368364 | 0.290691288 | 1.419000 | 71.069000 | null | null | null | null |
-| decode | cif | average | 1 | 368364 | 0.290691288 | 1.228500 | 82.027000 | 31.960618 | null | null | null |
-| encode | 360p | 1 | 1 | 409727 | 0.142266319 | 2.432 | 41.118 | null | null | null | null |
-| decode | 360p | 1 | 1 | 409727 | 0.142266319 | 2.222 | 44.997 | 36.177398 | null | null | null |
-| encode | 360p | 2 | 1 | 409727 | 0.142266319 | 2.408 | 41.533 | null | null | null | null |
-| decode | 360p | 2 | 1 | 409727 | 0.142266319 | 2.177 | 45.931 | 36.177398 | null | null | null |
-| encode | 360p | average | 1 | 409727 | 0.142266319 | 2.420000 | 41.325500 | null | null | null | null |
-| decode | 360p | average | 1 | 409727 | 0.142266319 | 2.199500 | 45.464000 | 36.177398 | null | null | null |
-| encode | 540p | 1 | 1 | 700081 | 0.108037191 | 4.757 | 21.022 | null | null | null | null |
-| decode | 540p | 1 | 1 | 700081 | 0.108037191 | 4.131 | 24.205 | 37.293340 | null | null | null |
-| encode | 540p | 2 | 1 | 700081 | 0.108037191 | 4.757 | 21.024 | null | null | null | null |
-| decode | 540p | 2 | 1 | 700081 | 0.108037191 | 4.121 | 24.266 | 37.293340 | null | null | null |
-| encode | 540p | average | 1 | 700081 | 0.108037191 | 4.757000 | 21.023000 | null | null | null | null |
-| decode | 540p | average | 1 | 700081 | 0.108037191 | 4.126000 | 24.235500 | 37.293340 | null | null | null |
-| encode | 720p | 1 | 1 | 1137492 | 0.098740625 | 8.722 | 11.465 | null | null | null | null |
-| decode | 720p | 1 | 1 | 1137492 | 0.098740625 | 7.270 | 13.756 | 38.649586 | null | null | null |
-| encode | 720p | 2 | 1 | 1137492 | 0.098740625 | 8.772 | 11.399 | null | null | null | null |
-| decode | 720p | 2 | 1 | 1137492 | 0.098740625 | 7.333 | 13.638 | 38.649586 | null | null | null |
-| encode | 720p | average | 1 | 1137492 | 0.098740625 | 8.747000 | 11.432000 | null | null | null | null |
-| decode | 720p | average | 1 | 1137492 | 0.098740625 | 7.301500 | 13.697000 | 38.649586 | null | null | null |
-| encode | 1080p | 1 | 1 | 1701636 | 0.065649537 | 19.272 | 5.189 | null | null | null | null |
-| decode | 1080p | 1 | 1 | 1701636 | 0.065649537 | 15.981 | 6.258 | 37.708906 | null | null | null |
-| encode | 1080p | 2 | 1 | 1701636 | 0.065649537 | 20.121 | 4.970 | null | null | null | null |
-| decode | 1080p | 2 | 1 | 1701636 | 0.065649537 | 16.400 | 6.098 | 37.708906 | null | null | null |
-| encode | 1080p | average | 1 | 1701636 | 0.065649537 | 19.696500 | 5.079500 | null | null | null | null |
-| decode | 1080p | average | 1 | 1701636 | 0.065649537 | 16.190500 | 6.178000 | 37.708906 | null | null | null |
-| encode | qcif | 1 | 30 | 13284 | 0.041931818 | 0.535 | 186.953 | null | null | null | null |
-| decode | qcif | 1 | 30 | 13284 | 0.041931818 | 0.487 | 205.545 | 38.116869 | null | null | null |
-| encode | qcif | 2 | 30 | 13284 | 0.041931818 | 0.602 | 165.998 | null | null | null | null |
-| decode | qcif | 2 | 30 | 13284 | 0.041931818 | 0.588 | 169.964 | 38.116869 | null | null | null |
-| encode | qcif | average | 30 | 13284 | 0.041931818 | 0.568500 | 176.475500 | null | null | null | null |
-| decode | qcif | average | 30 | 13284 | 0.041931818 | 0.537500 | 187.754500 | 38.116869 | null | null | null |
-| encode | cif | 1 | 30 | 60270 | 0.047561553 | 0.555 | 180.339 | null | null | null | null |
-| decode | cif | 1 | 30 | 60270 | 0.047561553 | 0.659 | 151.675 | 34.458990 | null | null | null |
-| encode | cif | 2 | 30 | 60270 | 0.047561553 | 0.570 | 175.301 | null | null | null | null |
-| decode | cif | 2 | 30 | 60270 | 0.047561553 | 0.699 | 142.967 | 34.458990 | null | null | null |
-| encode | cif | average | 30 | 60270 | 0.047561553 | 0.562500 | 177.820000 | null | null | null | null |
-| decode | cif | average | 30 | 60270 | 0.047561553 | 0.679000 | 147.321000 | 34.458990 | null | null | null |
-| encode | 360p | 1 | 30 | 94264 | 0.032730556 | 1.077 | 92.826 | null | null | null | null |
-| decode | 360p | 1 | 30 | 94264 | 0.032730556 | 1.089 | 91.866 | 34.943035 | null | null | null |
-| encode | 360p | 2 | 30 | 94264 | 0.032730556 | 0.927 | 107.873 | null | null | null | null |
-| decode | 360p | 2 | 30 | 94264 | 0.032730556 | 1.115 | 89.678 | 34.943035 | null | null | null |
-| encode | 360p | average | 30 | 94264 | 0.032730556 | 1.002000 | 100.349500 | null | null | null | null |
-| decode | 360p | average | 30 | 94264 | 0.032730556 | 1.102000 | 90.772000 | 34.943035 | null | null | null |
-| encode | 540p | 1 | 30 | 159063 | 0.024546759 | 1.640 | 60.959 | null | null | null | null |
-| decode | 540p | 1 | 30 | 159063 | 0.024546759 | 2.007 | 49.818 | 35.982801 | null | null | null |
-| encode | 540p | 2 | 30 | 159063 | 0.024546759 | 1.660 | 60.246 | null | null | null | null |
-| decode | 540p | 2 | 30 | 159063 | 0.024546759 | 1.987 | 50.320 | 35.982801 | null | null | null |
-| encode | 540p | average | 30 | 159063 | 0.024546759 | 1.650000 | 60.602500 | null | null | null | null |
-| decode | 540p | average | 30 | 159063 | 0.024546759 | 1.997000 | 50.069000 | 35.982801 | null | null | null |
-| encode | 720p | 1 | 30 | 138858 | 0.012053646 | 2.817 | 35.502 | null | null | null | null |
-| decode | 720p | 1 | 30 | 138858 | 0.012053646 | 3.419 | 29.249 | 40.439735 | null | null | null |
-| encode | 720p | 2 | 30 | 138858 | 0.012053646 | 2.860 | 34.963 | null | null | null | null |
-| decode | 720p | 2 | 30 | 138858 | 0.012053646 | 3.396 | 29.446 | 40.439735 | null | null | null |
-| encode | 720p | average | 30 | 138858 | 0.012053646 | 2.838500 | 35.232500 | null | null | null | null |
-| decode | 720p | average | 30 | 138858 | 0.012053646 | 3.407500 | 29.347500 | 40.439735 | null | null | null |
-| encode | 1080p | 1 | 30 | 406137 | 0.015668866 | 6.202 | 16.123 | null | null | null | null |
-| decode | 1080p | 1 | 30 | 406137 | 0.015668866 | 7.342 | 13.620 | 36.531961 | null | null | null |
-| encode | 1080p | 2 | 30 | 406137 | 0.015668866 | 6.573 | 15.214 | null | null | null | null |
-| decode | 1080p | 2 | 30 | 406137 | 0.015668866 | 7.345 | 13.615 | 36.531961 | null | null | null |
-| encode | 1080p | average | 30 | 406137 | 0.015668866 | 6.387500 | 15.668500 | null | null | null | null |
-| decode | 1080p | average | 30 | 406137 | 0.015668866 | 7.343500 | 13.617500 | 36.531961 | null | null | null |
-| encode | qcif | 1 | 100 | 10019 | 0.031625631 | 0.614 | 162.887 | null | null | null | null |
-| decode | qcif | 1 | 100 | 10019 | 0.031625631 | 0.511 | 195.505 | 37.898262 | null | null | null |
-| encode | qcif | 2 | 100 | 10019 | 0.031625631 | 0.596 | 167.664 | null | null | null | null |
-| decode | qcif | 2 | 100 | 10019 | 0.031625631 | 0.502 | 199.075 | 37.898262 | null | null | null |
-| encode | qcif | average | 100 | 10019 | 0.031625631 | 0.605000 | 165.275500 | null | null | null | null |
-| decode | qcif | average | 100 | 10019 | 0.031625631 | 0.506500 | 197.290000 | 37.898262 | null | null | null |
-| encode | cif | 1 | 100 | 32947 | 0.025999842 | 0.904 | 110.621 | null | null | null | null |
-| decode | cif | 1 | 100 | 32947 | 0.025999842 | 0.761 | 131.336 | 34.737855 | null | null | null |
-| encode | cif | 2 | 100 | 32947 | 0.025999842 | 0.836 | 119.658 | null | null | null | null |
-| decode | cif | 2 | 100 | 32947 | 0.025999842 | 0.648 | 154.261 | 34.737855 | null | null | null |
-| encode | cif | average | 100 | 32947 | 0.025999842 | 0.870000 | 115.139500 | null | null | null | null |
-| decode | cif | average | 100 | 32947 | 0.025999842 | 0.704500 | 142.798500 | 34.737855 | null | null | null |
-| encode | 360p | 1 | 100 | 78324 | 0.027195833 | 0.873 | 114.574 | null | null | null | null |
-| decode | 360p | 1 | 100 | 78324 | 0.027195833 | 1.102 | 90.762 | 34.700202 | null | null | null |
-| encode | 360p | 2 | 100 | 78324 | 0.027195833 | 0.895 | 111.672 | null | null | null | null |
-| decode | 360p | 2 | 100 | 78324 | 0.027195833 | 0.999 | 100.074 | 34.700202 | null | null | null |
-| encode | 360p | average | 100 | 78324 | 0.027195833 | 0.884000 | 113.123000 | null | null | null | null |
-| decode | 360p | average | 100 | 78324 | 0.027195833 | 1.050500 | 95.418000 | 34.700202 | null | null | null |
-| encode | 540p | 1 | 100 | 131825 | 0.020343364 | 1.557 | 64.210 | null | null | null | null |
-| decode | 540p | 1 | 100 | 131825 | 0.020343364 | 1.918 | 52.133 | 35.697964 | null | null | null |
-| encode | 540p | 2 | 100 | 131825 | 0.020343364 | 1.612 | 62.043 | null | null | null | null |
-| decode | 540p | 2 | 100 | 131825 | 0.020343364 | 1.966 | 50.859 | 35.697964 | null | null | null |
-| encode | 540p | average | 100 | 131825 | 0.020343364 | 1.584500 | 63.126500 | null | null | null | null |
-| decode | 540p | average | 100 | 131825 | 0.020343364 | 1.942000 | 51.496000 | 35.697964 | null | null | null |
-| encode | 720p | 1 | 100 | 76800 | 0.006666667 | 2.693 | 37.132 | null | null | null | null |
-| decode | 720p | 1 | 100 | 76800 | 0.006666667 | 3.284 | 30.454 | 40.352804 | null | null | null |
-| encode | 720p | 2 | 100 | 76800 | 0.006666667 | 2.700 | 37.041 | null | null | null | null |
-| decode | 720p | 2 | 100 | 76800 | 0.006666667 | 3.275 | 30.530 | 40.352804 | null | null | null |
-| encode | 720p | average | 100 | 76800 | 0.006666667 | 2.696500 | 37.086500 | null | null | null | null |
-| decode | 720p | average | 100 | 76800 | 0.006666667 | 3.279500 | 30.492000 | 40.352804 | null | null | null |
-| encode | 1080p | 1 | 100 | 341400 | 0.013171296 | 6.027 | 16.592 | null | null | null | null |
-| decode | 1080p | 1 | 100 | 341400 | 0.013171296 | 7.082 | 14.120 | 36.325771 | null | null | null |
-| encode | 1080p | 2 | 100 | 341400 | 0.013171296 | 6.144 | 16.275 | null | null | null | null |
-| decode | 1080p | 2 | 100 | 341400 | 0.013171296 | 7.126 | 14.034 | 36.325771 | null | null | null |
-| encode | 1080p | average | 100 | 341400 | 0.013171296 | 6.085500 | 16.433500 | null | null | null | null |
-| decode | 1080p | average | 100 | 341400 | 0.013171296 | 7.104000 | 14.077000 | 36.325771 | null | null | null |
+Source revision: `6a66db7a98081f9210dedb49d768899bd4e9f2b7`; source capture
+marked dirty. Image: `omarelghati/nvcr:1.0.7-amd64-cuda12.8-trt10.9`.
+Digest: `sha256:e8b04d3efc3c4048167aef1bc9ff1c72c3b748f8f53584650f0cad761e2a57e9`.
+Recorded Docker Desktop: 4.49.0; engine: 28.5.1; default WSL distribution:
+Ubuntu-22.04, WSL version 2. Storage: Windows repository bind mount.
+
+## Scope and limits
+
+This is an environment-specific diagnostic result under [the performance
+protocol](../../docs/performance.md), not a matched Python comparison.
+Retained values use the legacy codec interval and quality definitions.
+FPS and wrapper wall time are omitted from the publication tables.
+Memory was not profiled. Input hashes, driver, Windows build, WSL kernel,
+and power/clock state were not recorded in this matrix. Those missing fields
+prevent a controlled cross-host performance claim. The diagnostic audit
+does not independently prove decoded size or warning-free execution for every
+matrix operation; separate artifact admission smokes provide that evidence.
+
+One current publication result replaces the earlier two-repetition QP-32
+report. Raw repetitions, streams and long logs remain local. JSONL/CSV retain
+144 condition summaries, including sample SD and extrema for codec duration.
+See [validation metadata](validation.json) for source hashes and audit counts,
+and [engine admission/publication evidence](../../evidence/rtx3050-trt109-local-20261012/summary.md)
+for six exact bundles, 84 warning-free plan loads and published-bundle checks.
+
+## Condition means
+
+| Resolution | QP | GOP | Repetitions | Encode codec seconds | Decode codec seconds | Payload BPP | Legacy PSNR-YUV |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| qcif | 0 | 1 | 10 | 0.654800 | 0.574100 | 0.067102273 | 28.611048 |
+| qcif | 0 | 30 | 10 | 0.520700 | 0.520300 | 0.024154040 | 30.630047 |
+| qcif | 0 | 100 | 10 | 0.554800 | 0.503400 | 0.021395202 | 30.433957 |
+| qcif | 21 | 1 | 10 | 0.851800 | 0.718200 | 0.140612374 | 33.407347 |
+| qcif | 21 | 30 | 10 | 0.526200 | 0.511500 | 0.033421717 | 35.698299 |
+| qcif | 21 | 100 | 10 | 0.524000 | 0.535700 | 0.026511995 | 35.501795 |
+| qcif | 42 | 1 | 10 | 0.947900 | 0.752100 | 0.287389520 | 38.137590 |
+| qcif | 42 | 30 | 10 | 0.479000 | 0.504000 | 0.051963384 | 39.886153 |
+| qcif | 42 | 100 | 10 | 0.501800 | 0.527800 | 0.039034091 | 39.776692 |
+| qcif | 63 | 1 | 10 | 0.806700 | 0.652700 | 0.585350379 | 42.440415 |
+| qcif | 63 | 30 | 10 | 0.449200 | 0.460900 | 0.091849747 | 42.908545 |
+| qcif | 63 | 100 | 10 | 0.522800 | 0.445600 | 0.069144571 | 42.769138 |
+| cif | 0 | 1 | 10 | 1.266500 | 1.072200 | 0.040138100 | 26.735250 |
+| cif | 0 | 30 | 10 | 0.630300 | 0.675300 | 0.009405777 | 28.038554 |
+| cif | 0 | 100 | 10 | 0.622500 | 0.661100 | 0.006801610 | 27.992179 |
+| cif | 21 | 1 | 10 | 1.405100 | 1.210000 | 0.135912247 | 29.661527 |
+| cif | 21 | 30 | 10 | 0.688300 | 0.735800 | 0.028344381 | 32.273723 |
+| cif | 21 | 100 | 10 | 0.773100 | 0.773300 | 0.016152146 | 32.585016 |
+| cif | 42 | 1 | 10 | 1.589400 | 1.276200 | 0.529448390 | 34.418435 |
+| cif | 42 | 30 | 10 | 0.711100 | 0.697400 | 0.073141572 | 36.348929 |
+| cif | 42 | 100 | 10 | 0.683700 | 0.712800 | 0.040660511 | 36.545292 |
+| cif | 63 | 1 | 10 | 1.247100 | 1.169600 | 1.337533933 | 39.935721 |
+| cif | 63 | 30 | 10 | 0.604400 | 0.670400 | 0.169650410 | 39.585372 |
+| cif | 63 | 100 | 10 | 0.557700 | 0.609500 | 0.110456124 | 39.599134 |
+| 360p | 0 | 1 | 10 | 2.330600 | 2.065000 | 0.035064236 | 29.917590 |
+| 360p | 0 | 30 | 10 | 1.042300 | 1.048100 | 0.006757986 | 28.741219 |
+| 360p | 0 | 100 | 10 | 0.996800 | 1.057700 | 0.005417708 | 28.399101 |
+| 360p | 21 | 1 | 10 | 2.467300 | 2.151200 | 0.086714236 | 33.963038 |
+| 360p | 21 | 30 | 10 | 1.017800 | 1.061000 | 0.018193056 | 32.752984 |
+| 360p | 21 | 100 | 10 | 1.331000 | 1.209500 | 0.014783333 | 32.461748 |
+| 360p | 42 | 1 | 10 | 3.148700 | 2.471000 | 0.220078472 | 38.262583 |
+| 360p | 42 | 30 | 10 | 0.994900 | 1.018300 | 0.054842361 | 36.847769 |
+| 360p | 42 | 100 | 10 | 0.932600 | 1.000200 | 0.046429861 | 36.638590 |
+| 360p | 63 | 1 | 10 | 2.391400 | 2.120600 | 0.516954514 | 42.439919 |
+| 360p | 63 | 30 | 10 | 0.944400 | 1.000100 | 0.152606944 | 40.317682 |
+| 360p | 63 | 100 | 10 | 0.880900 | 0.965900 | 0.134894444 | 40.181927 |
+| 540p | 0 | 1 | 10 | 4.716000 | 4.084400 | 0.028262500 | 31.163930 |
+| 540p | 0 | 30 | 10 | 1.749100 | 1.927800 | 0.004700772 | 29.707668 |
+| 540p | 0 | 100 | 10 | 2.645700 | 2.360900 | 0.003673920 | 29.253265 |
+| 540p | 21 | 1 | 10 | 4.951500 | 4.238300 | 0.066887346 | 35.122960 |
+| 540p | 21 | 30 | 10 | 1.750900 | 1.921800 | 0.013606327 | 33.861093 |
+| 540p | 21 | 100 | 10 | 2.623500 | 2.312200 | 0.010947994 | 33.498962 |
+| 540p | 42 | 1 | 10 | 6.633500 | 5.077200 | 0.163604784 | 39.140174 |
+| 540p | 42 | 30 | 10 | 1.666300 | 1.851700 | 0.041545525 | 37.788771 |
+| 540p | 42 | 100 | 10 | 1.648500 | 1.854800 | 0.035231173 | 37.570214 |
+| 540p | 63 | 1 | 10 | 4.939600 | 4.239800 | 0.387089506 | 42.799791 |
+| 540p | 63 | 30 | 10 | 1.757100 | 1.947400 | 0.119485185 | 41.084712 |
+| 540p | 63 | 100 | 10 | 1.667700 | 1.877700 | 0.106022377 | 40.959016 |
+| 720p | 0 | 1 | 10 | 8.876800 | 7.366000 | 0.027208507 | 31.872486 |
+| 720p | 0 | 30 | 10 | 3.146500 | 3.359400 | 0.003362587 | 33.822028 |
+| 720p | 0 | 100 | 10 | 2.853900 | 3.152000 | 0.001769705 | 33.615389 |
+| 720p | 21 | 1 | 10 | 9.035600 | 7.490000 | 0.065003125 | 36.389199 |
+| 720p | 21 | 30 | 10 | 3.208200 | 3.363400 | 0.007883594 | 38.510909 |
+| 720p | 21 | 100 | 10 | 4.334900 | 3.923600 | 0.004145486 | 38.412397 |
+| 720p | 42 | 1 | 10 | 11.630600 | 8.952200 | 0.140898438 | 40.492360 |
+| 720p | 42 | 30 | 10 | 3.063400 | 3.255400 | 0.017927431 | 41.863639 |
+| 720p | 42 | 100 | 10 | 2.961700 | 3.193000 | 0.010515625 | 41.775835 |
+| 720p | 63 | 1 | 10 | 9.093400 | 7.565600 | 0.301465972 | 43.730588 |
+| 720p | 63 | 30 | 10 | 3.186500 | 3.356100 | 0.045857986 | 43.914015 |
+| 720p | 63 | 100 | 10 | 3.013800 | 3.241600 | 0.031645052 | 43.862515 |
+| 1080p | 0 | 1 | 10 | 20.471700 | 16.017900 | 0.018915162 | 32.888915 |
+| 1080p | 0 | 30 | 10 | 7.036900 | 7.216800 | 0.002916821 | 31.109725 |
+| 1080p | 0 | 100 | 10 | 6.538400 | 6.890800 | 0.002230710 | 30.633139 |
+| 1080p | 21 | 1 | 10 | 20.211200 | 16.043700 | 0.042442130 | 36.256224 |
+| 1080p | 21 | 30 | 10 | 7.074100 | 7.246700 | 0.008688426 | 34.875423 |
+| 1080p | 21 | 100 | 10 | 9.470100 | 8.684000 | 0.007049807 | 34.544858 |
+| 1080p | 42 | 1 | 10 | 25.640100 | 19.066100 | 0.098500694 | 38.834132 |
+| 1080p | 42 | 30 | 10 | 6.834400 | 7.059500 | 0.026772724 | 37.820530 |
+| 1080p | 42 | 100 | 10 | 6.532800 | 6.889100 | 0.023017863 | 37.682091 |
+| 1080p | 63 | 1 | 10 | 20.226200 | 16.220000 | 0.281832755 | 40.920196 |
+| 1080p | 63 | 30 | 10 | 7.089700 | 7.244700 | 0.086436574 | 39.815458 |
+| 1080p | 63 | 100 | 10 | 6.679900 | 7.000100 | 0.076259606 | 39.742647 |

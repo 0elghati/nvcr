@@ -1,0 +1,13 @@
+{
+  "architecture": "x86_64",
+  "compute_capability_major": 8,
+  "compute_capability_minor": 6,
+  "cuda_runtime_version": 12080,
+  "device_id": 0,
+  "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "multiprocessor_count": 16,
+  "operating_system": "linux",
+  "tensorrt_version_major": 10,
+  "tensorrt_version_minor": 9,
+  "tensorrt_version_patch": 0
+}

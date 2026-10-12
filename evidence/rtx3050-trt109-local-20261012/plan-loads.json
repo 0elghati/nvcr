@@ -1,0 +1,422 @@
+[
+  {
+    "profile": "qcif",
+    "plan": "i_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "i_hyper_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "i_hyper_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "i_spatial_prior_1.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "i_spatial_prior_2.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "i_spatial_prior_3.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "i_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "p_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "p_hyper_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "p_prior.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "p_reference_feature.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "p_reference_frame.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "p_spatial_prior.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "qcif",
+    "plan": "p_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "i_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "i_hyper_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "i_hyper_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "i_spatial_prior_1.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "i_spatial_prior_2.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "i_spatial_prior_3.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "i_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "p_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "p_hyper_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "p_prior.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "p_reference_feature.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "p_reference_frame.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "p_spatial_prior.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "cif",
+    "plan": "p_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "i_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "i_hyper_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "i_hyper_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "i_spatial_prior_1.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "i_spatial_prior_2.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "i_spatial_prior_3.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "i_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "p_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "p_hyper_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "p_prior.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "p_reference_feature.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "p_reference_frame.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "p_spatial_prior.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "360p",
+    "plan": "p_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "i_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "i_hyper_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "i_hyper_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "i_spatial_prior_1.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "i_spatial_prior_2.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "i_spatial_prior_3.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "i_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "p_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "p_hyper_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "p_prior.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "p_reference_feature.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "p_reference_frame.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "p_spatial_prior.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "540p",
+    "plan": "p_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "i_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "i_hyper_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "i_hyper_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "i_spatial_prior_1.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "i_spatial_prior_2.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "i_spatial_prior_3.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "i_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "p_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "p_hyper_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "p_prior.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "p_reference_feature.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "p_reference_frame.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "p_spatial_prior.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "720p",
+    "plan": "p_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "i_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "i_hyper_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "i_hyper_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "i_spatial_prior_1.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "i_spatial_prior_2.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "i_spatial_prior_3.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "i_synthesis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "p_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "p_hyper_analysis.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "p_prior.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "p_reference_feature.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "p_reference_frame.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "p_spatial_prior.plan",
+    "warning_free": true
+  },
+  {
+    "profile": "1080p",
+    "plan": "p_synthesis.plan",
+    "warning_free": true
+  }
+]
