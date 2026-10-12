@@ -144,18 +144,26 @@ fi
 mkdir -p "$output_dir"
 
 commit="${NVCR_BENCH_COMMIT:-}"
+if [[ "$execution_mode" == docker && -z "$commit" ]]; then commit=unknown; fi
 if [[ -z "$commit" ]]; then
     commit="$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || printf unknown)"
 fi
 dirty="${NVCR_BENCH_DIRTY:-}"
+if [[ "$execution_mode" == docker && -z "$dirty" ]]; then dirty=null; fi
 if [[ -z "$dirty" ]]; then
     dirty="false"
     if [[ -n "$(git -C "$repo_root" status --short 2>/dev/null || true)" ]]; then
         dirty="true"
     fi
 fi
-if [[ "$dirty" != true && "$dirty" != false ]]; then
-    echo "NVCR_BENCH_DIRTY must be true or false" >&2
+if [[ "$dirty" != true && "$dirty" != false && "$dirty" != null ]]; then
+    echo "NVCR_BENCH_DIRTY must be true, false or null (image source state unavailable)" >&2
+    exit 2
+fi
+harness_commit="${NVCR_BENCH_HARNESS_COMMIT:-unknown}"
+harness_dirty="${NVCR_BENCH_HARNESS_DIRTY:-null}"
+if [[ "$harness_dirty" != true && "$harness_dirty" != false && "$harness_dirty" != null ]]; then
+    echo "NVCR_BENCH_HARNESS_DIRTY must be true, false or null" >&2
     exit 2
 fi
 if [[ -z "$hardware" ]]; then
@@ -178,6 +186,8 @@ cat >"$report" <<EOF
 
 - Commit: $commit
 - Dirty: $dirty
+- Harness commit: $harness_commit
+- Harness dirty: $harness_dirty
 - Hardware: $hardware
 - Execution mode: $execution_mode
 - Container image: ${container_image:-none}
@@ -371,8 +381,8 @@ append_row() {
     local psnr_yuv="${14}" payload_bpp="${15}"
     local peak_memory_mb="${16}" peak_gpu_memory_mb="${17}" peak_system_memory_mb="${18}"
     local min_largest_free_block_mb="${19}" memory_sampler="${20}" row_memory_sample_ms="${21}"
-    printf '{"schema":"nvcr.benchmark.resolution-matrix.v1","hardware":"%s","execution_mode":"%s","container_image":"%s","container_digest":"%s","nvcr_commit":"%s","nvcr_dirty":%s,"operation":"%s","resolution":"%s","input":"%s","size":"%s","fps":%s,"frames":%s,"warmup_frames":%s,"run_index":"%s","runs_planned":%s,"qp":%s,"gop_size":%s,"engine_profile":"%s","payload_bytes":%s,"payload_bpp":%s,"codec_time_seconds":%s,"throughput_fps":%s,"psnr_yuv":%s,"peak_memory_mb":%s,"peak_gpu_memory_mb":%s,"peak_system_memory_mb":%s,"min_largest_free_block_mb":%s,"memory_sampler":"%s","memory_sample_ms":%s}\n' \
-        "$hardware" "$execution_mode" "$container_image" "$container_digest" "$commit" "$dirty" "$operation" "$label" "$input" "$size" "$fps" "$frames" \
+    printf '{"schema":"nvcr.benchmark.resolution-matrix.v1","hardware":"%s","execution_mode":"%s","container_image":"%s","container_digest":"%s","nvcr_commit":"%s","nvcr_dirty":%s,"harness_commit":"%s","harness_dirty":%s,"operation":"%s","resolution":"%s","input":"%s","size":"%s","fps":%s,"frames":%s,"warmup_frames":%s,"run_index":"%s","runs_planned":%s,"qp":%s,"gop_size":%s,"engine_profile":"%s","payload_bytes":%s,"payload_bpp":%s,"codec_time_seconds":%s,"throughput_fps":%s,"psnr_yuv":%s,"peak_memory_mb":%s,"peak_gpu_memory_mb":%s,"peak_system_memory_mb":%s,"min_largest_free_block_mb":%s,"memory_sampler":"%s","memory_sample_ms":%s}\n' \
+        "$hardware" "$execution_mode" "$container_image" "$container_digest" "$commit" "$dirty" "$harness_commit" "$harness_dirty" "$operation" "$label" "$input" "$size" "$fps" "$frames" \
         "$warmup_frames" "$run_index" "$repetitions" "$qp" "$gop" "$profile" \
         "$payload" "$payload_bpp" "$seconds" "$throughput" "$psnr_yuv" "$peak_memory_mb" \
         "$peak_gpu_memory_mb" "$peak_system_memory_mb" "$min_largest_free_block_mb" "$memory_sampler" "$row_memory_sample_ms" >>"$jsonl"

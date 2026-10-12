@@ -10,7 +10,7 @@ records.
 | [RTX 4070](https://github.com/0elghati/nvcr/blob/c2480e8fdbf6b06be481c33d27d09c4c55e95f24/results/rtx4070/measurement/summary.md) | Matched NVCR/Python | 6 resolutions; QPs 0/21/42/63; GOPs 1/30/100; 10 repetitions |
 | [Jetson Orin](https://github.com/0elghati/nvcr/blob/c2480e8fdbf6b06be481c33d27d09c4c55e95f24/results/jetson-orin/measurement/summary.md) | Matched NVCR/Python | Same matrix |
 | [RTX 3050](rtx3050/summary.md) | Deployment | 6 resolutions; QP 32; GOPs 1/30/100; 2 repetitions |
-| [RTX 5060](rtx5060/summary.md) | Deployment | Same deployment matrix |
+| [RTX 5060](rtx5060/summary.md) | NVCR 1.0.7 Docker/WSL2 deployment | 6 resolutions; QPs 0/21/42/63; GOPs 1/30/100; 10 repetitions; 24 measured smoke operations; no memory pass |
 
 The matched records above are pinned to source revision
 `c2480e8fdbf6b06be481c33d27d09c4c55e95f24`.
@@ -26,3 +26,8 @@ comparison above. JSONL records retain the source observations; CSV and
 Markdown summaries are derived views.
 
 For the measurement method, see [Performance](../docs/performance.md).
+
+The RTX 5060 result supersedes its historical QP32/two-repetition record. Its compact
+condition observations retain all 1,440 measured codec FPS values and distinguish
+the image source revision from the mounted harness checkout. The RTX 3050 replacement
+is pending; neither laptop dataset is a matched Python or native-Linux baseline.

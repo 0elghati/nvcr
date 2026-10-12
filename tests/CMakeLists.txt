@@ -198,6 +198,8 @@ if(Python3_Interpreter_FOUND)
         COMMAND "${CMAKE_COMMAND}" -E env
             "NVCR_WIRE_FIXTURE=$<TARGET_FILE:nvcr_measurement_wire_fixture>"
             "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/measurement_tests.py")
+    add_test(NAME nvcr_portability_consolidation
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/portability_results_tests.py")
     add_test(NAME nvcr_legacy_consolidation
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/consolidate_runtime_results_tests.py")
 endif()

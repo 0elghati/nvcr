@@ -18,6 +18,7 @@ The runtime does not depend on Python. These scripts prepare artifacts, package 
 | `benchmark_softwarex_matrix.py` | Validate and run the controlled evaluation matrix; write a complete evidence package |
 | `benchmark_resolution_matrix.sh` | Run the lower-level diagnostic resolution matrix |
 | `benchmark_docker.sh` | Pull an NVCR runtime image and run the same diagnostic matrix with `docker run` |
+| `consolidate_portability_results.py` | Validate and consolidate the ten-repetition NVCR-only Docker portability dataset |
 | `profile_energy.py` | Capture optional Jetson energy measurements |
 
 ## Prepare and validate

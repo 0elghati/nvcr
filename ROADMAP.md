@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-09-22
+Last reviewed: 2026-10-12
 
 ## Product direction
 
@@ -68,6 +68,14 @@ records.
 The measurement contract and execution commands are documented in
 [measurement-contract.md](docs/experiments/measurement-contract.md) and
 [measurement-runbook.md](docs/experiments/measurement-runbook.md).
+
+RTX 5060 Laptop portability now retains the published NVCR 1.0.7 Docker/WSL2
+campaign: six resolutions, QPs 0/21/42/63, GOPs 1/30/100 and ten repetitions
+(1,440 measured operations), with 24 measured smoke operations. Memory profiling
+is intentionally excluded from this deployment-only claim. The compact result
+and provenance correction are in `results/rtx5060/`. RTX 3050 consolidation and
+paper integration remain pending; this does not close the controlled comparison
+or warning-free artifact gates.
 
 ## Later codec integrations
 

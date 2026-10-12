@@ -1,0 +1,26 @@
+{
+  "status": "passed",
+  "verified_date": "2026-10-12",
+  "checks": [
+    "144 complete conditions and 1,440 measured observations",
+    "24 measured smoke operations",
+    "fresh regeneration byte-identical to all five repository result files",
+    "binary revision from recorded OCI label; no harness dirty flag assigned to binary",
+    "five portability/launcher regression tests passed inside the published image",
+    "nine existing consolidation regression tests passed",
+    "PowerShell launcher tested with mocked Docker image metadata"
+  ],
+  "not_executed": [
+    "new GPU measurement campaign",
+    "memory pass",
+    "Python codec reference"
+  ],
+  "file_sha256": {
+    "results.jsonl": "a244f2d5fb500e9f14dbe9bfbe606f5762c6186eda3a169da9ed461b6c200086",
+    "results.csv": "d8ff3a1c3245b97e73b4dfe1dcfc0d0167530c5728cb824ef81f2429d1ce372c",
+    "summary.md": "b8409236fb42d51a2bcce2a175e7f1c2b264927aa289b63c7e080969717f7af3",
+    "provenance.json": "78131be3983af42e59c4826f65432d5a0dd567df8a9745d9c6d82630fd600e51",
+    "smoke.json": "87495c4ffed9a4970fddf2e7e5415456d1265e080bbe123a1f46c403a159e360"
+  },
+  "consolidator_sha256": "bd5198bdf6cbe9fcaa2b0c805d3d4497afcb0c7dacd526963e89f0a710bbefac"
+}
