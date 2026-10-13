@@ -1,0 +1,370 @@
+{
+  "aggregates": [
+    {
+      "case_id": "akiyo-qcif-q0-g30",
+      "implementation": "nvcr",
+      "mode": "memory",
+      "n": 1,
+      "operation": "decode",
+      "process_peak_rss_mib": {
+        "maximum": 471.1796875,
+        "mean": 471.1796875,
+        "median": 471.1796875,
+        "method": "arithmetic mean; median; sample SD (ddof=1)",
+        "minimum": 471.1796875,
+        "n": 1,
+        "sample_std": null,
+        "unit_of_analysis": "independent process execution"
+      }
+    },
+    {
+      "case_id": "akiyo-qcif-q0-g30",
+      "implementation": "nvcr",
+      "mode": "quality",
+      "n": 2,
+      "operation": "decode",
+      "quality": [
+        {
+          "contract": "decoded-yuv420p8-pooled-plane-6-1-1-v1",
+          "decoded_sha256": "bea29fedf5d0a7b4d6a8ee47bd5ef8bc8f1159a2e14f845820f9580b3e0c130c",
+          "domain": "serialized decoded planar Y,U,V uint8; full code range 0..255",
+          "evaluator_conversion": "none; no resizing, clipping, rounding or colour conversion",
+          "exact_reconstruction": false,
+          "frames": 3,
+          "height": 144,
+          "mean_frame_plane_psnr_db": {
+            "U": 31.834103442796476,
+            "V": 39.122515500673025,
+            "Y": 27.989319132974455
+          },
+          "mean_frame_psnr_yuv_db": 29.861566717664527,
+          "per_frame": [
+            {
+              "frame_index": 0,
+              "planes": [
+                {
+                  "plane": "Y",
+                  "psnr_db": 26.597101775208106,
+                  "samples": 25344,
+                  "sse": 3607824
+                },
+                {
+                  "plane": "U",
+                  "psnr_db": 31.265606037446638,
+                  "samples": 6336,
+                  "sse": 307847
+                },
+                {
+                  "plane": "V",
+                  "psnr_db": 37.942934686485124,
+                  "samples": 6336,
+                  "sse": 66161
+                }
+              ],
+              "psnr_yuv_db": 28.598893921897552
+            },
+            {
+              "frame_index": 1,
+              "planes": [
+                {
+                  "plane": "Y",
+                  "psnr_db": 28.59097825043858,
+                  "samples": 25344,
+                  "sse": 2279595
+                },
+                {
+                  "plane": "U",
+                  "psnr_db": 32.098771914309985,
+                  "samples": 6336,
+                  "sse": 254108
+                },
+                {
+                  "plane": "V",
+                  "psnr_db": 39.634915107799095,
+                  "samples": 6336,
+                  "sse": 44813
+                }
+              ],
+              "psnr_yuv_db": 30.40994456559257
+            },
+            {
+              "frame_index": 2,
+              "planes": [
+                {
+                  "plane": "Y",
+                  "psnr_db": 28.77987737327668,
+                  "samples": 25344,
+                  "sse": 2182568
+                },
+                {
+                  "plane": "U",
+                  "psnr_db": 32.137932376632804,
+                  "samples": 6336,
+                  "sse": 251827
+                },
+                {
+                  "plane": "V",
+                  "psnr_db": 39.78969670773485,
+                  "samples": 6336,
+                  "sse": 43244
+                }
+              ],
+              "psnr_yuv_db": 30.575861665503467
+            }
+          ],
+          "pooled_plane_psnr_db": {
+            "U": 31.815087046816387,
+            "V": 39.03881717558825,
+            "Y": 27.872039403824374
+          },
+          "pooled_psnr_yuv_db": 29.760767580668862,
+          "reference_evaluated_sha256": "d5490b19d899cf444ae96ff2f58d96016fa1a3c443dd18da3d99f9a2f4f8ac75",
+          "schema": "nvcr.measurement.quality.v1",
+          "width": 176
+        },
+        {
+          "contract": "decoded-yuv420p8-pooled-plane-6-1-1-v1",
+          "decoded_sha256": "bea29fedf5d0a7b4d6a8ee47bd5ef8bc8f1159a2e14f845820f9580b3e0c130c",
+          "domain": "serialized decoded planar Y,U,V uint8; full code range 0..255",
+          "evaluator_conversion": "none; no resizing, clipping, rounding or colour conversion",
+          "exact_reconstruction": false,
+          "frames": 3,
+          "height": 144,
+          "mean_frame_plane_psnr_db": {
+            "U": 31.834103442796476,
+            "V": 39.122515500673025,
+            "Y": 27.989319132974455
+          },
+          "mean_frame_psnr_yuv_db": 29.861566717664527,
+          "per_frame": [
+            {
+              "frame_index": 0,
+              "planes": [
+                {
+                  "plane": "Y",
+                  "psnr_db": 26.597101775208106,
+                  "samples": 25344,
+                  "sse": 3607824
+                },
+                {
+                  "plane": "U",
+                  "psnr_db": 31.265606037446638,
+                  "samples": 6336,
+                  "sse": 307847
+                },
+                {
+                  "plane": "V",
+                  "psnr_db": 37.942934686485124,
+                  "samples": 6336,
+                  "sse": 66161
+                }
+              ],
+              "psnr_yuv_db": 28.598893921897552
+            },
+            {
+              "frame_index": 1,
+              "planes": [
+                {
+                  "plane": "Y",
+                  "psnr_db": 28.59097825043858,
+                  "samples": 25344,
+                  "sse": 2279595
+                },
+                {
+                  "plane": "U",
+                  "psnr_db": 32.098771914309985,
+                  "samples": 6336,
+                  "sse": 254108
+                },
+                {
+                  "plane": "V",
+                  "psnr_db": 39.634915107799095,
+                  "samples": 6336,
+                  "sse": 44813
+                }
+              ],
+              "psnr_yuv_db": 30.40994456559257
+            },
+            {
+              "frame_index": 2,
+              "planes": [
+                {
+                  "plane": "Y",
+                  "psnr_db": 28.77987737327668,
+                  "samples": 25344,
+                  "sse": 2182568
+                },
+                {
+                  "plane": "U",
+                  "psnr_db": 32.137932376632804,
+                  "samples": 6336,
+                  "sse": 251827
+                },
+                {
+                  "plane": "V",
+                  "psnr_db": 39.78969670773485,
+                  "samples": 6336,
+                  "sse": 43244
+                }
+              ],
+              "psnr_yuv_db": 30.575861665503467
+            }
+          ],
+          "pooled_plane_psnr_db": {
+            "U": 31.815087046816387,
+            "V": 39.03881717558825,
+            "Y": 27.872039403824374
+          },
+          "pooled_psnr_yuv_db": 29.760767580668862,
+          "reference_evaluated_sha256": "d5490b19d899cf444ae96ff2f58d96016fa1a3c443dd18da3d99f9a2f4f8ac75",
+          "schema": "nvcr.measurement.quality.v1",
+          "width": 176
+        }
+      ]
+    },
+    {
+      "case_id": "akiyo-qcif-q0-g30",
+      "codec_seconds": {
+        "maximum": 0.011740517,
+        "mean": 0.011740517,
+        "median": 0.011740517,
+        "method": "arithmetic mean; median; sample SD (ddof=1)",
+        "minimum": 0.011740517,
+        "n": 1,
+        "sample_std": null,
+        "unit_of_analysis": "independent process execution"
+      },
+      "implementation": "nvcr",
+      "mode": "throughput",
+      "n": 1,
+      "operation": "decode",
+      "process_seconds": {
+        "maximum": 1.0180171889951453,
+        "mean": 1.0180171889951453,
+        "median": 1.0180171889951453,
+        "method": "arithmetic mean; median; sample SD (ddof=1)",
+        "minimum": 1.0180171889951453,
+        "n": 1,
+        "sample_std": null,
+        "unit_of_analysis": "independent process execution"
+      },
+      "throughput_fps": {
+        "maximum": 255.52537422329868,
+        "mean": 255.52537422329868,
+        "median": 255.52537422329868,
+        "method": "arithmetic mean; median; sample SD (ddof=1)",
+        "minimum": 255.52537422329868,
+        "n": 1,
+        "sample_std": null,
+        "unit_of_analysis": "independent process execution"
+      }
+    },
+    {
+      "byte_observations": [
+        {
+          "entropy_bpp": 0.029145622895622895,
+          "file_bpp": 0.059027777777777776
+        }
+      ],
+      "case_id": "akiyo-qcif-q0-g30",
+      "implementation": "nvcr",
+      "mode": "memory",
+      "n": 1,
+      "operation": "encode",
+      "process_peak_rss_mib": {
+        "maximum": 471.16796875,
+        "mean": 471.16796875,
+        "median": 471.16796875,
+        "method": "arithmetic mean; median; sample SD (ddof=1)",
+        "minimum": 471.16796875,
+        "n": 1,
+        "sample_std": null,
+        "unit_of_analysis": "independent process execution"
+      }
+    },
+    {
+      "byte_observations": [
+        {
+          "entropy_bpp": 0.029145622895622895,
+          "file_bpp": 0.059027777777777776
+        },
+        {
+          "entropy_bpp": 0.029145622895622895,
+          "file_bpp": 0.059027777777777776
+        }
+      ],
+      "case_id": "akiyo-qcif-q0-g30",
+      "implementation": "nvcr",
+      "mode": "quality",
+      "n": 2,
+      "operation": "encode"
+    },
+    {
+      "byte_observations": [
+        {
+          "entropy_bpp": 0.029145622895622895,
+          "file_bpp": 0.059027777777777776
+        }
+      ],
+      "case_id": "akiyo-qcif-q0-g30",
+      "codec_seconds": {
+        "maximum": 0.012518981,
+        "mean": 0.012518981,
+        "median": 0.012518981,
+        "method": "arithmetic mean; median; sample SD (ddof=1)",
+        "minimum": 0.012518981,
+        "n": 1,
+        "sample_std": null,
+        "unit_of_analysis": "independent process execution"
+      },
+      "implementation": "nvcr",
+      "mode": "throughput",
+      "n": 1,
+      "operation": "encode",
+      "process_seconds": {
+        "maximum": 1.8774570489986218,
+        "mean": 1.8774570489986218,
+        "median": 1.8774570489986218,
+        "method": "arithmetic mean; median; sample SD (ddof=1)",
+        "minimum": 1.8774570489986218,
+        "n": 1,
+        "sample_std": null,
+        "unit_of_analysis": "independent process execution"
+      },
+      "throughput_fps": {
+        "maximum": 239.63611734852861,
+        "mean": 239.63611734852861,
+        "median": 239.63611734852861,
+        "method": "arithmetic mean; median; sample SD (ddof=1)",
+        "minimum": 239.63611734852861,
+        "n": 1,
+        "sample_std": null,
+        "unit_of_analysis": "independent process execution"
+      }
+    }
+  ],
+  "expected_operations": 8,
+  "failed_attempts_retained": 0,
+  "failed_or_skipped": 0,
+  "failures": [],
+  "mismatched_attempts": [],
+  "missing_observations": [],
+  "observed_operations": 8,
+  "reset_checks": [
+    {
+      "comparison": "cold versus warmed/reset output SHA256",
+      "implementation": "nvcr",
+      "operation": "encode",
+      "status": "passed"
+    },
+    {
+      "comparison": "cold versus warmed/reset output SHA256",
+      "implementation": "nvcr",
+      "operation": "decode",
+      "status": "passed"
+    }
+  ],
+  "schema": "nvcr.measurement.analysis.v1",
+  "statistical_method": "mean and sample SD, independent process executions within condition; no inferred pairing",
+  "status": "complete"
+}
