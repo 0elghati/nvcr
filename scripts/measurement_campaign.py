@@ -69,7 +69,7 @@ def load_manifest(path):
     if m['reference_reset_interval']!=64: raise ValueError('native DCVC-RT reference reset is fixed at 64')
     for key in ['repetitions','quality_repetitions','timeout_seconds']:
         if type(m[key])!=int or m[key]<=0: raise ValueError(f'invalid {key}')
-    if set(m['modes'])!={'throughput','memory','quality'} or len(m['modes'])!=3: raise ValueError('three distinct modes required')
+    if not m['modes'] or len(m['modes'])!=len(set(m['modes'])) or set(m['modes'])-{'throughput','memory','quality'}: raise ValueError('invalid measurement modes')
     for key in ['target_profile','model_profile','nvcr','build_dir','engine_root','reference_root','reference_python']:
         m[key]=os.path.abspath(ROOT/Path(m[key]))
     ids=set()
@@ -91,7 +91,7 @@ def engine(m,s):
 
 def jobs(m):
     rng=random.Random(m['order_seed']); result=[]
-    for mode in ['throughput','memory','quality']:
+    for mode in [x for x in ['throughput','memory','quality'] if x in m['modes']]:
         count=m['quality_repetitions'] if mode=='quality' else m['repetitions']
         for repeat in range(count):
             block=[{'sequence':s,'qp':q,'gop':g,'repeat':repeat,'mode':mode,'implementation':impl}
@@ -124,6 +124,22 @@ def commands(m,j,directory):
     return enc,dec,stream,reconstruction
 
 
+def container_release(m,binary):
+    """Bind a packaged binary to the launcher's inspected immutable OCI image."""
+    execution=m['execution']; image=execution.get('image',{})
+    for field in ['digest','id']:
+        if not re.fullmatch(r'sha256:[a-f0-9]{64}',image.get(field,'')):
+            raise ValueError('immutable OCI '+field+' required')
+    if image['digest']!=execution.get('container_digest'):
+        raise ValueError('OCI receipt/launch digest mismatch')
+    if not re.fullmatch(r'[a-f0-9]{40}',image.get('source_revision','')) or not image.get('version'):
+        raise ValueError('OCI source revision and version required')
+    actual=digest(binary)
+    if image.get('binary_sha256')!=actual: raise ValueError('OCI executable hash mismatch')
+    return {'kind':'oci-release','image':image,'binary_sha256':actual,
+            'native_build_cache':'not distributed with release image'}
+
+
 def preflight(m,output):
     output.mkdir(parents=True,exist_ok=True)
     env=capture(ROOT,Path(m['reference_python'] if 'python' in implementations(m) else sys.executable),Path(m['reference_root']),Path(m['build_dir']),Path(m['nvcr']))
@@ -137,17 +153,19 @@ def preflight(m,output):
     def dependencies():
         import numpy
         return {'numpy':numpy.__version__}
-    check('offline metrics dependency',dependencies)
+    if 'quality' in m['modes']: check('offline metrics dependency',dependencies)
     def build():
         binary=Path(m['nvcr']); cache=Path(m['build_dir'])/'CMakeCache.txt'
         if not binary.is_file() or not os.access(binary,os.X_OK): raise ValueError('NVCR executable unavailable')
-        if 'CMAKE_BUILD_TYPE:STRING=Release' not in cache.read_text(): raise ValueError('Release build required')
         help_result=command([binary,'--help'])
         if '--measurement-json' not in help_result.get('stdout',''): raise ValueError('rebuild NVCR: measurement CLI unavailable')
+        if m['execution']['mode']=='container': return container_release(m,binary)
+        if 'CMAKE_BUILD_TYPE:STRING=Release' not in cache.read_text(): raise ValueError('Release build required')
         sources=[ROOT/'cli/main.cpp',ROOT/'cli/CMakeLists.txt']+list((ROOT/'src').rglob('*.cpp'))+list((ROOT/'src').rglob('*.cu'))+list((ROOT/'include').rglob('*.hpp'))
         if any(p.stat().st_mtime>binary.stat().st_mtime for p in sources): raise ValueError('binary predates source: rebuild Release')
         return {'binary_sha256':digest(binary),'build_cache_sha256':digest(cache)}
-    check('Release executable',build)
+    build_identity=check('Release executable',build)
+    if m['execution']['mode']=='container': env['build']['oci_release']=build_identity
     model=check('model profile',lambda:json.loads(Path(m['model_profile']).read_text()))
     def reference():
         root=Path(m['reference_root'])
@@ -300,6 +318,10 @@ def run_job(m,j,root,fingerprint,input_identity):
                     if digest(Path(s['path']),evaluated_bytes)!=input_identity['evaluated_sha256']: raise ValueError('input changed during execution')
                     metric=json.loads((directory/f'{operation}.metrics.json').read_text()); validate_operation(metric,s,m)
                     row['metrics']=metric
+                    if not math.isfinite(row['process_seconds']) or row['process_seconds']<=0:
+                        raise ValueError('invalid completed process interval')
+                    row['process_fps']=s['frames']/row['process_seconds']
+                    row['units']['process_fps']='frames/s'
                     if operation=='encode':
                         accounting=nvcr_bytes(stream) if j['implementation']=='nvcr' else metric['bytes']
                         validate_coding(accounting,j)
@@ -405,6 +427,7 @@ def main(argv=None):
     ap.add_argument('action',choices=['capture','preflight','run','smoke','analyze','bd-rate'])
     ap.add_argument('--manifest',type=Path,default=ROOT/'docs/experiments/measurement-campaign.json')
     ap.add_argument('--implementation',action='append',choices=['nvcr','python'],help='select implementation(s); defaults to manifest or both')
+    ap.add_argument('--mode',action='append',choices=['throughput','memory','quality'],help='select passes without changing their measurement contracts')
     ap.add_argument('--engine-root',type=Path,help='use an existing installed engine root')
     ap.add_argument('--output',type=Path,required=True)
     ap.add_argument('--dry-run',action='store_true')
@@ -425,8 +448,12 @@ def main(argv=None):
         if len(args.implementation)!=len(set(args.implementation)): raise ValueError('duplicate implementation selection')
         m['implementations']=args.implementation
     if args.engine_root: m['engine_root']=str(args.engine_root.resolve())
+    if args.mode:
+        if len(args.mode)!=len(set(args.mode)): raise ValueError('duplicate mode selection')
+        m['modes']=args.mode
     if args.action=='smoke':
         m=copy.deepcopy(m); m['sequences']=[m['sequences'][0]]; m['sequences'][0]['frames']=3
+        m['modes']=['throughput','memory','quality']
         m['qps']=[m['qps'][0]]; m['gops']=[next(g for g in m['gops'] if g>1)]
         m['repetitions']=1; m['warmup_frames']=2; m['timeout_seconds']=180
     if args.action=='capture':

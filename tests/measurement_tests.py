@@ -131,6 +131,27 @@ class MeasurementTests(unittest.TestCase):
         self.assertEqual(m['qps'],[0,21,42,63]); self.assertEqual(m['repetitions'],10)
         self.assertEqual(campaign.jobs(m),campaign.jobs(m))
         self.assertEqual(len(campaign.jobs(m)),4*6*3*2*21)
+    def test_container_receipt_rejects_binary_and_launch_mismatches(self):
+        binary=self.root/'nvcr'; binary.write_bytes(b'release executable')
+        image={'digest':'sha256:'+'a'*64,'id':'sha256:'+'a'*64,
+               'source_revision':'b'*40,'version':'1.0.7','binary_sha256':campaign.digest(binary)}
+        manifest={'execution':{'image':image,'container_digest':image['digest']}}
+        self.assertEqual(campaign.container_release(manifest,binary)['kind'],'oci-release')
+        binary.write_bytes(b'different executable')
+        with self.assertRaisesRegex(ValueError,'executable hash mismatch'):
+            campaign.container_release(manifest,binary)
+        image['digest']='sha256:'+'c'*64
+        with self.assertRaisesRegex(ValueError,'launch digest mismatch'):
+            campaign.container_release(manifest,binary)
+
+    def test_nvcr_throughput_subset_keeps_complete_matrix(self):
+        m=campaign.load_manifest(campaign.ROOT/'docs/experiments/measurement-campaign.json')
+        m['implementations']=['nvcr']; m['modes']=['throughput']
+        jobs=campaign.jobs(m)
+        self.assertEqual(2*len(jobs),1440)
+        self.assertEqual({j['mode'] for j in jobs},{'throughput'})
+        self.assertEqual({j['repeat'] for j in jobs},set(range(10)))
+
     def test_nvcr_only_keeps_matrix_without_python_jobs(self):
         m=campaign.load_manifest(campaign.ROOT/'docs/experiments/measurement-campaign.json')
         m['implementations']=['nvcr']

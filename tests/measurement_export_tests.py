@@ -184,6 +184,12 @@ class MeasurementExportTests(unittest.TestCase):
             compact_exporter.export(rows, "full", 2)
         with self.assertRaisesRegex(ValueError, "all ten distinct repetitions"):
             compact_exporter.export(rows[:-1], "full", 1)
+        throughput = [row for row in rows if row['mode'] == 'throughput']
+        self.assertEqual(len(compact_exporter.export(throughput, 'full', 1, ['throughput'])), 4)
+        with self.assertRaisesRegex(ValueError, 'incomplete condition'):
+            compact_exporter.export(throughput, 'full', 1)
+        with self.assertRaisesRegex(ValueError, 'unexpected observation mode'):
+            compact_exporter.export(rows, 'full', 1, ['throughput'])
 
 
 if __name__ == "__main__":

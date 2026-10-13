@@ -30,6 +30,21 @@ it is not a throughput measurement.
 
 ## Environment-specific measurements
 
+For the NVCR-only Windows/WSL 2 controlled timing matrix on a laptop, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\measurement_laptop.ps1 -Gpu 3050 -Action Run -EngineDir .\build\engines\dcvcrt-3050-exact
+```
+
+The launcher runs the compatible reset smoke first and requires all 1,440
+throughput operations to pass. It records process and synchronized codec
+intervals using the controlled-study warm-up contract. `-Action Check` runs a
+bounded smoke and one timing pair. Full runs select NVCR throughput only;
+they do not establish a matched Python comparison or full quality/memory
+coverage. The executable is the identified 1.0.7 release binary in an immutable
+local container image, separate from the mounted measurement harness.
+See the [current RTX 3050 result](../results/rtx3050/measurement/summary.md).
+
 Use `scripts/benchmark_resolution_matrix.sh` for a native diagnostic matrix.
 It writes `nvcr.benchmark.resolution-matrix.v1` JSONL and CSV rows and a
 Markdown summary:

@@ -1,0 +1,143 @@
+{
+  "build_dir": "/opt/nvcr/build-evidence-not-distributed",
+  "engine_root": "/opt/nvcr/engines",
+  "execution": {
+    "container_digest": "sha256:8106c2275a4455b4ff9360b13124c1e877ba9ad8ee0fc1681bde13dcce422366",
+    "image": {
+      "binary_sha256": "8d12a772ede71839d9c3bfdbabd43da10e917d6bcdaa52199f3c45dc49dd69b0",
+      "digest": "sha256:8106c2275a4455b4ff9360b13124c1e877ba9ad8ee0fc1681bde13dcce422366",
+      "id": "sha256:8106c2275a4455b4ff9360b13124c1e877ba9ad8ee0fc1681bde13dcce422366",
+      "source_revision": "6a66db7a98081f9210dedb49d768899bd4e9f2b7",
+      "version": "1.0.7"
+    },
+    "mode": "container"
+  },
+  "gops": [
+    1,
+    30,
+    100
+  ],
+  "implementations": [
+    "nvcr"
+  ],
+  "model_profile": "/workspace/nvcr/configs/models/dcvcrt-cvpr2025.json",
+  "modes": [
+    "throughput"
+  ],
+  "nvcr": "/opt/nvcr/bin/nvcr",
+  "order_seed": 20260919,
+  "provenance_note": "NVCR-only laptop timing; identical controlled-study timing/warm-up contract. Image identity is separate from the mounted measurement harness.",
+  "qps": [
+    0,
+    21,
+    42,
+    63
+  ],
+  "quality_repetitions": 1,
+  "reference_python": "/usr/bin/python3",
+  "reference_reset_interval": 64,
+  "reference_root": "/workspace/nvcr/reference-not-selected",
+  "repetitions": 10,
+  "schema": "nvcr.measurement.campaign.v1",
+  "sequences": [
+    {
+      "content_id": "akiyo",
+      "fps": 30,
+      "frames": 100,
+      "height": 144,
+      "path": "/input/qcif/akiyo_qcif.yuv",
+      "pixel_format": "yuv420p8",
+      "profile": "qcif",
+      "provenance": {
+        "acquisition": null,
+        "preprocessing": null,
+        "status": "unknown"
+      },
+      "sequence_id": "akiyo-qcif",
+      "width": 176
+    },
+    {
+      "content_id": "waterfall",
+      "fps": 30,
+      "frames": 100,
+      "height": 288,
+      "path": "/input/cif/waterfall_cif.yuv",
+      "pixel_format": "yuv420p8",
+      "profile": "cif",
+      "provenance": {
+        "acquisition": null,
+        "preprocessing": null,
+        "status": "unknown"
+      },
+      "sequence_id": "waterfall-cif",
+      "width": 352
+    },
+    {
+      "content_id": "basketball-drive",
+      "fps": 50,
+      "frames": 100,
+      "height": 360,
+      "path": "/input/360p/BasketballDrive_640x360_50.yuv",
+      "pixel_format": "yuv420p8",
+      "profile": "360p",
+      "provenance": {
+        "acquisition": null,
+        "preprocessing": null,
+        "status": "unknown"
+      },
+      "sequence_id": "basketball-360p",
+      "width": 640
+    },
+    {
+      "content_id": "basketball-drive",
+      "fps": 50,
+      "frames": 100,
+      "height": 540,
+      "path": "/input/540p/BasketballDrive_960x540_50.yuv",
+      "pixel_format": "yuv420p8",
+      "profile": "540p",
+      "provenance": {
+        "acquisition": null,
+        "preprocessing": null,
+        "status": "unknown"
+      },
+      "sequence_id": "basketball-540p",
+      "width": 960
+    },
+    {
+      "content_id": "fourpeople",
+      "fps": 30,
+      "frames": 100,
+      "height": 720,
+      "path": "/input/720p/FourPeople_1280x720_60.yuv",
+      "pixel_format": "yuv420p8",
+      "profile": "720p",
+      "provenance": {
+        "acquisition": null,
+        "preprocessing": null,
+        "status": "unknown"
+      },
+      "sequence_id": "fourpeople-720p",
+      "width": 1280
+    },
+    {
+      "content_id": "basketball-drive",
+      "fps": 60,
+      "frames": 100,
+      "height": 1080,
+      "path": "/input/hd/BasketballDrive_1920x1080_50.yuv",
+      "pixel_format": "yuv420p8",
+      "profile": "1080p",
+      "provenance": {
+        "acquisition": null,
+        "preprocessing": null,
+        "status": "unknown"
+      },
+      "sequence_id": "basketball-1080p",
+      "width": 1920
+    }
+  ],
+  "target_profile": "/workspace/nvcr/configs/targets/rtx3050-laptop-ubuntu2404.json",
+  "timeout_seconds": 1800,
+  "warmup_frames": 10
+}

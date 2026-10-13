@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-10-12
+Last reviewed: 2026-10-13
 
 ## Product direction
 
@@ -60,13 +60,15 @@ redistribution status.
 
 ## Current evaluation priority
 
-RTX 3050 Laptop Windows/WSL 2 container portability matrix audited on
-2026-10-12: 1,440 observations across six resolutions, four QPs, three GOPs
-and ten repetitions, plus 24 smoke observations. The [current compact result](results/rtx3050/summary.md)
-corrects the accidental RTX 5060 launcher/folder label and replaces the older
-QP-32 report. It remains an environment-specific diagnostic with dirty-source
-and missing environment/input metadata limitations; matched reference and
-process-throughput gates remain open for this target.
+RTX 3050 Laptop Windows/WSL 2 controlled timing campaign audited on 2026-10-13:
+1,440 NVCR-only throughput operations across six resolutions, four QPs, three
+GOPs and ten repetitions, plus an eight-operation compatible reset smoke.
+The [current compact result](results/rtx3050/measurement/summary.md) records
+both process and synchronized codec intervals, input/engine identities, and
+576 regenerated condition statistics. It supersedes the legacy portability
+publication. The packaged release executable is bound to its OCI identity;
+the mounted measurement harness has a separate captured identity. Full matrix
+quality/memory and matched pinned Python reference gates remain open.
 
 Matched NVCR/Python measurements are complete on RTX 4070 and Jetson Orin.
 Process throughput is the primary comparison; codec-interval measurements are

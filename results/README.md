@@ -9,7 +9,7 @@ records.
 |---|---|---|
 | [RTX 4070](https://github.com/0elghati/nvcr/blob/c2480e8fdbf6b06be481c33d27d09c4c55e95f24/results/rtx4070/measurement/summary.md) | Matched NVCR/Python | 6 resolutions; QPs 0/21/42/63; GOPs 1/30/100; 10 repetitions |
 | [Jetson Orin](https://github.com/0elghati/nvcr/blob/c2480e8fdbf6b06be481c33d27d09c4c55e95f24/results/jetson-orin/measurement/summary.md) | Matched NVCR/Python | Same matrix |
-| [RTX 3050](rtx3050/summary.md) | Windows/WSL 2 container portability diagnostic | 6 resolutions; QPs 0/21/42/63; GOPs 1/30/100; 10 repetitions; 1,440 observations plus 24 smoke observations |
+| [RTX 3050](rtx3050/measurement/summary.md) | Windows/WSL 2 NVCR-only controlled timing | 6 resolutions; QPs 0/21/42/63; GOPs 1/30/100; 10 repetitions; 1,440 throughput operations plus 8 smoke operations |
 | [RTX 5060](rtx5060/summary.md) | Deployment | Same deployment matrix |
 
 The matched records above are pinned to source revision

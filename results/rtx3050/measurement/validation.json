@@ -1,0 +1,40 @@
+{
+  "schema": "nvcr.measurement.analysis.v1",
+  "status": "complete",
+  "expected_operations": 1440,
+  "observed_operations": 1440,
+  "failed_or_skipped": 0,
+  "missing_observations": [],
+  "mismatched_attempts": [],
+  "reset_checks": [],
+  "failed_attempts_retained": 0,
+  "statistical_method": "mean and sample SD, independent process executions within condition; no inferred pairing",
+  "smoke": {
+    "schema": "nvcr.measurement.analysis.v1",
+    "status": "complete",
+    "expected_operations": 8,
+    "observed_operations": 8,
+    "failed_or_skipped": 0,
+    "missing_observations": [],
+    "mismatched_attempts": [],
+    "reset_checks": [
+      {
+        "implementation": "nvcr",
+        "operation": "encode",
+        "status": "passed",
+        "comparison": "cold versus warmed/reset output SHA256"
+      },
+      {
+        "implementation": "nvcr",
+        "operation": "decode",
+        "status": "passed",
+        "comparison": "cold versus warmed/reset output SHA256"
+      }
+    ],
+    "failed_attempts_retained": 0,
+    "statistical_method": "mean and sample SD, independent process executions within condition; no inferred pairing"
+  },
+  "statistics": 576,
+  "source_observations_sha256": "3b76db6df9a4fa91557171f41a44898450e6dfda6fe41bbd6775c8ce79b9d3dd",
+  "tests": "measurement_tests.py: 26 tests, 2 optional skips; measurement_export_tests.py: 3 tests; PowerShell parser: passed; CLI statistics regeneration: identical SHA-256"
+}
