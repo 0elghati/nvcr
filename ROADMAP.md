@@ -48,7 +48,7 @@ not count as additional production codecs/providers or performance baselines.
 | Public documentation and onboarding | Implemented | Keep the project identity, contributions, reference comparisons, latest-release examples, and platform workflows current |
 | CLI and artifact-client build identity | Follow-up | Add `nvcr --version` and `nvcr-artifacts --version`, and reconcile the legacy `current_software_version` constant; until then use package manifests, source revisions, or OCI metadata |
 | Linux container GPU injection | Follow-up | Validate and document configured `nvidia` runtime, Docker `--gpus`, and CDI paths across supported Docker and NVIDIA Container Toolkit versions |
-| Exact-target artifacts | In progress | Produce current warning-free profile sets and target-local evidence |
+| Exact-target artifacts | In progress | RTX 3050 Laptop TensorRT 10.9.0/CUDA runtime 12080: all six exact bundles published with verified remote digests after 84 independent warning-free plan loads and dimension-matched I/P round trips. Fresh catalog QCIF installation and downloaded-bundle round trip pass with identical stream/reconstruction hashes. See [publication evidence](evidence/rtx3050-trt109-local-20261012/summary.md). Produce current warning-free profile sets and target-local evidence for remaining targets |
 | Reproducible evaluation | Matched measurements complete | Process throughput is the primary comparison; codec-interval measurements are reported separately. See the [result inventory](results/README.md) for coverage and retained records. The RTX 4070 matched campaign predates the current stricter preflight gate: it was captured under a forked/unpinned reference source and without a matched smoke. Rerun with a clean pinned reference and a passing matched smoke before further publication claims |
 | Compatibility classes | Experimental | Compare against complete exact baselines |
 | Public C++ API/ABI | Release policy adopted | Preserve public API compatibility in patch and minor releases; require a major release for breaking changes. Rebuild applications when upgrading; cross-release ABI compatibility is not guaranteed. |
@@ -59,6 +59,16 @@ remain bound to their recorded GPU, CUDA, TensorRT, model, profile, digest, and
 redistribution status.
 
 ## Current evaluation priority
+
+RTX 3050 Laptop Windows/WSL 2 controlled timing campaign audited on 2026-10-13:
+1,440 NVCR-only throughput operations across six resolutions, four QPs, three
+GOPs and ten repetitions, plus an eight-operation compatible reset smoke.
+The [current compact result](results/rtx3050/measurement/summary.md) records
+both process and synchronized codec intervals, input/engine identities, and
+576 regenerated condition statistics. It supersedes the legacy portability
+publication. The packaged release executable is bound to its OCI identity;
+the mounted measurement harness has a separate captured identity. Full matrix
+quality/memory and matched pinned Python reference gates remain open.
 
 Matched NVCR/Python measurements are complete on RTX 4070 and Jetson Orin.
 Process throughput is the primary comparison; codec-interval measurements are

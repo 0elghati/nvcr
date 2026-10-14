@@ -1,0 +1,74 @@
+[
+  {
+    "profile": "qcif",
+    "frames": 4,
+    "qp": 32,
+    "gop": 2,
+    "input_bytes": 152064,
+    "decoded_bytes": 152064,
+    "input_sha256": "69fa1b70488393267d07be35393882005c720bf82abcb7fd1aa595afb86e34d2",
+    "decoded_sha256": "90da65837cc041efeb4e2129ff80ec322221e7e26e2cc9cd0a36b6b6ad900b38",
+    "warning_free": true,
+    "status": "passed"
+  },
+  {
+    "profile": "cif",
+    "frames": 4,
+    "qp": 32,
+    "gop": 2,
+    "input_bytes": 608256,
+    "decoded_bytes": 608256,
+    "input_sha256": "b2777ba65fb3c9be52fb3aa9432f68301ddda562bf8c57773c9677140934eda8",
+    "decoded_sha256": "e6e4d2e25b5868d036239a11df02e049ad7e302b844f968844ef7e08df15f332",
+    "warning_free": true,
+    "status": "passed"
+  },
+  {
+    "profile": "360p",
+    "frames": 4,
+    "qp": 32,
+    "gop": 2,
+    "input_bytes": 1382400,
+    "decoded_bytes": 1382400,
+    "input_sha256": "40a47dc25bfd6285c2041f85dc1296de79aaea8768d5d87e802ce19de9b8e440",
+    "decoded_sha256": "35f7294bf42ac007cb71ef410f1f4cdab14a490cbbd6716956d0988604686dfa",
+    "warning_free": true,
+    "status": "passed"
+  },
+  {
+    "profile": "540p",
+    "frames": 4,
+    "qp": 32,
+    "gop": 2,
+    "input_bytes": 3110400,
+    "decoded_bytes": 3110400,
+    "input_sha256": "ee7c229e9d62e22b48316bdbab817905e52698259ad6242085e026bec4af0ad7",
+    "decoded_sha256": "ff0d04b3ea8c5e8bc7ea84bb7c029db6e8715163e1b66646415235beb9004c6b",
+    "warning_free": true,
+    "status": "passed"
+  },
+  {
+    "profile": "720p",
+    "frames": 4,
+    "qp": 32,
+    "gop": 2,
+    "input_bytes": 5529600,
+    "decoded_bytes": 5529600,
+    "input_sha256": "df23be34740649a918500f16e454b73f16f84ff959258907d9d4ff719b17ea70",
+    "decoded_sha256": "416ce5a392dac0d702b73d01fdac459f91595f5150e1cab87e75ac5d4b904e13",
+    "warning_free": true,
+    "status": "passed"
+  },
+  {
+    "profile": "1080p",
+    "frames": 4,
+    "qp": 32,
+    "gop": 2,
+    "input_bytes": 12441600,
+    "decoded_bytes": 12441600,
+    "input_sha256": "4284b2bc64bfd5b6df6008cf911840eccb25ce192dc16c4f0e435d3cb5f7e015",
+    "decoded_sha256": "df2027ad0ce2604fa564483d582c1dc200aa8a6e0077ec0f4bec31627abc1727",
+    "warning_free": true,
+    "status": "passed"
+  }
+]

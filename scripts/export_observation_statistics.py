@@ -21,7 +21,10 @@ METRICS = {
 }
 
 
-def export(rows, campaign, expected_conditions):
+def export(rows, campaign, expected_conditions, modes=None):
+    selected_modes = tuple(METRICS if modes is None else modes)
+    if not selected_modes or len(set(selected_modes)) != len(selected_modes) or set(selected_modes) - METRICS.keys():
+        raise ValueError("invalid statistical mode selection")
     groups = defaultdict(list)
     conditions = set()
     executions = set()
@@ -44,7 +47,7 @@ def export(rows, campaign, expected_conditions):
             raise ValueError("invalid process duration")
         if mode == "quality":
             continue
-        if mode not in METRICS:
+        if mode not in selected_modes:
             raise ValueError(f"unexpected observation mode: {mode}")
         values = ({"codec_seconds": row["metrics"]["codec_seconds"],
                    "throughput_fps": row["metrics"]["throughput_fps"],
@@ -60,7 +63,7 @@ def export(rows, campaign, expected_conditions):
     if len(fingerprints) != 1 or len(conditions) != expected_conditions:
         raise ValueError("campaign fingerprint or condition coverage mismatch")
     expected = {(condition, mode, metric) for condition in conditions
-                for mode, metrics in METRICS.items() for metric in metrics}
+                for mode in selected_modes for metric in METRICS[mode]}
     if groups.keys() != expected:
         raise ValueError("incomplete condition or metric coverage")
     output = []
@@ -84,12 +87,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--campaign", required=True)
     parser.add_argument("--expected-conditions", type=int, required=True)
+    parser.add_argument("--mode", action="append", choices=tuple(METRICS),
+                        help="selected statistical passes; defaults to throughput and memory")
     parser.add_argument("observations", type=Path)
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
     with args.observations.open() as stream:
         rows = export((json.loads(line) for line in stream), args.campaign,
-                      args.expected_conditions)
+                      args.expected_conditions, args.mode)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=FIELDS, lineterminator="\n")

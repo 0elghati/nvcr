@@ -1,0 +1,597 @@
+{
+  "device": {
+    "architecture": "x86_64",
+    "compute_capability_major": 8,
+    "compute_capability_minor": 6,
+    "cuda_runtime_version": 12080,
+    "device_id": 0,
+    "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "multiprocessor_count": 16,
+    "operating_system": "linux",
+    "tensorrt_version_major": 10,
+    "tensorrt_version_minor": 9,
+    "tensorrt_version_patch": 0
+  },
+  "binary": {
+    "path": "/opt/nvcr/bin/nvcr",
+    "sha256": "8d12a772ede71839d9c3bfdbabd43da10e917d6bcdaa52199f3c45dc49dd69b0"
+  },
+  "source_head": {
+    "command": [
+      "git",
+      "-C",
+      "/workspace/nvcr",
+      "rev-parse",
+      "HEAD"
+    ],
+    "reason": "[Errno 2] No such file or directory: 'git'",
+    "status": "unavailable"
+  },
+  "source_diff": {
+    "command": [
+      "git",
+      "-C",
+      "/workspace/nvcr",
+      "diff",
+      "HEAD",
+      "--"
+    ],
+    "reason": "[Errno 2] No such file or directory: 'git'",
+    "status": "unavailable"
+  },
+  "measurement_sources": {
+    "cli/main.cpp": "710f301d26698dc96729bbc3b8eff3b973e207bfd596056af72cd11e1e415455",
+    "scripts/measure_python_reference.py": "41c1e806a43e12948edff221e45db1ddb939c7c34964ddd50be51ffbe4b70778",
+    "scripts/measurement_campaign.py": "d93711daa8081abb9e7df77577cff1b062d319166e9eed1741b0a8b0b6d0c926",
+    "scripts/measurement_environment.py": "a0988e3c0e8ff45578c372e5c0d52f3ff07552a30bb1c19b6efcf7e589979f0f",
+    "scripts/measurement_metrics.py": "701699fca9ee28643e1c02c5aa80ecfb82ccaa83d69cda71e55dbf0e35887b31"
+  },
+  "assets": {
+    "checkpoints": {},
+    "engines": {
+      "1080p": {
+        "build_command": {
+          "status": "unavailable"
+        },
+        "export_command": {
+          "status": "unavailable"
+        },
+        "manifest": {
+          "builder_optimization_level": 2,
+          "checksum_manifest": "engine.sha256",
+          "checksum_manifest_sha256": "9d93f3b8da5a6ca9fb62467a4167f743d42e96ee977c48903e8aedcd7d109874",
+          "compute_capability_major": 8,
+          "compute_capability_minor": 6,
+          "cuda_runtime_version": 12080,
+          "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+          "engine_profile_id": "1080p",
+          "engine_profile_sha256": "e1f3103afbcf5a98b7e07252e8dba5ac0af1330af111384796891bf2fe9a6195",
+          "files": {
+            "i_analysis.plan": "cd35f17033f9f08ca9bfde368be94a7856e495567f3e84a44b3e80b1a5f1ed7a",
+            "i_entropy.bin": "c70ece2356eab799da5b271397e2fe5600a52223477a4bb8e9b0203c77cf210c",
+            "i_frame_manifest.json": "75f04808166368c1420e06fadc089c37cd2c94c2bc37353a24ce7e228cec0122",
+            "i_hyper_analysis.plan": "dda14577d5f643a8450de61ed5e676c134ca552f638dbf234408a2dcb65ac36c",
+            "i_hyper_synthesis.plan": "3af7ccf576c88275dd1d11110fb7ed667273a413640ad43a45785d548340b6b4",
+            "i_quant.bin": "34d6d0e99cdabc6758ef8001ab411bb0b4ecb9be1886af9c86b6b41d9c00a81d",
+            "i_spatial_prior_1.plan": "07dbee627c87d859cf19735ec3e99c4609b48c4ddfb66e093e5148660d75dd7e",
+            "i_spatial_prior_2.plan": "c68429ce72f9b3f1905c954639c61a7b25b8519c3e56b3ac31897f20199977db",
+            "i_spatial_prior_3.plan": "36444fd115388c66eb06f7d3f137856424e98c76082bd8dc52ea078f59466e8f",
+            "i_synthesis.plan": "8d0a907545bdcc2fb70d26e05c3dc220b0ec2d694975b7ef2e96d7501adaaabc",
+            "p_analysis.plan": "10515a1d5cba4806185f895e785ca2b7cdcddb8cf9147d600350006ad93eb24c",
+            "p_entropy.bin": "c4e5c5e9a573624db272f4a77909abce3dcd0fc0f842afbdb177b31152aec06a",
+            "p_frame_manifest.json": "2a9f153851bcc453be529119fb669c7a12c280016a72c3183d38cb813f0e545d",
+            "p_hyper_analysis.plan": "97fede6c9da48ecfcc558f68c48a60a590be082a513f8c1ca2b7868d2e2b3fca",
+            "p_prior.plan": "355913e3f91ea96ea244f80f249585286b2b43448ea5b60bf0dee549dae8901a",
+            "p_quant.bin": "9a8cbc1082132be8b11251fc8d46bd011d17c6880fb6f0c24970ca0c46fe831e",
+            "p_reference_feature.plan": "202bee3c14e3d998c11d1baf99e039a6be627dcd8558c67afa35b45161d09b95",
+            "p_reference_frame.plan": "69d85d6193081a34c73e4e1e3405f0e292a4f895447131acf888ebdd73d2b9b3",
+            "p_spatial_prior.plan": "50b685eb5419f087b3c4f1c5c726bc3b9930247e0f1f6353289fbe59c6764e4b",
+            "p_synthesis.plan": "c457d3fe3d6b894c12d329f9db44fe5bfd6486d5be1357d36a26ae210bb538fd"
+          },
+          "format": 2,
+          "hardware_compatibility": "exact",
+          "i_model_manifest_sha256": "75f04808166368c1420e06fadc089c37cd2c94c2bc37353a24ce7e228cec0122",
+          "kind": "nvcr-tensorrt-engine-bundle",
+          "model_profile_id": "dcvcrt-cvpr2025",
+          "model_profile_sha256": "414466eb974284ff938f018e20f2d7ce4b337bccdbcb387f31aac24be227380f",
+          "multiprocessor_count": 16,
+          "optimization_point": "1080p",
+          "p_model_manifest_sha256": "2a9f153851bcc453be529119fb669c7a12c280016a72c3183d38cb813f0e545d",
+          "precision": "fp16",
+          "schema": "nvcr.engine-bundle.v2",
+          "shape_profile": "dynamic",
+          "target_profile_id": "rtx3050-laptop-ubuntu2404",
+          "target_profile_sha256": "5a740e5de63a3a81c420cc2c0b5021fe5cbf89d9f63e54f488cb4a4b48020620",
+          "tensorrt_version_major": 10,
+          "tensorrt_version_minor": 9,
+          "tensorrt_version_patch": 0,
+          "visible_dimensions": {
+            "maximum": [
+              1920,
+              1080
+            ],
+            "minimum": [
+              64,
+              64
+            ],
+            "optimum": [
+              1920,
+              1080
+            ]
+          },
+          "workspace_mib": 1024
+        },
+        "path": "/opt/nvcr/engines/1080p",
+        "sha256": "f19bd4e9ce58436f9a606cd0c0566d15d62e289f04ba5117582285eae7b00826"
+      },
+      "360p": {
+        "build_command": {
+          "status": "unavailable"
+        },
+        "export_command": {
+          "status": "unavailable"
+        },
+        "manifest": {
+          "builder_optimization_level": 4,
+          "checksum_manifest": "engine.sha256",
+          "checksum_manifest_sha256": "316a6fc6d5eb652644d70e64dbde0b8936c70e4e53d566869b8968b4e9098605",
+          "compute_capability_major": 8,
+          "compute_capability_minor": 6,
+          "cuda_runtime_version": 12080,
+          "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+          "engine_profile_id": "360p",
+          "engine_profile_sha256": "d09bc33518e983b3d3b82b86e7b62ff145d134fa021bf7f1ee3164fc5d6a5ec0",
+          "files": {
+            "i_analysis.plan": "ada4d8db200cc17fb07f1930ada0676fa6a129c1ec17acb16781e83a22ff9cf1",
+            "i_entropy.bin": "c70ece2356eab799da5b271397e2fe5600a52223477a4bb8e9b0203c77cf210c",
+            "i_frame_manifest.json": "75f04808166368c1420e06fadc089c37cd2c94c2bc37353a24ce7e228cec0122",
+            "i_hyper_analysis.plan": "93100874e02dcd410aa94a86b751987956391ee9ecead431ff7d8e976b0d0ebe",
+            "i_hyper_synthesis.plan": "ae76dde28ecf414dcc882117390079c0ae47cdd3fe08bf9862e2c499a8337b20",
+            "i_quant.bin": "34d6d0e99cdabc6758ef8001ab411bb0b4ecb9be1886af9c86b6b41d9c00a81d",
+            "i_spatial_prior_1.plan": "72cc4c0f99764909597266412a233afde3e185c7a2fababf293765677b71e78e",
+            "i_spatial_prior_2.plan": "66a3075baa66890b18e93d62459a50da0c3e7c027f2ea45bb79cda6db19a7569",
+            "i_spatial_prior_3.plan": "58bba58e48884286b49018f3affc9757b6de53a695f6675b5d08cdfcd6b75586",
+            "i_synthesis.plan": "8543b2de29386a5223458a4498b12bbd7c98781f8cf651a75db803df18f87a7a",
+            "p_analysis.plan": "58acae4786075d7ee267c41f91259de8542ac5a1db7a6192a9fb3f2cd02e5ab4",
+            "p_entropy.bin": "c4e5c5e9a573624db272f4a77909abce3dcd0fc0f842afbdb177b31152aec06a",
+            "p_frame_manifest.json": "2a9f153851bcc453be529119fb669c7a12c280016a72c3183d38cb813f0e545d",
+            "p_hyper_analysis.plan": "1103da751359af265bcabb5071b5571b93a10c23e60ea7acb8e8d2b570ef821a",
+            "p_prior.plan": "46217fec571ea41b67453addea8342a865120119e8e3ff752337b254e169e4b8",
+            "p_quant.bin": "9a8cbc1082132be8b11251fc8d46bd011d17c6880fb6f0c24970ca0c46fe831e",
+            "p_reference_feature.plan": "c612c34454bd2da90460ecc5d2bd5380d34c56da66d3429c5abf28bed6a36e16",
+            "p_reference_frame.plan": "b827f8c0bcdbabad47293a5edecc9468d2118bafbf44e75978d77df12f658aec",
+            "p_spatial_prior.plan": "e03d9ebd19e0b6f7f1e1520bcf10ddbda2c8d1756b5cfc2595f5280477f58eff",
+            "p_synthesis.plan": "19ea110f70089d64be8f44962524409c963f422240385e2bde0faef2d60afef2"
+          },
+          "format": 2,
+          "hardware_compatibility": "exact",
+          "i_model_manifest_sha256": "75f04808166368c1420e06fadc089c37cd2c94c2bc37353a24ce7e228cec0122",
+          "kind": "nvcr-tensorrt-engine-bundle",
+          "model_profile_id": "dcvcrt-cvpr2025",
+          "model_profile_sha256": "414466eb974284ff938f018e20f2d7ce4b337bccdbcb387f31aac24be227380f",
+          "multiprocessor_count": 16,
+          "optimization_point": "360p",
+          "p_model_manifest_sha256": "2a9f153851bcc453be529119fb669c7a12c280016a72c3183d38cb813f0e545d",
+          "precision": "fp16",
+          "schema": "nvcr.engine-bundle.v2",
+          "shape_profile": "fixed",
+          "target_profile_id": "rtx3050-laptop-ubuntu2404",
+          "target_profile_sha256": "5a740e5de63a3a81c420cc2c0b5021fe5cbf89d9f63e54f488cb4a4b48020620",
+          "tensorrt_version_major": 10,
+          "tensorrt_version_minor": 9,
+          "tensorrt_version_patch": 0,
+          "visible_dimensions": {
+            "maximum": [
+              640,
+              360
+            ],
+            "minimum": [
+              640,
+              360
+            ],
+            "optimum": [
+              640,
+              360
+            ]
+          },
+          "workspace_mib": 1024
+        },
+        "path": "/opt/nvcr/engines/360p",
+        "sha256": "0d0eec542d67e128f5f4c529d74721b74701d912283dee5769d0e11ccc5fe891"
+      },
+      "540p": {
+        "build_command": {
+          "status": "unavailable"
+        },
+        "export_command": {
+          "status": "unavailable"
+        },
+        "manifest": {
+          "builder_optimization_level": 4,
+          "checksum_manifest": "engine.sha256",
+          "checksum_manifest_sha256": "6040b2dd8c5786f9a90418998284bf184ebbfe09b1dbabdd5720e99e00a78170",
+          "compute_capability_major": 8,
+          "compute_capability_minor": 6,
+          "cuda_runtime_version": 12080,
+          "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+          "engine_profile_id": "540p",
+          "engine_profile_sha256": "96efc1a3841a2c2e1ebe936ef7bda96b8e5a367a4ae672370452ea2ee8741d2d",
+          "files": {
+            "i_analysis.plan": "a2f8f7ca2ce2bdcf62634bc1fe5f4a108a81beee077449e6f8870bb5aee9c53d",
+            "i_entropy.bin": "c70ece2356eab799da5b271397e2fe5600a52223477a4bb8e9b0203c77cf210c",
+            "i_frame_manifest.json": "75f04808166368c1420e06fadc089c37cd2c94c2bc37353a24ce7e228cec0122",
+            "i_hyper_analysis.plan": "5474574ae60d3214002c0b5b552ea488b4585f4786f1a204063d5a467f463674",
+            "i_hyper_synthesis.plan": "d8d0371a8186c1c2e8a8df8b781a012ab08a6ab61d075bd35f656e120e614ac6",
+            "i_quant.bin": "34d6d0e99cdabc6758ef8001ab411bb0b4ecb9be1886af9c86b6b41d9c00a81d",
+            "i_spatial_prior_1.plan": "563dcd84b64640ba8f2938e124a723c5e22be48de95bc8c577502480040b266a",
+            "i_spatial_prior_2.plan": "8c4408e76a29c4a60736fcf4a1bfd4aeec7fe21c955ca9b427af260d5d86fbb5",
+            "i_spatial_prior_3.plan": "6acaca63fa5177df1169f34051a672305af5893e0382403af67f1eba10f20030",
+            "i_synthesis.plan": "575f828a88abb7e673680b3beea68469b48bf266bdaef603705d198e7134199d",
+            "p_analysis.plan": "c7aee7920ce572b617730ade80781505800f2ac7548cb29859074b409a366a01",
+            "p_entropy.bin": "c4e5c5e9a573624db272f4a77909abce3dcd0fc0f842afbdb177b31152aec06a",
+            "p_frame_manifest.json": "2a9f153851bcc453be529119fb669c7a12c280016a72c3183d38cb813f0e545d",
+            "p_hyper_analysis.plan": "0bcd5b1aa191aa04303cee6dd9da07fcc51b405d5d4f4de7b0950394bf837a2f",
+            "p_prior.plan": "05dcc3634a232ec3b5a99d5c99c5d968f751e9bad64b69261929b9e3f08340f1",
+            "p_quant.bin": "9a8cbc1082132be8b11251fc8d46bd011d17c6880fb6f0c24970ca0c46fe831e",
+            "p_reference_feature.plan": "aff31298eb5d5cc89c2131a6ea899fbf2d8c5a4b6bfd7d2396c8f9cbfadda7f0",
+            "p_reference_frame.plan": "a78125322a2fc2ab9201d7e72d2f74fa04e5833c507a5f91732e9b120cf3fbf0",
+            "p_spatial_prior.plan": "e530ebb57be8b83eb206f3a32e497702ae9a1ad28269bfae3d464c59a968d7d2",
+            "p_synthesis.plan": "e17d6ac44dbc044d8f36881eb144aaf4e64050f508c723d5e85c33c957f9e2ef"
+          },
+          "format": 2,
+          "hardware_compatibility": "exact",
+          "i_model_manifest_sha256": "75f04808166368c1420e06fadc089c37cd2c94c2bc37353a24ce7e228cec0122",
+          "kind": "nvcr-tensorrt-engine-bundle",
+          "model_profile_id": "dcvcrt-cvpr2025",
+          "model_profile_sha256": "414466eb974284ff938f018e20f2d7ce4b337bccdbcb387f31aac24be227380f",
+          "multiprocessor_count": 16,
+          "optimization_point": "540p",
+          "p_model_manifest_sha256": "2a9f153851bcc453be529119fb669c7a12c280016a72c3183d38cb813f0e545d",
+          "precision": "fp16",
+          "schema": "nvcr.engine-bundle.v2",
+          "shape_profile": "fixed",
+          "target_profile_id": "rtx3050-laptop-ubuntu2404",
+          "target_profile_sha256": "5a740e5de63a3a81c420cc2c0b5021fe5cbf89d9f63e54f488cb4a4b48020620",
+          "tensorrt_version_major": 10,
+          "tensorrt_version_minor": 9,
+          "tensorrt_version_patch": 0,
+          "visible_dimensions": {
+            "maximum": [
+              960,
+              540
+            ],
+            "minimum": [
+              960,
+              540
+            ],
+            "optimum": [
+              960,
+              540
+            ]
+          },
+          "workspace_mib": 1024
+        },
+        "path": "/opt/nvcr/engines/540p",
+        "sha256": "5e6a9b4f048bc66f6b0d39aa8bf8ebb88a26d9c694db1ae1284e6e4770d3faef"
+      },
+      "720p": {
+        "build_command": {
+          "status": "unavailable"
+        },
+        "export_command": {
+          "status": "unavailable"
+        },
+        "manifest": {
+          "builder_optimization_level": 2,
+          "checksum_manifest": "engine.sha256",
+          "checksum_manifest_sha256": "09aa39bcc24fbd3c4de491c0e77b61f2b31b462100aca0f02379dd1e2e85e40c",
+          "compute_capability_major": 8,
+          "compute_capability_minor": 6,
+          "cuda_runtime_version": 12080,
+          "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+          "engine_profile_id": "720p",
+          "engine_profile_sha256": "97f5268c32efbf5a166bd2aacf5902d452b358d3c67b0abb7d2e1965f7f45467",
+          "files": {
+            "i_analysis.plan": "e79e3ccfb3f1289fa3bb669cc6698fd2c3bb2945835fd81c665d86bf3b2d81ef",
+            "i_entropy.bin": "c70ece2356eab799da5b271397e2fe5600a52223477a4bb8e9b0203c77cf210c",
+            "i_frame_manifest.json": "75f04808166368c1420e06fadc089c37cd2c94c2bc37353a24ce7e228cec0122",
+            "i_hyper_analysis.plan": "a5a916b4bd2544cfe588881976aa66c2e2e514bc2bcd4cbbd8ed085e831d4489",
+            "i_hyper_synthesis.plan": "b742f2a329e3c7014328819d05129c64afe6bcc5e877e3be8d51d9e91e841838",
+            "i_quant.bin": "34d6d0e99cdabc6758ef8001ab411bb0b4ecb9be1886af9c86b6b41d9c00a81d",
+            "i_spatial_prior_1.plan": "964bb00b0b8c91789057145bf179adf467b9e1576d058453f774a78c2af3524d",
+            "i_spatial_prior_2.plan": "777f75d8094d6e5f17a3ce71a222b9c223ac48cafd8f0c9ca63ab2d2b9b11896",
+            "i_spatial_prior_3.plan": "159d8ee4b817fe28934374c846403849f4464b81e8f7df03462816d35e11fb8b",
+            "i_synthesis.plan": "2c93d8cd4812384778bb0a9f4a9cb3c64ee018d8087daa4d21da101caa8e20f9",
+            "p_analysis.plan": "b0f436673800eed08aff9080dd490c30e71bc96fdb1ac3c18575ff61fe59a96f",
+            "p_entropy.bin": "c4e5c5e9a573624db272f4a77909abce3dcd0fc0f842afbdb177b31152aec06a",
+            "p_frame_manifest.json": "2a9f153851bcc453be529119fb669c7a12c280016a72c3183d38cb813f0e545d",
+            "p_hyper_analysis.plan": "c93eefa598239226899d80a1d7886627307d735e60c1d6c577fff778fc8d757a",
+            "p_prior.plan": "038bfc261b25ce23bbbab2e2f7c5247429d2ba6b2efa79a859a921d2c1c61481",
+            "p_quant.bin": "9a8cbc1082132be8b11251fc8d46bd011d17c6880fb6f0c24970ca0c46fe831e",
+            "p_reference_feature.plan": "c3a46296e1a4502a874670df01bd2d62e8119ff33560c9772eb1ea5b4196be92",
+            "p_reference_frame.plan": "b8e8d48d4df4d99ef6ef5e1e9d173ff5d949a08f2d7bb96c2e2de6f8c870e74b",
+            "p_spatial_prior.plan": "c448218eb41271c38cc3fb91de5c194d7ab03e50804c8d4fb6734828e574ef7c",
+            "p_synthesis.plan": "de343ae49e3ba827a436743391a36609e1ea055039ef1021eeaaf08317636047"
+          },
+          "format": 2,
+          "hardware_compatibility": "exact",
+          "i_model_manifest_sha256": "75f04808166368c1420e06fadc089c37cd2c94c2bc37353a24ce7e228cec0122",
+          "kind": "nvcr-tensorrt-engine-bundle",
+          "model_profile_id": "dcvcrt-cvpr2025",
+          "model_profile_sha256": "414466eb974284ff938f018e20f2d7ce4b337bccdbcb387f31aac24be227380f",
+          "multiprocessor_count": 16,
+          "optimization_point": "720p",
+          "p_model_manifest_sha256": "2a9f153851bcc453be529119fb669c7a12c280016a72c3183d38cb813f0e545d",
+          "precision": "fp16",
+          "schema": "nvcr.engine-bundle.v2",
+          "shape_profile": "dynamic",
+          "target_profile_id": "rtx3050-laptop-ubuntu2404",
+          "target_profile_sha256": "5a740e5de63a3a81c420cc2c0b5021fe5cbf89d9f63e54f488cb4a4b48020620",
+          "tensorrt_version_major": 10,
+          "tensorrt_version_minor": 9,
+          "tensorrt_version_patch": 0,
+          "visible_dimensions": {
+            "maximum": [
+              1280,
+              720
+            ],
+            "minimum": [
+              64,
+              64
+            ],
+            "optimum": [
+              1280,
+              720
+            ]
+          },
+          "workspace_mib": 1024
+        },
+        "path": "/opt/nvcr/engines/720p",
+        "sha256": "46e1a52a62ded5d0c41298b34417c544164ab02015dd74559afabd1e1cda727c"
+      },
+      "cif": {
+        "build_command": {
+          "status": "unavailable"
+        },
+        "export_command": {
+          "status": "unavailable"
+        },
+        "manifest": {
+          "builder_optimization_level": 1,
+          "checksum_manifest": "engine.sha256",
+          "checksum_manifest_sha256": "a6e10dd7b2123bd894aa8781e03fe23210fc13ffd013c55a2f893c1f4698a81f",
+          "compute_capability_major": 8,
+          "compute_capability_minor": 6,
+          "cuda_runtime_version": 12080,
+          "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+          "engine_profile_id": "cif",
+          "engine_profile_sha256": "f3835570038719664d9a7c2417eb1010dfdaa8b9682bd5850ac40e557f614f0d",
+          "files": {
+            "i_analysis.plan": "a2ad09cc7a1960933949cc501a5fb10480d08708e030e3860417673a210e169b",
+            "i_entropy.bin": "c70ece2356eab799da5b271397e2fe5600a52223477a4bb8e9b0203c77cf210c",
+            "i_frame_manifest.json": "75f04808166368c1420e06fadc089c37cd2c94c2bc37353a24ce7e228cec0122",
+            "i_hyper_analysis.plan": "9ca6a83a21ec9f0cc376c21fc1a0ccbffc16d7d07fc019275a413966736f0c85",
+            "i_hyper_synthesis.plan": "4bd907c8c3a0cb0ed340fa1ddf1a3755ba5e6b44beff71251164b88a3c8445b0",
+            "i_quant.bin": "34d6d0e99cdabc6758ef8001ab411bb0b4ecb9be1886af9c86b6b41d9c00a81d",
+            "i_spatial_prior_1.plan": "9d21583fc38277aa5c6bb2f089eeb403cd252c40db086c968f7b4dca97aa579d",
+            "i_spatial_prior_2.plan": "51c8dfe0d6951e2a2c22db7dc0c9c09be762c9bbc27400a2c952fe16552315f6",
+            "i_spatial_prior_3.plan": "8e5e100160840d94fbfbe247e03029005e1f4012aa65472be5734d05c3608865",
+            "i_synthesis.plan": "b4722f100750c586238efacf449c26d269437ab0cdd1710f73a1a76592a1b01a",
+            "p_analysis.plan": "29afddca6fc9ef618a65f176220ef7f5a7b373996a7e23da24a08aec8f0b0b8e",
+            "p_entropy.bin": "c4e5c5e9a573624db272f4a77909abce3dcd0fc0f842afbdb177b31152aec06a",
+            "p_frame_manifest.json": "2a9f153851bcc453be529119fb669c7a12c280016a72c3183d38cb813f0e545d",
+            "p_hyper_analysis.plan": "206e3f3474aede2eb1251434ce6aef79fdcd498f9d5ab84f445e442a47dc3a17",
+            "p_prior.plan": "027d92277e1b84a267a48edda0d6aacce5e8cccb02c062bee08b46c83b1a2d93",
+            "p_quant.bin": "9a8cbc1082132be8b11251fc8d46bd011d17c6880fb6f0c24970ca0c46fe831e",
+            "p_reference_feature.plan": "51ca952e0ac3f94d97f09659ed950892e813276686cf8b34a25f0e434c2caa24",
+            "p_reference_frame.plan": "7a82ee6b39ee5968a8c64f70b338eab53932a1947c282da66602ed76aeb94595",
+            "p_spatial_prior.plan": "2cf6417c9e4c2abd890866e983132e9f3de460f36abfc8be8050391a321e9fe7",
+            "p_synthesis.plan": "04f0f0d8a10d19e30b94a77a99384dbe475d0654f9eb5c41fca9e3522570ce26"
+          },
+          "format": 2,
+          "hardware_compatibility": "exact",
+          "i_model_manifest_sha256": "75f04808166368c1420e06fadc089c37cd2c94c2bc37353a24ce7e228cec0122",
+          "kind": "nvcr-tensorrt-engine-bundle",
+          "model_profile_id": "dcvcrt-cvpr2025",
+          "model_profile_sha256": "414466eb974284ff938f018e20f2d7ce4b337bccdbcb387f31aac24be227380f",
+          "multiprocessor_count": 16,
+          "optimization_point": "cif",
+          "p_model_manifest_sha256": "2a9f153851bcc453be529119fb669c7a12c280016a72c3183d38cb813f0e545d",
+          "precision": "fp16",
+          "schema": "nvcr.engine-bundle.v2",
+          "shape_profile": "dynamic",
+          "target_profile_id": "rtx3050-laptop-ubuntu2404",
+          "target_profile_sha256": "5a740e5de63a3a81c420cc2c0b5021fe5cbf89d9f63e54f488cb4a4b48020620",
+          "tensorrt_version_major": 10,
+          "tensorrt_version_minor": 9,
+          "tensorrt_version_patch": 0,
+          "visible_dimensions": {
+            "maximum": [
+              352,
+              288
+            ],
+            "minimum": [
+              64,
+              64
+            ],
+            "optimum": [
+              352,
+              288
+            ]
+          },
+          "workspace_mib": 512
+        },
+        "path": "/opt/nvcr/engines/cif",
+        "sha256": "81d47440f482f56d5bffc135f6a5410513b3d3a96e608f6b6dc607c8c1d3e40c"
+      },
+      "qcif": {
+        "build_command": {
+          "status": "unavailable"
+        },
+        "export_command": {
+          "status": "unavailable"
+        },
+        "manifest": {
+          "builder_optimization_level": 1,
+          "checksum_manifest": "engine.sha256",
+          "checksum_manifest_sha256": "6bea0ae6318b1b6adf26606fa618d544b256fc8ee504ba1f843b865a0d4508ae",
+          "compute_capability_major": 8,
+          "compute_capability_minor": 6,
+          "cuda_runtime_version": 12080,
+          "device_name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+          "engine_profile_id": "qcif",
+          "engine_profile_sha256": "e8e4e93f8195913ac2b456dc4235f72a3bfbcadb5eb2e8f5a063b1769a7d88f3",
+          "files": {
+            "i_analysis.plan": "84a2189da2d95e6b323b61e7a76d2c0fe943a72f118ebd40f45ef28fa8fe0d3a",
+            "i_entropy.bin": "c70ece2356eab799da5b271397e2fe5600a52223477a4bb8e9b0203c77cf210c",
+            "i_frame_manifest.json": "75f04808166368c1420e06fadc089c37cd2c94c2bc37353a24ce7e228cec0122",
+            "i_hyper_analysis.plan": "83bee29af548190857bb05deee9555b79059d527a14e6c264e2d83108be7fb5f",
+            "i_hyper_synthesis.plan": "5e29779e9dc4afffd7de9e896de94e2c71aebea09ad628f735cdaadf1833f477",
+            "i_quant.bin": "34d6d0e99cdabc6758ef8001ab411bb0b4ecb9be1886af9c86b6b41d9c00a81d",
+            "i_spatial_prior_1.plan": "bcc8f122be55f4aacc624c7da7ff2d1470876f80020ceeb79b5d20d3609605e4",
+            "i_spatial_prior_2.plan": "c542a56bd2768d3b368a4a1218c94804a7a4def4bb92ea32a87625f1ceae8a19",
+            "i_spatial_prior_3.plan": "253f336a559bd95c6abdda33b6d780e6f94b826d0b0d89b5a9ddb3d363983f57",
+            "i_synthesis.plan": "95e13c260a9cca7d8ccfe8f3d45b42ecefc28333d7d491557537832da21700ca",
+            "p_analysis.plan": "70af560e65f2b3eb25403879187ad2b0813add39b006e548d71954b8482a3e00",
+            "p_entropy.bin": "c4e5c5e9a573624db272f4a77909abce3dcd0fc0f842afbdb177b31152aec06a",
+            "p_frame_manifest.json": "2a9f153851bcc453be529119fb669c7a12c280016a72c3183d38cb813f0e545d",
+            "p_hyper_analysis.plan": "cfed9730ca14a2adcce4946bfddd3ca76834e130d04bec9ba82e38ae3818ed17",
+            "p_prior.plan": "f5ab66575fc9457b1231d8b27b9440e00625d00837eb7ef88b86a699d4399f32",
+            "p_quant.bin": "9a8cbc1082132be8b11251fc8d46bd011d17c6880fb6f0c24970ca0c46fe831e",
+            "p_reference_feature.plan": "fa795081b72ca7fffa2827e6b4fe7fefe0a41104c45be9f7dcbd3f54cf9cacc9",
+            "p_reference_frame.plan": "7374fdcb3866cd7a05b7e8b056527a007599356236e93e1d601c9e391fa06eb6",
+            "p_spatial_prior.plan": "cba7d350506331bc45b6bace752088ee7d7129e271b4877221155e283b3511b8",
+            "p_synthesis.plan": "9b9a09a1cc032d8ea51d6435840c86de875499da6ebae4da0a759d06498b6f61"
+          },
+          "format": 2,
+          "hardware_compatibility": "exact",
+          "i_model_manifest_sha256": "75f04808166368c1420e06fadc089c37cd2c94c2bc37353a24ce7e228cec0122",
+          "kind": "nvcr-tensorrt-engine-bundle",
+          "model_profile_id": "dcvcrt-cvpr2025",
+          "model_profile_sha256": "414466eb974284ff938f018e20f2d7ce4b337bccdbcb387f31aac24be227380f",
+          "multiprocessor_count": 16,
+          "optimization_point": "qcif",
+          "p_model_manifest_sha256": "2a9f153851bcc453be529119fb669c7a12c280016a72c3183d38cb813f0e545d",
+          "precision": "fp16",
+          "schema": "nvcr.engine-bundle.v2",
+          "shape_profile": "dynamic",
+          "target_profile_id": "rtx3050-laptop-ubuntu2404",
+          "target_profile_sha256": "5a740e5de63a3a81c420cc2c0b5021fe5cbf89d9f63e54f488cb4a4b48020620",
+          "tensorrt_version_major": 10,
+          "tensorrt_version_minor": 9,
+          "tensorrt_version_patch": 0,
+          "visible_dimensions": {
+            "maximum": [
+              176,
+              144
+            ],
+            "minimum": [
+              64,
+              64
+            ],
+            "optimum": [
+              176,
+              144
+            ]
+          },
+          "workspace_mib": 512
+        },
+        "path": "/opt/nvcr/engines/qcif",
+        "sha256": "14e13f9c8f4080348836813b716c9a0fc5d684ec78e1482218c6448d2ce01f8f"
+      }
+    },
+    "inputs": {
+      "akiyo-qcif": {
+        "content_id": "akiyo",
+        "evaluated_frames": 100,
+        "evaluated_sha256": "c7c95c0e81df52f6819c6bea4da8a91f0b3a39afb1d68f72d7768a47405e3045",
+        "provenance": {
+          "acquisition": null,
+          "preprocessing": null,
+          "status": "unknown"
+        },
+        "source_bytes": 11404800,
+        "source_sha256": "e1efee0e95c6d27aefe2294a727768334db8466e67bf4a49cf8f5b2fb8b49108",
+        "start_frame": 0
+      },
+      "basketball-1080p": {
+        "content_id": "basketball-drive",
+        "evaluated_frames": 100,
+        "evaluated_sha256": "e004197c0a412ad50ba5746c826e7aaa112dfc18a0cdf6953f4fe3cd83445cef",
+        "provenance": {
+          "acquisition": null,
+          "preprocessing": null,
+          "status": "unknown"
+        },
+        "source_bytes": 1555200000,
+        "source_sha256": "dc89d33e4910379dca548c5a807c2c83dde471014a09a852c370bd49fb354543",
+        "start_frame": 0
+      },
+      "basketball-360p": {
+        "content_id": "basketball-drive",
+        "evaluated_frames": 100,
+        "evaluated_sha256": "09b7d325b7f209766e88f4621ae5ea03923ea17d08c8ee1a30577b81988a449b",
+        "provenance": {
+          "acquisition": null,
+          "preprocessing": null,
+          "status": "unknown"
+        },
+        "source_bytes": 172800000,
+        "source_sha256": "23f7de744d5e05d620629d2e6b5a443514d92ef4c3d7b463f65a9a900ef3fb9d",
+        "start_frame": 0
+      },
+      "basketball-540p": {
+        "content_id": "basketball-drive",
+        "evaluated_frames": 100,
+        "evaluated_sha256": "4ffe7801f3adfaef8ef4480a2b72d9696ca0459570b9846d3445eafda670c053",
+        "provenance": {
+          "acquisition": null,
+          "preprocessing": null,
+          "status": "unknown"
+        },
+        "source_bytes": 388800000,
+        "source_sha256": "352ef44449f7a4ec339e54753e15769f9e7ed274cd323f17a03a540ad5ca300c",
+        "start_frame": 0
+      },
+      "fourpeople-720p": {
+        "content_id": "fourpeople",
+        "evaluated_frames": 100,
+        "evaluated_sha256": "a69f104f98db26de88efb68438d5b5f4ecfd2f47459f542f3d2ce3e9cf72b69e",
+        "provenance": {
+          "acquisition": null,
+          "preprocessing": null,
+          "status": "unknown"
+        },
+        "source_bytes": 830822400,
+        "source_sha256": "e7a4eb993d36ea136d24c4e1d655ebdaf5c44b11d14cf8ef12b5748ad7bb037f",
+        "start_frame": 0
+      },
+      "waterfall-cif": {
+        "content_id": "waterfall",
+        "evaluated_frames": 100,
+        "evaluated_sha256": "729250456374cb2cfe71b17e0c8ea7399b5c5c9e941e145f0aa30fcbba209ab5",
+        "provenance": {
+          "acquisition": null,
+          "preprocessing": null,
+          "status": "unknown"
+        },
+        "source_bytes": 39536640,
+        "source_sha256": "ead14413b145932e039e760f9f4c5a0e8d56d5ecb7f5335eb538911d05169f89",
+        "start_frame": 0
+      }
+    }
+  },
+  "oci_release": {
+    "binary_sha256": "8d12a772ede71839d9c3bfdbabd43da10e917d6bcdaa52199f3c45dc49dd69b0",
+    "image": {
+      "binary_sha256": "8d12a772ede71839d9c3bfdbabd43da10e917d6bcdaa52199f3c45dc49dd69b0",
+      "digest": "sha256:8106c2275a4455b4ff9360b13124c1e877ba9ad8ee0fc1681bde13dcce422366",
+      "id": "sha256:8106c2275a4455b4ff9360b13124c1e877ba9ad8ee0fc1681bde13dcce422366",
+      "source_revision": "6a66db7a98081f9210dedb49d768899bd4e9f2b7",
+      "version": "1.0.7"
+    },
+    "kind": "oci-release",
+    "native_build_cache": "not distributed with release image"
+  },
+  "fingerprint": "de0b3b16b5fb30fbe3cc6479027fbe773ad22ae01f71236385a664f24a5cb875"
+}
