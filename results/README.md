@@ -27,4 +27,4 @@ Markdown summaries are derived views.
 
 For the measurement method, see [Performance](../docs/performance.md).
 
-The current RTX 5060 result supersedes both earlier diagnostic cohorts. All process and codec execution values are retained separately, with same-session warm-up/reset and input/artifact identities. RTX 3050 consolidation is pending; neither laptop dataset is a matched Python or native-Linux baseline.
+The current RTX 5060 result supersedes both earlier diagnostic cohorts. All process and codec execution values are retained separately, with same-session warm-up/reset and input/artifact identities. RTX 3050 consolidation is complete; neither laptop dataset is a matched Python or native-Linux baseline.
