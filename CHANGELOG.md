@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.8](https://github.com/0elghati/nvcr/compare/v1.0.7...v1.0.8) (2026-10-14)
+
+
+### Bug Fixes
+
+* laptop common timing ([#168](https://github.com/0elghati/nvcr/issues/168)) ([1db6df3](https://github.com/0elghati/nvcr/commit/1db6df3293f4ac705a38de848bb43f4f64e0eac6))
+* rtx3050 portability measurements ([#167](https://github.com/0elghati/nvcr/issues/167)) ([9631102](https://github.com/0elghati/nvcr/commit/96311021776b9f5863017f8eb1bc506e330470c1))
+
 ## [1.0.7](https://github.com/0elghati/nvcr/compare/v1.0.6...v1.0.7) (2026-09-30)
 
 
