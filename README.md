@@ -163,6 +163,12 @@ outside the current release.
 - [Performance and benchmarking](docs/performance.md)
 - [Results](results/README.md)
 
+## Citation and evidence
+
+See [CITATION.cff](CITATION.cff) for the software citation metadata.
+The supporting measurement and validation dataset is available at
+[doi:10.5281/zenodo.23373151](https://doi.org/10.5281/zenodo.23373151).
+
 ## Acknowledgements
 
 NVCR's first codec integration is with the DCVC-RT, introduced by Zhaoyang Jia,
