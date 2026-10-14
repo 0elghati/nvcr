@@ -1,0 +1,28 @@
+{
+  "status": "passed",
+  "date": "2026-10-13",
+  "operations": 1440,
+  "conditions": 144,
+  "condition_statistics": 576,
+  "smoke_operations": 8,
+  "preflight_checks": 17,
+  "checks": [
+    "all exported process/codec/initialization values match original execution records exactly",
+    "complete ten-repetition coverage independently audited",
+    "complete input and engine identities retained",
+    "cold/warm-reset encode and decode hash matches verified"
+  ],
+  "measurement_sources": {
+    "cli/main.cpp": "710f301d26698dc96729bbc3b8eff3b973e207bfd596056af72cd11e1e415455",
+    "scripts/measure_python_reference.py": "41c1e806a43e12948edff221e45db1ddb939c7c34964ddd50be51ffbe4b70778",
+    "scripts/measurement_campaign.py": "d93711daa8081abb9e7df77577cff1b062d319166e9eed1741b0a8b0b6d0c926",
+    "scripts/measurement_environment.py": "a0988e3c0e8ff45578c372e5c0d52f3ff07552a30bb1c19b6efcf7e589979f0f",
+    "scripts/measurement_metrics.py": "701699fca9ee28643e1c02c5aa80ecfb82ccaa83d69cda71e55dbf0e35887b31"
+  },
+  "exporter_sha256": "a5459d19f75ef416389a47fb9a953a4f41233c3d543b28ff5c8445eb988b07fa",
+  "tests": [
+    "3 measurement-export tests passed (including throughput-only scope)",
+    "3 laptop runner tests passed",
+    "mocked PowerShell launcher checks passed"
+  ]
+}

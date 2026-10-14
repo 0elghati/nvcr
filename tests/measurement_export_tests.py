@@ -26,7 +26,7 @@ class MeasurementExportTests(unittest.TestCase):
                 "sequences": [{"sequence_id": "sample", "width": 176, "height": 144}],
                 "qps": [0], "gops": [1], "implementations": ["python"],
                 "repetitions": 10, "warmup_frames": 10,
-                "modes": ["throughput", "memory"],
+                "modes": ["throughput", "memory", "quality"],
             }
             (campaign / "run.json").write_text(json.dumps({
                 "manifest": manifest, "fingerprint": "def", "expected_operations": 40}))
@@ -118,6 +118,24 @@ class MeasurementExportTests(unittest.TestCase):
                 self.assertEqual(len(measurements), 40)
                 self.assertEqual(float(measurements[0]["throughput_fps"]), 50.0)
                 self.assertEqual(measurements[0]["entropy_bytes"], "900")
+                manifest["modes"] = ["throughput"]
+                (campaign / "run.json").write_text(json.dumps({
+                    "manifest": manifest, "fingerprint": "def", "expected_operations": 20}))
+                analysis["aggregates"] = [a for a in aggregates if a["mode"] == "throughput"]
+                (campaign / "analysis.json").write_text(json.dumps(analysis))
+                (campaign / "rd-points.json").write_text(json.dumps({
+                    "schema": "nvcr.measurement.rd.v1", "points": []}))
+                (campaign / "observations.jsonl").write_text("".join(
+                    json.dumps(r) + "\n" for r in observations if r["mode"] == "throughput"))
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exporter.main()
+                with (output / "condition-statistics.csv").open() as stream:
+                    timing_stats = list(csv.DictReader(stream))
+                self.assertEqual(len(timing_stats), 8)
+                self.assertEqual({r["metric"] for r in timing_stats},
+                    {"process_seconds", "process_fps", "codec_seconds", "throughput_fps"})
+                with (output / "operation-measurements.csv").open() as stream:
+                    self.assertEqual(len(list(csv.DictReader(stream))), 20)
                 analysis["status"] = "incomplete"
                 (campaign / "analysis.json").write_text(json.dumps(analysis))
                 with self.assertRaisesRegex(ValueError, "complete campaign"):

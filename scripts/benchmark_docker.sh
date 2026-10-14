@@ -154,6 +154,8 @@ fi
     echo "benchmark_docker: cannot resolve image identity: $image" >&2
     exit 2
 }
+image_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image")"
+[[ -n "$image_revision" ]] || image_revision=unknown
 
 gpu_args=(--gpus all)
 for device in /dev/nvidia-uvm /dev/nvidia-uvm-tools; do
@@ -192,8 +194,10 @@ container_env=(
     -e NVCR_BENCH_EXECUTION_MODE=docker
     -e "NVCR_BENCH_CONTAINER_IMAGE=$image"
     -e "NVCR_BENCH_CONTAINER_DIGEST=$image_digest"
-    -e "NVCR_BENCH_COMMIT=$commit"
-    -e "NVCR_BENCH_DIRTY=$dirty"
+    -e "NVCR_BENCH_COMMIT=$image_revision"
+    -e NVCR_BENCH_DIRTY=null
+    -e "NVCR_BENCH_HARNESS_COMMIT=$commit"
+    -e "NVCR_BENCH_HARNESS_DIRTY=$dirty"
     -e "NVCR_BENCH_HARDWARE=$hardware"
     -e "NVCR_BENCH_QCIF_ENGINE_DIR=$engine_container_root/dcvcrt-qcif"
     -e "NVCR_BENCH_CIF_ENGINE_DIR=$engine_container_root/dcvcrt-cif"

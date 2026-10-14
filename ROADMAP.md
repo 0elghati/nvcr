@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-09-22
+Last reviewed: 2026-10-13
 
 ## Product direction
 
@@ -68,6 +68,19 @@ records.
 The measurement contract and execution commands are documented in
 [measurement-contract.md](docs/experiments/measurement-contract.md) and
 [measurement-runbook.md](docs/experiments/measurement-runbook.md).
+
+RTX 5060 Laptop now retains the corrected NVCR 1.0.7 Docker/WSL2 timing
+campaign under results/rtx5060/measurement: all 1,440 throughput executions and
+576 condition statistics, with common process/codec timers and same-session
+warm-up/reset. The eight-operation smoke and 17 preflight checks pass.
+Input hashes, exact engine identities, the OCI/executable receipt and measured
+harness state are retained. No full memory or quality campaign was run.
+The earlier separate-process-warm-up diagnostics are superseded in Git history.
+
+The laptop launcher and selected-pass runner retain the existing release binary
+and engines; only the measurement image adds NumPy for bounded smoke quality
+checks. RTX 3050 consolidation, paper integration and broader release gates
+remain open. No new GPU campaign was launched during export.
 
 ## Later codec integrations
 

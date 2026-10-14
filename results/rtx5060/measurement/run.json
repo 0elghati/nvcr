@@ -1,0 +1,6734 @@
+{
+  "expected_keys": [
+    [
+      "basketball-1080p-q42-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r0-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r0-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r1-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r1-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r2-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r2-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r3-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r3-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r4-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r4-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r5-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r5-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r6-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r6-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r7-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r7-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r8-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r8-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q63-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q63-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q42-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q63-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q42-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q42-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q0-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q0-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q21-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q63-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q0-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q21-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-1080p-q0-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q42-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "waterfall-cif-q0-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q21-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q21-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q0-g30-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q42-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "akiyo-qcif-q21-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "fourpeople-720p-q42-g100-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-360p-q63-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q21-g1-throughput-r9-nvcr",
+      "decode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r9-nvcr",
+      "encode"
+    ],
+    [
+      "basketball-540p-q63-g100-throughput-r9-nvcr",
+      "decode"
+    ]
+  ],
+  "expected_operations": 1440,
+  "fingerprint": "656b14e0aaefc5f428f6c376a7624f515cbd6ff50ed113f489e4ef677b2e8849",
+  "manifest": {
+    "build_dir": "/opt/nvcr/build-evidence-not-distributed",
+    "engine_root": "/opt/nvcr/engines",
+    "execution": {
+      "container_digest": "sha256:f4f80c675c45917b953fd81f759a2232a7e34d7deee4e943ec934e9d70607374",
+      "image": {
+        "binary_sha256": "8d12a772ede71839d9c3bfdbabd43da10e917d6bcdaa52199f3c45dc49dd69b0",
+        "digest": "sha256:f4f80c675c45917b953fd81f759a2232a7e34d7deee4e943ec934e9d70607374",
+        "id": "sha256:f4f80c675c45917b953fd81f759a2232a7e34d7deee4e943ec934e9d70607374",
+        "source_revision": "6a66db7a98081f9210dedb49d768899bd4e9f2b7",
+        "version": "1.0.7"
+      },
+      "mode": "container"
+    },
+    "gops": [
+      1,
+      30,
+      100
+    ],
+    "implementations": [
+      "nvcr"
+    ],
+    "model_profile": "/workspace/nvcr/configs/models/dcvcrt-cvpr2025.json",
+    "modes": [
+      "throughput"
+    ],
+    "nvcr": "/opt/nvcr/bin/nvcr",
+    "order_seed": 20260919,
+    "provenance_note": "NVCR-only laptop timing; identical controlled-study timing/warm-up contract. Image identity is separate from the mounted measurement harness.",
+    "qps": [
+      0,
+      21,
+      42,
+      63
+    ],
+    "quality_repetitions": 1,
+    "reference_python": "/usr/bin/python3",
+    "reference_reset_interval": 64,
+    "reference_root": "/workspace/nvcr/reference-not-selected",
+    "repetitions": 10,
+    "schema": "nvcr.measurement.campaign.v1",
+    "sequences": [
+      {
+        "content_id": "akiyo",
+        "fps": 30,
+        "frames": 100,
+        "height": 144,
+        "path": "/input/qcif/akiyo_qcif.yuv",
+        "pixel_format": "yuv420p8",
+        "profile": "qcif",
+        "provenance": {
+          "acquisition": null,
+          "preprocessing": null,
+          "status": "unknown"
+        },
+        "sequence_id": "akiyo-qcif",
+        "width": 176
+      },
+      {
+        "content_id": "waterfall",
+        "fps": 30,
+        "frames": 100,
+        "height": 288,
+        "path": "/input/cif/waterfall_cif.yuv",
+        "pixel_format": "yuv420p8",
+        "profile": "cif",
+        "provenance": {
+          "acquisition": null,
+          "preprocessing": null,
+          "status": "unknown"
+        },
+        "sequence_id": "waterfall-cif",
+        "width": 352
+      },
+      {
+        "content_id": "basketball-drive",
+        "fps": 50,
+        "frames": 100,
+        "height": 360,
+        "path": "/input/360p/BasketballDrive_640x360_50.yuv",
+        "pixel_format": "yuv420p8",
+        "profile": "360p",
+        "provenance": {
+          "acquisition": null,
+          "preprocessing": null,
+          "status": "unknown"
+        },
+        "sequence_id": "basketball-360p",
+        "width": 640
+      },
+      {
+        "content_id": "basketball-drive",
+        "fps": 50,
+        "frames": 100,
+        "height": 540,
+        "path": "/input/540p/BasketballDrive_960x540_50.yuv",
+        "pixel_format": "yuv420p8",
+        "profile": "540p",
+        "provenance": {
+          "acquisition": null,
+          "preprocessing": null,
+          "status": "unknown"
+        },
+        "sequence_id": "basketball-540p",
+        "width": 960
+      },
+      {
+        "content_id": "fourpeople",
+        "fps": 30,
+        "frames": 100,
+        "height": 720,
+        "path": "/input/720p/FourPeople_1280x720_60.yuv",
+        "pixel_format": "yuv420p8",
+        "profile": "720p",
+        "provenance": {
+          "acquisition": null,
+          "preprocessing": null,
+          "status": "unknown"
+        },
+        "sequence_id": "fourpeople-720p",
+        "width": 1280
+      },
+      {
+        "content_id": "basketball-drive",
+        "fps": 60,
+        "frames": 100,
+        "height": 1080,
+        "path": "/input/hd/BasketballDrive_1920x1080_50.yuv",
+        "pixel_format": "yuv420p8",
+        "profile": "1080p",
+        "provenance": {
+          "acquisition": null,
+          "preprocessing": null,
+          "status": "unknown"
+        },
+        "sequence_id": "basketball-1080p",
+        "width": 1920
+      }
+    ],
+    "target_profile": "/workspace/nvcr/configs/targets/rtx5060-laptop-ubuntu2404.json",
+    "timeout_seconds": 1800,
+    "warmup_frames": 10
+  },
+  "preflight_identity": {
+    "assets": {
+      "checkpoints": {},
+      "engines": {
+        "1080p": {
+          "build_command": {
+            "status": "unavailable"
+          },
+          "export_command": {
+            "status": "unavailable"
+          },
+          "manifest": {
+            "builder_optimization_level": 2,
+            "checksum_manifest": "engine.sha256",
+            "checksum_manifest_sha256": "bb3b26190e9841d64d2a50dab6f99cfb45b126f4c9af5ffe1e4aabbd310c28b1",
+            "compute_capability_major": 12,
+            "compute_capability_minor": 0,
+            "cuda_runtime_version": 12080,
+            "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+            "engine_profile_id": "1080p",
+            "engine_profile_sha256": "e1f3103afbcf5a98b7e07252e8dba5ac0af1330af111384796891bf2fe9a6195",
+            "files": {
+              "i_analysis.plan": "0193f15651d9712b8818590a8ddad5aac724a232280a336791395421263191c6",
+              "i_entropy.bin": "c70ece2356eab799da5b271397e2fe5600a52223477a4bb8e9b0203c77cf210c",
+              "i_frame_manifest.json": "57193f5bf10a82cd25123c884208813eeb5c5d8245ee8042ab4430a7e700c22b",
+              "i_hyper_analysis.plan": "fb76261043624389d39bc9605f6b9aa836eb0dd5602416a4222b5663c33680d9",
+              "i_hyper_synthesis.plan": "fef7fd4c208d3d27f08bcc947847eeb817143e2186c8de8bae8e92adabbf4a90",
+              "i_quant.bin": "34d6d0e99cdabc6758ef8001ab411bb0b4ecb9be1886af9c86b6b41d9c00a81d",
+              "i_spatial_prior_1.plan": "f3fd1fc33b3fbe3c28b1152895f0e03a3eb35f68be6910b4c8b2018168c50d19",
+              "i_spatial_prior_2.plan": "b48d9c4a0cc29ce6bc994ff51ee414d67c26525ed540ce897e17aa3169d3defa",
+              "i_spatial_prior_3.plan": "11a6399d0b23fccf466dd2d45c5fe4578b45a3b589519a1a995fa21e58b61637",
+              "i_synthesis.plan": "3e385a131fa49a571d0959747b8eb2b7b64f0c22ed2b6b06c9ea72c44a439621",
+              "p_analysis.plan": "866402e9e8d4669cecf56df94e02cd5eec8227bdeade01004de55d4020da2595",
+              "p_entropy.bin": "c4e5c5e9a573624db272f4a77909abce3dcd0fc0f842afbdb177b31152aec06a",
+              "p_frame_manifest.json": "5a1587e4480daa26471a7eea97964f1e9572b0832c9d1f3217fe4730f71beede",
+              "p_hyper_analysis.plan": "198ab5c1332e2f681988eacd3daa88bf4f5687435a84dfa3c516fe27ae89d278",
+              "p_prior.plan": "cf34e75e824d92a3bb7013e67728f4dbb5c01d38a0a58c66b8b4f2345dfb3bdc",
+              "p_quant.bin": "9a8cbc1082132be8b11251fc8d46bd011d17c6880fb6f0c24970ca0c46fe831e",
+              "p_reference_feature.plan": "6b6e16fba62668472a4dcafc55194c8ffb3fed2430973a64220a57c2dc79bade",
+              "p_reference_frame.plan": "6b7cbeb64a54abb8630a330c508dbd930b8e5c231e13d2839bf99a28f93dcc6d",
+              "p_spatial_prior.plan": "2680d2bf4cfa926849165b67792043e661b953a214a342f9780b65e1d71d0c30",
+              "p_synthesis.plan": "c68915f66240f5c204cacb3d09c8a958551c63688715af47b4c4f9217485b90b"
+            },
+            "format": 2,
+            "hardware_compatibility": "exact",
+            "i_model_manifest_sha256": "57193f5bf10a82cd25123c884208813eeb5c5d8245ee8042ab4430a7e700c22b",
+            "kind": "nvcr-tensorrt-engine-bundle",
+            "model_profile_id": "dcvcrt-cvpr2025",
+            "model_profile_sha256": "414466eb974284ff938f018e20f2d7ce4b337bccdbcb387f31aac24be227380f",
+            "multiprocessor_count": 26,
+            "optimization_point": "1080p",
+            "p_model_manifest_sha256": "5a1587e4480daa26471a7eea97964f1e9572b0832c9d1f3217fe4730f71beede",
+            "precision": "fp16",
+            "schema": "nvcr.engine-bundle.v2",
+            "shape_profile": "dynamic",
+            "target_profile_id": "rtx5060-laptop-ubuntu2404",
+            "target_profile_sha256": "8f4bf33777bc6361faa83430bb6a6f0bf4853a40668ae5a49926461930d8ac76",
+            "tensorrt_version_major": 10,
+            "tensorrt_version_minor": 9,
+            "tensorrt_version_patch": 0,
+            "visible_dimensions": {
+              "maximum": [
+                1920,
+                1080
+              ],
+              "minimum": [
+                64,
+                64
+              ],
+              "optimum": [
+                1920,
+                1080
+              ]
+            },
+            "workspace_mib": 1024
+          },
+          "path": "/opt/nvcr/engines/bundles/dcvcrt/rtx5060-laptop-ubuntu2404/1080p/d13d7c9370e4500d1512392adfecc1e2b0f91187bd8a6c87ada9a7ba80b0baac",
+          "sha256": "edc7ed71f9e8ff6f341af1b2509f25380ae2427b30c635c2e20efc442667b58c"
+        },
+        "360p": {
+          "build_command": {
+            "status": "unavailable"
+          },
+          "export_command": {
+            "status": "unavailable"
+          },
+          "manifest": {
+            "builder_optimization_level": 4,
+            "checksum_manifest": "engine.sha256",
+            "checksum_manifest_sha256": "f84cc1fb12383b2b1a436b4b932b8b80e3ff682007c89f55afe7af2237c6ce40",
+            "compute_capability_major": 12,
+            "compute_capability_minor": 0,
+            "cuda_runtime_version": 12080,
+            "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+            "engine_profile_id": "360p",
+            "engine_profile_sha256": "d09bc33518e983b3d3b82b86e7b62ff145d134fa021bf7f1ee3164fc5d6a5ec0",
+            "files": {
+              "i_analysis.plan": "91152e5fd1a32c7720455a7cae6f96cc3c25f4a88093a621c38c9b6a6ffaf68f",
+              "i_entropy.bin": "c70ece2356eab799da5b271397e2fe5600a52223477a4bb8e9b0203c77cf210c",
+              "i_frame_manifest.json": "57193f5bf10a82cd25123c884208813eeb5c5d8245ee8042ab4430a7e700c22b",
+              "i_hyper_analysis.plan": "da6661b0019f7e32835c217febb5a4f9fdc6798bad95361652f128bf45d4dd5f",
+              "i_hyper_synthesis.plan": "e96aebc09bc63f56e27a2e247564c8e3a8ab23c9ce6a7bd7cebe5c1e3f79854e",
+              "i_quant.bin": "34d6d0e99cdabc6758ef8001ab411bb0b4ecb9be1886af9c86b6b41d9c00a81d",
+              "i_spatial_prior_1.plan": "f31a35d45c983e79a3f09c8c2d58299565a7898433568d3ac60a11f22cc91a59",
+              "i_spatial_prior_2.plan": "cad87bbade2ae34f7ea1ed7cfa5be42bf0f0e10b44f87861487980d4f929f2b6",
+              "i_spatial_prior_3.plan": "60c356799f4fb33f5bb28b81f54d415865f40501372ca4c21a980f6626b3f30e",
+              "i_synthesis.plan": "5a37bec3d5d4fd762f96f557b36a3859e61ec5c12f8dc5f35269d05b43ca0d53",
+              "p_analysis.plan": "a1a5c48d11719bf7cf036982a1de4da4634d41b2fdbbb4dd7bd8e8485d83b06b",
+              "p_entropy.bin": "c4e5c5e9a573624db272f4a77909abce3dcd0fc0f842afbdb177b31152aec06a",
+              "p_frame_manifest.json": "5a1587e4480daa26471a7eea97964f1e9572b0832c9d1f3217fe4730f71beede",
+              "p_hyper_analysis.plan": "6e9ebb0fd0eac9e66cc878be6bc07bbb97e2ce2e3d7e85d0ffd157b3f1976b6e",
+              "p_prior.plan": "6e022a5ca46f52e51eb8c464e176e9b62859d0f5b14703a1473791e9d2f19a6d",
+              "p_quant.bin": "9a8cbc1082132be8b11251fc8d46bd011d17c6880fb6f0c24970ca0c46fe831e",
+              "p_reference_feature.plan": "cd3e2292a514f7a1f6468ae45dd23b356447c0e2c6e599394edcee1061dce1cb",
+              "p_reference_frame.plan": "5849e92d935f34ba943c67d1c42041bd7300dbd330c3231d6fea01c3b6242b6b",
+              "p_spatial_prior.plan": "73384323534824ff8c521775b54a54cd59dcda5cddee11f0b51ee7570b14443d",
+              "p_synthesis.plan": "611bc0234d7f2fc8af5e4d4b529519a5b1c2ecb0ad8c202735a589213d7f3ec2"
+            },
+            "format": 2,
+            "hardware_compatibility": "exact",
+            "i_model_manifest_sha256": "57193f5bf10a82cd25123c884208813eeb5c5d8245ee8042ab4430a7e700c22b",
+            "kind": "nvcr-tensorrt-engine-bundle",
+            "model_profile_id": "dcvcrt-cvpr2025",
+            "model_profile_sha256": "414466eb974284ff938f018e20f2d7ce4b337bccdbcb387f31aac24be227380f",
+            "multiprocessor_count": 26,
+            "optimization_point": "360p",
+            "p_model_manifest_sha256": "5a1587e4480daa26471a7eea97964f1e9572b0832c9d1f3217fe4730f71beede",
+            "precision": "fp16",
+            "schema": "nvcr.engine-bundle.v2",
+            "shape_profile": "fixed",
+            "target_profile_id": "rtx5060-laptop-ubuntu2404",
+            "target_profile_sha256": "8f4bf33777bc6361faa83430bb6a6f0bf4853a40668ae5a49926461930d8ac76",
+            "tensorrt_version_major": 10,
+            "tensorrt_version_minor": 9,
+            "tensorrt_version_patch": 0,
+            "visible_dimensions": {
+              "maximum": [
+                640,
+                360
+              ],
+              "minimum": [
+                640,
+                360
+              ],
+              "optimum": [
+                640,
+                360
+              ]
+            },
+            "workspace_mib": 1024
+          },
+          "path": "/opt/nvcr/engines/bundles/dcvcrt/rtx5060-laptop-ubuntu2404/360p/be7697ba5466b896fb6f63c61ceb931ad5b909faa330a9130cd6cf1ede925575",
+          "sha256": "1b176cdb4d30b551db3deedefaed1eebf6927d05898add30e13337e0739e28fc"
+        },
+        "540p": {
+          "build_command": {
+            "status": "unavailable"
+          },
+          "export_command": {
+            "status": "unavailable"
+          },
+          "manifest": {
+            "builder_optimization_level": 4,
+            "checksum_manifest": "engine.sha256",
+            "checksum_manifest_sha256": "ecfbc2888455b2b27465d375d9090d860ef9ffe3540c08911629537cfe582506",
+            "compute_capability_major": 12,
+            "compute_capability_minor": 0,
+            "cuda_runtime_version": 12080,
+            "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+            "engine_profile_id": "540p",
+            "engine_profile_sha256": "96efc1a3841a2c2e1ebe936ef7bda96b8e5a367a4ae672370452ea2ee8741d2d",
+            "files": {
+              "i_analysis.plan": "9df7c62f48733b415f1b71a861c6a576419a17d44d29151f985f29f07ced0079",
+              "i_entropy.bin": "c70ece2356eab799da5b271397e2fe5600a52223477a4bb8e9b0203c77cf210c",
+              "i_frame_manifest.json": "57193f5bf10a82cd25123c884208813eeb5c5d8245ee8042ab4430a7e700c22b",
+              "i_hyper_analysis.plan": "3ba298bae224fde1b6e06a0026844b9daf00914e736d6f750a69511485c89c7a",
+              "i_hyper_synthesis.plan": "63d7ced3970ed9fa1f31c6ba628f90db19184f345c1fd5d2296be7232e3007f9",
+              "i_quant.bin": "34d6d0e99cdabc6758ef8001ab411bb0b4ecb9be1886af9c86b6b41d9c00a81d",
+              "i_spatial_prior_1.plan": "a171024efae922ff706d06524dc180b336ab3e04233aafe49c5affa19fd217c7",
+              "i_spatial_prior_2.plan": "e30b39bbd1c26bb3b488121466363fe5d35b7d64d88ae1957787479efbe5e2b3",
+              "i_spatial_prior_3.plan": "5e256861cfadc4094457b0843170eea2a6391923dfd3ca75096db2aa31d119e0",
+              "i_synthesis.plan": "5f0a64a9fdf47dc2b1f964e5ea783b319c655ff45ec2cb6b3a0c27072db09d47",
+              "p_analysis.plan": "55324213a477ee01e7fa04316600ed6645ce8cbcc13ad499322f40765f2422e2",
+              "p_entropy.bin": "c4e5c5e9a573624db272f4a77909abce3dcd0fc0f842afbdb177b31152aec06a",
+              "p_frame_manifest.json": "5a1587e4480daa26471a7eea97964f1e9572b0832c9d1f3217fe4730f71beede",
+              "p_hyper_analysis.plan": "70317da8c6c0372e5ad0e69c449d77fed4d9d6a00d8f3b5f47a1bad9479e376f",
+              "p_prior.plan": "8a7a017221d65ac413b93242d9bc3cee7da182b77aa417df6e26d01a4cf51722",
+              "p_quant.bin": "9a8cbc1082132be8b11251fc8d46bd011d17c6880fb6f0c24970ca0c46fe831e",
+              "p_reference_feature.plan": "ed4532a214b97c2438521a277910ee83199edd6027038dee9670beb41279f17b",
+              "p_reference_frame.plan": "92e8a1ddfa9de7cece57e25a00b2445820d0e8971ddf59fe0b89c756f9eb525b",
+              "p_spatial_prior.plan": "58a57415d947c73c22558a678984e63c33f790069209004767095ef3324f6a0a",
+              "p_synthesis.plan": "0794abf52d553550296495c1581966aa565dd8d54503e2b4369bc87e63579fd1"
+            },
+            "format": 2,
+            "hardware_compatibility": "exact",
+            "i_model_manifest_sha256": "57193f5bf10a82cd25123c884208813eeb5c5d8245ee8042ab4430a7e700c22b",
+            "kind": "nvcr-tensorrt-engine-bundle",
+            "model_profile_id": "dcvcrt-cvpr2025",
+            "model_profile_sha256": "414466eb974284ff938f018e20f2d7ce4b337bccdbcb387f31aac24be227380f",
+            "multiprocessor_count": 26,
+            "optimization_point": "540p",
+            "p_model_manifest_sha256": "5a1587e4480daa26471a7eea97964f1e9572b0832c9d1f3217fe4730f71beede",
+            "precision": "fp16",
+            "schema": "nvcr.engine-bundle.v2",
+            "shape_profile": "fixed",
+            "target_profile_id": "rtx5060-laptop-ubuntu2404",
+            "target_profile_sha256": "8f4bf33777bc6361faa83430bb6a6f0bf4853a40668ae5a49926461930d8ac76",
+            "tensorrt_version_major": 10,
+            "tensorrt_version_minor": 9,
+            "tensorrt_version_patch": 0,
+            "visible_dimensions": {
+              "maximum": [
+                960,
+                540
+              ],
+              "minimum": [
+                960,
+                540
+              ],
+              "optimum": [
+                960,
+                540
+              ]
+            },
+            "workspace_mib": 1024
+          },
+          "path": "/opt/nvcr/engines/bundles/dcvcrt/rtx5060-laptop-ubuntu2404/540p/7be535bb82413181269d78fa9acfa33df9909aa51c686a143e39de214705137e",
+          "sha256": "3b90ef029a558e005c7ae86f67328171e68756484afc271ecf803faf1189f950"
+        },
+        "720p": {
+          "build_command": {
+            "status": "unavailable"
+          },
+          "export_command": {
+            "status": "unavailable"
+          },
+          "manifest": {
+            "builder_optimization_level": 2,
+            "checksum_manifest": "engine.sha256",
+            "checksum_manifest_sha256": "0fa6b9eef690c53a5411d465b8b5b638e31a79d3f414608bc63a01a7ceaf362a",
+            "compute_capability_major": 12,
+            "compute_capability_minor": 0,
+            "cuda_runtime_version": 12080,
+            "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+            "engine_profile_id": "720p",
+            "engine_profile_sha256": "97f5268c32efbf5a166bd2aacf5902d452b358d3c67b0abb7d2e1965f7f45467",
+            "files": {
+              "i_analysis.plan": "4eca8750ff47426c0764162cf776384ca9be3c195951145d3fa8d69df288604d",
+              "i_entropy.bin": "c70ece2356eab799da5b271397e2fe5600a52223477a4bb8e9b0203c77cf210c",
+              "i_frame_manifest.json": "57193f5bf10a82cd25123c884208813eeb5c5d8245ee8042ab4430a7e700c22b",
+              "i_hyper_analysis.plan": "51774425b7646c926e11fd8587a186279fe42b13c42582f2fce2e5268091448e",
+              "i_hyper_synthesis.plan": "0763b605ce9a4a1c22d96c295ba7fda43d371712aa72233ea12ab14790904aa7",
+              "i_quant.bin": "34d6d0e99cdabc6758ef8001ab411bb0b4ecb9be1886af9c86b6b41d9c00a81d",
+              "i_spatial_prior_1.plan": "940ebbe42befc998078cc222208116bbe775762ef772f687db2963e1440cd6e4",
+              "i_spatial_prior_2.plan": "29a8fae2209069bb09e7be0b739c5f153ecfe951af5939a6730db00d35bed0fa",
+              "i_spatial_prior_3.plan": "a1942d64fe68f8b3dfc5e05aba749046ad5aa3b1bdec54f05840c9c18039b3fa",
+              "i_synthesis.plan": "f73377170f71c4d78baeb4c067c4f74136d50d9cfbcd93128dd6660a3058088d",
+              "p_analysis.plan": "d0aa326afd3411e95bc1fc18d19f3bf24367df063a4450c60a9272230fbcff24",
+              "p_entropy.bin": "c4e5c5e9a573624db272f4a77909abce3dcd0fc0f842afbdb177b31152aec06a",
+              "p_frame_manifest.json": "5a1587e4480daa26471a7eea97964f1e9572b0832c9d1f3217fe4730f71beede",
+              "p_hyper_analysis.plan": "28b24e39363273269fc4fdef445c5b49799a021c58be2ccbc9b72aeb8faab9ad",
+              "p_prior.plan": "3942390b26a185922d1bc375ff9d8170476fac472ab550c96700518c3b1a1410",
+              "p_quant.bin": "9a8cbc1082132be8b11251fc8d46bd011d17c6880fb6f0c24970ca0c46fe831e",
+              "p_reference_feature.plan": "076ba2c70bf699bdb6da45d67498260107e06d1f1acf07d64088cfd8b74df819",
+              "p_reference_frame.plan": "c244d28cc0e64d7a525d65f36f3988b68b83a1bc8bff37ec7cabd9655a648bfc",
+              "p_spatial_prior.plan": "e5f119d276921060563018213c806f805894ae00c4eada333242892c560a7487",
+              "p_synthesis.plan": "a1dc9c2b742311d3e337424dc559f242919796caebf96ab93227a86035ec62a3"
+            },
+            "format": 2,
+            "hardware_compatibility": "exact",
+            "i_model_manifest_sha256": "57193f5bf10a82cd25123c884208813eeb5c5d8245ee8042ab4430a7e700c22b",
+            "kind": "nvcr-tensorrt-engine-bundle",
+            "model_profile_id": "dcvcrt-cvpr2025",
+            "model_profile_sha256": "414466eb974284ff938f018e20f2d7ce4b337bccdbcb387f31aac24be227380f",
+            "multiprocessor_count": 26,
+            "optimization_point": "720p",
+            "p_model_manifest_sha256": "5a1587e4480daa26471a7eea97964f1e9572b0832c9d1f3217fe4730f71beede",
+            "precision": "fp16",
+            "schema": "nvcr.engine-bundle.v2",
+            "shape_profile": "dynamic",
+            "target_profile_id": "rtx5060-laptop-ubuntu2404",
+            "target_profile_sha256": "8f4bf33777bc6361faa83430bb6a6f0bf4853a40668ae5a49926461930d8ac76",
+            "tensorrt_version_major": 10,
+            "tensorrt_version_minor": 9,
+            "tensorrt_version_patch": 0,
+            "visible_dimensions": {
+              "maximum": [
+                1280,
+                720
+              ],
+              "minimum": [
+                64,
+                64
+              ],
+              "optimum": [
+                1280,
+                720
+              ]
+            },
+            "workspace_mib": 1024
+          },
+          "path": "/opt/nvcr/engines/bundles/dcvcrt/rtx5060-laptop-ubuntu2404/720p/0ec2b6f972883aa0107f9e1179aa48ea455be4aea92e6a9388faa879248352ef",
+          "sha256": "2f31ee6eb8fae8cf94d310e3548592439a270d3813f5f0c5402d6726bcfd8bcc"
+        },
+        "cif": {
+          "build_command": {
+            "status": "unavailable"
+          },
+          "export_command": {
+            "status": "unavailable"
+          },
+          "manifest": {
+            "builder_optimization_level": 1,
+            "checksum_manifest": "engine.sha256",
+            "checksum_manifest_sha256": "cf742bf88eae3e4c7a0ec6841b6d5a010e71cf51d90601ec052aa20d0a369f9c",
+            "compute_capability_major": 12,
+            "compute_capability_minor": 0,
+            "cuda_runtime_version": 12080,
+            "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+            "engine_profile_id": "cif",
+            "engine_profile_sha256": "f3835570038719664d9a7c2417eb1010dfdaa8b9682bd5850ac40e557f614f0d",
+            "files": {
+              "i_analysis.plan": "f59b1ceea3a7dbe34f631ade1af32720134822564a4538d541b66c3290b57560",
+              "i_entropy.bin": "c70ece2356eab799da5b271397e2fe5600a52223477a4bb8e9b0203c77cf210c",
+              "i_frame_manifest.json": "57193f5bf10a82cd25123c884208813eeb5c5d8245ee8042ab4430a7e700c22b",
+              "i_hyper_analysis.plan": "6feacf04b6e3f02c4676b0ac5da1a362096f6c3fc44b37a3b56ab3cf516985e9",
+              "i_hyper_synthesis.plan": "cf28865dfb120997a8f612b1546438cb17b7337209df01c56e38b23826cfe3d0",
+              "i_quant.bin": "34d6d0e99cdabc6758ef8001ab411bb0b4ecb9be1886af9c86b6b41d9c00a81d",
+              "i_spatial_prior_1.plan": "a733e4139f14ef315093b516e99b6a6bfbec8279082727cd4603984cd2b5a884",
+              "i_spatial_prior_2.plan": "4d64992d14bb87886d58749192154c7d3a72ccd6ce6cbad6025b52264d401f38",
+              "i_spatial_prior_3.plan": "3ca5905738bf2c1c71b9831b818acce8fc12f36194de4625e9211d915ce19923",
+              "i_synthesis.plan": "b87caef4b6f99eedac3a70af0733916211bf30b310e38ff7ddc6e810b076ba83",
+              "p_analysis.plan": "452d24d96585a13aad03960ac856115905ef58c8a346e56a355589220d4ba7e7",
+              "p_entropy.bin": "c4e5c5e9a573624db272f4a77909abce3dcd0fc0f842afbdb177b31152aec06a",
+              "p_frame_manifest.json": "5a1587e4480daa26471a7eea97964f1e9572b0832c9d1f3217fe4730f71beede",
+              "p_hyper_analysis.plan": "16265e3d2b19e894a0148e7077aa8ebc731f3b1d80937f17ed25a8638e1d4517",
+              "p_prior.plan": "d220ac3b76c4e7bc336d79b228ae7d033eaec6f2e6c9f02ff0a33a7f7c39aa15",
+              "p_quant.bin": "9a8cbc1082132be8b11251fc8d46bd011d17c6880fb6f0c24970ca0c46fe831e",
+              "p_reference_feature.plan": "7595de5ac51073fdb584e5549468cf9c771659466cc46816bfa5edbc026f1811",
+              "p_reference_frame.plan": "fbb88f45f2f35c3cb1257f274004ad3349b6d67d13d61a30f1055e71c0db07f6",
+              "p_spatial_prior.plan": "6e5d75575d657e115e8335eaf90b1fbb8bdf7f2683798344e4739d9122960acf",
+              "p_synthesis.plan": "2e9369d596f8583b4742230b172d701c2d7bbb449b30b780f83166a7446ca38f"
+            },
+            "format": 2,
+            "hardware_compatibility": "exact",
+            "i_model_manifest_sha256": "57193f5bf10a82cd25123c884208813eeb5c5d8245ee8042ab4430a7e700c22b",
+            "kind": "nvcr-tensorrt-engine-bundle",
+            "model_profile_id": "dcvcrt-cvpr2025",
+            "model_profile_sha256": "414466eb974284ff938f018e20f2d7ce4b337bccdbcb387f31aac24be227380f",
+            "multiprocessor_count": 26,
+            "optimization_point": "cif",
+            "p_model_manifest_sha256": "5a1587e4480daa26471a7eea97964f1e9572b0832c9d1f3217fe4730f71beede",
+            "precision": "fp16",
+            "schema": "nvcr.engine-bundle.v2",
+            "shape_profile": "dynamic",
+            "target_profile_id": "rtx5060-laptop-ubuntu2404",
+            "target_profile_sha256": "8f4bf33777bc6361faa83430bb6a6f0bf4853a40668ae5a49926461930d8ac76",
+            "tensorrt_version_major": 10,
+            "tensorrt_version_minor": 9,
+            "tensorrt_version_patch": 0,
+            "visible_dimensions": {
+              "maximum": [
+                352,
+                288
+              ],
+              "minimum": [
+                64,
+                64
+              ],
+              "optimum": [
+                352,
+                288
+              ]
+            },
+            "workspace_mib": 512
+          },
+          "path": "/opt/nvcr/engines/bundles/dcvcrt/rtx5060-laptop-ubuntu2404/cif/32ee6b159061d73472b55007415983e6fab7e7294ea718b2ec2f433c4f3b0a96",
+          "sha256": "0942b9c918ea5bf198f9b925b3a2244d8a1bb08c5629169aedd415085dd21f46"
+        },
+        "qcif": {
+          "build_command": {
+            "status": "unavailable"
+          },
+          "export_command": {
+            "status": "unavailable"
+          },
+          "manifest": {
+            "builder_optimization_level": 1,
+            "checksum_manifest": "engine.sha256",
+            "checksum_manifest_sha256": "736933ae0cb7e2920a1cdd0e75058fa6e20dedf175bb970b5ca8593d6293f60a",
+            "compute_capability_major": 12,
+            "compute_capability_minor": 0,
+            "cuda_runtime_version": 12080,
+            "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+            "engine_profile_id": "qcif",
+            "engine_profile_sha256": "e8e4e93f8195913ac2b456dc4235f72a3bfbcadb5eb2e8f5a063b1769a7d88f3",
+            "files": {
+              "i_analysis.plan": "b25277a8366b9b1a5babe8c5dd9e68afbf5e7a775ce72c98e6d6aadc99b135cb",
+              "i_entropy.bin": "c70ece2356eab799da5b271397e2fe5600a52223477a4bb8e9b0203c77cf210c",
+              "i_frame_manifest.json": "57193f5bf10a82cd25123c884208813eeb5c5d8245ee8042ab4430a7e700c22b",
+              "i_hyper_analysis.plan": "25197f61cb1fc3a74150ff45e6588d338effec094a0f7e5ae0df5f54aa75d1a0",
+              "i_hyper_synthesis.plan": "9f90ccc16b193bfdd0e5182cdad2d2df34926681ff1a5a7c07207b830d03b07f",
+              "i_quant.bin": "34d6d0e99cdabc6758ef8001ab411bb0b4ecb9be1886af9c86b6b41d9c00a81d",
+              "i_spatial_prior_1.plan": "61fd3c05cfdab5e650af8ef1f34ebe97322c3975aee9a7b6f3a45ab664b6e32f",
+              "i_spatial_prior_2.plan": "30a626d85e4a4b798d1c80ec595e91585a7475a0f4a6c477d7346dd9cf4429bf",
+              "i_spatial_prior_3.plan": "682b31923aa96a30be497ddb47ed365fd3a371e01398b2d136aa298a6e9a45b0",
+              "i_synthesis.plan": "73f616237c1a5114908f2bca1572e54c8dbca2b4de69bb2c8f9ed183b6dd7b17",
+              "p_analysis.plan": "9f221737d8f94b480784eec225cb80afe03d6b0dc50fa15397f1bc10d4812165",
+              "p_entropy.bin": "c4e5c5e9a573624db272f4a77909abce3dcd0fc0f842afbdb177b31152aec06a",
+              "p_frame_manifest.json": "5a1587e4480daa26471a7eea97964f1e9572b0832c9d1f3217fe4730f71beede",
+              "p_hyper_analysis.plan": "af5686c0790aa4e814725521102e04a048d4f021c58bda8119a0c4c28ab82901",
+              "p_prior.plan": "a37bd42e955fc5172d5899ac2dc9ed70eca4b6cbbd5e261c25cb53dc8e1e8fc4",
+              "p_quant.bin": "9a8cbc1082132be8b11251fc8d46bd011d17c6880fb6f0c24970ca0c46fe831e",
+              "p_reference_feature.plan": "4e54d0c8d34c352050ac545743f1753c965a8b186f6ede1c9b97014fa1336f3e",
+              "p_reference_frame.plan": "33913c2ffb689490cd98b0aabeb8b9967948125739be80cff3afed2e6f2b4cb7",
+              "p_spatial_prior.plan": "a8699fb41767791ebc3324b338130adab9ad7881caf12f163a7a0a5a318bf219",
+              "p_synthesis.plan": "9c908674cc2df862ee9d58b8ec0d282c5d6ac7ed9e3970a872e19abb3d193d3a"
+            },
+            "format": 2,
+            "hardware_compatibility": "exact",
+            "i_model_manifest_sha256": "57193f5bf10a82cd25123c884208813eeb5c5d8245ee8042ab4430a7e700c22b",
+            "kind": "nvcr-tensorrt-engine-bundle",
+            "model_profile_id": "dcvcrt-cvpr2025",
+            "model_profile_sha256": "414466eb974284ff938f018e20f2d7ce4b337bccdbcb387f31aac24be227380f",
+            "multiprocessor_count": 26,
+            "optimization_point": "qcif",
+            "p_model_manifest_sha256": "5a1587e4480daa26471a7eea97964f1e9572b0832c9d1f3217fe4730f71beede",
+            "precision": "fp16",
+            "schema": "nvcr.engine-bundle.v2",
+            "shape_profile": "dynamic",
+            "target_profile_id": "rtx5060-laptop-ubuntu2404",
+            "target_profile_sha256": "8f4bf33777bc6361faa83430bb6a6f0bf4853a40668ae5a49926461930d8ac76",
+            "tensorrt_version_major": 10,
+            "tensorrt_version_minor": 9,
+            "tensorrt_version_patch": 0,
+            "visible_dimensions": {
+              "maximum": [
+                176,
+                144
+              ],
+              "minimum": [
+                64,
+                64
+              ],
+              "optimum": [
+                176,
+                144
+              ]
+            },
+            "workspace_mib": 512
+          },
+          "path": "/opt/nvcr/engines/bundles/dcvcrt/rtx5060-laptop-ubuntu2404/qcif/29c010bfee889a9706ca654a8cb739375b11a89bf1dec24ded42a9b9bae81f82",
+          "sha256": "084be581e1b509833f4d33d51c793a0d4556c91c544de520af516455bdc32de6"
+        }
+      },
+      "inputs": {
+        "akiyo-qcif": {
+          "content_id": "akiyo",
+          "evaluated_frames": 100,
+          "evaluated_sha256": "c7c95c0e81df52f6819c6bea4da8a91f0b3a39afb1d68f72d7768a47405e3045",
+          "provenance": {
+            "acquisition": null,
+            "preprocessing": null,
+            "status": "unknown"
+          },
+          "source_bytes": 11404800,
+          "source_sha256": "e1efee0e95c6d27aefe2294a727768334db8466e67bf4a49cf8f5b2fb8b49108",
+          "start_frame": 0
+        },
+        "basketball-1080p": {
+          "content_id": "basketball-drive",
+          "evaluated_frames": 100,
+          "evaluated_sha256": "e004197c0a412ad50ba5746c826e7aaa112dfc18a0cdf6953f4fe3cd83445cef",
+          "provenance": {
+            "acquisition": null,
+            "preprocessing": null,
+            "status": "unknown"
+          },
+          "source_bytes": 1555200000,
+          "source_sha256": "dc89d33e4910379dca548c5a807c2c83dde471014a09a852c370bd49fb354543",
+          "start_frame": 0
+        },
+        "basketball-360p": {
+          "content_id": "basketball-drive",
+          "evaluated_frames": 100,
+          "evaluated_sha256": "09b7d325b7f209766e88f4621ae5ea03923ea17d08c8ee1a30577b81988a449b",
+          "provenance": {
+            "acquisition": null,
+            "preprocessing": null,
+            "status": "unknown"
+          },
+          "source_bytes": 172800000,
+          "source_sha256": "23f7de744d5e05d620629d2e6b5a443514d92ef4c3d7b463f65a9a900ef3fb9d",
+          "start_frame": 0
+        },
+        "basketball-540p": {
+          "content_id": "basketball-drive",
+          "evaluated_frames": 100,
+          "evaluated_sha256": "4ffe7801f3adfaef8ef4480a2b72d9696ca0459570b9846d3445eafda670c053",
+          "provenance": {
+            "acquisition": null,
+            "preprocessing": null,
+            "status": "unknown"
+          },
+          "source_bytes": 388800000,
+          "source_sha256": "352ef44449f7a4ec339e54753e15769f9e7ed274cd323f17a03a540ad5ca300c",
+          "start_frame": 0
+        },
+        "fourpeople-720p": {
+          "content_id": "fourpeople",
+          "evaluated_frames": 100,
+          "evaluated_sha256": "a69f104f98db26de88efb68438d5b5f4ecfd2f47459f542f3d2ce3e9cf72b69e",
+          "provenance": {
+            "acquisition": null,
+            "preprocessing": null,
+            "status": "unknown"
+          },
+          "source_bytes": 830822400,
+          "source_sha256": "e7a4eb993d36ea136d24c4e1d655ebdaf5c44b11d14cf8ef12b5748ad7bb037f",
+          "start_frame": 0
+        },
+        "waterfall-cif": {
+          "content_id": "waterfall",
+          "evaluated_frames": 100,
+          "evaluated_sha256": "729250456374cb2cfe71b17e0c8ea7399b5c5c9e941e145f0aa30fcbba209ab5",
+          "provenance": {
+            "acquisition": null,
+            "preprocessing": null,
+            "status": "unknown"
+          },
+          "source_bytes": 39536640,
+          "source_sha256": "ead14413b145932e039e760f9f4c5a0e8d56d5ecb7f5335eb538911d05169f89",
+          "start_frame": 0
+        }
+      }
+    },
+    "binary": {
+      "path": "/opt/nvcr/bin/nvcr",
+      "sha256": "8d12a772ede71839d9c3bfdbabd43da10e917d6bcdaa52199f3c45dc49dd69b0"
+    },
+    "build": {
+      "CMakeCache.txt": {
+        "content": {
+          "reason": "[Errno 2] No such file or directory: '/opt/nvcr/build-evidence-not-distributed/CMakeCache.txt'",
+          "status": "unavailable"
+        },
+        "sha256": null
+      },
+      "CMakeFiles/nvcr.dir/flags.make": {
+        "content": {
+          "reason": "[Errno 2] No such file or directory: '/opt/nvcr/build-evidence-not-distributed/CMakeFiles/nvcr.dir/flags.make'",
+          "status": "unavailable"
+        },
+        "sha256": null
+      },
+      "cli/CMakeFiles/nvcr_cli.dir/flags.make": {
+        "content": {
+          "reason": "[Errno 2] No such file or directory: '/opt/nvcr/build-evidence-not-distributed/cli/CMakeFiles/nvcr_cli.dir/flags.make'",
+          "status": "unavailable"
+        },
+        "sha256": null
+      },
+      "cli/CMakeFiles/nvcr_cli.dir/link.txt": {
+        "content": {
+          "reason": "[Errno 2] No such file or directory: '/opt/nvcr/build-evidence-not-distributed/cli/CMakeFiles/nvcr_cli.dir/link.txt'",
+          "status": "unavailable"
+        },
+        "sha256": null
+      },
+      "oci_release": {
+        "binary_sha256": "8d12a772ede71839d9c3bfdbabd43da10e917d6bcdaa52199f3c45dc49dd69b0",
+        "image": {
+          "binary_sha256": "8d12a772ede71839d9c3bfdbabd43da10e917d6bcdaa52199f3c45dc49dd69b0",
+          "digest": "sha256:f4f80c675c45917b953fd81f759a2232a7e34d7deee4e943ec934e9d70607374",
+          "id": "sha256:f4f80c675c45917b953fd81f759a2232a7e34d7deee4e943ec934e9d70607374",
+          "source_revision": "6a66db7a98081f9210dedb49d768899bd4e9f2b7",
+          "version": "1.0.7"
+        },
+        "kind": "oci-release",
+        "native_build_cache": "not distributed with release image"
+      }
+    },
+    "device": {
+      "architecture": "x86_64",
+      "compute_capability_major": 12,
+      "compute_capability_minor": 0,
+      "cuda_runtime_version": 12080,
+      "device_id": 0,
+      "device_name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+      "multiprocessor_count": 26,
+      "operating_system": "linux",
+      "tensorrt_version_major": 10,
+      "tensorrt_version_minor": 9,
+      "tensorrt_version_patch": 0
+    },
+    "execution_environment": {
+      "CUDA_MODULE_LOADING": null,
+      "CUDA_VISIBLE_DEVICES": null,
+      "LD_LIBRARY_PATH": "/usr/local/cuda/lib64",
+      "NVCR_TENSORRT_LOW_MEMORY_MODE": null,
+      "NVCR_VERIFY_ENCODER_RECONSTRUCTION": null,
+      "OMP_NUM_THREADS": null,
+      "PYTHONPATH": null,
+      "SUPPRESS_CUSTOM_KERNEL_WARNING": null
+    },
+    "governors": {},
+    "host_identity": {
+      "/etc/nv_tegra_release": {
+        "reason": "[Errno 2] No such file or directory: '/etc/nv_tegra_release'",
+        "status": "unavailable"
+      },
+      "/etc/os-release": "PRETTY_NAME=\"Ubuntu 24.04.1 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.1 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo",
+      "/proc/device-tree/model": {
+        "reason": "[Errno 2] No such file or directory: '/proc/device-tree/model'",
+        "status": "unavailable"
+      },
+      "/proc/driver/nvidia/version": {
+        "reason": "[Errno 2] No such file or directory: '/proc/driver/nvidia/version'",
+        "status": "unavailable"
+      }
+    },
+    "manifest": {
+      "build_dir": "/opt/nvcr/build-evidence-not-distributed",
+      "engine_root": "/opt/nvcr/engines",
+      "execution": {
+        "container_digest": "sha256:f4f80c675c45917b953fd81f759a2232a7e34d7deee4e943ec934e9d70607374",
+        "image": {
+          "binary_sha256": "8d12a772ede71839d9c3bfdbabd43da10e917d6bcdaa52199f3c45dc49dd69b0",
+          "digest": "sha256:f4f80c675c45917b953fd81f759a2232a7e34d7deee4e943ec934e9d70607374",
+          "id": "sha256:f4f80c675c45917b953fd81f759a2232a7e34d7deee4e943ec934e9d70607374",
+          "source_revision": "6a66db7a98081f9210dedb49d768899bd4e9f2b7",
+          "version": "1.0.7"
+        },
+        "mode": "container"
+      },
+      "gops": [
+        1,
+        30,
+        100
+      ],
+      "implementations": [
+        "nvcr"
+      ],
+      "model_profile": "/workspace/nvcr/configs/models/dcvcrt-cvpr2025.json",
+      "modes": [
+        "throughput"
+      ],
+      "nvcr": "/opt/nvcr/bin/nvcr",
+      "order_seed": 20260919,
+      "provenance_note": "NVCR-only laptop timing; identical controlled-study timing/warm-up contract. Image identity is separate from the mounted measurement harness.",
+      "qps": [
+        0,
+        21,
+        42,
+        63
+      ],
+      "quality_repetitions": 1,
+      "reference_python": "/usr/bin/python3",
+      "reference_reset_interval": 64,
+      "reference_root": "/workspace/nvcr/reference-not-selected",
+      "repetitions": 10,
+      "schema": "nvcr.measurement.campaign.v1",
+      "sequences": [
+        {
+          "content_id": "akiyo",
+          "fps": 30,
+          "frames": 100,
+          "height": 144,
+          "path": "/input/qcif/akiyo_qcif.yuv",
+          "pixel_format": "yuv420p8",
+          "profile": "qcif",
+          "provenance": {
+            "acquisition": null,
+            "preprocessing": null,
+            "status": "unknown"
+          },
+          "sequence_id": "akiyo-qcif",
+          "width": 176
+        },
+        {
+          "content_id": "waterfall",
+          "fps": 30,
+          "frames": 100,
+          "height": 288,
+          "path": "/input/cif/waterfall_cif.yuv",
+          "pixel_format": "yuv420p8",
+          "profile": "cif",
+          "provenance": {
+            "acquisition": null,
+            "preprocessing": null,
+            "status": "unknown"
+          },
+          "sequence_id": "waterfall-cif",
+          "width": 352
+        },
+        {
+          "content_id": "basketball-drive",
+          "fps": 50,
+          "frames": 100,
+          "height": 360,
+          "path": "/input/360p/BasketballDrive_640x360_50.yuv",
+          "pixel_format": "yuv420p8",
+          "profile": "360p",
+          "provenance": {
+            "acquisition": null,
+            "preprocessing": null,
+            "status": "unknown"
+          },
+          "sequence_id": "basketball-360p",
+          "width": 640
+        },
+        {
+          "content_id": "basketball-drive",
+          "fps": 50,
+          "frames": 100,
+          "height": 540,
+          "path": "/input/540p/BasketballDrive_960x540_50.yuv",
+          "pixel_format": "yuv420p8",
+          "profile": "540p",
+          "provenance": {
+            "acquisition": null,
+            "preprocessing": null,
+            "status": "unknown"
+          },
+          "sequence_id": "basketball-540p",
+          "width": 960
+        },
+        {
+          "content_id": "fourpeople",
+          "fps": 30,
+          "frames": 100,
+          "height": 720,
+          "path": "/input/720p/FourPeople_1280x720_60.yuv",
+          "pixel_format": "yuv420p8",
+          "profile": "720p",
+          "provenance": {
+            "acquisition": null,
+            "preprocessing": null,
+            "status": "unknown"
+          },
+          "sequence_id": "fourpeople-720p",
+          "width": 1280
+        },
+        {
+          "content_id": "basketball-drive",
+          "fps": 60,
+          "frames": 100,
+          "height": 1080,
+          "path": "/input/hd/BasketballDrive_1920x1080_50.yuv",
+          "pixel_format": "yuv420p8",
+          "profile": "1080p",
+          "provenance": {
+            "acquisition": null,
+            "preprocessing": null,
+            "status": "unknown"
+          },
+          "sequence_id": "basketball-1080p",
+          "width": 1920
+        }
+      ],
+      "target_profile": "/workspace/nvcr/configs/targets/rtx5060-laptop-ubuntu2404.json",
+      "timeout_seconds": 1800,
+      "warmup_frames": 10
+    },
+    "measurement_sources": {
+      "cli/main.cpp": "710f301d26698dc96729bbc3b8eff3b973e207bfd596056af72cd11e1e415455",
+      "scripts/measure_python_reference.py": "41c1e806a43e12948edff221e45db1ddb939c7c34964ddd50be51ffbe4b70778",
+      "scripts/measurement_campaign.py": "d93711daa8081abb9e7df77577cff1b062d319166e9eed1741b0a8b0b6d0c926",
+      "scripts/measurement_environment.py": "a0988e3c0e8ff45578c372e5c0d52f3ff07552a30bb1c19b6efcf7e589979f0f",
+      "scripts/measurement_metrics.py": "701699fca9ee28643e1c02c5aa80ecfb82ccaa83d69cda71e55dbf0e35887b31"
+    },
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2+-x86_64-with-glibc2.39",
+    "power_configuration": [
+      {
+        "command": [
+          "nvpmodel",
+          "-q",
+          "--verbose"
+        ],
+        "reason": "[Errno 2] No such file or directory: 'nvpmodel'",
+        "status": "unavailable"
+      }
+    ],
+    "python_dependencies": [
+      {
+        "command": [
+          "/usr/bin/python3",
+          "-m",
+          "pip",
+          "freeze"
+        ],
+        "returncode": 1,
+        "status": "unavailable",
+        "stderr": "/usr/bin/python3: No module named pip\n",
+        "stdout": ""
+      }
+    ],
+    "python_device": {
+      "status": "not_selected"
+    },
+    "source_diff": {
+      "command": [
+        "git",
+        "-C",
+        "/workspace/nvcr",
+        "diff",
+        "HEAD",
+        "--"
+      ],
+      "reason": "[Errno 2] No such file or directory: 'git'",
+      "status": "unavailable"
+    },
+    "source_head": {
+      "command": [
+        "git",
+        "-C",
+        "/workspace/nvcr",
+        "rev-parse",
+        "HEAD"
+      ],
+      "reason": "[Errno 2] No such file or directory: 'git'",
+      "status": "unavailable"
+    }
+  },
+  "smoke": false
+}
