@@ -89,8 +89,9 @@ The earlier separate-process-warm-up diagnostics are superseded in Git history.
 
 The laptop launcher and selected-pass runner retain the existing release binary
 and engines; only the measurement image adds NumPy for bounded smoke quality
-checks. RTX 3050 consolidation, paper integration and broader release gates
-remain open. No new GPU campaign was launched during export.
+checks. RTX 3050 consolidation and paper integration are complete; broader
+release and submission checks remain open. No new GPU campaign was launched
+during export.
 
 ## Later codec integrations
 

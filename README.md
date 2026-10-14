@@ -1,4 +1,4 @@
-# NVCR â€” Neural Video Codec Runtime
+# NVCR — Neural Video Codec Runtime
 
 NVCR is a native C++ runtime for running neural video codecs as usable
 applications. It gives a learned compression method the parts it needs in
@@ -89,17 +89,17 @@ throughput ratios across resolutions.
 
 | Platform | Encode | Decode |
 |---|---:|---:|
-| [RTX 4070](https://github.com/0elghati/nvcr/blob/c2480e8fdbf6b06be481c33d27d09c4c55e95f24/results/rtx4070/measurement/summary.md) | 1.96â€“3.05Ã— | 1.37â€“3.01Ã— |
-| [Jetson Orin](https://github.com/0elghati/nvcr/blob/c2480e8fdbf6b06be481c33d27d09c4c55e95f24/results/jetson-orin/measurement/summary.md) | 1.51â€“3.50Ã— | 1.27â€“3.21Ã— |
+| [RTX 4070](https://github.com/0elghati/nvcr/blob/c2480e8fdbf6b06be481c33d27d09c4c55e95f24/results/rtx4070/measurement/summary.md) | 1.96–3.05× | 1.37–3.01× |
+| [Jetson Orin](https://github.com/0elghati/nvcr/blob/c2480e8fdbf6b06be481c33d27d09c4c55e95f24/results/jetson-orin/measurement/summary.md) | 1.51–3.50× | 1.27–3.21× |
 
 NVCR has higher mean process throughput in every evaluated condition on both
 platforms. These finite-job measurements compare complete implementations and
 do not isolate the contribution of runtime architecture.
 
-Separate [RTX 3050](results/rtx3050/summary.md) and
+Separate [RTX 3050](results/rtx3050/measurement/summary.md) and
 [RTX 5060](results/rtx5060/measurement/summary.md) runs demonstrate laptop deployment
-from QCIF to 1080p. RTX 5060 retains ten-repetition process and codec measurements
-at QPs 0/21/42/63 and GOPs 1/30/100; the RTX 3050 replacement is pending.
+from QCIF to 1080p. Both campaigns retain ten-repetition process and codec
+measurements at QPs 0/21/42/63 and GOPs 1/30/100.
 These deployment records are separate from the matched Python comparison.
 
 The [result inventory](results/README.md) links the matched records and
