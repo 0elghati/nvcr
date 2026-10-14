@@ -168,8 +168,11 @@ def main():
     }
     stats = []
     append_analysis_stats(stats, analysis, manifest, "full")
-    expected_stats = len(cases) * len(manifest["implementations"]) * 2 * 4
-    expected_rd = len(cases) * len(manifest["implementations"])
+    metric_count = sum({"throughput": 3, "memory": 1, "quality": 0}[mode]
+                       for mode in manifest["modes"])
+    expected_stats = len(cases) * len(manifest["implementations"]) * 2 * metric_count
+    expected_rd = (len(cases) * len(manifest["implementations"])
+                   if "quality" in manifest["modes"] else 0)
     if len(stats) != expected_stats or len(rd["points"]) != expected_rd:
         raise ValueError("aggregate or RD coverage mismatch")
 
@@ -219,6 +222,15 @@ def main():
                     "campaign": label,
                     "campaign_fingerprint": source_run["fingerprint"],
                     "execution_id": execution_id, "case_id": item["case_id"],
+                    "job_id": item.get("job_id", ""),
+                    "attempt_id": item.get("attempt_id", ""),
+                    "status": item["status"],
+                    "input_sha256": item.get("input_sha256", ""),
+                    "source_sha256": item.get("source_sha256", ""),
+                    "timing_contract": item["timing_contract"],
+                    "warmup_policy": timing.get("warmup_policy", ""),
+                    "synchronization": timing.get("synchronization", ""),
+                    "encoded_sha256": size.get("file_sha256", ""),
                     "sequence": item["sequence"], "width": item["width"],
                     "height": item["height"], "qp": item["qp"], "gop": item["gop"],
                     "implementation": item["implementation"],

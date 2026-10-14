@@ -81,3 +81,6 @@ venv
 /evidence/measurement-*.smoke-path.txt
 /output/peer-review/
 /output/peer-review.smoke-path.txt
+
+# Local portability streams, original logs and archive candidates.
+/evidence/portability-*/

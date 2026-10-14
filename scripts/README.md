@@ -16,8 +16,10 @@ The runtime does not depend on Python. These scripts prepare artifacts, package 
 | `ci/check_jetson_cross_toolchain.sh` | Validate the x86-hosted Jetson cross-build environment |
 | `generate_sample_yuv.py` | Generate deterministic planar YUV420P8 functional-validation input |
 | `benchmark_softwarex_matrix.py` | Validate and run the controlled evaluation matrix; write a complete evidence package |
+| `measurement_laptop.ps1` | Use the controlled measurement runner on Docker/WSL laptops; `Check` proves both timers with a short run, `Run` selects only the throughput pass |
 | `benchmark_resolution_matrix.sh` | Run the lower-level diagnostic resolution matrix |
 | `benchmark_docker.sh` | Pull an NVCR runtime image and run the same diagnostic matrix with `docker run` |
+| `consolidate_portability_results.py` | Validate and consolidate the ten-repetition NVCR-only Docker portability dataset |
 | `profile_energy.py` | Capture optional Jetson energy measurements |
 
 ## Prepare and validate

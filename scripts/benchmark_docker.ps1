@@ -137,6 +137,9 @@ if ([string]::IsNullOrWhiteSpace($imageDigest)) {
     throw "Cannot resolve Docker image identity: $Image"
 }
 $imageDigest = $imageDigest.Trim()
+$imageRevision = (& docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' $Image | Select-Object -First 1)
+if ($LASTEXITCODE -ne 0) { throw "Cannot inspect Docker image revision: $Image" }
+if ([string]::IsNullOrWhiteSpace($imageRevision)) { $imageRevision = "unknown" }
 
 if ($MatrixArgs.Count -gt 0 -and $MatrixArgs[0] -eq "--") {
     $MatrixArgs = @($MatrixArgs | Select-Object -Skip 1)
@@ -223,8 +226,10 @@ $containerEnv = @(
     "NVCR_BENCH_EXECUTION_MODE=docker",
     "NVCR_BENCH_CONTAINER_IMAGE=$Image",
     "NVCR_BENCH_CONTAINER_DIGEST=$imageDigest",
-    "NVCR_BENCH_COMMIT=$commit",
-    "NVCR_BENCH_DIRTY=$($dirty.ToString().ToLowerInvariant())",
+    "NVCR_BENCH_COMMIT=$imageRevision",
+    "NVCR_BENCH_DIRTY=null",
+    "NVCR_BENCH_HARNESS_COMMIT=$commit",
+    "NVCR_BENCH_HARNESS_DIRTY=$($dirty.ToString().ToLowerInvariant())",
     "NVCR_BENCH_HARDWARE=$Hardware",
     "NVCR_BENCH_MEMORY_PROFILER=/workspace/nvcr/scripts/profile_memory_command.py"
 )
