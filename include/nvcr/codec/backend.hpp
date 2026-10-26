@@ -48,6 +48,11 @@ public:
         const SequenceStateView& state) = 0;
     [[nodiscard]] virtual Result<void> flush() = 0;
     virtual void reset() noexcept = 0;
+
+    // Directional hooks let codec sessions reset independently. Existing
+    // backends retain their whole-backend reset behavior unless they override.
+    virtual void reset_encoder() noexcept { reset(); }
+    virtual void reset_decoder() noexcept { reset(); }
 };
 
 struct Components final {

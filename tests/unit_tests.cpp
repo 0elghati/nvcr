@@ -69,7 +69,8 @@ TEST(ConfigurationLoader, KeepsBitstreamModelIdSeparate) {
     {
         std::ofstream output(path);
         ASSERT_TRUE(output);
-        output << "model_id=internal-profile\n"
+        output << "codec_id=test-codec\n"
+               << "model_id=internal-profile\n"
                << "bitstream_model_id=public-stream\n"
                << "provider_id=onnxruntime\n";
     }
@@ -79,9 +80,10 @@ TEST(ConfigurationLoader, KeepsBitstreamModelIdSeparate) {
     std::filesystem::remove(path, cleanup_error);
 
     ASSERT_TRUE(configuration) << configuration.error().describe();
-    EXPECT_EQ(configuration.value().model_id, "internal-profile");
-    EXPECT_EQ(configuration.value().bitstream_model_id, "public-stream");
-    EXPECT_EQ(configuration.value().provider_id, "onnxruntime");
+    EXPECT_EQ(configuration.value().codec.id, "test-codec");
+    EXPECT_EQ(configuration.value().artifacts.model_id, "internal-profile");
+    EXPECT_EQ(configuration.value().stream.bitstream_model_id, "public-stream");
+    EXPECT_EQ(configuration.value().provider.id, "onnxruntime");
 }
 
 TEST(AccessUnitIO, RoundTripsAndRejectsUnsafeInputs) {
@@ -285,9 +287,9 @@ TEST(SessionInterfaces, ReceiveWithoutSendReturnsTryAgain) {
     // infrastructure.  We construct an invalid Runtime (no backend) and verify
     // that the session correctly reports invalid_state, not a crash.
     nvcr::RuntimeConfiguration cfg{};
-    nvcr::codec::Components components;  // nullptr codec
+    nvcr::codec::Sessions sessions;
 
-    auto result = nvcr::Runtime::create(std::move(cfg), std::move(components));
+    auto result = nvcr::Runtime::create(std::move(cfg), std::move(sessions));
     // create() should fail because validate() rejects an empty config or the
     // null-codec check fires.
     ASSERT_FALSE(result);

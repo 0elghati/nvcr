@@ -12,36 +12,48 @@ Implement a codec adapter that provides:
 2. `CodecCapabilities` for frame types, delay, QP/rate controls, and supported
    ordering behavior.
 3. Namespaced encoder and decoder `OptionSchema` declarations.
-4. `ICodecAdapter::create_components`, using `RuntimeServices` to obtain
-   provider-owned components rather than naming a concrete provider type.
-5. A `CodecBackend` that translates codec semantics into `CodecEncodeResult`
-   and `CodecDecodeResult`, owns codec reference/latent state, and converts
-   backend exceptions into `Result` errors.
+4. `ICodecAdapter::create_sessions`, accepting the provider session selected
+   from the configured codec and provider IDs.
+5. Paired `IEncoderSession` and `IDecoderSession` implementations that own
+   codec state, buffering, output cardinality, and directional drain/reset.
+6. Any internal backend needed to translate model execution into codec results
+   while converting provider exceptions into `Result` errors.
 
 The adapter owns GOP and frame-type meaning, reference-state transitions,
 entropy semantics, codec-private payload syntax, and the compatibility position
-of that payload. The runtime owns session lifecycle and common error behavior.
+of that payload. Codec sessions own directional lifecycle behavior. The generic
+runtime owns registry construction, facade serialization, shared compatibility
+operations, and common error types.
 
 ### Session obligations
 
-The session contract permits lookahead and delayed output even though the
-current DCVC-RT path emits one access unit per input frame. A codec may return
-`try_again` when output is not ready. `flush()` signals end of input; callers
-must drain `receive_access_unit()` or `receive_frame()` until
-`end_of_stream`. `reset()` must discard all reference state and make the next
-sequence start from frame index zero.
+The session contract permits lookahead, grouped access units, multiple decoded
+frames per access unit, and delayed output even though the current DCVC-RT path
+emits one access unit per input frame. A successful `send_frame()` or
+`send_access_unit()` consumes its input, so callers must not resubmit it.
+Output readiness is reported by `receive_access_unit()` or `receive_frame()`;
+`try_again` means no output is ready and more input may be required. `flush()`
+signals end of input; callers must drain the receive method until
+`end_of_stream`. `reset()` must discard all state for that direction and make
+the next sequence start from frame index zero.
+
+Return both initialized directions in `codec::Sessions`. If they share a
+backend, the implementation must still preserve independent encoder and decoder
+flush/reset behavior. Keep pending packets and frames inside the codec sessions,
+not in the generic runtime facade.
 
 Document whether the codec reorders frames, delays output, requires a reference
 for predicted frames, or has codec-specific reset/discontinuity rules.
 
 ### Access units and payloads
 
-The adapter supplies codec identity, frame type, dimensions, model/profile
+The codec sessions supply codec identity, frame type, dimensions, model/profile
 identity, dependencies, and bounded codec-private sections to the `NVAU`
-contract. It must not put TensorRT plan names, CUDA device IDs, binding indexes,
-or local filesystem paths into the normative stream identity. State whether
-the payload is self-conformant only, reference-consistent, cross-provider
-conformant, or byte/payload interchangeable with another implementation.
+contract. They must not put TensorRT plan names, CUDA device IDs, binding
+indexes, or local filesystem paths into the normative stream identity. State
+whether the payload is self-conformant only, reference-consistent,
+cross-provider conformant, or byte/payload interchangeable with another
+implementation.
 
 ### Codec registration and tests
 
@@ -57,15 +69,14 @@ tests include:
 
 ## Adding an execution provider
 
-Implement `ProviderDescriptor` and `ProviderCapabilities`, then implement
-`IExecutionProvider`:
+Implement `ProviderDescriptor`, `ProviderCapabilities`, and
+`provider::experimental::IProviderSession`:
 
-- `supports()` must reject artifacts outside the provider's identity and
-  compatibility rules;
-- `load()` must validate or rely on the artifact boundary as documented and
-  return an `IExecutable` with a complete `ArtifactDescriptor`; and
-- `IExecutable::execute()` must define tensor names, shapes, dtypes, ownership,
-  synchronization, and error translation.
+- `load_stage()` must validate the complete artifact and tensor contract;
+- `allocate()` must preserve explicit memory-domain, ownership, and lifetime
+  rules;
+- `submit()` must validate bindings and dependencies before enqueueing; and
+- `reset()` and destruction must wait only for work owned by that session.
 
 Use `IArtifactCompiler` only for an explicitly offline source-model to
 provider-artifact workflow. Deployment should be able to consume prebuilt
@@ -77,11 +88,13 @@ semantics, entropy meaning, or access-unit framing.
 
 ### Provider registration and artifact compatibility
 
-Register the provider with a factory and, if needed, a provider-mediated
-component factory. Artifact requests must identify codec, model set, component,
-engine profile, provider, precision, target, runtime, API/schema versions,
-digest expectations, and license policy. The resolver selects a candidate;
-the provider remains responsible for rejecting an artifact it cannot execute.
+Register the provider with a `session_factory`. The legacy
+`IExecutionProvider` factory is optional and only needed for clients that use
+the older component-level executable API. Artifact requests must identify
+codec, model set, component, engine profile, provider, precision, target,
+runtime, API/schema versions, digest expectations, and license policy. The
+resolver selects a candidate; the provider remains responsible for rejecting
+an artifact it cannot execute.
 
 Do not describe a same-compute or Ampere-plus artifact as universally portable.
 Name exactly what was validated: host binary, CUDA code, engine bundle, catalog
@@ -100,11 +113,12 @@ Required tests include:
 
 ## Current TensorRT boundary
 
-TensorRT is the only production provider. It currently creates a provider-owned
-monolithic DCVC-RT backend through `component_factory`; its
-`IExecutionProvider::load` component-level path returns `not_implemented`.
-Independent loading of each neural model stage is transitional work. New
-documentation must preserve that distinction.
+TensorRT is the only production provider. Its registry entry creates the real
+provider session. The selected DCVC-RT adapter composes it into codec-owned
+encoder and decoder sessions containing I/P orchestration, `SequenceState`,
+NVAU handling, and output queues. TensorRT does not register the older
+component-level `IExecutionProvider` path. Independent use of each loaded
+neural model stage outside the codec remains transitional work.
 
 ## Build and contribution checklist
 

@@ -11,7 +11,7 @@
 | Build tools | CMake 3.24+, CTest, a C++20 compiler; CUDA and TensorRT for GPU execution |
 | Supported codec/provider | DCVC-RT with TensorRT FP16 on qualified Linux/NVIDIA targets |
 | Conformance fixtures | Deterministic test codec and CPU provider |
-| Public API/ABI | Pre-v1 and not frozen |
+| Public API/ABI | v1.x released; cross-minor C++ API/ABI stability is not guaranteed |
 | Support | [`SUPPORT.md`](../../SUPPORT.md); security reports follow [`SECURITY.md`](../../SECURITY.md) |
 
 Every retained GPU result must additionally record the platform, GPU, CUDA and

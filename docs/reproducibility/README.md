@@ -44,7 +44,7 @@ and compare rate only at the same byte boundary.
 - [Retained result inventory](../../results/README.md)
 - [Code metadata](code-metadata.md)
 
-The C++ API/ABI is not frozen. NVCR does not claim native Windows support,
+NVCR v1.x is released; cross-minor C++ API/ABI stability is not guaranteed. NVCR does not claim native Windows support,
 universal TensorRT-plan portability, upstream Python payload interchangeability,
 standard-container support, or unrestricted model and engine redistribution.
 

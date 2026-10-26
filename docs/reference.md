@@ -18,11 +18,14 @@ not independent product support.
 
 ## Session lifecycle
 
-Encoder and decoder sessions expose send/receive, flush, reset, state, and
-statistics. Draining means receiving until `end_of_stream` after `flush()`;
-there is no separate `drain()` method. The generic contract permits delayed output and frame
-reordering even though the current concrete DCVC-RT runtime emits one output
-per input.
+Encoder and decoder sessions expose send/receive, flush, and reset. The Runtime
+facade also exposes aggregate state and statistics. Draining means receiving
+until `end_of_stream` after `flush()`; there is no separate `drain()` method.
+The generic contract permits delayed output, grouped access units, multiple
+decoded frames per access unit, and frame reordering even though the current
+DCVC-RT runtime emits one output per input. A successful send consumes its
+input; output readiness is reported by the matching receive method. Callers
+must not resubmit input after receive returns `try_again`.
 
 ```cpp
 #include <nvcr/nvcr.hpp>
@@ -49,20 +52,25 @@ int submit(nvcr::Runtime& runtime, const nvcr::Frame& frame) {
 }
 ```
 
-After the final input, call `flush()` and keep receiving until
-`ErrorCode::end_of_stream`. `try_again` means output is not ready; it is
-not a backend failure. Call `reset()` before reusing a session for a new
-sequence so reference state and frame indexes are cleared.
+After the final input, flush the relevant direction and keep receiving until
+`ErrorCode::end_of_stream`. Use `flush_encoder()`, `reset_encoder()`,
+`flush_decoder()`, and `reset_decoder()` when the directions must be controlled
+independently. The facade's `flush()` and `reset()` remain shared compatibility
+operations. `try_again` means output is not ready; it is not a backend failure.
 
-Convenience `encode(const Frame&)` and `decode(const Packet&)` methods
-remain available for the current immediate-output CLI path. Calls are
-serialized per runtime because codec state is mutable.
+Convenience `encode(const Frame&)` and `decode(const Packet&)` methods remain
+available to callers that require exactly one immediate output. The CLI uses
+the session lifecycle above so it can drive delayed and multi-output codecs.
+Calls are serialized per runtime because codec state is mutable.
 
 ## Construction and registration
 
-Applications select registered codec `dcvc-rt` and provider `tensorrt`.
-The selected adapter obtains provider-owned components through
-`RuntimeServices`; that construction is separate from the lifecycle loop.
+Applications register their built-in codec and provider entries, set
+`RuntimeConfiguration::codec.id` and `provider.id`, then call
+`Runtime::create(configuration)`. The runtime resolves the codec adapter and
+provider-session factories through `RuntimeServices` and gives the selected
+provider session to the adapter. The adapter returns complete encoder and
+decoder sessions. Generic runtime code does not name DCVC-RT or TensorRT.
 
 The registry is static in the current release. Test codec/provider entries are
 linked only for contract coverage. They do not establish additional products
@@ -70,23 +78,33 @@ or CPU neural inference.
 
 ## Codec/provider ownership
 
-`codec::ICodecAdapter` owns codec semantics: options, GOP/frame types,
-reference state, entropy meaning, and codec-private payloads.
+`codec::ICodecAdapter` owns codec semantics through the sessions it creates:
+options, GOP/frame types, reference state, buffering, output cardinality,
+entropy meaning, and codec-private payloads.
 
-`provider::IExecutionProvider` owns executable artifacts, tensor bindings,
-memory, synchronization, execution, and provider failures. CUDA, TensorRT, and
-DCVC-RT implementation types do not cross the public provider headers.
+`provider::experimental::IProviderSession` owns executable stages, buffers,
+synchronization, execution, and provider failures. CUDA, TensorRT, and DCVC-RT
+implementation types do not cross the public provider headers.
 
-The TensorRT provider currently constructs one provider-owned monolithic
-DCVC-RT backend. Independent model-stage loading through
-`IExecutionProvider::load` returns `not_implemented`; the interface is
-transitional, not a completed production path.
+The TensorRT registry entry creates the real provider session used by
+production. The selected DCVC-RT adapter composes that session with its codec
+orchestration behind the current backend facade. The older component-level
+`IExecutionProvider` API remains available to artifact clients and fixtures,
+but TensorRT no longer registers an unused implementation of it.
 
 ## Configuration and errors
 
-Configuration covers public model/bitstream IDs, provider and device, engine
-selection, QP/GOP, packet bounds, memory policy, TensorRT mode, and diagnostics.
-It is validated before backend initialization.
+`RuntimeConfiguration` separates runtime, codec, provider, artifact-selection,
+and stream-policy scopes. Together they cover public model/bitstream IDs,
+provider and device, engine selection, QP/GOP, packet bounds, memory policy,
+TensorRT mode, and diagnostics. The complete configuration is validated before
+provider-session and codec-session initialization.
+
+For rebuilt 1.0.x clients, the original flat `RuntimeConfiguration` fields,
+`codec::Components`, `ICodecAdapter::create_components()`, and provider
+`component_factory` remain source-compatible shims. Runtime construction
+reconciles flat fields into the scoped groups before validation. New
+integrations should use the scoped configuration and codec/provider sessions.
 
 Structured errors cover invalid state, malformed stream, missing artifact or
 provider, incompatible target/version/precision, digest mismatch, distribution

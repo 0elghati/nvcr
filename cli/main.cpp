@@ -4,6 +4,8 @@
 #include <cuda_runtime_api.h>
 #endif
 
+#include "session_driver.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -69,12 +71,13 @@ struct Options final {
 void usage(std::ostream& out) {
     out << "NVCR native encoder and decoder\n\n"
         << "Usage:\n"
+        << "  nvcr --version\n"
         << "  nvcr encode -i INPUT.yuv -o OUTPUT.nvcr -s WIDTHxHEIGHT\n"
-        << "              [--provider ID] [--backend NAME] [--engine-profile NAME]\n"
+        << "              [--codec ID] [--provider ID] [--backend NAME] [--engine-profile NAME]\n"
         << "              [--frames N] [--qp N]\n"
         << "              [--gop-size N] [-r FPS] [--engine-dir DIR]\n"
         << "  nvcr decode -i INPUT.nvcr -o OUTPUT.yuv [--quality-metrics REFERENCE.yuv]\n"
-        << "              [--provider ID] [--backend NAME] [--engine-profile NAME] [--frames N]\n"
+        << "              [--codec ID] [--provider ID] [--backend NAME] [--engine-profile NAME] [--frames N]\n"
         << "              [--device-id N] [--engine-dir DIR]\n"
         << "  Measurement options: --measurement-json FILE --warmup-frames N\n"
         << "  nvcr codec list\n"
@@ -92,12 +95,13 @@ void usage(std::ostream& out) {
         << "      --width N             Raw input width (encode only)\n"
         << "      --height N            Raw input height (encode only)\n"
         << "      --backend NAME        Installed backend selector (default: NVCR_BACKEND or default)\n"
+        << "      --codec ID            Codec adapter id (default: dcvc-rt)\n"
         << "      --provider ID         Execution provider id (default: tensorrt)\n"
         << "      --engine-profile NAME Installed engine profile, for example 720p\n"
         << "                            (default: inferred from encoded dimensions)\n"
         << "      --engine-dir DIR      Custom TensorRT engine and entropy asset directory\n"
         << "                            (overrides backend/profile selection)\n"
-        << "      --frames N            Frames to process; 0 means all (default: 0)\n"
+        << "      --frames N            Encode input/decode output frame limit; 0 means all\n"
         << "      --qp N                I-frame QP (default: 32)\n"
         << "      --gop-size N          GOP size; 1 explicitly requests all-intra (default: 32)\n"
         << "  -r, --fps FPS             Input frame rate (default: 60)\n"
@@ -106,6 +110,7 @@ void usage(std::ostream& out) {
         << "      --profile             Print TensorRT/CUDA per-frame profiling counters\n"
         << "      --quality-metrics FILE  Report decoded Y/U/V and weighted PSNR against FILE\n"
         << "  -v, --verbose             Print per-frame CLI progress and info logs\n"
+        << "      --version             Print the NVCR software version\n"
         << "  -h, --help                Show this help\n\n"
         << "Without an explicit engine override, encode selects a profile from -s and\n"
         << "decode selects it from dimensions embedded in the first access unit.\n";
@@ -488,6 +493,10 @@ bool parse_options(int argc, char* argv[], Options& options) {
         return true;
     }
 
+    if (const char* codec = std::getenv("NVCR_CODEC")) {
+        if (*codec != '\0' && options.codec_id.empty()) options.codec_id = codec;
+    }
+    if (options.codec_id.empty()) options.codec_id = "dcvc-rt";
     if (const char* backend = std::getenv("NVCR_BACKEND")) {
         if (*backend != '\0' && options.backend == "default") options.backend = backend;
     }
@@ -708,23 +717,18 @@ nvcr::Result<nvcr::Runtime> create_runtime(
     if (options.verbose) {
         std::cout << "Using TensorRT engine bundle: " << engine_dir << '\n';
     }
-    auto adapter = nvcr::dcvcrt::make_adapter();
-    if (!adapter) return adapter.error();
     nvcr::RuntimeConfiguration configuration;
-    configuration.intra_engine_path = engine_dir;
-    if (!options.provider_id.empty()) configuration.provider_id = options.provider_id;
-    configuration.device_id = options.device_id;
-    configuration.intra_qp = options.qp;
-    configuration.gop_size = options.gop_size;
-    configuration.enable_profiling = options.profile;
-    configuration.log_level = options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
+    configuration.artifacts.intra_engine_path = engine_dir;
+    configuration.codec.id = options.codec_id;
+    if (!options.provider_id.empty()) configuration.provider.id = options.provider_id;
+    configuration.provider.device_id = options.device_id;
+    configuration.codec.intra_qp = options.qp;
+    configuration.codec.gop_size = options.gop_size;
+    configuration.provider.enable_profiling = options.profile;
+    configuration.runtime.log_level =
+        options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
     bootstrap_registry();
-    nvcr::runtime::RuntimeServices services(
-        nvcr::runtime::Registry::instance(),
-        configuration.provider_id);
-    auto components = adapter.value()->create_components(configuration, services);
-    if (!components) return components.error();
-    return nvcr::Runtime::create(configuration, std::move(components.value()));
+    return nvcr::Runtime::create(configuration);
 }
 
 // Opt-in measurement synchronization does not change production execution policy.
@@ -826,8 +830,28 @@ int encode(const Options& options) {
 
     std::vector<std::byte> yuv(frame_size.value());
     std::size_t frame_index = 0;
+    std::size_t access_unit_index = 0;
     std::uint64_t payload_bytes = 0;
     std::chrono::nanoseconds codec_time{};
+    auto emit_packet = [&](nvcr::Packet&& packet) -> nvcr::Result<void> {
+        auto wire = nvcr::PacketIO::serialize(packet);
+        if (!wire) return wire.error();
+        if (!write_u64(output, wire.value().size())) {
+            return nvcr::Error(
+                nvcr::ErrorCode::io_error, "failed writing packet length", "cli");
+        }
+        output.write(reinterpret_cast<const char*>(wire.value().data()),
+                     static_cast<std::streamsize>(wire.value().size()));
+        if (!output) {
+            return nvcr::Error(
+                nvcr::ErrorCode::io_error,
+                "failed writing access unit " + std::to_string(access_unit_index),
+                "cli");
+        }
+        payload_bytes += packet.size();
+        ++access_unit_index;
+        return {};
+    };
     while (options.frames == 0 || frame_index < options.frames) {
         input.read(reinterpret_cast<char*>(yuv.data()), static_cast<std::streamsize>(yuv.size()));
         const auto read = static_cast<std::size_t>(input.gcount());
@@ -839,8 +863,6 @@ int encode(const Options& options) {
             return 1;
         }
         if (!measurement_sync(options)) return 1;
-        auto measurement_start = options.measurement_json.empty()
-            ? std::chrono::steady_clock::time_point{} : std::chrono::steady_clock::now();
         auto frame = nvcr::Frame::copy_from(
             options.width, options.height, nvcr::PixelFormat::yuv420p8, yuv,
             nvcr::Timestamp{static_cast<nvcr::Timestamp::rep>(
@@ -849,47 +871,44 @@ int encode(const Options& options) {
             std::cerr << "nvcr: " << frame.error().describe() << '\n';
             return 1;
         }
-        const auto start = std::chrono::steady_clock::now();
-        auto packet = runtime.value().encode(frame.value());
-        const auto elapsed = std::chrono::steady_clock::now() - start;
-        if (!packet) {
-            std::cerr << "nvcr: " << packet.error().describe() << '\n';
-            return 1;
-        }
-        if (options.measurement_json.empty()) codec_time += elapsed;
-        auto wire = nvcr::PacketIO::serialize(packet.value());
-        if (!wire) {
-            std::cerr << "nvcr: " << wire.error().describe() << '\n';
+        const auto previous_time = codec_time;
+        const auto previous_access_units = access_unit_index;
+        const auto previous_payload_bytes = payload_bytes;
+        auto drained = nvcr::cli::send_frame_and_drain(
+            runtime.value(), frame.value(), emit_packet, codec_time);
+        if (!drained) {
+            std::cerr << "nvcr: " << drained.error().describe() << '\n';
             return 1;
         }
         if (!measurement_sync(options)) return 1;
-        if (!options.measurement_json.empty()) {
-            codec_time += std::chrono::steady_clock::now() - measurement_start;
-        }
-        if (!write_u64(output, wire.value().size())) {
-            std::cerr << "nvcr: failed writing packet length\n";
-            return 1;
-        }
-        output.write(reinterpret_cast<const char*>(wire.value().data()),
-                     static_cast<std::streamsize>(wire.value().size()));
-        if (!output) {
-            std::cerr << "nvcr: failed writing packet " << frame_index << '\n';
-            return 1;
-        }
-        payload_bytes += packet.value().size();
         if (options.verbose) {
             const double milliseconds =
-                std::chrono::duration<double, std::milli>(elapsed).count();
-            std::cout << "frame " << frame_index << ": encoded " << packet.value().size()
-                      << " payload bytes in " << std::fixed << std::setprecision(2)
-                      << milliseconds << " ms\n";
+                std::chrono::duration<double, std::milli>(codec_time - previous_time).count();
+            std::cout << "input frame " << frame_index << ": codec operations emitted "
+                      << access_unit_index - previous_access_units << " access unit(s), "
+                      << payload_bytes - previous_payload_bytes << " payload bytes in "
+                      << std::fixed << std::setprecision(2) << milliseconds << " ms\n";
         }
         ++frame_index;
     }
-    auto flushed = runtime.value().flush();
-    if (!flushed) {
-        std::cerr << "nvcr: " << flushed.error().describe() << '\n';
+    if (!measurement_sync(options)) return 1;
+    const auto previous_time = codec_time;
+    const auto previous_access_units = access_unit_index;
+    const auto previous_payload_bytes = payload_bytes;
+    auto drained = nvcr::cli::flush_and_drain_encoder(
+        runtime.value(), emit_packet, codec_time);
+    if (!drained) {
+        std::cerr << "nvcr: " << drained.error().describe() << '\n';
         return 1;
+    }
+    if (!measurement_sync(options)) return 1;
+    if (options.verbose) {
+        const double milliseconds =
+            std::chrono::duration<double, std::milli>(codec_time - previous_time).count();
+        std::cout << "encoder flush: codec operations emitted "
+                  << access_unit_index - previous_access_units << " access unit(s), "
+                  << payload_bytes - previous_payload_bytes << " payload bytes in "
+                  << std::fixed << std::setprecision(2) << milliseconds << " ms\n";
     }
     const double seconds = std::chrono::duration<double>(codec_time).count();
     if (!write_measurement(options, frame_index, seconds, initialization_seconds)) {
@@ -966,70 +985,40 @@ int decode(const Options& options) {
     }
 
     std::size_t frame_index = 0;
+    std::size_t access_unit_index = 0;
     std::uint32_t sequence_width = 0;
     std::uint32_t sequence_height = 0;
     std::chrono::nanoseconds codec_time{};
     QualityAccumulator quality;
     std::vector<std::byte> reference_yuv;
-    bool have_record = true;
-    while (options.frames == 0 || frame_index < options.frames) {
-        if (!have_record) {
-            const auto status = read_record(input, wire);
-            if (status == RecordRead::end) {
-                if (options.frames == 0) break;
-                std::cerr << "nvcr: bitstream ended after " << frame_index
-                          << " frame(s); requested " << options.frames << '\n';
-                return 1;
-            }
-            if (status == RecordRead::error) {
-                std::cerr << "nvcr: malformed or truncated packet record " << frame_index << '\n';
-                return 1;
-            }
-        }
-        have_record = false;
-        if (!measurement_sync(options)) return 1;
-        const auto measurement_start = options.measurement_json.empty()
-            ? std::chrono::steady_clock::time_point{} : std::chrono::steady_clock::now();
-        auto packet = nvcr::PacketIO::deserialize(wire);
-        if (!packet) {
-            std::cerr << "nvcr: " << packet.error().describe() << '\n';
-            return 1;
-        }
-        const auto start = std::chrono::steady_clock::now();
-        auto frame = runtime.value().decode(packet.value());
-        const auto elapsed = std::chrono::steady_clock::now() - start;
-        if (!frame) {
-            std::cerr << "nvcr: " << frame.error().describe() << '\n';
-            return 1;
-        }
-        if (options.measurement_json.empty()) codec_time += elapsed;
-        if (frame.value().pixel_format() != nvcr::PixelFormat::yuv420p8 &&
-            frame.value().pixel_format() != nvcr::PixelFormat::rgb24) {
-            std::cerr << "nvcr: decoder returned an unsupported pixel format\n";
-            return 1;
+    auto emit_frame = [&](nvcr::Frame&& frame) -> nvcr::Result<void> {
+        if (frame.pixel_format() != nvcr::PixelFormat::yuv420p8 &&
+            frame.pixel_format() != nvcr::PixelFormat::rgb24) {
+            return nvcr::Error(
+                nvcr::ErrorCode::invalid_argument,
+                "decoder returned an unsupported pixel format",
+                "cli");
         }
         if (frame_index == 0) {
-            sequence_width = frame.value().width();
-            sequence_height = frame.value().height();
+            sequence_width = frame.width();
+            sequence_height = frame.height();
             if ((sequence_width & 1U) != 0 || (sequence_height & 1U) != 0) {
-                std::cerr << "nvcr: decoded dimensions are invalid for YUV420p8\n";
-                return 1;
+                return nvcr::Error(
+                    nvcr::ErrorCode::invalid_argument,
+                    "decoded dimensions are invalid for YUV420p8",
+                    "cli");
             }
-        } else if (frame.value().width() != sequence_width ||
-                   frame.value().height() != sequence_height) {
-            std::cerr << "nvcr: raw YUV output does not support resolution changes\n";
-            return 1;
+        } else if (frame.width() != sequence_width || frame.height() != sequence_height) {
+            return nvcr::Error(
+                nvcr::ErrorCode::invalid_argument,
+                "raw YUV output does not support resolution changes",
+                "cli");
         }
         std::vector<std::byte> converted_yuv;
-        std::span<const std::byte> yuv = frame.value().data();
-        if (frame.value().pixel_format() == nvcr::PixelFormat::rgb24) {
-            converted_yuv = rgb24_to_yuv420p8(
-                frame.value().data(), frame.value().width(), frame.value().height());
+        std::span<const std::byte> yuv = frame.data();
+        if (frame.pixel_format() == nvcr::PixelFormat::rgb24) {
+            converted_yuv = rgb24_to_yuv420p8(frame.data(), frame.width(), frame.height());
             yuv = converted_yuv;
-        }
-        if (!measurement_sync(options)) return 1;
-        if (!options.measurement_json.empty()) {
-            codec_time += std::chrono::steady_clock::now() - measurement_start;
         }
         if (quality_reference.is_open()) {
             reference_yuv.resize(yuv.size());
@@ -1037,33 +1026,99 @@ int decode(const Options& options) {
                 reinterpret_cast<char*>(reference_yuv.data()),
                 static_cast<std::streamsize>(reference_yuv.size()));
             if (static_cast<std::size_t>(quality_reference.gcount()) != reference_yuv.size()) {
-                std::cerr << "nvcr: quality reference ended before decoded frame "
-                          << frame_index << "\n";
-                return 1;
+                return nvcr::Error(
+                    nvcr::ErrorCode::io_error,
+                    "quality reference ended before decoded frame " +
+                        std::to_string(frame_index),
+                    "cli");
             }
-            if (!quality.add(reference_yuv, yuv, frame.value().width(), frame.value().height())) {
-                std::cerr << "nvcr: quality metric frame dimensions are invalid\n";
-                return 1;
+            if (!quality.add(reference_yuv, yuv, frame.width(), frame.height())) {
+                return nvcr::Error(
+                    nvcr::ErrorCode::invalid_argument,
+                    "quality metric frame dimensions are invalid",
+                    "cli");
             }
         }
         output.write(reinterpret_cast<const char*>(yuv.data()),
                      static_cast<std::streamsize>(yuv.size()));
         if (!output) {
-            std::cerr << "nvcr: failed writing decoded frame " << frame_index << '\n';
-            return 1;
-        }
-        if (options.verbose) {
-            const double milliseconds =
-                std::chrono::duration<double, std::milli>(elapsed).count();
-            std::cout << "frame " << frame_index << ": decoded in " << std::fixed
-                      << std::setprecision(2) << milliseconds << " ms\n";
+            return nvcr::Error(
+                nvcr::ErrorCode::io_error,
+                "failed writing decoded frame " + std::to_string(frame_index),
+                "cli");
         }
         ++frame_index;
+        return {};
+    };
+    bool have_record = true;
+    while (options.frames == 0 || frame_index < options.frames) {
+        if (!have_record) {
+            const auto status = read_record(input, wire);
+            if (status == RecordRead::end) {
+                break;
+            }
+            if (status == RecordRead::error) {
+                std::cerr << "nvcr: malformed or truncated packet record "
+                          << access_unit_index << '\n';
+                return 1;
+            }
+        }
+        have_record = false;
+        if (!measurement_sync(options)) return 1;
+        auto packet = nvcr::PacketIO::deserialize(wire);
+        if (!packet) {
+            std::cerr << "nvcr: " << packet.error().describe() << '\n';
+            return 1;
+        }
+        const auto previous_time = codec_time;
+        const auto previous_frame_index = frame_index;
+        const auto output_limit = options.frames == 0
+            ? std::numeric_limits<std::size_t>::max()
+            : options.frames - frame_index;
+        auto drained = nvcr::cli::send_access_unit_and_drain(
+            runtime.value(), packet.value(), emit_frame, output_limit, codec_time);
+        if (!drained) {
+            std::cerr << "nvcr: " << drained.error().describe() << '\n';
+            return 1;
+        }
+        if (!measurement_sync(options)) return 1;
+        if (options.verbose) {
+            const double milliseconds =
+                std::chrono::duration<double, std::milli>(codec_time - previous_time).count();
+            std::cout << "access unit " << access_unit_index
+                      << ": codec operations emitted " << frame_index - previous_frame_index
+                      << " frame(s) in " << std::fixed << std::setprecision(2)
+                      << milliseconds << " ms\n";
+        }
+        ++access_unit_index;
+        if (drained.value() == nvcr::cli::DrainState::output_limit) break;
     }
-    auto flushed = runtime.value().flush();
-    if (!flushed) {
-        std::cerr << "nvcr: " << flushed.error().describe() << '\n';
-        return 1;
+    if (options.frames == 0 || frame_index < options.frames) {
+        if (!measurement_sync(options)) return 1;
+        const auto previous_time = codec_time;
+        const auto previous_frame_index = frame_index;
+        const auto output_limit = options.frames == 0
+            ? std::numeric_limits<std::size_t>::max()
+            : options.frames - frame_index;
+        auto drained = nvcr::cli::flush_and_drain_decoder(
+            runtime.value(), emit_frame, output_limit, codec_time);
+        if (!drained) {
+            std::cerr << "nvcr: " << drained.error().describe() << '\n';
+            return 1;
+        }
+        if (!measurement_sync(options)) return 1;
+        if (options.verbose) {
+            const double milliseconds =
+                std::chrono::duration<double, std::milli>(codec_time - previous_time).count();
+            std::cout << "decoder flush: codec operations emitted "
+                      << frame_index - previous_frame_index << " frame(s) in "
+                      << std::fixed << std::setprecision(2) << milliseconds << " ms\n";
+        }
+        if (options.frames != 0 && frame_index < options.frames) {
+            std::cerr << "nvcr: bitstream ended after " << frame_index
+                      << " frame(s); requested " << options.frames << '\n';
+            return 1;
+        }
     }
     const double seconds = std::chrono::duration<double>(codec_time).count();
     if (!write_measurement(options, frame_index, seconds, initialization_seconds)) {
@@ -1094,6 +1149,10 @@ int decode(const Options& options) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+    if (argc == 2 && std::string_view(argv[1]) == "--version") {
+        std::cout << "nvcr " << nvcr::current_software_version_string << '\n';
+        return 0;
+    }
     Options options;
     if (!parse_options(argc, argv, options)) {
         std::cerr << "\n";

@@ -1,13 +1,12 @@
 #include "nvcr/runtime/runtime.hpp"
 
 #include "nvcr/codec/runtime.hpp"
-#include "nvcr/dcvcrt/backend.hpp"
 #include "nvcr/logging/logger.hpp"
 #include "nvcr/memory/memory_pool.hpp"
+#include "nvcr/runtime/registry.hpp"
 
 #include <mutex>
 #include <new>
-#include <optional>
 #include <utility>
 
 namespace nvcr {
@@ -15,62 +14,84 @@ namespace nvcr {
 struct Runtime::Impl final {
     Impl(
         RuntimeConfiguration runtime_configuration,
-        codec::Components components,
+        codec::Sessions sessions,
         std::shared_ptr<LoggerFactory> logger_factory)
         : configuration(std::move(runtime_configuration)),
           logger(logger_factory->create("runtime")),
-          stats(std::make_shared<Statistics>()),
-          host_pool(make_host_memory_resource(), configuration.memory_pool_bytes),
-          codec(configuration, std::move(components), std::move(logger_factory), stats) {}
+          stats(sessions.statistics ? std::move(sessions.statistics) :
+                                      std::make_shared<Statistics>()),
+          host_pool(make_host_memory_resource(), configuration.runtime.memory_pool_bytes),
+          encoder(std::move(sessions.encoder)),
+          decoder(std::move(sessions.decoder)) {}
 
     RuntimeConfiguration configuration;
     std::shared_ptr<Logger> logger;
     std::shared_ptr<Statistics> stats;
     MemoryPool host_pool;
-    codec::Runtime codec;
+    std::unique_ptr<IEncoderSession> encoder;
+    std::unique_ptr<IDecoderSession> decoder;
     mutable std::mutex mutex;
     RuntimeState state{RuntimeState::initializing};
-
-    // Pending output queued by send_frame / send_access_unit.  DCVC-RT is
-    // one-frame/one-unit so at most one item is ever pending, but the queue
-    // keeps the send/receive split clean for future multi-output codecs.
-    std::optional<Packet> pending_encoded;
-    std::optional<Frame>  pending_decoded;
-    bool encoder_flushed{false};
-    bool decoder_flushed{false};
 };
 
 Runtime::Runtime(std::unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {}
 Runtime::~Runtime() = default;
 Runtime::Runtime(Runtime&&) noexcept = default;
 Runtime& Runtime::operator=(Runtime&&) noexcept = default;
+Result<Runtime> Runtime::create(RuntimeConfiguration configuration) {
+    configuration.reconcile_legacy_fields();
+    auto valid = ConfigurationLoader::validate(configuration);
+    if (!valid) return valid.error();
+
+    auto& registry = runtime::Registry::instance();
+    auto adapter = registry.create_codec(configuration.codec.id);
+    if (!adapter) return adapter.error();
+    if (!registry.compatible(configuration.codec.id, configuration.provider.id)) {
+        return Error(
+            ErrorCode::missing_provider,
+            "codec/provider selection is not registered: " + configuration.codec.id +
+                "/" + configuration.provider.id,
+            "runtime");
+    }
+
+    runtime::RuntimeServices services(registry, configuration.provider.id);
+    auto provider_session = services.create_provider_session(configuration);
+    if (provider_session) {
+        auto sessions = adapter.value()->create_sessions(
+            configuration, std::move(provider_session.value()));
+        if (sessions) {
+            return create(std::move(configuration), std::move(sessions.value()));
+        }
+        if (sessions.error().code() != ErrorCode::not_implemented) {
+            return sessions.error();
+        }
+    } else if (provider_session.error().code() != ErrorCode::not_implemented) {
+        return provider_session.error();
+    }
+
+    auto components = adapter.value()->create_components(configuration, services);
+    if (!components) return components.error();
+    return create(std::move(configuration), std::move(components.value()));
+}
 
 Result<Runtime> Runtime::create(
-    RuntimeConfiguration configuration, codec::Components components) {
-    // Bootstrap built-in registry entries before validation and initialization.
-    dcvcrt::register_codec();
-    dcvcrt::register_execution_providers();
-
+    RuntimeConfiguration configuration, codec::Sessions sessions) {
+    configuration.reconcile_legacy_fields();
     auto valid = ConfigurationLoader::validate(configuration);
     if (!valid) {
         return valid.error();
     }
-    if (!components.codec) {
+    if (!sessions.encoder || !sessions.decoder) {
         return Error(
             ErrorCode::dependency_unavailable,
-            "a codec backend must be provided",
+            "codec encoder and decoder sessions must be provided",
             "runtime");
     }
 
     try {
-        auto logger_factory = make_default_logger_factory(configuration.log_level);
+        auto logger_factory = make_default_logger_factory(configuration.runtime.log_level);
         auto impl = std::make_unique<Impl>(
-            std::move(configuration), std::move(components), std::move(logger_factory));
-        auto initialized = impl->codec.initialize();
-        if (!initialized) {
-            impl->state = RuntimeState::failed;
-            return initialized.error();
-        }
+            std::move(configuration), std::move(sessions), std::move(logger_factory));
         impl->state = RuntimeState::ready;
         impl->logger->log(LogLevel::info, "NVCR runtime is ready");
         return Runtime(std::move(impl));
@@ -82,6 +103,14 @@ Result<Runtime> Runtime::create(
     } catch (const std::exception& exception) {
         return Error(ErrorCode::internal_error, exception.what(), "runtime");
     }
+}
+
+Result<Runtime> Runtime::create(
+    RuntimeConfiguration configuration, codec::Components components) {
+    configuration.reconcile_legacy_fields();
+    auto sessions = codec::make_legacy_sessions(configuration, std::move(components));
+    if (!sessions) return sessions.error();
+    return create(std::move(configuration), std::move(sessions.value()));
 }
 
 // ---------------------------------------------------------------------------
@@ -100,11 +129,7 @@ Result<void> Runtime::send_frame(const Frame& frame) {
         return Error(ErrorCode::invalid_argument, "cannot encode an empty frame", "runtime");
     }
     try {
-        auto result = impl_->codec.encode(frame);
-        if (!result) return result.error();
-        impl_->pending_encoded = std::move(result.value());
-        impl_->encoder_flushed = false;
-        return {};
+        return impl_->encoder->send_frame(frame);
     } catch (const std::exception& e) {
         return Error(ErrorCode::backend_error, e.what(), "runtime");
     } catch (...) {
@@ -117,15 +142,7 @@ Result<Packet> Runtime::receive_access_unit() {
         return Error(ErrorCode::invalid_state, "runtime was moved from", "runtime");
     }
     std::scoped_lock lock(impl_->mutex);
-    if (impl_->pending_encoded) {
-        Packet p = std::move(*impl_->pending_encoded);
-        impl_->pending_encoded.reset();
-        return p;
-    }
-    if (impl_->encoder_flushed) {
-        return Error(ErrorCode::end_of_stream, "encoder has been flushed", "runtime");
-    }
-    return Error(ErrorCode::try_again, "no encoded output available yet", "runtime");
+    return impl_->encoder->receive_access_unit();
 }
 
 // ---------------------------------------------------------------------------
@@ -141,11 +158,7 @@ Result<void> Runtime::send_access_unit(const Packet& packet) {
         return Error(ErrorCode::invalid_state, "runtime is not ready", "runtime");
     }
     try {
-        auto result = impl_->codec.decode(packet);
-        if (!result) return result.error();
-        impl_->pending_decoded = std::move(result.value());
-        impl_->decoder_flushed = false;
-        return {};
+        return impl_->decoder->send_access_unit(packet);
     } catch (const std::exception& e) {
         return Error(ErrorCode::backend_error, e.what(), "runtime");
     } catch (...) {
@@ -158,15 +171,7 @@ Result<Frame> Runtime::receive_frame() {
         return Error(ErrorCode::invalid_state, "runtime was moved from", "runtime");
     }
     std::scoped_lock lock(impl_->mutex);
-    if (impl_->pending_decoded) {
-        Frame f = std::move(*impl_->pending_decoded);
-        impl_->pending_decoded.reset();
-        return f;
-    }
-    if (impl_->decoder_flushed) {
-        return Error(ErrorCode::end_of_stream, "decoder has been flushed", "runtime");
-    }
-    return Error(ErrorCode::try_again, "no decoded output available yet", "runtime");
+    return impl_->decoder->receive_frame();
 }
 
 // ---------------------------------------------------------------------------
@@ -182,11 +187,10 @@ Result<void> Runtime::flush() {
         return Error(ErrorCode::invalid_state, "runtime is not ready", "runtime");
     }
     try {
-        auto result = impl_->codec.flush();
-        if (!result) return result;
-        impl_->encoder_flushed = true;
-        impl_->decoder_flushed = true;
-        return {};
+        auto encoder = impl_->encoder->flush();
+        auto decoder = impl_->decoder->flush();
+        if (!encoder) return encoder.error();
+        return decoder;
     } catch (const std::exception& e) {
         return Error(ErrorCode::backend_error, e.what(), "runtime");
     } catch (...) {
@@ -202,12 +206,10 @@ Result<void> Runtime::reset() {
     if (impl_->state != RuntimeState::ready) {
         return Error(ErrorCode::invalid_state, "runtime is not ready", "runtime");
     }
-    impl_->codec.reset();
-    impl_->pending_encoded.reset();
-    impl_->pending_decoded.reset();
-    impl_->encoder_flushed = false;
-    impl_->decoder_flushed = false;
-    return {};
+    auto encoder = impl_->encoder->reset();
+    auto decoder = impl_->decoder->reset();
+    if (!encoder) return encoder.error();
+    return decoder;
 }
 
 // ---------------------------------------------------------------------------
@@ -224,6 +226,62 @@ Result<Frame> Runtime::decode(const Packet& packet) {
     auto sent = send_access_unit(packet);
     if (!sent) return sent.error();
     return receive_frame();
+}
+
+Result<void> Runtime::flush_encoder() {
+    if (!impl_) {
+        return Error(ErrorCode::invalid_state, "runtime was moved from", "runtime");
+    }
+    std::scoped_lock lock(impl_->mutex);
+    if (impl_->state != RuntimeState::ready) {
+        return Error(ErrorCode::invalid_state, "runtime is not ready", "runtime");
+    }
+    try {
+        return impl_->encoder->flush();
+    } catch (const std::exception& e) {
+        return Error(ErrorCode::backend_error, e.what(), "runtime");
+    } catch (...) {
+        return Error(ErrorCode::backend_error, "unknown backend failure", "runtime");
+    }
+}
+
+Result<void> Runtime::reset_encoder() {
+    if (!impl_) {
+        return Error(ErrorCode::invalid_state, "runtime was moved from", "runtime");
+    }
+    std::scoped_lock lock(impl_->mutex);
+    if (impl_->state != RuntimeState::ready) {
+        return Error(ErrorCode::invalid_state, "runtime is not ready", "runtime");
+    }
+    return impl_->encoder->reset();
+}
+
+Result<void> Runtime::flush_decoder() {
+    if (!impl_) {
+        return Error(ErrorCode::invalid_state, "runtime was moved from", "runtime");
+    }
+    std::scoped_lock lock(impl_->mutex);
+    if (impl_->state != RuntimeState::ready) {
+        return Error(ErrorCode::invalid_state, "runtime is not ready", "runtime");
+    }
+    try {
+        return impl_->decoder->flush();
+    } catch (const std::exception& e) {
+        return Error(ErrorCode::backend_error, e.what(), "runtime");
+    } catch (...) {
+        return Error(ErrorCode::backend_error, "unknown backend failure", "runtime");
+    }
+}
+
+Result<void> Runtime::reset_decoder() {
+    if (!impl_) {
+        return Error(ErrorCode::invalid_state, "runtime was moved from", "runtime");
+    }
+    std::scoped_lock lock(impl_->mutex);
+    if (impl_->state != RuntimeState::ready) {
+        return Error(ErrorCode::invalid_state, "runtime is not ready", "runtime");
+    }
+    return impl_->decoder->reset();
 }
 
 // ---------------------------------------------------------------------------

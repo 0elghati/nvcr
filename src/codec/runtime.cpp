@@ -3,20 +3,31 @@
 #include "nvcr/bitstream/access_unit.hpp"
 
 #include <chrono>
+#include <exception>
+#include <new>
 #include <optional>
 #include <utility>
 
 namespace nvcr::codec {
+namespace {
+
+RuntimeConfiguration normalized_configuration(RuntimeConfiguration configuration) {
+    configuration.reconcile_legacy_fields();
+    return configuration;
+}
+
+}  // namespace
+
 
 Runtime::Runtime(
     RuntimeConfiguration configuration,
     Components components,
     std::shared_ptr<LoggerFactory> logger_factory,
     std::shared_ptr<Statistics> statistics)
-    : configuration_(std::move(configuration)),
+    : configuration_(normalized_configuration(std::move(configuration))),
       components_(std::move(components)),
-      encoder_state_(configuration_.gop_size),
-      decoder_state_(configuration_.gop_size),
+      encoder_state_(configuration_.codec.gop_size),
+      decoder_state_(configuration_.codec.gop_size),
       logger_(logger_factory->create("dcvcrt")),
       statistics_(std::move(statistics)) {}
 
@@ -52,14 +63,14 @@ Result<Packet> Runtime::encode(const Frame& frame) {
         frame, frame_type.value(), encoder_state_.view());
     if (!encoded) return encoded.error();
     AccessUnit access_unit{
-        configuration_.bitstream_model_id,
+        configuration_.stream.bitstream_model_id,
         frame.width(),
         frame.height(),
         encoded.value().effective_qp,
         frame_type.value(),
         frame_type.value() == FrameType::intra,
         std::move(encoded.value().payload)};
-    auto serialized = AccessUnitIO::serialize(access_unit, configuration_.max_packet_bytes);
+    auto serialized = AccessUnitIO::serialize(access_unit, configuration_.runtime.max_packet_bytes);
     if (!serialized) return serialized.error();
     Packet packet(
         std::move(serialized.value()),
@@ -81,7 +92,7 @@ Result<Frame> Runtime::decode(const Packet& packet) {
     if (!initialized_) {
         return Error(ErrorCode::invalid_state, "runtime is not initialized", "dcvcrt");
     }
-    if (packet.size() > configuration_.max_packet_bytes) {
+    if (packet.size() > configuration_.runtime.max_packet_bytes) {
         return Error(
             ErrorCode::resource_exhausted,
             "packet exceeds configured limit",
@@ -90,9 +101,9 @@ Result<Frame> Runtime::decode(const Packet& packet) {
     std::optional<AccessUnit> access_unit;
     std::span<const std::byte> codec_payload = packet.data();
     if (AccessUnitIO::has_magic(packet.data())) {
-        auto parsed = AccessUnitIO::deserialize(packet.data(), configuration_.max_packet_bytes);
+        auto parsed = AccessUnitIO::deserialize(packet.data(), configuration_.runtime.max_packet_bytes);
         if (!parsed) return parsed.error();
-        if (parsed.value().model_id != configuration_.bitstream_model_id) {
+        if (parsed.value().model_id != configuration_.stream.bitstream_model_id) {
             return Error(
                 ErrorCode::malformed_bitstream,
                 "access-unit model identity does not match the configured bundle",
@@ -109,7 +120,7 @@ Result<Frame> Runtime::decode(const Packet& packet) {
             decoder_state_.reset();
         }
         codec_payload = access_unit->payload;
-    } else if (!configuration_.allow_legacy_access_units) {
+    } else if (!configuration_.stream.allow_legacy_access_units) {
         return Error(
             ErrorCode::malformed_bitstream,
             "legacy codec payload rejected by configuration",
@@ -163,6 +174,154 @@ void Runtime::reset() noexcept {
     decoder_state_.reset();
     components_.codec->reset();
     logger_->log(LogLevel::debug, "sequence state reset");
+}
+
+
+namespace {
+
+struct LegacySessionState final {
+    LegacySessionState(
+        RuntimeConfiguration configuration,
+        Components components,
+        std::shared_ptr<LoggerFactory> logger_factory,
+        std::shared_ptr<Statistics> statistics)
+        : runtime(
+              std::move(configuration),
+              std::move(components),
+              std::move(logger_factory),
+              std::move(statistics)) {}
+
+    Runtime runtime;
+    std::optional<Packet> pending_packet;
+    std::optional<Frame> pending_frame;
+    bool encoder_flushed{false};
+    bool decoder_flushed{false};
+};
+
+class LegacyEncoderSession final : public IEncoderSession {
+public:
+    explicit LegacyEncoderSession(std::shared_ptr<LegacySessionState> state)
+        : state_(std::move(state)) {}
+
+    Result<void> send_frame(const Frame& frame) override {
+        auto packet = state_->runtime.encode(frame);
+        if (!packet) return packet.error();
+        state_->pending_packet = std::move(packet.value());
+        state_->encoder_flushed = false;
+        return {};
+    }
+
+    Result<Packet> receive_access_unit() override {
+        if (state_->pending_packet) {
+            auto packet = std::move(*state_->pending_packet);
+            state_->pending_packet.reset();
+            return packet;
+        }
+        if (state_->encoder_flushed) {
+            return Error(ErrorCode::end_of_stream, "encoder has been flushed", "codec");
+        }
+        return Error(ErrorCode::try_again, "no encoded output available yet", "codec");
+    }
+
+    Result<void> flush() override {
+        auto flushed = state_->runtime.flush();
+        if (!flushed) return flushed.error();
+        state_->pending_packet.reset();
+        state_->pending_frame.reset();
+        state_->encoder_flushed = true;
+        state_->decoder_flushed = true;
+        return {};
+    }
+
+    Result<void> reset() override {
+        state_->runtime.reset();
+        state_->pending_packet.reset();
+        state_->pending_frame.reset();
+        state_->encoder_flushed = false;
+        state_->decoder_flushed = false;
+        return {};
+    }
+
+private:
+    std::shared_ptr<LegacySessionState> state_;
+};
+
+class LegacyDecoderSession final : public IDecoderSession {
+public:
+    explicit LegacyDecoderSession(std::shared_ptr<LegacySessionState> state)
+        : state_(std::move(state)) {}
+
+    Result<void> send_access_unit(const Packet& packet) override {
+        auto frame = state_->runtime.decode(packet);
+        if (!frame) return frame.error();
+        state_->pending_frame = std::move(frame.value());
+        state_->decoder_flushed = false;
+        return {};
+    }
+
+    Result<Frame> receive_frame() override {
+        if (state_->pending_frame) {
+            auto frame = std::move(*state_->pending_frame);
+            state_->pending_frame.reset();
+            return frame;
+        }
+        if (state_->decoder_flushed) {
+            return Error(ErrorCode::end_of_stream, "decoder has been flushed", "codec");
+        }
+        return Error(ErrorCode::try_again, "no decoded output available yet", "codec");
+    }
+
+    Result<void> flush() override {
+        auto flushed = state_->runtime.flush();
+        if (!flushed) return flushed.error();
+        state_->pending_packet.reset();
+        state_->pending_frame.reset();
+        state_->encoder_flushed = true;
+        state_->decoder_flushed = true;
+        return {};
+    }
+
+    Result<void> reset() override {
+        state_->runtime.reset();
+        state_->pending_packet.reset();
+        state_->pending_frame.reset();
+        state_->encoder_flushed = false;
+        state_->decoder_flushed = false;
+        return {};
+    }
+
+private:
+    std::shared_ptr<LegacySessionState> state_;
+};
+
+}  // namespace
+
+Result<Sessions> make_legacy_sessions(
+    RuntimeConfiguration configuration, Components components) {
+    configuration.reconcile_legacy_fields();
+    try {
+        auto statistics = std::make_shared<Statistics>();
+        auto logger_factory = make_default_logger_factory(configuration.runtime.log_level);
+        auto state = std::make_shared<LegacySessionState>(
+            std::move(configuration),
+            std::move(components),
+            std::move(logger_factory),
+            statistics);
+        auto initialized = state->runtime.initialize();
+        if (!initialized) return initialized.error();
+        return Sessions{
+            std::make_unique<LegacyEncoderSession>(state),
+            std::make_unique<LegacyDecoderSession>(std::move(state)),
+            std::move(statistics),
+        };
+    } catch (const std::bad_alloc&) {
+        return Error(
+            ErrorCode::resource_exhausted,
+            "unable to allocate legacy codec sessions",
+            "codec");
+    } catch (const std::exception& exception) {
+        return Error(ErrorCode::internal_error, exception.what(), "codec");
+    }
 }
 
 }  // namespace nvcr::codec

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 namespace nvcr {
 
@@ -37,6 +38,8 @@ struct ManifestSchemaVersion {
     std::uint16_t minor{0};
 };
 
-inline constexpr SoftwareVersion current_software_version{0, 8, 2};
+inline constexpr SoftwareVersion current_software_version{
+    @PROJECT_VERSION_MAJOR@, @PROJECT_VERSION_MINOR@, @PROJECT_VERSION_PATCH@};
+inline constexpr std::string_view current_software_version_string{"@PROJECT_VERSION@"};
 
 }  // namespace nvcr

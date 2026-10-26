@@ -55,7 +55,13 @@ std::optional<CodecEntry> Registry::find_codec(std::string_view id) const {
 Result<std::unique_ptr<codec::ICodecAdapter>> Registry::create_codec(
     std::string_view id) const {
     auto entry = find_codec(id);
-    if (!entry || !entry->factory) {
+    if (!entry) {
+        return Error(
+            ErrorCode::missing_codec,
+            "codec is not registered: " + std::string(id),
+            "registry");
+    }
+    if (!entry->factory) {
         return Error(
             ErrorCode::dependency_unavailable,
             "codec has no registered adapter factory: " + std::string(id),
@@ -144,9 +150,11 @@ Result<std::shared_ptr<provider::IExecutable>> RuntimeServices::resolve(
 
 Result<codec::Components>
 RuntimeServices::create_components(const RuntimeConfiguration& configuration) const {
-    const std::string provider_id = configuration.provider_id.empty()
+    auto normalized = configuration;
+    normalized.reconcile_legacy_fields();
+    const std::string provider_id = normalized.provider.id.empty()
         ? std::string(preferred_provider_id_)
-        : configuration.provider_id;
+        : normalized.provider.id;
     if (provider_id.empty()) {
         return Error(
             ErrorCode::missing_provider,
@@ -174,7 +182,45 @@ RuntimeServices::create_components(const RuntimeConfiguration& configuration) co
             "execution provider cannot create codec components: " + provider_id,
             "registry");
     }
-    return component_factory(configuration);
+    return component_factory(normalized);
+}
+
+Result<std::shared_ptr<provider::experimental::IProviderSession>>
+RuntimeServices::create_provider_session(const RuntimeConfiguration& configuration) const {
+    auto normalized = configuration;
+    normalized.reconcile_legacy_fields();
+    const std::string provider_id = normalized.provider.id.empty()
+        ? std::string(preferred_provider_id_)
+        : normalized.provider.id;
+    if (provider_id.empty()) {
+        return Error(
+            ErrorCode::missing_provider,
+            "configuration does not identify an execution provider",
+            "registry");
+    }
+
+    std::function<Result<std::shared_ptr<provider::experimental::IProviderSession>>(
+        const RuntimeConfiguration&)> session_factory;
+    {
+        std::scoped_lock lock(registry_.mutex_);
+        const auto provider = std::find_if(
+            registry_.providers_.begin(), registry_.providers_.end(),
+            [&](const ProviderEntry& entry) { return entry.descriptor.id == provider_id; });
+        if (provider == registry_.providers_.end()) {
+            return Error(
+                ErrorCode::missing_provider,
+                "execution provider is not registered: " + provider_id,
+                "registry");
+        }
+        session_factory = provider->session_factory;
+    }
+    if (!session_factory) {
+        return Error(
+            ErrorCode::not_implemented,
+            "execution provider cannot create a session: " + provider_id,
+            "registry");
+    }
+    return session_factory(normalized);
 }
 
 }  // namespace nvcr::runtime

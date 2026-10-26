@@ -273,8 +273,8 @@ int main() {
     // well-known error code — no crash, no UB on the session call path.
     {
         nvcr::RuntimeConfiguration cfg{};
-        nvcr::codec::Components components;
-        auto result = nvcr::Runtime::create(std::move(cfg), std::move(components));
+        nvcr::codec::Sessions sessions;
+        auto result = nvcr::Runtime::create(std::move(cfg), std::move(sessions));
         expect(!result, "Runtime::create rejects empty config or null codec");
         if (!result) {
             auto code = result.error().code();
@@ -309,4 +309,3 @@ int main() {
     }
     return failures == 0 ? 0 : 1;
 }
-

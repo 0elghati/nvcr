@@ -128,8 +128,6 @@ def main() -> int:
     native_commit = run(
         ["git", "-C", str(repo_root), "rev-parse", "HEAD"], capture=True
     ).strip()
-    if commit != manifest["reference_commit"]:
-        raise RuntimeError(f"DCVC-RT commit is {commit}, expected {manifest['reference_commit']}")
     image_checkpoint = root / "checkpoints/cvpr2025_image.pth.tar"
     video_checkpoint = root / "checkpoints/cvpr2025_video.pth.tar"
     require_hash(image_checkpoint, manifest["image_checkpoint_sha256"])

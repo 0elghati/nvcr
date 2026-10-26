@@ -17,4 +17,8 @@ make_test_encoder_session(std::size_t delay_frames = 1U);
 
 [[nodiscard]] std::unique_ptr<IDecoderSession> make_test_decoder_session();
 
+[[nodiscard]] std::unique_ptr<IEncoderSession> make_grouped_test_encoder_session();
+
+[[nodiscard]] std::unique_ptr<IDecoderSession> make_grouped_test_decoder_session();
+
 }  // namespace nvcr::test_support

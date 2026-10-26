@@ -1,6 +1,7 @@
 #pragma once
 
 #include "nvcr/codec/backend.hpp"
+#include "nvcr/codec/session.hpp"
 #include "nvcr/common/error.hpp"
 #include "nvcr/configuration/configuration.hpp"
 #include "nvcr/logging/logger.hpp"
@@ -35,5 +36,8 @@ private:
     std::shared_ptr<Statistics> statistics_;
     bool initialized_{false};
 };
+
+[[nodiscard]] Result<Sessions> make_legacy_sessions(
+    RuntimeConfiguration configuration, Components components);
 
 }  // namespace nvcr::codec

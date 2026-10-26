@@ -4,6 +4,9 @@ if(Python3_Interpreter_FOUND)
         NAME nvcr_artifact_profiles
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/artifact_tool_tests.py")
     add_test(
+        NAME nvcr_version_identity
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/version_identity_tests.py")
+    add_test(
         NAME nvcr_engine_catalog
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/engine_catalog_tests.py")
     add_test(
@@ -43,6 +46,12 @@ add_executable(
     support/test_provider/test_provider.cpp)
 target_link_libraries(nvcr_contract_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_contract_tests)
+target_compile_definitions(
+    nvcr_contract_tests PRIVATE
+        NVCR_TEST_PROJECT_VERSION="${PROJECT_VERSION}"
+        NVCR_TEST_PROJECT_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+        NVCR_TEST_PROJECT_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+        NVCR_TEST_PROJECT_VERSION_PATCH=${PROJECT_VERSION_PATCH})
 if(NVCR_ENABLE_TENSORRT)
     target_compile_definitions(nvcr_contract_tests PRIVATE NVCR_TEST_HAS_TENSORRT=1)
 endif()
@@ -87,12 +96,34 @@ target_link_libraries(nvcr_dcvcrt_payload_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_dcvcrt_payload_tests)
 add_test(NAME nvcr_dcvcrt_payloads COMMAND nvcr_dcvcrt_payload_tests)
 
+add_executable(nvcr_dcvcrt_orchestration_tests dcvcrt_orchestration_tests.cpp)
+target_include_directories(
+    nvcr_dcvcrt_orchestration_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcrt")
+target_link_libraries(nvcr_dcvcrt_orchestration_tests PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_dcvcrt_orchestration_tests)
+add_test(NAME nvcr_dcvcrt_orchestration COMMAND nvcr_dcvcrt_orchestration_tests)
+
 add_executable(nvcr_rans_conformance_tests rans_conformance_tests.cpp)
 target_link_libraries(nvcr_rans_conformance_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_rans_conformance_tests)
 add_test(NAME nvcr_rans_conformance COMMAND nvcr_rans_conformance_tests)
 
 if(TARGET nvcr_cli)
+    add_test(
+        NAME nvcr_cli_version
+        COMMAND "${CMAKE_COMMAND}"
+            -DNVCR_CLI=$<TARGET_FILE:nvcr_cli>
+            -DEXPECTED_VERSION=${PROJECT_VERSION}
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/check_cli_version.cmake")
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME nvcr_artifact_cli_version
+            COMMAND "${CMAKE_COMMAND}"
+                -DPYTHON_EXECUTABLE=${Python3_EXECUTABLE}
+                -DNVCR_ARTIFACT_CLI=${PROJECT_BINARY_DIR}/generated/bin/nvcr-artifacts
+                -DEXPECTED_VERSION=${PROJECT_VERSION}
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/check_artifact_version.cmake")
+    endif()
     add_test(
         NAME nvcr_cli_accepts_inter_gop
         COMMAND "${CMAKE_COMMAND}"
@@ -205,3 +236,8 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME nvcr_legacy_consolidation
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/consolidate_runtime_results_tests.py")
 endif()
+
+add_executable(nvcr_public_api_compatibility public_api_compatibility.cpp)
+target_link_libraries(nvcr_public_api_compatibility PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_public_api_compatibility)
+add_test(NAME nvcr_public_api_compatibility COMMAND nvcr_public_api_compatibility)

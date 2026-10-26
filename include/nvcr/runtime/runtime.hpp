@@ -19,11 +19,10 @@ enum class RuntimeState {
     stopped,
 };
 
-// Runtime implements IEncoderSession and IDecoderSession on the same session
-// object for ergonomic symmetry.  The underlying codec::Runtime calls are
-// serialized by an internal mutex so both directions are safe to drive from a
-// single thread.  DCVC-RT's one-frame/one-AU behaviour is conformant with the
-// send/receive contract (try_again is never returned in the current adapter).
+// Runtime is a thin facade over the encoder and decoder sessions created by the
+// selected codec adapter. Calls are serialized by an internal mutex. The
+// direction-specific lifecycle methods preserve independent flush/reset;
+// Runtime's interface overrides remain shared compatibility operations.
 class Runtime final : public IEncoderSession, public IDecoderSession {
 public:
     ~Runtime() override;
@@ -32,6 +31,15 @@ public:
     Runtime(const Runtime&) = delete;
     Runtime& operator=(const Runtime&) = delete;
 
+    // Selects the registered codec and provider named by configuration, then
+    // composes their adapter and provider session into a runtime.
+    [[nodiscard]] static Result<Runtime> create(RuntimeConfiguration configuration);
+
+    // Low-level construction seam for tests and callers supplying sessions.
+    [[nodiscard]] static Result<Runtime> create(
+        RuntimeConfiguration configuration,
+        codec::Sessions sessions);
+    // 1.0.x low-level construction seam retained for rebuilt clients.
     [[nodiscard]] static Result<Runtime> create(
         RuntimeConfiguration configuration,
         codec::Components components);
@@ -52,6 +60,12 @@ public:
     [[nodiscard]] Result<Packet> encode(const Frame& frame);
     [[nodiscard]] Result<Frame> decode(const Packet& packet);
 
+    // Direction-specific lifecycle for independent drain/reset.
+    [[nodiscard]] Result<void> flush_encoder();
+    [[nodiscard]] Result<void> reset_encoder();
+    [[nodiscard]] Result<void> flush_decoder();
+    [[nodiscard]] Result<void> reset_decoder();
+
     [[nodiscard]] RuntimeState state() const noexcept;
     [[nodiscard]] StatisticsSnapshot statistics() const noexcept;
 
@@ -62,4 +76,3 @@ private:
 };
 
 }  // namespace nvcr
-

@@ -30,10 +30,10 @@ video inference.
 
 ## Current limits
 
-NVCR is pre-v1, so its C++ API and ABI may change. Native Windows and macOS
-execution, CPU neural inference, INT8 release support, FFmpeg integration,
-standard multimedia containers, and additional production codec/provider pairs
-are not part of the current release.
+NVCR v1.x is released. Its public C++ API and ABI have not been declared stable
+across minor releases. Native Windows and macOS execution, CPU neural inference,
+INT8 release support, FFmpeg integration, standard multimedia containers, and
+additional production codec/provider pairs are not part of the current release.
 
 See [Architecture](architecture.md) to understand the component boundaries,
 [Installation](installation.md) to choose a delivery path, and

@@ -25,7 +25,47 @@ enum class TensorRTExecutionMode : std::uint8_t {
     performance,
 };
 
+struct RuntimeOptions final {
+    std::size_t memory_pool_bytes{256U * 1024U * 1024U};
+    std::size_t max_packet_bytes{64U * 1024U * 1024U};
+    LogLevel log_level{LogLevel::info};
+};
+
+struct CodecConfiguration final {
+    std::string id{"dcvc-rt"};
+    std::uint32_t intra_qp{32};
+    std::uint32_t gop_size{32};
+    bool verify_encoder_reconstruction{false};
+};
+
+struct ProviderConfiguration final {
+    std::string id{"tensorrt"};
+    std::int32_t device_id{0};
+    std::size_t device_arena_bytes{512U * 1024U * 1024U};
+    TensorRTExecutionMode tensorrt_execution_mode{TensorRTExecutionMode::automatic};
+    bool enable_profiling{false};
+};
+
+struct ArtifactSelection final {
+    std::filesystem::path intra_engine_path;
+    std::filesystem::path predicted_engine_path;
+    std::filesystem::path entropy_model_path;
+    std::string model_id{"dcvcrt-cvpr2025"};
+    CodecApiVersion codec_api_version{1};
+    ProviderApiVersion provider_api_version{1};
+    ModelSetVersion model_set_version{1, 0};
+    ManifestSchemaVersion manifest_schema_version{2, 0};
+};
+
+struct StreamPolicy final {
+    std::string bitstream_model_id{"dcvcrt"};
+    StreamFormatVersion stream_format_version{1, 0};
+    PayloadSyntaxVersion payload_syntax_version{1};
+    bool allow_legacy_access_units{true};
+};
+
 struct RuntimeConfiguration final {
+    // 1.0.x fields retain their original order for aggregate initialization.
     std::filesystem::path intra_engine_path;
     std::filesystem::path predicted_engine_path;
     std::filesystem::path entropy_model_path;
@@ -49,6 +89,15 @@ struct RuntimeConfiguration final {
     bool allow_legacy_access_units{true};
     bool verify_encoder_reconstruction{false};
     bool enable_profiling{false};
+
+    // Scoped v2 ownership groups. Internal code uses these after reconciliation.
+    RuntimeOptions runtime;
+    CodecConfiguration codec;
+    ProviderConfiguration provider;
+    ArtifactSelection artifacts;
+    StreamPolicy stream;
+
+    void reconcile_legacy_fields();
 };
 
 class ConfigurationLoader final {

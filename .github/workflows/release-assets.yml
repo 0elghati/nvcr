@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Exact release tag, for example v0.18.0
+        description: Exact release tag, for example v1.0.6
         required: true
 
 permissions:
@@ -157,6 +157,6 @@ jobs:
           Remaining manual deliverables and gates:
           - run clean-room target validation on the recorded RTX 4070 reference target;
           - run clean-room target validation on the recorded Jetson Orin Nano reference target;
-          - record correctness, performance, memory, and energy evidence in `ROADMAP.md`;
+          - record correctness, performance, and memory evidence in `ROADMAP.md`;
           - publish the draft release manually only after the required release-track gates pass.
           EOF

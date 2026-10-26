@@ -5,9 +5,9 @@ GOP decisions, references, latents, reset/flush, and golden codec vectors belong
 ## 720p I-frame golden
 
 `i_frame_golden.py` runs one FourPeople 1280x720 frame at QP 32 through the
-pinned Python DCVC-RT runtime and native NVCR. It verifies the upstream commit,
-checkpoint, source-frame, Python bitstream, and Python reconstruction hashes,
-then gates native source quality and Python/native reconstruction PSNR.
+Python DCVC-RT runtime and native NVCR. It verifies the checkpoint, source-frame,
+Python bitstream, and Python reconstruction hashes, then gates native source
+quality and Python/native reconstruction PSNR.
 
 Configure all three paths to register the opt-in CTest:
 

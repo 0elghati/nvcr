@@ -15,18 +15,6 @@
         {
           "type": "generic",
           "path": "CITATION.cff"
-        },
-        {
-          "type": "generic",
-          "path": "CMakeLists.txt"
-        },
-        {
-          "type": "generic",
-          "path": "README.md"
-        },
-        {
-          "type": "generic",
-          "path": "docs/getting-started.md"
         }
       ]
     }
