@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-10-13
+Last reviewed: 2026-10-26
 
 ## Product direction
 
@@ -167,6 +167,7 @@ and gap classifications are recorded in
 | C6 | MLVC CUDA equivalence diagnosis | Complete; tested reference-interchange path rejected 2026-09-14 | FP16 encoder raw symbols diverged before entropy coding, so the tested pair is not byte/payload interchangeable with the reference path; see [the C6 evidence](evidence/phase-c6-mlvc-cuda-equivalence-20260914.md) |
 | C6.5 | Generic CLI session driving | Complete 2026-09-15 | Encode/decode use session send, full receive drain, directional flush, and final drain through the same driver exercised by the grouped fixture; see [the C6.5 evidence](evidence/phase-c6-5-cli-session-driver-20260915.md) |
 | C6.6 | Session send/receive contract clarification | Complete 2026-09-15 | Send success consumes input, receive-side `try_again` reports delayed readiness, and a registered multi-input decoder fixture proves order, timestamps, flush/drain, and reset/reuse without changing production behavior; see [the C6.6 evidence](evidence/phase-c6-6-session-contract-20260915.md) |
+| C6.7 | Current-main rebase and minor-release compatibility | Complete 2026-10-26 with documented GPU-contention exception | The twelve-commit `main-advanced` stack is rebased onto v1.0.8 and the public 1.0 source seams are retained. CPU, install-consumer, sanitizer/fuzz, TensorRT non-GPU, available-profile GPU, pinned-golden, and byte-parity gates pass; two 1080p tests were omitted because they could not coexist with the active GPU workload. See [the C6.7 evidence](evidence/main-advanced-rebase-vetting-20261026.md) |
 | C7 | DCVC-UF fused-operator feasibility | Pending; separate codec axis | One fused operator and one frame-specific high-throughput branch match a pinned upstream encode/decode vector without generic runtime code owning UF branch semantics |
 
 C0 confirmed that C1 could proceed without a new chunk API. The existing
@@ -238,6 +239,14 @@ input, and receive-side `try_again` reports that output is not ready. The
 registered grouped decoder now delays its first access unit until another unit
 arrives, then preserves order and timestamps through flush, final drain, reset,
 and reuse. DCVC-RT behavior and the C6.5 CLI driver remain unchanged.
+
+C6.7 rebases the completed provider/session work onto the current v1.0.8 main
+line and audits it against the adopted minor-release API policy. The original
+flat configuration and component-construction seams remain available as source
+compatibility shims; scoped configuration and sessions remain the preferred
+architecture. All compatible gates pass. Two 1080p TensorRT cases were omitted
+by user direction because the active training process left insufficient VRAM;
+that process was not interrupted.
 
 Energy measurement remains optional downstream evidence, not a release gate.
 

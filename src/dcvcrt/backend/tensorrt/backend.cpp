@@ -4172,6 +4172,11 @@ void register_tensorrt_provider() {
             .target_device = "cuda",
         },
         {},
+        [](const RuntimeConfiguration&) -> Result<codec::Components> {
+            auto backend = make_tensorrt_backend();
+            if (!backend) return backend.error();
+            return codec::Components{std::move(backend.value())};
+        },
         make_tensorrt_session,
     });
 }

@@ -145,6 +145,80 @@ Result<void> apply_setting(
 }
 
 }  // namespace
+void RuntimeConfiguration::reconcile_legacy_fields() {
+    const RuntimeConfiguration defaults;
+    const auto reconcile = []<typename T>(T& scoped, T& legacy, const T& default_value) {
+        if (scoped == default_value && legacy != default_value) scoped = legacy;
+        legacy = scoped;
+    };
+
+    reconcile(artifacts.intra_engine_path, intra_engine_path,
+              defaults.artifacts.intra_engine_path);
+    reconcile(artifacts.predicted_engine_path, predicted_engine_path,
+              defaults.artifacts.predicted_engine_path);
+    reconcile(artifacts.entropy_model_path, entropy_model_path,
+              defaults.artifacts.entropy_model_path);
+    reconcile(artifacts.model_id, model_id, defaults.artifacts.model_id);
+    reconcile(stream.bitstream_model_id, bitstream_model_id,
+              defaults.stream.bitstream_model_id);
+    reconcile(provider.id, provider_id, defaults.provider.id);
+    reconcile(provider.device_id, device_id, defaults.provider.device_id);
+    reconcile(codec.intra_qp, intra_qp, defaults.codec.intra_qp);
+    reconcile(codec.gop_size, gop_size, defaults.codec.gop_size);
+    reconcile(runtime.memory_pool_bytes, memory_pool_bytes,
+              defaults.runtime.memory_pool_bytes);
+    reconcile(provider.device_arena_bytes, device_arena_bytes,
+              defaults.provider.device_arena_bytes);
+    reconcile(runtime.max_packet_bytes, max_packet_bytes,
+              defaults.runtime.max_packet_bytes);
+    reconcile(runtime.log_level, log_level, defaults.runtime.log_level);
+    reconcile(provider.tensorrt_execution_mode, tensorrt_execution_mode,
+              defaults.provider.tensorrt_execution_mode);
+    reconcile(stream.allow_legacy_access_units, allow_legacy_access_units,
+              defaults.stream.allow_legacy_access_units);
+    reconcile(codec.verify_encoder_reconstruction, verify_encoder_reconstruction,
+              defaults.codec.verify_encoder_reconstruction);
+    reconcile(provider.enable_profiling, enable_profiling,
+              defaults.provider.enable_profiling);
+
+    if (artifacts.codec_api_version.major == defaults.artifacts.codec_api_version.major &&
+        codec_api_version.major != defaults.codec_api_version.major) {
+        artifacts.codec_api_version = codec_api_version;
+    }
+    codec_api_version = artifacts.codec_api_version;
+    if (artifacts.provider_api_version.major == defaults.artifacts.provider_api_version.major &&
+        provider_api_version.major != defaults.provider_api_version.major) {
+        artifacts.provider_api_version = provider_api_version;
+    }
+    provider_api_version = artifacts.provider_api_version;
+    if (stream.stream_format_version.major == defaults.stream.stream_format_version.major &&
+        stream.stream_format_version.minor == defaults.stream.stream_format_version.minor &&
+        (stream_format_version.major != defaults.stream_format_version.major ||
+         stream_format_version.minor != defaults.stream_format_version.minor)) {
+        stream.stream_format_version = stream_format_version;
+    }
+    stream_format_version = stream.stream_format_version;
+    if (stream.payload_syntax_version.major == defaults.stream.payload_syntax_version.major &&
+        payload_syntax_version.major != defaults.payload_syntax_version.major) {
+        stream.payload_syntax_version = payload_syntax_version;
+    }
+    payload_syntax_version = stream.payload_syntax_version;
+    if (artifacts.model_set_version.major == defaults.artifacts.model_set_version.major &&
+        artifacts.model_set_version.minor == defaults.artifacts.model_set_version.minor &&
+        (model_set_version.major != defaults.model_set_version.major ||
+         model_set_version.minor != defaults.model_set_version.minor)) {
+        artifacts.model_set_version = model_set_version;
+    }
+    model_set_version = artifacts.model_set_version;
+    if (artifacts.manifest_schema_version.major == defaults.artifacts.manifest_schema_version.major &&
+        artifacts.manifest_schema_version.minor == defaults.artifacts.manifest_schema_version.minor &&
+        (manifest_schema_version.major != defaults.manifest_schema_version.major ||
+         manifest_schema_version.minor != defaults.manifest_schema_version.minor)) {
+        artifacts.manifest_schema_version = manifest_schema_version;
+    }
+    manifest_schema_version = artifacts.manifest_schema_version;
+}
+
 
 Result<RuntimeConfiguration> ConfigurationLoader::from_file(
     const std::filesystem::path& path) {
@@ -183,6 +257,7 @@ Result<RuntimeConfiguration> ConfigurationLoader::from_file(
         return Error(ErrorCode::io_error, "failed while reading configuration", "configuration");
     }
 
+    configuration.reconcile_legacy_fields();
     auto valid = validate(configuration);
     if (!valid) {
         return valid.error();
@@ -191,30 +266,32 @@ Result<RuntimeConfiguration> ConfigurationLoader::from_file(
 }
 
 Result<void> ConfigurationLoader::validate(const RuntimeConfiguration& configuration) {
-    if (!valid_identifier(configuration.codec.id)) {
+    auto normalized = configuration;
+    normalized.reconcile_legacy_fields();
+    if (!valid_identifier(normalized.codec.id)) {
         return Error(ErrorCode::invalid_argument, "invalid codec_id", "configuration");
     }
-    if (!valid_identifier(configuration.artifacts.model_id)) {
+    if (!valid_identifier(normalized.artifacts.model_id)) {
         return Error(ErrorCode::invalid_argument, "invalid model_id", "configuration");
     }
-    if (!valid_identifier(configuration.stream.bitstream_model_id)) {
+    if (!valid_identifier(normalized.stream.bitstream_model_id)) {
         return Error(ErrorCode::invalid_argument, "invalid bitstream_model_id", "configuration");
     }
-    if (!valid_identifier(configuration.provider.id)) {
+    if (!valid_identifier(normalized.provider.id)) {
         return Error(ErrorCode::invalid_argument, "invalid provider_id", "configuration");
     }
-    if (configuration.provider.device_id < 0) {
+    if (normalized.provider.device_id < 0) {
         return Error(ErrorCode::invalid_argument, "device_id cannot be negative", "configuration");
     }
-    if (configuration.codec.gop_size == 0) {
+    if (normalized.codec.gop_size == 0) {
         return Error(ErrorCode::invalid_argument, "gop_size must be greater than zero", "configuration");
     }
-    if (configuration.codec.intra_qp >= 64) {
+    if (normalized.codec.intra_qp >= 64) {
         return Error(ErrorCode::invalid_argument, "intra_qp must be in [0, 63]", "configuration");
     }
-    if (configuration.runtime.memory_pool_bytes == 0 ||
-        configuration.provider.device_arena_bytes == 0 ||
-        configuration.runtime.max_packet_bytes == 0) {
+    if (normalized.runtime.memory_pool_bytes == 0 ||
+        normalized.provider.device_arena_bytes == 0 ||
+        normalized.runtime.max_packet_bytes == 0) {
         return Error(
             ErrorCode::invalid_argument,
             "memory and packet limits must be greater than zero",

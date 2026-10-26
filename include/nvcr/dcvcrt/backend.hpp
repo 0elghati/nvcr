@@ -10,7 +10,7 @@ using CodecBackend = codec::CodecBackend;
 using CodecDecodeResult = codec::CodecDecodeResult;
 using CodecEncodeResult = codec::CodecEncodeResult;
 using Sessions = codec::Sessions;
-using Components = Sessions;
+using Components = codec::Components;
 
 // Register the DCVC-RT codec adapter entry in the global registry.
 // Safe to call multiple times; re-registration is idempotent.

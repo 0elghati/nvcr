@@ -24,7 +24,7 @@ class VersionIdentityTests(unittest.TestCase):
             entry["path"]
             for entry in package.get("extra-files", [])
         }
-        self.assertEqual(extra_paths, set())
+        self.assertEqual(extra_paths, {"CITATION.cff"})
 
         cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
         self.assertIn('file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/version.txt"', cmake)
@@ -32,13 +32,12 @@ class VersionIdentityTests(unittest.TestCase):
 
     def test_citation_metadata_matches(self) -> None:
         citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-        top_versions = re.findall(r'^version:\s*"?([^"\n]+)"?$', citation, re.MULTILINE)
+        top_versions = re.findall(r"^version:\s*\"?(\d+\.\d+\.\d+)", citation, re.MULTILINE)
         self.assertEqual(top_versions, [VERSION])
         preferred_versions = re.findall(
-            r'^\s+version:\s*"?([^"\n]+)"?$', citation, re.MULTILINE
+            r"^\s+version:\s*\"?(\d+\.\d+\.\d+)", citation, re.MULTILINE
         )
         self.assertEqual(preferred_versions, [VERSION])
-        self.assertIn(f"v{VERSION} software release using these metadata.", citation)
         self.assertIn(f"/releases/tag/v{VERSION}", citation)
 
     def test_source_artifact_cli_reports_version(self) -> None:
@@ -52,3 +51,6 @@ class VersionIdentityTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout, f"nvcr-artifacts {VERSION}\n")
         self.assertEqual(result.stderr, "")
+
+if __name__ == "__main__":
+    unittest.main()

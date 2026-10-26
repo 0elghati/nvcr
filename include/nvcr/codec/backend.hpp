@@ -55,4 +55,8 @@ public:
     virtual void reset_decoder() noexcept { reset(); }
 };
 
+struct Components final {
+    std::unique_ptr<CodecBackend> codec;
+};
+
 }  // namespace nvcr::codec

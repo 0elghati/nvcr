@@ -863,8 +863,6 @@ int encode(const Options& options) {
             return 1;
         }
         if (!measurement_sync(options)) return 1;
-        auto measurement_start = options.measurement_json.empty()
-            ? std::chrono::steady_clock::time_point{} : std::chrono::steady_clock::now();
         auto frame = nvcr::Frame::copy_from(
             options.width, options.height, nvcr::PixelFormat::yuv420p8, yuv,
             nvcr::Timestamp{static_cast<nvcr::Timestamp::rep>(
@@ -883,10 +881,6 @@ int encode(const Options& options) {
             return 1;
         }
         if (!measurement_sync(options)) return 1;
-        if (!options.measurement_json.empty()) {
-            codec_time = previous_time + std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::steady_clock::now() - measurement_start);
-        }
         if (options.verbose) {
             const double milliseconds =
                 std::chrono::duration<double, std::milli>(codec_time - previous_time).count();
@@ -897,6 +891,7 @@ int encode(const Options& options) {
         }
         ++frame_index;
     }
+    if (!measurement_sync(options)) return 1;
     const auto previous_time = codec_time;
     const auto previous_access_units = access_unit_index;
     const auto previous_payload_bytes = payload_bytes;
@@ -906,6 +901,7 @@ int encode(const Options& options) {
         std::cerr << "nvcr: " << drained.error().describe() << '\n';
         return 1;
     }
+    if (!measurement_sync(options)) return 1;
     if (options.verbose) {
         const double milliseconds =
             std::chrono::duration<double, std::milli>(codec_time - previous_time).count();
@@ -1069,8 +1065,6 @@ int decode(const Options& options) {
         }
         have_record = false;
         if (!measurement_sync(options)) return 1;
-        const auto measurement_start = options.measurement_json.empty()
-            ? std::chrono::steady_clock::time_point{} : std::chrono::steady_clock::now();
         auto packet = nvcr::PacketIO::deserialize(wire);
         if (!packet) {
             std::cerr << "nvcr: " << packet.error().describe() << '\n';
@@ -1088,10 +1082,6 @@ int decode(const Options& options) {
             return 1;
         }
         if (!measurement_sync(options)) return 1;
-        if (!options.measurement_json.empty()) {
-            codec_time = previous_time + std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::steady_clock::now() - measurement_start);
-        }
         if (options.verbose) {
             const double milliseconds =
                 std::chrono::duration<double, std::milli>(codec_time - previous_time).count();
@@ -1104,6 +1094,7 @@ int decode(const Options& options) {
         if (drained.value() == nvcr::cli::DrainState::output_limit) break;
     }
     if (options.frames == 0 || frame_index < options.frames) {
+        if (!measurement_sync(options)) return 1;
         const auto previous_time = codec_time;
         const auto previous_frame_index = frame_index;
         const auto output_limit = options.frames == 0
@@ -1115,6 +1106,7 @@ int decode(const Options& options) {
             std::cerr << "nvcr: " << drained.error().describe() << '\n';
             return 1;
         }
+        if (!measurement_sync(options)) return 1;
         if (options.verbose) {
             const double milliseconds =
                 std::chrono::duration<double, std::milli>(codec_time - previous_time).count();

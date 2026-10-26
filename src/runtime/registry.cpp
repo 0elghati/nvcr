@@ -148,11 +148,50 @@ Result<std::shared_ptr<provider::IExecutable>> RuntimeServices::resolve(
     return resolve(selected.value().candidate.artifact);
 }
 
+Result<codec::Components>
+RuntimeServices::create_components(const RuntimeConfiguration& configuration) const {
+    auto normalized = configuration;
+    normalized.reconcile_legacy_fields();
+    const std::string provider_id = normalized.provider.id.empty()
+        ? std::string(preferred_provider_id_)
+        : normalized.provider.id;
+    if (provider_id.empty()) {
+        return Error(
+            ErrorCode::missing_provider,
+            "configuration does not identify an execution provider",
+            "registry");
+    }
+
+    std::function<Result<codec::Components>(const RuntimeConfiguration&)> component_factory;
+    {
+        std::scoped_lock lock(registry_.mutex_);
+        const auto provider = std::find_if(
+            registry_.providers_.begin(), registry_.providers_.end(),
+            [&](const ProviderEntry& entry) { return entry.descriptor.id == provider_id; });
+        if (provider == registry_.providers_.end()) {
+            return Error(
+                ErrorCode::missing_provider,
+                "execution provider is not registered: " + provider_id,
+                "registry");
+        }
+        component_factory = provider->component_factory;
+    }
+    if (!component_factory) {
+        return Error(
+            ErrorCode::not_implemented,
+            "execution provider cannot create codec components: " + provider_id,
+            "registry");
+    }
+    return component_factory(normalized);
+}
+
 Result<std::shared_ptr<provider::experimental::IProviderSession>>
 RuntimeServices::create_provider_session(const RuntimeConfiguration& configuration) const {
-    const std::string provider_id = configuration.provider.id.empty()
+    auto normalized = configuration;
+    normalized.reconcile_legacy_fields();
+    const std::string provider_id = normalized.provider.id.empty()
         ? std::string(preferred_provider_id_)
-        : configuration.provider.id;
+        : normalized.provider.id;
     if (provider_id.empty()) {
         return Error(
             ErrorCode::missing_provider,
@@ -181,7 +220,7 @@ RuntimeServices::create_provider_session(const RuntimeConfiguration& configurati
             "execution provider cannot create a session: " + provider_id,
             "registry");
     }
-    return session_factory(configuration);
+    return session_factory(normalized);
 }
 
 }  // namespace nvcr::runtime

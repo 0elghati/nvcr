@@ -537,6 +537,7 @@ void register_test_provider() {
         []() -> std::shared_ptr<provider::IExecutionProvider> {
             return std::make_shared<TestProvider>();
         },
+        {},
         [](const RuntimeConfiguration&) {
             return make_test_provider_session();
         },

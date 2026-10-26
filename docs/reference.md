@@ -100,6 +100,12 @@ provider and device, engine selection, QP/GOP, packet bounds, memory policy,
 TensorRT mode, and diagnostics. The complete configuration is validated before
 provider-session and codec-session initialization.
 
+For rebuilt 1.0.x clients, the original flat `RuntimeConfiguration` fields,
+`codec::Components`, `ICodecAdapter::create_components()`, and provider
+`component_factory` remain source-compatible shims. Runtime construction
+reconciles flat fields into the scoped groups before validation. New
+integrations should use the scoped configuration and codec/provider sessions.
+
 Structured errors cover invalid state, malformed stream, missing artifact or
 provider, incompatible target/version/precision, digest mismatch, distribution
 restriction, and backend failure. Preserve category, subsystem, and message

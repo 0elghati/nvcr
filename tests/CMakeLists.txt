@@ -236,3 +236,8 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME nvcr_legacy_consolidation
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/consolidate_runtime_results_tests.py")
 endif()
+
+add_executable(nvcr_public_api_compatibility public_api_compatibility.cpp)
+target_link_libraries(nvcr_public_api_compatibility PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_public_api_compatibility)
+add_test(NAME nvcr_public_api_compatibility COMMAND nvcr_public_api_compatibility)

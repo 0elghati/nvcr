@@ -89,6 +89,7 @@ target_sources(
         src/artifacts/catalog.cpp
         src/artifacts/resolver.cpp
         src/codec/sequence_state.cpp
+        src/codec/runtime.cpp
         src/common/error.cpp
         src/common/sha256.cpp
         src/configuration/configuration.cpp

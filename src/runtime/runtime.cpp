@@ -1,5 +1,6 @@
 #include "nvcr/runtime/runtime.hpp"
 
+#include "nvcr/codec/runtime.hpp"
 #include "nvcr/logging/logger.hpp"
 #include "nvcr/memory/memory_pool.hpp"
 #include "nvcr/runtime/registry.hpp"
@@ -37,8 +38,8 @@ Runtime::Runtime(std::unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {
 Runtime::~Runtime() = default;
 Runtime::Runtime(Runtime&&) noexcept = default;
 Runtime& Runtime::operator=(Runtime&&) noexcept = default;
-
 Result<Runtime> Runtime::create(RuntimeConfiguration configuration) {
+    configuration.reconcile_legacy_fields();
     auto valid = ConfigurationLoader::validate(configuration);
     if (!valid) return valid.error();
 
@@ -55,15 +56,27 @@ Result<Runtime> Runtime::create(RuntimeConfiguration configuration) {
 
     runtime::RuntimeServices services(registry, configuration.provider.id);
     auto provider_session = services.create_provider_session(configuration);
-    if (!provider_session) return provider_session.error();
-    auto sessions = adapter.value()->create_sessions(
-        configuration, std::move(provider_session.value()));
-    if (!sessions) return sessions.error();
-    return create(std::move(configuration), std::move(sessions.value()));
+    if (provider_session) {
+        auto sessions = adapter.value()->create_sessions(
+            configuration, std::move(provider_session.value()));
+        if (sessions) {
+            return create(std::move(configuration), std::move(sessions.value()));
+        }
+        if (sessions.error().code() != ErrorCode::not_implemented) {
+            return sessions.error();
+        }
+    } else if (provider_session.error().code() != ErrorCode::not_implemented) {
+        return provider_session.error();
+    }
+
+    auto components = adapter.value()->create_components(configuration, services);
+    if (!components) return components.error();
+    return create(std::move(configuration), std::move(components.value()));
 }
 
 Result<Runtime> Runtime::create(
     RuntimeConfiguration configuration, codec::Sessions sessions) {
+    configuration.reconcile_legacy_fields();
     auto valid = ConfigurationLoader::validate(configuration);
     if (!valid) {
         return valid.error();
@@ -90,6 +103,14 @@ Result<Runtime> Runtime::create(
     } catch (const std::exception& exception) {
         return Error(ErrorCode::internal_error, exception.what(), "runtime");
     }
+}
+
+Result<Runtime> Runtime::create(
+    RuntimeConfiguration configuration, codec::Components components) {
+    configuration.reconcile_legacy_fields();
+    auto sessions = codec::make_legacy_sessions(configuration, std::move(components));
+    if (!sessions) return sessions.error();
+    return create(std::move(configuration), std::move(sessions.value()));
 }
 
 // ---------------------------------------------------------------------------

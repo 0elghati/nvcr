@@ -50,6 +50,9 @@ struct ProviderEntry {
     provider::ProviderCapabilities capabilities;
     // Factory creates a live provider instance on demand.
     std::function<std::shared_ptr<provider::IExecutionProvider>()> factory;
+    // 1.0.x codec-component factory retained for rebuilt clients.
+    std::function<Result<codec::Components>(const RuntimeConfiguration&)>
+        component_factory{};
     // Factory creates the provider-owned execution session selected for a
     // codec runtime. The legacy executable factory above remains available to
     // component-level artifact clients while that API is supported.
@@ -122,6 +125,9 @@ public:
     resolve(
         const artifacts::Resolver& resolver,
         const artifacts::ArtifactRequest& request) const;
+
+    [[nodiscard]] Result<codec::Components>
+    create_components(const RuntimeConfiguration& configuration) const;
 
     [[nodiscard]] Result<std::shared_ptr<provider::experimental::IProviderSession>>
     create_provider_session(const RuntimeConfiguration& configuration) const;

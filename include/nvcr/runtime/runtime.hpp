@@ -1,5 +1,6 @@
 #pragma once
 
+#include "nvcr/codec/backend.hpp"
 #include "nvcr/codec/session.hpp"
 #include "nvcr/common/error.hpp"
 #include "nvcr/configuration/configuration.hpp"
@@ -38,6 +39,10 @@ public:
     [[nodiscard]] static Result<Runtime> create(
         RuntimeConfiguration configuration,
         codec::Sessions sessions);
+    // 1.0.x low-level construction seam retained for rebuilt clients.
+    [[nodiscard]] static Result<Runtime> create(
+        RuntimeConfiguration configuration,
+        codec::Components components);
 
     // IEncoderSession
     [[nodiscard]] Result<void> send_frame(const Frame& frame) override;
