@@ -79,25 +79,46 @@ entropy or a full encode/decode vector.
 The separate provider probe loads the real HT-S checkpoint and compares the
 upstream fused `DMCHTSReconHeadProxy` with the upstream Python reconstruction
 head. The proxy must be preallocated before `forward`, and the comparison covers
-all eight clamped frame outputs plus the unclamped reset feature. The temporary
-binding used to expose that upstream class is built only in the reference
-checkout; the checkout is restored clean after the run and NVCR does not depend
-on that binding.
+all eight clamped frame outputs plus the unclamped reset feature. The tracked
+`provider_probe.cpp` binding links to an existing, unmodified upstream inference
+shared library. It compiles a small C++ binding, without modifying the reference
+checkout or rebuilding CUDA kernels. Build the upstream inference extension and
+rANS dependency using the pinned source and CUTLASS revision above, with the same
+PyTorch/CUDA environment used by this probe. The library hash below identifies
+the local build; supply the hash of your own build when reproducing elsewhere.
+The binary digest identifies the executable being tested; a clean source checkout
+alone does not prove how an externally supplied binary was built.
 
 ```sh
-rtk env PYTHONPATH=assets/dcvc-uf-reference/src/layers/extensions/inference:build/dcvcuf-python-deps:assets/dcvc-uf-reference \
+rtk proxy env PYTHONPATH=build/dcvcuf-python-deps CUDA_HOME=/usr/local/cuda-12.6 MAX_JOBS=2 \
   .venv/bin/python scripts/backends/dcvcuf/probe_hts_provider.py \
   --reference-root assets/dcvc-uf-reference \
   --checkpoint /home/oelghati/dcvc-uf/cvpr2026_video_hts.pth.tar \
   --checkpoint-sha256 565607d84943ee79072a5760d34a200d5724b4bb72c6bc24bfab41e8ae4f5f47 \
-  --output-dir build/dcvcuf-c7-provider-real
+  --extension build/dcvcuf-python-deps/inference_extensions_cuda.cpython-312-x86_64-linux-gnu.so \
+  --extension-sha256 cf2be0cc51d3766a9c1c8b19eb513a6fe6337f9b9d864ac527a3bcc9718bf805 \
+  --output-dir build/dcvcuf-provider-probe
 ```
 
-The current real-checkpoint vector is intentionally recorded as a failed gate:
+Supply `--feature FILE.npy --feature-sha256 SHA256` to replay an existing finite
+FP16 `[1,512,H,W]` vector. Without those options the input is synthetic, even
+though the weights are real. `feature.f16.npy` and `outputs.npz` retain the input
+and both paths' outputs locally; their digests are in the report.
+
+The current real-checkpoint vector remains a failed Python/fused comparison:
 the fused FP16 path differs from PyTorch by at most `0.009521484375` on clamped
 frames and `0.0047607421875` on the reset feature against the predeclared
-`atol=3e-3, rtol=3e-3` limit. This is provider-stage evidence, not an adapter or
-bitstream claim; do not register DCVC-UF until the parity contract is resolved.
+`atol=3e-3, rtol=3e-3` limit. Snapshotting borrowed outputs before subsequent calls
+preserves the same result. Input preservation, repeated execution, direct reset,
+and reset-to-display shuffle/clamp agree exactly.
+
+The first-operation diagnostic compares the first 1x1 convolution with and
+without bias, then its WSiLU activation. Its float64 CPU oracle uses the same
+FP16-quantized weights and input. The pinned SM89 CUTLASS path uses FP16 GEMM
+accumulators, so standard PyTorch/ONNX arithmetic is not an established reference
+for reproducing the fused decoder. Future NVCR stage comparisons must use the
+pinned fused outputs. This diagnostic compares two upstream paths; NVCR provider
+parity, captured codec features, entropy, and adapter lifecycle remain untested.
 
 The dependency-free provenance checks run through CTest or directly:
 

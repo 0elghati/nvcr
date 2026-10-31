@@ -38,7 +38,12 @@
   },
   "provider_stage": {
     "status": "provider_stage_failed",
-    "probe_sha256": "c76ba90958d103e960f1f5edfba4f6e8e17d399ba145a48271f9a8078b3b28c2",
+    "comparison": "upstream_pytorch_fp16_vs_upstream_fused_fp16",
+    "nvcr_provider_tested": false,
+    "probe_sha256": "99bea7b3a062e0c5270bbb78cb763653ef94efd900223aa0bfef9f0282163097",
+    "binding_sha256": "e9d147939ecf2fe109ccd4b9195c8ac9f035fc77806f2c8492d62b0a30225430",
+    "extension_sha256": "cf2be0cc51d3766a9c1c8b19eb513a6fe6337f9b9d864ac527a3bcc9718bf805",
+    "outputs_sha256": "75b4c758137447b961d151d66acc00b799721d97c2ab049d641a4f751895d3b0",
     "feature_sha256": "34b4bda86d6e030ca06c62d5157ca7aad407db83b5911d1cb7a8c1dc942009e9",
     "feature_shape": [1, 512, 3, 3],
     "seed": 20261031,
@@ -49,11 +54,29 @@
     "acceptance": {"atol": 0.003, "rtol": 0.003},
     "max_frame_abs_error": 0.009521484375,
     "max_reset_abs_error": 0.0047607421875,
-    "proxy_preallocation": "passed"
+    "proxy_preallocation": "passed",
+    "lifecycle": {
+      "input_unchanged": true,
+      "repeat_exact": true,
+      "reset_exact": true,
+      "reset_display_exact": true
+    },
+    "first_operation": {
+      "location": "recon_head.conv1.0.0.dc.0",
+      "sm89_cutlass_accumulator": "float16",
+      "no_bias_max_abs_error": 0.01953125,
+      "no_bias_different_elements": 3680,
+      "no_bias_elements": 4608,
+      "with_bias_max_abs_error": 0.01953125,
+      "activation_max_abs_error": 0.015625,
+      "oracle": "CPU float64 computation with identical FP16-quantized inputs and weights",
+      "oracle_vs_python_conv_mean_abs_error": 0.0003286489389008946,
+      "oracle_vs_fused_conv_mean_abs_error": 0.0019426708006196553
+    }
   },
   "remaining_gates": [
     "pretrained upstream encode/decode vector and entropy parity",
-    "resolve real-checkpoint fused FP16 provider-stage parity",
+    "NVCR stages compared against pinned fused FP16 outputs on captured codec features",
     "codec-owned I/chunk/tail/reset lifecycle"
   ],
   "stages": {

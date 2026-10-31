@@ -1,6 +1,7 @@
 # Phase C7 DCVC-UF stage export — 2026-10-31
 
-Status: upstream checkpoint and stage feasibility pass; C7 remains open. The user prioritized
+Status: upstream checkpoint/export checks pass; Python/fused arithmetic divergence
+localized to the first convolution; C7 remains open. The user prioritized
 starting DCVC-UF integration on 2026-10-31. This experiment builds on the existing
 codec-owned sessions and grouped/delayed-output contracts. It does not register
 a supported DCVC-UF codec or alter the DCVC-RT production path.
@@ -56,7 +57,7 @@ passed for both requested rate entries. It reports 1 I frame, 8 P frames,
 `0dcc0c3773f14a2f74eb51fd0be2e0b9acac1aac722a29ffc37cd58412a6a3c6`.
 The two rate entries intentionally used the same QP as a smoke check.
 
-The real HT-S provider-stage vector then loaded the same video checkpoint into
+The real HT-S diagnostic vector then loaded the same video checkpoint into
 the upstream `DMCHTSReconHeadProxy` and compared its eight clamped frame outputs
 and unclamped reset feature with the upstream Python reconstruction head. The
 proxy preallocation lifecycle passed, but the strict predeclared FP16 parity
@@ -64,19 +65,49 @@ gate did not: the largest frame error was `0.009521484375` and the reset error
 was `0.0047607421875`, against `atol=3e-3, rtol=3e-3`. The vector used feature
 shape `[1,512,3,3]`, seed `20261031`, feature SHA-256
 `34b4bda86d6e030ca06c62d5157ca7aad407db83b5911d1cb7a8c1dc942009e9`, and
-provider probe SHA-256
-`c76ba90958d103e960f1f5edfba4f6e8e17d399ba145a48271f9a8078b3b28c2`. This is an
-open provider-stage mismatch, not a reason to register an adapter or claim
-bitstream compatibility.
+current probe SHA-256
+`99bea7b3a062e0c5270bbb78cb763653ef94efd900223aa0bfef9f0282163097`.
+
+The follow-up removes the temporary upstream binding dependency: the tracked
+`provider_probe.cpp` links to the existing unmodified upstream extension, whose
+SHA-256 is `cf2be0cc51d3766a9c1c8b19eb513a6fe6337f9b9d864ac527a3bcc9718bf805`.
+All outputs are snapshotted before further proxy calls. The original reset check
+could read a buffer overwritten by `forward_reset`; correcting that lifetime
+issue reproduces the same frame/reset error maxima. Input preservation, repeated
+execution, full-head/direct-reset equality, and reset-to-display shuffle/clamp
+all pass exact checks. The pinned checkout remains clean throughout this run.
+
+The first differing operation is `recon_head.conv1.0.0.dc.0`, the first 1x1
+convolution. Even with bias and activation removed, 3680 of 4608 elements differ,
+with maximum absolute error `0.01953125`. With bias, the maximum remains
+`0.01953125`; after WSiLU it is `0.015625`. A CPU float64 oracle using identical
+FP16-quantized inputs and weights gives mean convolution error `0.000328648939`
+for PyTorch and `0.001942670801` for CUTLASS.
+
+The pinned `cutlass/conv1x1_kernel.h:conv1x1_bias_generic_cutlass2` instantiates
+the GEMM accumulator as `cutlass::half_t`. The WSiLU epilogue computes in float
+after that accumulation. These source facts and the bias-free measurement locate
+the first divergence in the convolution's accumulation, before activation,
+depthwise-bias folding, shuffle, or reset. They do not attribute every later
+head error to that one operation or establish behavior on other GPU targets.
+
+This is a comparison of two upstream paths, **not NVCR provider parity**. The
+strict Python/fused gate remains failed without changing its tolerance. The
+pinned fused decoder outputs are the reference for the next NVCR stage test;
+a passing FP32 ONNX/PyTorch comparison alone cannot establish that equivalence.
+The current feature is still synthetic, not captured from a codec decode.
+Local `outputs.npz` retains both paths' tensors with SHA-256
+`75b4c758137447b961d151d66acc00b799721d97c2ab049d641a4f751895d3b0`.
 
 An initial TensorRT check used `--exportOutput` JSON and observed up to
 `5.066394805908203e-7` apparent shuffle error due to decimal formatting.
 The current probe uses `--dumpRawBindingsToFile`; binary shuffle output is
 identical. This was a measurement correction, not a tolerance change.
 
-CPU Release rebuild and CTest: **24/24 pass**, including three dependency-free
+CPU Release rebuild and CTest: **24/24 pass**. Five dependency-free
 UF provenance tests covering wrong revision, modified/staged/untracked source,
-explicit synthetic mode, mandatory hashes, and checkpoint-hash rejection.
+explicit synthetic mode, mandatory hashes, and checkpoint/binary/feature-hash
+rejection pass.
 The production codec/provider code is unchanged.
 
 ## Reproduction
@@ -85,7 +116,7 @@ See [the probe instructions](../scripts/backends/dcvcuf/README.md) for source
 setup, dependencies, checkpoint/captured-feature inputs, and CPU-only use.
 The local reference import needed SciPy, installed into the ignored
 `build/dcvcuf-python-deps` directory with no change to the existing environment.
-The combined current run is:
+The initial export run is:
 
 ```sh
 rtk env PYTHONPATH=/home/oelghati/NVCR/build/dcvcuf-python-deps \
@@ -102,15 +133,22 @@ Raw tensors, ONNX models, generated bindings, build products, and logs remain
 in the ignored local build directory. Only the compact current record is kept
 with this evidence.
 
+The current diagnostic run is `build/dcvcuf-c7-diagnosis-current/report.json`.
+Use the provider command in the probe instructions, adding
+`--feature build/dcvcuf-c7-provider-real-4/feature.f16.npy` and
+`--feature-sha256 34b4bda86d6e030ca06c62d5157ca7aad407db83b5911d1cb7a8c1dc942009e9`
+to replay the retained failing feature exactly. Exit code 1 records the unchanged
+numerical gate failure; the lifecycle checks pass independently.
+
 ## Remaining gates
 
 The initial automated checkpoint links redirected to HTTP 403, but the required
 files were subsequently provided manually. These checks remain necessary:
 
-1. Resolve the provider-stage FP16 mismatch on the real HT-S checkpoint, then
-   repeat the comparison on captured upstream reconstruction/reset features.
-   The current vector exercises real weights but a deterministic feature and
-   does not establish fused FP16 stream interchangeability.
+1. Implement and compare NVCR stages against the pinned fused outputs, preserving
+   the required accumulation behavior. Repeat on captured upstream
+   reconstruction/reset features. The upstream Python/fused divergence is
+   localized, but no NVCR provider comparison has been executed.
 2. Close the C7 pinned encode/decode vector gate inside NVCR before registering an adapter;
    then implement UF-owned I/chunk/tail/reset policy and private AU metadata,
    with real full/short-chunk, drain/reset, and reference tests.

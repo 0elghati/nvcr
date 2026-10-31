@@ -6,11 +6,13 @@ import importlib.util
 import io
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/backends/dcvcuf/probe_hts_export.py"
+sys.path.insert(0, str(SCRIPT.parent))
 spec = importlib.util.spec_from_file_location("dcvcuf_probe", SCRIPT)
 probe = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(probe)
@@ -74,7 +76,8 @@ class ProvenanceTests(unittest.TestCase):
             self.assertFalse(output.exists())
 
     def test_provider_probe_requires_real_checkpoint_identity(self):
-        base = ["--reference-root", "unused", "--output-dir", "unused"]
+        base = ["--reference-root", "unused", "--output-dir", "unused",
+                "--extension", "unused.so", "--extension-sha256", "0" * 64]
         for options in ([], ["--checkpoint", "weights.tar"],
                         ["--checkpoint", "weights.tar", "--checkpoint-sha256", "0" * 64,
                          "--feature-height", "0"]):
@@ -84,6 +87,24 @@ class ProvenanceTests(unittest.TestCase):
         parsed = provider_probe.parse_args(base + [
             "--checkpoint", "weights.tar", "--checkpoint-sha256", "0" * 64])
         self.assertEqual(parsed.feature_height, 3)
+
+    def test_provider_binary_and_feature_hashes_fail_before_loading(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifact = root / "artifact"
+            artifact.write_bytes(b"fixture")
+            digest = provider_probe.sha256(artifact)
+            base = ["--reference-root", directory, "--output-dir", str(root / "output")]
+            for wrong in ("checkpoint", "extension", "feature"):
+                args = list(base)
+                for name in ("checkpoint", "extension", "feature"):
+                    args += [f"--{name}", str(artifact), f"--{name}-sha256",
+                             "0" * 64 if name == wrong else digest]
+                with self.subTest(wrong=wrong), patch.object(
+                        provider_probe, "verify_reference", return_value="fixture"):
+                    with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+                        provider_probe.main(args)
+                self.assertFalse((root / "output").exists())
 
 
 if __name__ == "__main__":
