@@ -557,18 +557,21 @@ experiments remain separate axes.
 8. **Provider-axis handoff.** Hold DCVC-RT codec semantics constant and test a
    separately defined provider path, with ONNX Runtime CUDA as the current
    candidate.
-9. **C7 — DCVC-UF fused-operator feasibility.** Keep this as a pending,
-   separate codec-axis experiment. Compare one fused operator and
-   one frame-specific high-throughput branch against a pinned upstream vector
+9. **C7 — DCVC-UF fused-operator feasibility.** Active by user priority on
+   2026-10-31; keep this a separate codec-axis experiment. Compare one fused
+   operator and one frame-specific high-throughput branch against a pinned upstream vector
    without moving UF branch semantics into generic runtime code.
 
 **Inference.** C5 and C6 reject the tested default FP16 MLVC/ORT-CUDA pair for
 strict reference consistency and byte/payload interchange with the reference
 path. They leave MLVC self-conformance and ONNX Runtime CUDA provider
-suitability unresolved. After C6.5, the next bounded experiment holds DCVC-RT
-constant while testing the provider axis. C7 remains pending until a concrete
-DCVC-UF operator path preserves the selected bitstream and reconstruction
-contract.
+suitability unresolved. The original next experiment held DCVC-RT constant while
+testing the provider axis. On 2026-10-31 the user prioritized DCVC-UF instead.
+C7 now has an executable pinned-source stage probe: the upstream fused
+shuffle/clamp kernel matches exactly, and a synthetic HT-S frame branch passes
+ONNX CPU and TensorRT FP32 checks. The pretrained bitstream/reconstruction gate
+remains open; this does not establish codec support. See
+[the C7 evidence](../evidence/phase-c7-dcvcuf-export-20261031.md).
 
 ## Explicit non-goals
 

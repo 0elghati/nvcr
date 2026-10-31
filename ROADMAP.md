@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-31
 
 ## Product direction
 
@@ -168,7 +168,7 @@ and gap classifications are recorded in
 | C6.5 | Generic CLI session driving | Complete 2026-09-15 | Encode/decode use session send, full receive drain, directional flush, and final drain through the same driver exercised by the grouped fixture; see [the C6.5 evidence](evidence/phase-c6-5-cli-session-driver-20260915.md) |
 | C6.6 | Session send/receive contract clarification | Complete 2026-09-15 | Send success consumes input, receive-side `try_again` reports delayed readiness, and a registered multi-input decoder fixture proves order, timestamps, flush/drain, and reset/reuse without changing production behavior; see [the C6.6 evidence](evidence/phase-c6-6-session-contract-20260915.md) |
 | C6.7 | Current-main rebase and minor-release compatibility | Complete 2026-10-26 with documented GPU-contention exception | The twelve-commit `main-advanced` stack is rebased onto v1.0.8 and the public 1.0 source seams are retained. CPU, install-consumer, sanitizer/fuzz, TensorRT non-GPU, available-profile GPU, pinned-golden, and byte-parity gates pass; two 1080p tests were omitted because they could not coexist with the active GPU workload. See [the C6.7 evidence](evidence/main-advanced-rebase-vetting-20261026.md) |
-| C7 | DCVC-UF fused-operator feasibility | Pending; separate codec axis | One fused operator and one frame-specific high-throughput branch match a pinned upstream encode/decode vector without generic runtime code owning UF branch semantics |
+| C7 | DCVC-UF fused-operator feasibility | In progress; prioritized by user 2026-10-31 | Pinned fused shuffle/clamp and synthetic HT-S branch export checks pass; pretrained encode/decode, entropy parity, and captured-feature gates remain open. See [the C7 evidence](evidence/phase-c7-dcvcuf-export-20261031.md) |
 
 C0 confirmed that C1 could proceed without a new chunk API. The existing
 session verbs were sufficient. C1 now routes the production path through
@@ -228,10 +228,15 @@ so the tested pair is not byte/payload interchangeable with the reference path.
 MLVC self-conformance, MLVC's general suitability, and ONNX Runtime CUDA's
 suitability as an NVCR provider remain unresolved.
 
-C6.5 brings the CLI into line with the existing session contract. The next
-experiment holds DCVC-RT constant and tests a second provider, with ONNX Runtime
-CUDA as the current candidate. C7 remains a pending, separate DCVC-UF codec-axis
-experiment. The minimum capability vocabulary remains open in
+C6.5 brings the CLI into line with the existing session contract. On 2026-10-31,
+the user prioritized starting DCVC-UF integration, making C7 the active bounded
+experiment. The pinned upstream fused shuffle/clamp kernel matches exactly on
+a synthetic vector; one HT-S frame branch exports and passes ONNX CPU and
+TensorRT FP32 checks, including its unclamped reset feature. This is stage
+feasibility evidence, not a supported codec. Both official checkpoint links
+returned HTTP 403, leaving pretrained encode/decode and captured-feature parity
+open. The DCVC-RT/ONNX Runtime CUDA provider experiment remains separate and
+deferred. The minimum capability vocabulary remains open in
 [the cross-codec audit](docs/cross-codec-requirements.md#open-questions-requiring-prototypes).
 
 C6.6 makes the pre-1.1 session contract explicit: successful sends consume

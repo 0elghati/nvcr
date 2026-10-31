@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "scope": "dcvcuf_hts_stage_export_probe",
+  "reference_commit": "cbdae87a5445114cdc7f48816da63ea80bdeac40",
+  "probe_sha256": "0a08e08de772145630aab1457310b3a3652908f7cc2609b6665cbc30500baeac",
+  "weights": "synthetic",
+  "checkpoint_sha256": null,
+  "feature_source": "synthetic",
+  "feature_sha256": null,
+  "seed": 0,
+  "branch": 7,
+  "versions": {
+    "torch": "2.13.0+cu126",
+    "onnx": "1.22.0",
+    "onnxruntime": "1.28.0",
+    "tensorrt": "10.9.0",
+    "scipy": "1.18.1"
+  },
+  "acceptance": {
+    "shuffle": "exact",
+    "branch_atol": 1e-05,
+    "branch_rtol": 0.0001
+  },
+  "c7_complete": false,
+  "remaining_gates": [
+    "pretrained upstream encode/decode vector and entropy parity",
+    "provider-stage comparison on captured reconstruction/reset features"
+  ],
+  "stages": {
+    "shuffle_clamp": {
+      "onnx_sha256": "890b15eba2bca301564135066adcd82df024c5159dfbb32bffc2cf8c6c329bc4",
+      "input_shape": [
+        1,
+        192,
+        2,
+        3
+      ],
+      "onnx_cpu": {
+        "frame": {
+          "passed": true,
+          "exact": true,
+          "max_abs_error": 0.0,
+          "shape": [
+            1,
+            3,
+            16,
+            24
+          ]
+        }
+      },
+      "input_sha256": "00c1209b3d1252533e02f0ecf6b015781294fdc1ddf9c9b93cdb485ce995aaf9",
+      "trtexec_command": [
+        "/usr/src/tensorrt/bin/trtexec",
+        "--onnx=/home/oelghati/NVCR/build/dcvcuf-c7-current/shuffle_clamp.onnx",
+        "--loadInputs=input:/home/oelghati/NVCR/build/dcvcuf-c7-current/shuffle_clamp.input.f32",
+        "--dumpRawBindingsToFile",
+        "--noTF32",
+        "--builderOptimizationLevel=0",
+        "--memPoolSize=workspace:64",
+        "--warmUp=0",
+        "--duration=0",
+        "--iterations=1"
+      ],
+      "tensorrt": {
+        "frame": {
+          "passed": true,
+          "exact": true,
+          "max_abs_error": 0.0,
+          "shape": [
+            1,
+            3,
+            16,
+            24
+          ],
+          "output_sha256": "17110c1aa0155799f16a5f6674e0d3b9c90b841cf5c3fc8e2a2591b4f31fdadb"
+        }
+      }
+    },
+    "hts_frame_branch": {
+      "onnx_sha256": "e5b2f2778cbfaee38448581c6c3457a0ba8c1097f59d6f8b3df73b220ea56a93",
+      "input_shape": [
+        1,
+        512,
+        2,
+        3
+      ],
+      "onnx_cpu": {
+        "pre_shuffle": {
+          "passed": true,
+          "exact": false,
+          "max_abs_error": 1.430511474609375e-06,
+          "shape": [
+            1,
+            192,
+            2,
+            3
+          ]
+        },
+        "frame": {
+          "passed": true,
+          "exact": false,
+          "max_abs_error": 1.2218952178955078e-06,
+          "shape": [
+            1,
+            3,
+            16,
+            24
+          ]
+        }
+      },
+      "input_sha256": "b8f07d706aa854c7278122c3f15c9ad8ddbc7dc82542145b2639116b041ddc2c",
+      "trtexec_command": [
+        "/usr/src/tensorrt/bin/trtexec",
+        "--onnx=/home/oelghati/NVCR/build/dcvcuf-c7-current/hts_frame_branch.onnx",
+        "--loadInputs=input:/home/oelghati/NVCR/build/dcvcuf-c7-current/hts_frame_branch.input.f32",
+        "--dumpRawBindingsToFile",
+        "--noTF32",
+        "--builderOptimizationLevel=0",
+        "--memPoolSize=workspace:64",
+        "--warmUp=0",
+        "--duration=0",
+        "--iterations=1"
+      ],
+      "tensorrt": {
+        "pre_shuffle": {
+          "passed": true,
+          "exact": false,
+          "max_abs_error": 1.7881393432617188e-06,
+          "shape": [
+            1,
+            192,
+            2,
+            3
+          ],
+          "output_sha256": "ac5e0539b6073a20268efd4e04931fbe57e3e150945409c7e19d584e4fe81e84"
+        },
+        "frame": {
+          "passed": true,
+          "exact": false,
+          "max_abs_error": 1.1026859283447266e-06,
+          "shape": [
+            1,
+            3,
+            16,
+            24
+          ],
+          "output_sha256": "9928a6bc2716cbd625bf23e27265e046a5003c28efea89638840dc2671156010"
+        }
+      }
+    }
+  },
+  "fused_shuffle": {
+    "cutlass_commit": "4370102f9dacab813282e1d67722fceb0b90a019",
+    "gpu": "NVIDIA GeForce RTX 4070",
+    "torch_cuda": "12.6",
+    "checks": {
+      "contiguous": {
+        "passed": true,
+        "exact": true,
+        "max_abs_error": 0.0,
+        "shape": [
+          1,
+          3,
+          16,
+          24
+        ]
+      },
+      "channels_last": {
+        "passed": true,
+        "exact": true,
+        "max_abs_error": 0.0,
+        "shape": [
+          1,
+          3,
+          16,
+          24
+        ]
+      }
+    }
+  },
+  "status": "stage_probe_passed",
+  "date": "2026-10-31",
+  "cpu_release_tests": {
+    "passed": 24,
+    "failed": 0
+  },
+  "additional_branch0_probe": {
+    "status": "stage_probe_passed",
+    "feature_shape": [
+      1,
+      512,
+      1,
+      1
+    ],
+    "backend": "onnx_cpu"
+  }
+}
