@@ -5,6 +5,10 @@
   "probe_sha256": "0a08e08de772145630aab1457310b3a3652908f7cc2609b6665cbc30500baeac",
   "weights": "synthetic",
   "checkpoint_sha256": null,
+  "real_checkpoints": {
+    "image": "b3b900de23f30e4fc437010ddffe6a5413a56d6cfd97fb6235adbcd2b6973302",
+    "video_hts": "565607d84943ee79072a5760d34a200d5724b4bb72c6bc24bfab41e8ae4f5f47"
+  },
   "feature_source": "synthetic",
   "feature_sha256": null,
   "seed": 0,
@@ -22,6 +26,16 @@
     "branch_rtol": 0.0001
   },
   "c7_complete": false,
+  "upstream_round_trip": {
+    "status": "passed",
+    "frames": 9,
+    "i_frames": 1,
+    "p_frames": 8,
+    "qp": 32,
+    "aggregate_bpp": 0.042368,
+    "aggregate_psnr": 38.54547,
+    "result_sha256": "0dcc0c3773f14a2f74eb51fd0be2e0b9acac1aac722a29ffc37cd58412a6a3c6"
+  },
   "remaining_gates": [
     "pretrained upstream encode/decode vector and entropy parity",
     "provider-stage comparison on captured reconstruction/reset features"
