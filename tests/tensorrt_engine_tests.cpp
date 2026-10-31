@@ -57,6 +57,8 @@ int main(int argc, char* argv[]) {
     const fs::path engine_root = fs::absolute(argv[1]);
     nvcr::RuntimeConfiguration configuration;
     configuration.artifacts.intra_engine_path = engine_root;
+    configuration.artifacts.model_id = "dcvcrt-cvpr2025";
+    configuration.stream.bitstream_model_id = "dcvcrt";
     configuration.provider.device_id = 0;
 
     auto wrong_model = configuration;

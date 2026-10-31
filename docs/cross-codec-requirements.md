@@ -560,7 +560,9 @@ experiments remain separate axes.
 9. **C7 — DCVC-UF fused-operator feasibility.** Active by user priority on
    2026-10-31; keep this a separate codec-axis experiment. Compare one fused
    operator and one frame-specific high-throughput branch against a pinned upstream vector
-   without moving UF branch semantics into generic runtime code.
+   without moving UF branch semantics into generic runtime code. A future UF
+   adapter owns UF lifecycle and access-unit details; the generic provider
+   contract remains stages, tensors, buffers, submissions, and reset only.
 
 **Inference.** C5 and C6 reject the tested default FP16 MLVC/ORT-CUDA pair for
 strict reference consistency and byte/payload interchange with the reference

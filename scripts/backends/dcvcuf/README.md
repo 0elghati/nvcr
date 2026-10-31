@@ -120,6 +120,22 @@ for reproducing the fused decoder. Future NVCR stage comparisons must use the
 pinned fused outputs. This diagnostic compares two upstream paths; NVCR provider
 parity, captured codec features, entropy, and adapter lifecycle remain untested.
 
+## NVCR integration boundary
+
+This probe does not add a DCVC-UF option, stage, or lifecycle rule to NVCR's
+shared runtime, provider, or configuration code. A future UF adapter owns its
+I/chunk/tail/reset and access-unit semantics; a provider session receives only
+generic stages, tensor contracts, buffers, submissions, and reset. The generic
+runtime has no default codec, provider, model, or stream identity. The current
+CLI selects its existing DCVC-RT/TensorRT product pair and identities explicitly
+at that CLI entry point.
+
+The dependency-free architecture check guards this separation:
+
+```sh
+rtk python3 tests/dcvcuf_architecture_tests.py
+```
+
 The dependency-free provenance checks run through CTest or directly:
 
 ```sh

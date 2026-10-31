@@ -104,11 +104,15 @@ An initial TensorRT check used `--exportOutput` JSON and observed up to
 The current probe uses `--dumpRawBindingsToFile`; binary shuffle output is
 identical. This was a measurement correction, not a tolerance change.
 
-CPU Release rebuild and CTest: **24/24 pass**. Five dependency-free
+CPU Release rebuild and CTest: **25/25 pass**. Five dependency-free
 UF provenance tests covering wrong revision, modified/staged/untracked source,
 explicit synthetic mode, mandatory hashes, and checkpoint/binary/feature-hash
-rejection pass.
-The production codec/provider code is unchanged.
+rejection pass. The dependency-free architecture check also passes: shared
+codec, provider, runtime, and configuration code contains no UF-specific terms,
+and core configuration has no default codec, provider, model, or stream
+identity. The CLI names its current DCVC-RT/TensorRT product selection and
+identities explicitly. The production codec/provider implementations are
+unchanged.
 
 ## Reproduction
 

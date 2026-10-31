@@ -56,6 +56,8 @@ int main(int argc, char* argv[]) {
 
     nvcr::RuntimeConfiguration configuration;
     configuration.artifacts.intra_engine_path = std::filesystem::path(argv[1]);
+    configuration.artifacts.model_id = "dcvcrt-cvpr2025";
+    configuration.stream.bitstream_model_id = "dcvcrt";
     configuration.provider.device_id = 0;
     configuration.codec.intra_qp = 32;
     configuration.codec.verify_encoder_reconstruction = true;

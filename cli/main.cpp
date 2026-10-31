@@ -720,7 +720,11 @@ nvcr::Result<nvcr::Runtime> create_runtime(
     nvcr::RuntimeConfiguration configuration;
     configuration.artifacts.intra_engine_path = engine_dir;
     configuration.codec.id = options.codec_id;
-    if (!options.provider_id.empty()) configuration.provider.id = options.provider_id;
+    // The CLI currently ships the DCVC-RT/TensorRT integration. Keep that
+    // product choice here rather than in the generic runtime configuration.
+    configuration.provider.id = options.provider_id.empty() ? "tensorrt" : options.provider_id;
+    configuration.artifacts.model_id = "dcvcrt-cvpr2025";
+    configuration.stream.bitstream_model_id = "dcvcrt";
     configuration.provider.device_id = options.device_id;
     configuration.codec.intra_qp = options.qp;
     configuration.codec.gop_size = options.gop_size;

@@ -234,8 +234,16 @@
   "status": "stage_probe_passed",
   "date": "2026-10-31",
   "cpu_release_tests": {
-    "passed": 24,
+    "passed": 25,
     "failed": 0
+  },
+  "architecture_boundary": {
+    "passed": true,
+    "command": "python3 tests/dcvcuf_architecture_tests.py",
+    "checks": [
+      "shared contracts contain no UF-specific terms",
+      "core configuration has no default codec/provider/model/stream identity"
+    ]
   },
   "additional_branch0_probe": {
     "status": "stage_probe_passed",
