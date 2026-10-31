@@ -56,6 +56,19 @@ passed for both requested rate entries. It reports 1 I frame, 8 P frames,
 `0dcc0c3773f14a2f74eb51fd0be2e0b9acac1aac722a29ffc37cd58412a6a3c6`.
 The two rate entries intentionally used the same QP as a smoke check.
 
+The real HT-S provider-stage vector then loaded the same video checkpoint into
+the upstream `DMCHTSReconHeadProxy` and compared its eight clamped frame outputs
+and unclamped reset feature with the upstream Python reconstruction head. The
+proxy preallocation lifecycle passed, but the strict predeclared FP16 parity
+gate did not: the largest frame error was `0.009521484375` and the reset error
+was `0.0047607421875`, against `atol=3e-3, rtol=3e-3`. The vector used feature
+shape `[1,512,3,3]`, seed `20261031`, feature SHA-256
+`34b4bda86d6e030ca06c62d5157ca7aad407db83b5911d1cb7a8c1dc942009e9`, and
+provider probe SHA-256
+`c76ba90958d103e960f1f5edfba4f6e8e17d399ba145a48271f9a8078b3b28c2`. This is an
+open provider-stage mismatch, not a reason to register an adapter or claim
+bitstream compatibility.
+
 An initial TensorRT check used `--exportOutput` JSON and observed up to
 `5.066394805908203e-7` apparent shuffle error due to decimal formatting.
 The current probe uses `--dumpRawBindingsToFile`; binary shuffle output is
@@ -94,10 +107,10 @@ with this evidence.
 The initial automated checkpoint links redirected to HTTP 403, but the required
 files were subsequently provided manually. These checks remain necessary:
 
-1. Compare the provider stages on captured upstream features, including the
-   unclamped reset feature, with the selected reconstruction/entropy contract.
-   This synthetic FP32 branch result does not establish fused FP16 convolution
-   parity or stream interchangeability.
+1. Resolve the provider-stage FP16 mismatch on the real HT-S checkpoint, then
+   repeat the comparison on captured upstream reconstruction/reset features.
+   The current vector exercises real weights but a deterministic feature and
+   does not establish fused FP16 stream interchangeability.
 2. Close the C7 pinned encode/decode vector gate inside NVCR before registering an adapter;
    then implement UF-owned I/chunk/tail/reset policy and private AU metadata,
    with real full/short-chunk, drain/reset, and reference tests.

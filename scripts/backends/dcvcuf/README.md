@@ -74,6 +74,31 @@ The full upstream PyTorch head independently checks frame selection and branch
 7's reset feature. `c7_complete` stays false because this probe does not test
 entropy or a full encode/decode vector.
 
+## Fused HT-S provider-stage vector
+
+The separate provider probe loads the real HT-S checkpoint and compares the
+upstream fused `DMCHTSReconHeadProxy` with the upstream Python reconstruction
+head. The proxy must be preallocated before `forward`, and the comparison covers
+all eight clamped frame outputs plus the unclamped reset feature. The temporary
+binding used to expose that upstream class is built only in the reference
+checkout; the checkout is restored clean after the run and NVCR does not depend
+on that binding.
+
+```sh
+rtk env PYTHONPATH=assets/dcvc-uf-reference/src/layers/extensions/inference:build/dcvcuf-python-deps:assets/dcvc-uf-reference \
+  .venv/bin/python scripts/backends/dcvcuf/probe_hts_provider.py \
+  --reference-root assets/dcvc-uf-reference \
+  --checkpoint /home/oelghati/dcvc-uf/cvpr2026_video_hts.pth.tar \
+  --checkpoint-sha256 565607d84943ee79072a5760d34a200d5724b4bb72c6bc24bfab41e8ae4f5f47 \
+  --output-dir build/dcvcuf-c7-provider-real
+```
+
+The current real-checkpoint vector is intentionally recorded as a failed gate:
+the fused FP16 path differs from PyTorch by at most `0.009521484375` on clamped
+frames and `0.0047607421875` on the reset feature against the predeclared
+`atol=3e-3, rtol=3e-3` limit. This is provider-stage evidence, not an adapter or
+bitstream claim; do not register DCVC-UF until the parity contract is resolved.
+
 The dependency-free provenance checks run through CTest or directly:
 
 ```sh

@@ -36,9 +36,25 @@
     "aggregate_psnr": 38.54547,
     "result_sha256": "0dcc0c3773f14a2f74eb51fd0be2e0b9acac1aac722a29ffc37cd58412a6a3c6"
   },
+  "provider_stage": {
+    "status": "provider_stage_failed",
+    "probe_sha256": "c76ba90958d103e960f1f5edfba4f6e8e17d399ba145a48271f9a8078b3b28c2",
+    "feature_sha256": "34b4bda86d6e030ca06c62d5157ca7aad407db83b5911d1cb7a8c1dc942009e9",
+    "feature_shape": [1, 512, 3, 3],
+    "seed": 20261031,
+    "dtype": "float16",
+    "gpu": "NVIDIA GeForce RTX 4070",
+    "torch": "2.13.0+cu126",
+    "cuda": "12.6",
+    "acceptance": {"atol": 0.003, "rtol": 0.003},
+    "max_frame_abs_error": 0.009521484375,
+    "max_reset_abs_error": 0.0047607421875,
+    "proxy_preallocation": "passed"
+  },
   "remaining_gates": [
     "pretrained upstream encode/decode vector and entropy parity",
-    "provider-stage comparison on captured reconstruction/reset features"
+    "resolve real-checkpoint fused FP16 provider-stage parity",
+    "codec-owned I/chunk/tail/reset lifecycle"
   ],
   "stages": {
     "shuffle_clamp": {

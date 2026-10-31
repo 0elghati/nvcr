@@ -571,8 +571,10 @@ C7 now has an executable pinned-source stage probe: the upstream fused
 shuffle/clamp kernel matches exactly, a real HT-S frame branch passes ONNX CPU
 and TensorRT FP32 checks, and the upstream I/P path completes a nine-frame
 QCIF encode/decode smoke with one full eight-frame chunk. NVCR provider-stage
-parity and the codec adapter/chunk lifecycle gates remain open; this does not
-establish NVCR codec support. See
+parity was then tested with the real HT-S checkpoint through the upstream fused
+reconstruction proxy and failed the predeclared `atol=3e-3, rtol=3e-3` gate
+(maximum frame error `0.009521484375`). The codec adapter/chunk lifecycle gates
+also remain open; this does not establish NVCR codec support. See
 [the C7 evidence](../evidence/phase-c7-dcvcuf-export-20261031.md).
 
 ## Explicit non-goals

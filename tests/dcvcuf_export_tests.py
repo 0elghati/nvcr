@@ -14,6 +14,10 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts/backends/dcvcuf/probe_ht
 spec = importlib.util.spec_from_file_location("dcvcuf_probe", SCRIPT)
 probe = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(probe)
+PROVIDER_SCRIPT = Path(__file__).resolve().parents[1] / "scripts/backends/dcvcuf/probe_hts_provider.py"
+provider_spec = importlib.util.spec_from_file_location("dcvcuf_provider_probe", PROVIDER_SCRIPT)
+provider_probe = importlib.util.module_from_spec(provider_spec)
+provider_spec.loader.exec_module(provider_probe)
 
 
 class ProvenanceTests(unittest.TestCase):
@@ -68,6 +72,18 @@ class ProvenanceTests(unittest.TestCase):
                     probe.main(["--reference-root", directory, "--output-dir", str(output),
                                 "--checkpoint", str(checkpoint), "--checkpoint-sha256", "0" * 64])
             self.assertFalse(output.exists())
+
+    def test_provider_probe_requires_real_checkpoint_identity(self):
+        base = ["--reference-root", "unused", "--output-dir", "unused"]
+        for options in ([], ["--checkpoint", "weights.tar"],
+                        ["--checkpoint", "weights.tar", "--checkpoint-sha256", "0" * 64,
+                         "--feature-height", "0"]):
+            with self.subTest(options=options), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    provider_probe.parse_args(base + options)
+        parsed = provider_probe.parse_args(base + [
+            "--checkpoint", "weights.tar", "--checkpoint-sha256", "0" * 64])
+        self.assertEqual(parsed.feature_height, 3)
 
 
 if __name__ == "__main__":
