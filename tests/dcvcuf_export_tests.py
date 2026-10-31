@@ -20,9 +20,30 @@ PROVIDER_SCRIPT = Path(__file__).resolve().parents[1] / "scripts/backends/dcvcuf
 provider_spec = importlib.util.spec_from_file_location("dcvcuf_provider_probe", PROVIDER_SCRIPT)
 provider_probe = importlib.util.module_from_spec(provider_spec)
 provider_spec.loader.exec_module(provider_probe)
+SESSION_SCRIPT = SCRIPT.with_name("probe_nvcr_session.py")
+session_spec = importlib.util.spec_from_file_location("dcvcuf_session_probe", SESSION_SCRIPT)
+session_probe = importlib.util.module_from_spec(session_spec)
+session_spec.loader.exec_module(session_probe)
 
 
 class ProvenanceTests(unittest.TestCase):
+    def test_session_probe_rejects_unverified_native_stream_before_loading(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifact = root / "fixture"
+            artifact.write_bytes(b"fixture")
+            digest = session_probe.sha256(artifact)
+            for wrong in ("image-checkpoint", "checkpoint", "extension", "stream"):
+                args = ["--reference-root", directory, "--output-dir", str(root / "output")]
+                for name in ("image-checkpoint", "checkpoint", "extension", "stream"):
+                    args += [f"--{name}", str(artifact), f"--{name}-sha256",
+                             "0" * 64 if name == wrong else digest]
+                with self.subTest(wrong=wrong), patch.object(
+                        session_probe, "verify_reference", return_value="fixture"):
+                    with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+                        session_probe.main(args)
+                self.assertFalse((root / "output").exists())
+
     def test_weights_and_feature_identity_must_be_explicit(self):
         base = ["--reference-root", "unused", "--output-dir", "unused"]
         for options in ([], ["--checkpoint", "weights.tar"],

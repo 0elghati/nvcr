@@ -13,9 +13,10 @@ SHARED_DIRECTORIES = (
     ROOT / "include/nvcr/runtime",
     ROOT / "src/codec",
     ROOT / "src/configuration",
+    ROOT / "src/provider",
     ROOT / "src/runtime",
 )
-UF_TERMS = ("dcvc-uf", "dcvc_uf", "dmchts", "dmchtl", "dmcld", "recon_head")
+UF_TERMS = ("dcvc-uf", "dcvc_uf", "dcvcuf", "dmchts", "dmchtl", "dmcld", "recon_head")
 
 
 class ArchitectureBoundaryTests(unittest.TestCase):

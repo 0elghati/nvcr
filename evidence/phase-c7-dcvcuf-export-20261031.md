@@ -50,12 +50,12 @@ ONNX CPU and TensorRT FP32 tolerance checks. The full PyTorch head independently
 confirms branch selection and the reset feature. An additional branch-0, 1x1
 feature CPU probe passes, covering the first shared-pair boundary.
 
-The real upstream `test_video.py` also completed a nine-frame QCIF run with
-one I-frame and one eight-frame HT-S P chunk at QP 32. The encode/decode run
-passed for both requested rate entries. It reports 1 I frame, 8 P frames,
-0.042368 aggregate BPP, 38.545470 aggregate PSNR, and stream JSON SHA-256
-`0dcc0c3773f14a2f74eb51fd0be2e0b9acac1aac722a29ffc37cd58412a6a3c6`.
-The two rate entries intentionally used the same QP as a smoke check.
+The initial upstream nine-frame QCIF smoke run was superseded by the fresh
+17-frame reference described below. Its retained stream failed repeat decoding
+with the current library; that compatibility decision is documented below.
+The current upstream run reports 1 I-frame and 16 P-frames at QP 32, aggregate
+BPP `0.027796345811051695`, and aggregate PSNR `38.68018492283872`.
+These are upstream reference metrics, not full NVCR codec results.
 
 The real HT-S diagnostic vector then loaded the same video checkpoint into
 the upstream `DMCHTSReconHeadProxy` and compared its eight clamped frame outputs
@@ -95,7 +95,8 @@ This is a comparison of two upstream paths, **not NVCR provider parity**. The
 strict Python/fused gate remains failed without changing its tolerance. The
 pinned fused decoder outputs are the reference for the next NVCR stage test;
 a passing FP32 ONNX/PyTorch comparison alone cannot establish that equivalence.
-The current feature is still synthetic, not captured from a codec decode.
+That diagnostic feature is synthetic; the later NVCR session gate below uses
+features captured from native decoding.
 Local `outputs.npz` retains both paths' tensors with SHA-256
 `75b4c758137447b961d151d66acc00b799721d97c2ab049d641a4f751895d3b0`.
 
@@ -104,7 +105,7 @@ An initial TensorRT check used `--exportOutput` JSON and observed up to
 The current probe uses `--dumpRawBindingsToFile`; binary shuffle output is
 identical. This was a measurement correction, not a tolerance change.
 
-CPU Release rebuild and CTest: **25/25 pass**. Five dependency-free
+CPU Release rebuild and CTest: **25/25 pass**. Six dependency-free
 UF provenance tests covering wrong revision, modified/staged/untracked source,
 explicit synthetic mode, mandatory hashes, and checkpoint/binary/feature-hash
 rejection pass. The dependency-free architecture check also passes: shared
@@ -112,7 +113,65 @@ codec, provider, runtime, and configuration code contains no UF-specific terms,
 and core configuration has no default codec, provider, model, or stream
 identity. The CLI names its current DCVC-RT/TensorRT product selection and
 identities explicitly. The production codec/provider implementations are
-unchanged.
+unchanged; a probe-only UF reconstruction implementation now lives under
+`src/dcvcuf/backend/upstream`.
+
+## NVCR provider-session reconstruction
+
+The next stage gate passes through the existing C++ `IProviderSession`
+interface: allocate device buffers, load a codec-specific stage, submit tensor
+views, wait for completion, reset, and reuse. The bridge invokes the original
+`DMCHTSReconHeadProxy` from the verified upstream library. It retains UF's fused
+FP16 accumulation and avoids changing any shared runtime/provider interface.
+
+The current input comes from a fresh 17-frame QCIF native UF stream
+(one I-frame and two eight-frame predicted chunks, QP 32, reset interval 8).
+Its SHA-256 is
+`7b2ebb14719082381ea8363ff9511545d5200dfb6a543db84d6782279be3fe7a`.
+A renamed copy of the pinned decoder adds only read-only feature snapshots;
+its decoded frames match the unmodified library exactly. The unused encoder
+entry point is omitted from that capture copy to avoid a hidden Python helper.
+The upstream checkout remains clean. Generated capture-source hashes and the
+tested binary digest are retained in the JSON evidence.
+
+Each captured feature is FP16 `[1,18,22,512]` in the boundary's contiguous NHWC
+layout. All sixteen `[144,176,3]` frames and both unclamped `[1,18,22,192]` reset
+features match exactly. Input preservation, provider reset/reuse, and independent
+sessions also match exactly. Two independent process runs produce identical
+digests for all eleven captured/output tensors and the vector archive.
+Sixteen contract checks cover foreign stages,
+buffers and completions; missing or malformed bindings; shape, type, access,
+name, size and offset errors; overlap; model identity; unverified artifacts;
+unsupported memory; and an accepted same-session dependency.
+
+This validates a synchronous, single-caller reconstruction bridge built by the
+probe. It is not a registered production provider or a full UF codec. The codec's
+reference-memory reset remains separate from provider reset. No entropy or
+bitstream syntax is translated or relabelled by this stage. The earlier failed
+Python/fused comparison and its unchanged tolerances remain relevant evidence
+for choosing the fused implementation.
+
+The previously retained nine-frame stream (SHA-256
+`a9bcc803acb31802de58295ca96ddd13149ed592e87ee34e68373436a847ded1`)
+was rejected as a current reference. The standalone unmodified upstream image
+decoder produced different outputs on repeated cold replay, including with
+upstream deterministic setup and launch synchronization. In contrast, a newly
+encoded nontrivial I-frame decoded exactly on an independent cold proxy and on
+repeat. The old stream's I payload is 597 bytes with digest
+`75e2ee5efe8d2c3ffc4a18372bc0aa9278f6952776b992b754825ac2806b38e7`;
+the freshly generated native I payload is 601 bytes with digest
+`d1bf03da978629a870a3236750aa8ddd4c503cfb7a583ae19919eeb05004f988`.
+This establishes that the old stream/current decoder pair is unsuitable for
+stable reference capture; it does not establish which earlier producing
+environment difference caused it. The probe now fails on unequal I-frame repeat
+decodes before using any predicted features. Its deterministic setup matches
+upstream, and raw tensor digests are recorded separately from archive digests.
+
+DCVC-RT regression: the Release engine-contract and I/P round-trip executables
+pass on `build/engines-rtx4070-exact-20260805/qcif` (176x144, 202 payload bytes).
+Their codec/provider selections are now explicit, repairing the missed test
+callers after removal of implicit configuration defaults. No performance
+measurement or broad GPU campaign was run.
 
 ## Reproduction
 
@@ -144,15 +203,19 @@ Use the provider command in the probe instructions, adding
 to replay the retained failing feature exactly. Exit code 1 records the unchanged
 numerical gate failure; the lifecycle checks pass independently.
 
+The current NVCR stage run is `build/dcvcuf-nvcr-session-fresh-2/report.json`.
+Its command is in the probe README. Raw `vectors.npz` stays local; the compact
+report is retained under `nvcr_provider_session` in the adjacent JSON evidence.
+
 ## Remaining gates
 
 The initial automated checkpoint links redirected to HTTP 403, but the required
 files were subsequently provided manually. These checks remain necessary:
 
-1. Implement and compare NVCR stages against the pinned fused outputs, preserving
-   the required accumulation behavior. Repeat on captured upstream
-   reconstruction/reset features. The upstream Python/fused divergence is
-   localized, but no NVCR provider comparison has been executed.
+1. Extend beyond the now-exact reconstruction stage to the remaining UF execution
+   stages and entropy path, using pinned native-stream vectors and preserving
+   the required arithmetic. Validate more chunks, reset transitions, and targets
+   before making broader equivalence claims.
 2. Close the C7 pinned encode/decode vector gate inside NVCR before registering an adapter;
    then implement UF-owned I/chunk/tail/reset policy and private AU metadata,
    with real full/short-chunk, drain/reset, and reference tests.

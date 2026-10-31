@@ -55,6 +55,8 @@ int main(int argc, char* argv[]) {
     }
 
     nvcr::RuntimeConfiguration configuration;
+    configuration.codec.id = "dcvc-rt";
+    configuration.provider.id = "tensorrt";
     configuration.artifacts.intra_engine_path = std::filesystem::path(argv[1]);
     configuration.artifacts.model_id = "dcvcrt-cvpr2025";
     configuration.stream.bitstream_model_id = "dcvcrt";

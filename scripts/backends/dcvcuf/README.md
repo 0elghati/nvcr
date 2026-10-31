@@ -116,11 +116,79 @@ The first-operation diagnostic compares the first 1x1 convolution with and
 without bias, then its WSiLU activation. Its float64 CPU oracle uses the same
 FP16-quantized weights and input. The pinned SM89 CUTLASS path uses FP16 GEMM
 accumulators, so standard PyTorch/ONNX arithmetic is not an established reference
-for reproducing the fused decoder. Future NVCR stage comparisons must use the
-pinned fused outputs. This diagnostic compares two upstream paths; NVCR provider
-parity, captured codec features, entropy, and adapter lifecycle remain untested.
+for reproducing the fused decoder. NVCR stage comparisons use the pinned fused
+outputs. This diagnostic compares two upstream paths; the separate NVCR
+provider-session bridge below tests reconstruction on captured codec features.
+Entropy integration and adapter lifecycle remain untested.
 
 ## NVCR integration boundary
+
+`probe_nvcr_session.py` exercises the experimental implementation in
+`src/dcvcuf/backend/upstream/recon_session.cpp` through the existing C++
+`IProviderSession` interface. It loads the pinned HT-S weights, allocates opaque
+device buffers, loads a reconstruction stage, submits tensor views, waits for
+completion, and resets/reuses the session. The interface uses contiguous NHWC
+FP16 tensors; conversion to upstream channels-last NCHW stays inside the bridge.
+The stage returns eight clamped frames and one unclamped reset tensor. Only
+codec-specific code assigns meaning to these outputs.
+
+For a real vector, the script decodes a hash-verified native UF stream with both
+the original upstream binary and a capture-only proxy. The capture proxy is a
+renamed copy of the pinned HT-S class with a read-only snapshot method; its
+unused encoder entry point is omitted because a Python return helper is hidden
+in the upstream binary. Supporting operators and entropy functions link to the
+original library. The upstream checkout remains untouched. Captured decode
+frames must match the original library exactly before this can count as stage
+evidence. The input feature, original frames, reset feature, and NVCR outputs
+are retained in `vectors.npz`, with hashes in the report.
+
+Run this after configuring an NVCR build (for its generated version header):
+
+```sh
+rtk proxy env PYTHONPATH=build/dcvcuf-python-deps \
+  .venv/bin/python assets/dcvc-uf-reference/test_video.py \
+  --model_path_i /home/oelghati/dcvc-uf/cvpr2026_image.pth.tar \
+  --model_path_p /home/oelghati/dcvc-uf/cvpr2026_video_hts.pth.tar \
+  --model_structure hts --test_config build/dcvcuf_qcif.json \
+  --rate_num 1 --qp_i 32 --qp_p 32 --force_frame_num 17 \
+  --force_intra_period 32 --reset_interval 8 --worker 1 --cuda_idx 0 \
+  --stream_path build/dcvcuf-reference-session-20261031 \
+  --output_path build/dcvcuf-reference-session-20261031.json
+
+rtk proxy env PYTHONPATH=build/dcvcuf-python-deps CUDA_HOME=/usr/local/cuda-12.6 MAX_JOBS=2 \
+  .venv/bin/python scripts/backends/dcvcuf/probe_nvcr_session.py \
+  --reference-root assets/dcvc-uf-reference --nvcr-build build-cpu \
+  --image-checkpoint /home/oelghati/dcvc-uf/cvpr2026_image.pth.tar \
+  --image-checkpoint-sha256 b3b900de23f30e4fc437010ddffe6a5413a56d6cfd97fb6235adbcd2b6973302 \
+  --checkpoint /home/oelghati/dcvc-uf/cvpr2026_video_hts.pth.tar \
+  --checkpoint-sha256 565607d84943ee79072a5760d34a200d5724b4bb72c6bc24bfab41e8ae4f5f47 \
+  --extension build/dcvcuf-python-deps/inference_extensions_cuda.cpython-312-x86_64-linux-gnu.so \
+  --extension-sha256 cf2be0cc51d3766a9c1c8b19eb513a6fe6337f9b9d864ac527a3bcc9718bf805 \
+  --stream build/dcvcuf-reference-session-20261031/QCIF/akiyo_qcif.yuv_q32.bin \
+  --stream-sha256 7b2ebb14719082381ea8363ff9511545d5200dfb6a543db84d6782279be3fe7a \
+  --output-dir build/dcvcuf-nvcr-session
+```
+
+The probe output directory must be new. The recorded stream is a fresh 17-frame
+QCIF upstream run with two predicted chunks and reset interval 8. Supply the digest of your own generated native stream when
+reproducing elsewhere. The diagnostic requires explicit input digests and uses
+the upstream parser. It also uses the reference worker's `set_torch_env()` setup.
+The I-frame must decode identically twice before its features are used. The older
+nine-frame stream failed this cold replay check with the current binary and is
+not a stage reference. Its producing environment is not established by its old
+quality report alone; see the evidence for the rejected stream identity.
+Reconstruction outputs, repeated execution after provider reset, input
+preservation, and independent sessions require exact equality. The GPU check
+also rejects foreign buffers/stages/dependencies, invalid shapes, names, types,
+access modes, slices, aliasing, and model identities before executing kernels.
+
+This is a synchronous, single-caller correctness bridge with in-memory verified
+weights and feature dimensions limited to 256x256. It is built only by the probe,
+does not register a production codec/provider, and is not a deployable standalone
+backend. Artifact loading, asynchronous execution, UF entropy integration,
+native-byte interoperability, adapter lifecycle, and performance remain separate
+gates. Provider reset here clears no codec reference state: UF reference-memory
+reset belongs to the future codec adapter.
 
 This probe does not add a DCVC-UF option, stage, or lifecycle rule to NVCR's
 shared runtime, provider, or configuration code. A future UF adapter owns its
