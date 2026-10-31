@@ -1,6 +1,6 @@
 # Phase C7 DCVC-UF stage export — 2026-10-31
 
-Status: initial stage feasibility passes; C7 remains open. The user prioritized
+Status: upstream checkpoint and stage feasibility pass; C7 remains open. The user prioritized
 starting DCVC-UF integration on 2026-10-31. This experiment builds on the existing
 codec-owned sessions and grouped/delayed-output contracts. It does not register
 a supported DCVC-UF codec or alter the DCVC-RT production path.
@@ -16,6 +16,13 @@ a supported DCVC-UF codec or alter the DCVC-RT production path.
   64 MiB workspace limit. No performance conclusion is drawn.
 - HT-S branch 7, synthetic seeded weights and feature, seed 0, feature shape
   `[1,512,2,3]`, output `[1,3,16,24]`. No pretrained weights were used.
+
+Real checkpoint validation then used `cvpr2026_image.pth.tar` (SHA-256
+`b3b900de23f30e4fc437010ddffe6a5413a56d6cfd97fb6235adbcd2b6973302`) and
+`cvpr2026_video_hts.pth.tar` (SHA-256
+`565607d84943ee79072a5760d34a200d5724b4bb72c6bc24bfab41e8ae4f5f47`). The
+upstream rANS and CUDA inference extensions built successfully with the pinned
+source and CUTLASS v4.4.1.
 
 The source boundaries are `src/models/video_model_ht.py:ReconHead`,
 `src/layers/extensions/inference/dmc_hts_proxy.cpp:DMCHTSReconHeadProxy`, and
@@ -41,6 +48,13 @@ exactly. The HT-S branch's raw reset feature and reconstructed frame pass both
 ONNX CPU and TensorRT FP32 tolerance checks. The full PyTorch head independently
 confirms branch selection and the reset feature. An additional branch-0, 1x1
 feature CPU probe passes, covering the first shared-pair boundary.
+
+The real upstream `test_video.py` also completed a nine-frame QCIF run with
+one I-frame and one eight-frame HT-S P chunk at QP 32. The encode/decode run
+passed for both requested rate entries. It reports 1 I frame, 8 P frames,
+0.042368 aggregate BPP, 38.545470 aggregate PSNR, and stream JSON SHA-256
+`0dcc0c3773f14a2f74eb51fd0be2e0b9acac1aac722a29ffc37cd58412a6a3c6`.
+The two rate entries intentionally used the same QP as a smoke check.
 
 An initial TensorRT check used `--exportOutput` JSON and observed up to
 `5.066394805908203e-7` apparent shuffle error due to decimal formatting.
@@ -77,17 +91,14 @@ with this evidence.
 
 ## Remaining gates
 
-Both official checkpoint folder links in the pinned README (primary and backup)
-redirected to HTTP 403 on 2026-10-31. No pretrained UF checkpoint was available
-in the inspected local asset directories. These checks remain necessary:
+The initial automated checkpoint links redirected to HTTP 403, but the required
+files were subsequently provided manually. These checks remain necessary:
 
-1. Obtain and hash-pin the I and HT-S pretrained checkpoints; build the full
-   upstream inference/entropy extension and capture a deterministic I/P vector.
-2. Compare the provider stages on captured upstream features, including the
+1. Compare the provider stages on captured upstream features, including the
    unclamped reset feature, with the selected reconstruction/entropy contract.
    This synthetic FP32 branch result does not establish fused FP16 convolution
    parity or stream interchangeability.
-3. Close the C7 pinned encode/decode vector gate before registering an adapter;
+2. Close the C7 pinned encode/decode vector gate inside NVCR before registering an adapter;
    then implement UF-owned I/chunk/tail/reset policy and private AU metadata,
    with real full/short-chunk, drain/reset, and reference tests.
 
