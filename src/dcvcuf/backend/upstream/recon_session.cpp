@@ -42,35 +42,67 @@ public:
     Stage(std::string owner, ExecutableStageDescriptor descriptor,
           const Weights& weights, int device)
         : owner_(std::move(owner)), descriptor_(std::move(descriptor)) {
-        proxy.set_param(weights);
-        const auto& dims = descriptor_.tensors[0].dimensions;
+        const auto& dims = descriptor_.tensors.back().dimensions;
         auto options = at::TensorOptions().dtype(at::kHalf)
                            .device(at::Device(at::kCUDA, device))
                            .memory_format(at::MemoryFormat::ChannelsLast);
-        auto input = at::empty({1, 512, dims[1].minimum, dims[2].minimum}, options);
-        reset_storage = at::empty({1, 192, dims[1].minimum, dims[2].minimum}, options);
-        proxy.pre_allocate_tensors(input, reset_storage);
+        const auto h = dims[1].minimum;
+        const auto w = dims[2].minimum;
+        if (descriptor_.stage_id == "dcvcuf.hts.decoder") {
+            decoder = std::make_unique<DMCHTSDecoderProxy>();
+            decoder->set_param(weights);
+            auto latent = at::empty({1, 256, h / 2, w / 2}, options);
+            decoder_cat = at::empty({1, 1024, h, w}, options);
+            auto up = decoder_cat.narrow(1, 0, 512);
+            context = decoder_cat.narrow(1, 512, 512);
+            storage = at::empty({1, 512, h, w}, options);
+            decoder->pre_allocate_tensors(latent, up, decoder_cat, storage);
+        } else {
+            recon = std::make_unique<DMCHTSReconHeadProxy>();
+            recon->set_param(weights);
+            auto input = at::empty({1, 512, h, w}, options);
+            storage = at::empty({1, 192, h, w}, options);
+            recon->pre_allocate_tensors(input, storage);
+        }
     }
     const ExecutableStageDescriptor& descriptor() const noexcept override { return descriptor_; }
     std::string_view owner_id() const noexcept override { return owner_; }
-    mutable DMCHTSReconHeadProxy proxy;
+    void forward(const std::vector<at::Tensor>& bound) const {
+        if (decoder) {
+            context.copy_(bound[1].permute({0, 3, 1, 2}));
+            auto feature = decoder->forward(bound[0].permute({0, 3, 1, 2}), decoder_cat,
+                                            bound[2].permute({0, 3, 1, 2}));
+            bound[3].copy_(feature.permute({0, 2, 3, 1}));
+        } else {
+            auto [frames, reset_feature] = recon->forward(bound[0].permute({0, 3, 1, 2}));
+            for (std::size_t i = 0; i < frames.size(); ++i)
+                bound[1].narrow(0, i, 1).copy_(frames[i].permute({0, 2, 3, 1}));
+            bound[2].copy_(reset_feature.permute({0, 2, 3, 1}));
+        }
+    }
 private:
     std::string owner_;
     ExecutableStageDescriptor descriptor_;
-    at::Tensor reset_storage;
+    std::unique_ptr<DMCHTSReconHeadProxy> recon;
+    std::unique_ptr<DMCHTSDecoderProxy> decoder;
+    at::Tensor storage, decoder_cat, context;
 };
 
 class Session final : public IProviderSession {
 public:
-    Session(const Weights& weights, int device) : device_(device) {
+    Session(const Weights& recon_weights, const Weights& decoder_weights, int device) : device_(device) {
         static std::atomic<std::uint64_t> next{0};
         owner_ = "dcvcuf-upstream-" + std::to_string(++next);
         c10::cuda::CUDAGuard guard(device_);
-        for (const auto& [key, tensor] : weights) {
-            TORCH_CHECK(tensor.is_cuda() && tensor.get_device() == device_ &&
-                        tensor.scalar_type() == at::kHalf, "weights must be FP16 on selected device");
-            weights_.emplace(key, tensor.clone());
-        }
+        auto clone = [&](const Weights& source, Weights& target) {
+            for (const auto& [key, tensor] : source) {
+                TORCH_CHECK(tensor.is_cuda() && tensor.get_device() == device_ &&
+                            tensor.scalar_type() == at::kHalf, "weights must be FP16 on selected device");
+                target.emplace(key, tensor.clone());
+            }
+        };
+        clone(recon_weights, recon_weights_);
+        clone(decoder_weights, decoder_weights_);
     }
     std::string_view owner_id() const noexcept override { return owner_; }
     Result<BufferHandle> allocate(std::size_t bytes, MemoryDomain domain) override {
@@ -83,15 +115,17 @@ public:
         } catch (const std::exception& e) { return invalid(e.what()); }
     }
     Result<ExecutableStage> load_stage(ExecutableStageDescriptor desc) override {
-        // This bounded prototype accepts exactly one codec-local stage and
+        // This bounded prototype accepts two codec-local stages and
         // already verified in-memory weights; it is not an artifact loader.
-        if (desc.tensors.size() != 3 || desc.tensors[0].dimensions.size() != 4)
-            return invalid("invalid reconstruction contract");
+        const bool decoder = desc.stage_id == "dcvcuf.hts.decoder";
+        if ((!decoder && desc.stage_id != "dcvcuf.hts.reconstruction") ||
+            desc.tensors.size() != (decoder ? 4u : 3u) || desc.tensors[0].dimensions.size() != 4)
+            return invalid("invalid synthesis stage contract");
         const auto h = desc.tensors[0].dimensions[1].minimum;
         const auto w = desc.tensors[0].dimensions[2].minimum;
-        if (h <= 0 || w <= 0 || h > 256 || w > 256)
+        if (h <= 0 || w <= 0 || h > (decoder ? 128 : 256) || w > (decoder ? 128 : 256))
             return invalid("prototype supports feature dimensions 1 through 256");
-        const auto expected = recon_descriptor(h, w);
+        const auto expected = decoder ? decoder_descriptor(h * 2, w * 2) : recon_descriptor(h, w);
         const auto& a = desc.artifact;
         const auto& b = expected.artifact;
         if (desc.stage_id != expected.stage_id || a.codec_id != b.codec_id ||
@@ -103,7 +137,7 @@ public:
             a.model_set_version.minor != 0 || a.manifest_schema_version.major != 2 ||
             a.manifest_schema_version.minor != 0)
             return invalid("unsupported reconstruction artifact identity");
-        for (std::size_t i = 0; i < 3; ++i) {
+        for (std::size_t i = 0; i < expected.tensors.size(); ++i) {
             const auto& t = desc.tensors[i];
             const auto& e = expected.tensors[i];
             if (t.name != e.name || t.data_type != e.data_type || t.access != e.access ||
@@ -115,14 +149,15 @@ public:
         }
         try {
             c10::cuda::CUDAGuard guard(device_);
-            return ExecutableStage(std::make_shared<Stage>(owner_, std::move(desc), weights_, device_));
+            return ExecutableStage(std::make_shared<Stage>(owner_, std::move(desc),
+                decoder ? decoder_weights_ : recon_weights_, device_));
         } catch (const std::exception& e) { return invalid(e.what()); }
     }
     Result<Completion> submit(const ExecutableStage& handle,
                               std::span<const TensorView> tensors,
                               std::span<const ExecutionDependency> dependencies) override {
         auto stage = std::dynamic_pointer_cast<const Stage>(handle);
-        if (!stage || stage->owner_id() != owner_ || tensors.size() != 3)
+        if (!stage || stage->owner_id() != owner_ || tensors.size() != stage->descriptor().tensors.size())
             return invalid("foreign stage or wrong binding count");
         for (const auto& dep : dependencies)
             if (!dep.completion || dep.completion->owner_id() != owner_)
@@ -158,10 +193,7 @@ public:
                 auto waited = dep.completion->wait();
                 if (!waited) return waited.error();
             }
-            auto [frames, reset_feature] = stage->proxy.forward(bound[0].permute({0, 3, 1, 2}));
-            for (std::size_t i = 0; i < frames.size(); ++i)
-                bound[1].narrow(0, i, 1).copy_(frames[i].permute({0, 2, 3, 1}));
-            bound[2].copy_(reset_feature.permute({0, 2, 3, 1}));
+            stage->forward(bound);
             // Bounded correctness bridge: synchronous completion. Async
             // execution can be introduced only with its own lifetime tests.
             C10_CUDA_CHECK(cudaStreamSynchronize(at::cuda::getCurrentCUDAStream(device_)));
@@ -174,12 +206,14 @@ public:
 private:
     int device_;
     std::string owner_;
-    Weights weights_;
+    Weights recon_weights_, decoder_weights_;
 };
 }  // namespace
 
 std::shared_ptr<provider::experimental::IProviderSession> make_recon_session(
-    const Weights& weights, int device) { return std::make_shared<Session>(weights, device); }
+    const Weights& recon_weights, const Weights& decoder_weights, int device) {
+    return std::make_shared<Session>(recon_weights, decoder_weights, device);
+}
 
 provider::experimental::ExecutableStageDescriptor recon_descriptor(int h, int w) {
     using namespace provider::experimental;
@@ -196,6 +230,21 @@ provider::experimental::ExecutableStageDescriptor recon_descriptor(int h, int w)
         {"feature", TensorDataType::float16, TensorAccess::read, {{1,1},{h,h},{w,w},{512,512}}},
         {"frames", TensorDataType::float16, TensorAccess::write, {{8,8},{h*8,h*8},{w*8,w*8},{3,3}}},
         {"reset_feature", TensorDataType::float16, TensorAccess::write, {{1,1},{h,h},{w,w},{192,192}}},
+    };
+    return d;
+}
+
+provider::experimental::ExecutableStageDescriptor decoder_descriptor(int h, int w) {
+    using namespace provider::experimental;
+    auto d = recon_descriptor(h, w);
+    TORCH_CHECK(h % 2 == 0 && w % 2 == 0, "decoder feature dimensions must be even");
+    d.stage_id = "dcvcuf.hts.decoder";
+    d.artifact.component_id = "hts-decoder";
+    d.tensors = {
+        {"latent", TensorDataType::float16, TensorAccess::read, {{1,1},{h/2,h/2},{w/2,w/2},{256,256}}},
+        {"context", TensorDataType::float16, TensorAccess::read, {{1,1},{h,h},{w,w},{512,512}}},
+        {"quant", TensorDataType::float16, TensorAccess::read, {{1,1},{1,1},{1,1},{512,512}}},
+        {"feature", TensorDataType::float16, TensorAccess::write, {{1,1},{h,h},{w,w},{512,512}}},
     };
     return d;
 }

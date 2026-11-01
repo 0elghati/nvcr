@@ -126,10 +126,13 @@ Entropy integration and adapter lifecycle remain untested.
 `probe_nvcr_session.py` exercises the experimental implementation in
 `src/dcvcuf/backend/upstream/recon_session.cpp` through the existing C++
 `IProviderSession` interface. It loads the pinned HT-S weights, allocates opaque
-device buffers, loads a reconstruction stage, submits tensor views, waits for
-completion, and resets/reuses the session. The interface uses contiguous NHWC
+device buffers, loads synthesis-decoder and reconstruction stages, submits tensor
+views, waits for completion, and resets/reuses the session. The decoder takes
+latents, temporal context, and per-channel quantization. Its output buffer is
+shared directly with reconstruction through an execution dependency; the
+intermediate feature does not round-trip through the host. The interface uses contiguous NHWC
 FP16 tensors; conversion to upstream channels-last NCHW stays inside the bridge.
-The stage returns eight clamped frames and one unclamped reset tensor. Only
+The reconstruction stage returns eight clamped frames and one unclamped reset tensor. Only
 codec-specific code assigns meaning to these outputs.
 
 For a real vector, the script decodes a hash-verified native UF stream with both
@@ -139,8 +142,8 @@ unused encoder entry point is omitted because a Python return helper is hidden
 in the upstream binary. Supporting operators and entropy functions link to the
 original library. The upstream checkout remains untouched. Captured decode
 frames must match the original library exactly before this can count as stage
-evidence. The input feature, original frames, reset feature, and NVCR outputs
-are retained in `vectors.npz`, with hashes in the report.
+evidence. The decoded latents, context, quantization, intermediate feature,
+original frames, reset feature, and NVCR outputs are retained in `vectors.npz`, with hashes in the report.
 
 Run this after configuring an NVCR build (for its generated version header):
 
@@ -156,6 +159,7 @@ rtk proxy env PYTHONPATH=build/dcvcuf-python-deps \
   --output_path build/dcvcuf-reference-session-20261031.json
 
 rtk proxy env PYTHONPATH=build/dcvcuf-python-deps CUDA_HOME=/usr/local/cuda-12.6 MAX_JOBS=2 \
+  CUDA_LAUNCH_BLOCKING=1 \
   .venv/bin/python scripts/backends/dcvcuf/probe_nvcr_session.py \
   --reference-root assets/dcvc-uf-reference --nvcr-build build-cpu \
   --image-checkpoint /home/oelghati/dcvc-uf/cvpr2026_image.pth.tar \
@@ -166,24 +170,45 @@ rtk proxy env PYTHONPATH=build/dcvcuf-python-deps CUDA_HOME=/usr/local/cuda-12.6
   --extension-sha256 cf2be0cc51d3766a9c1c8b19eb513a6fe6337f9b9d864ac527a3bcc9718bf805 \
   --stream build/dcvcuf-reference-session-20261031/QCIF/akiyo_qcif.yuv_q32.bin \
   --stream-sha256 7b2ebb14719082381ea8363ff9511545d5200dfb6a543db84d6782279be3fe7a \
-  --output-dir build/dcvcuf-nvcr-session
+  --output-dir build/dcvcuf-nvcr-synthesis
 ```
 
 The probe output directory must be new. The recorded stream is a fresh 17-frame
 QCIF upstream run with two predicted chunks and reset interval 8. Supply the digest of your own generated native stream when
 reproducing elsewhere. The diagnostic requires explicit input digests and uses
 the upstream parser. It also uses the reference worker's `set_torch_env()` setup.
-The I-frame must decode identically twice before its features are used. The older
-nine-frame stream failed this cold replay check with the current binary and is
-not a stage reference. Its producing environment is not established by its old
-quality report alone; see the evidence for the rejected stream identity.
-Reconstruction outputs, repeated execution after provider reset, input
-preservation, and independent sessions require exact equality. The GPU check
-also rejects foreign buffers/stages/dependencies, invalid shapes, names, types,
-access modes, slices, aliasing, and model identities before executing kernels.
+The I-frame must decode identically twice before its features are used. Normal
+asynchronous native replay showed intermittent differences even for the current
+17-frame stream. This is also reproducible without NVCR. The command explicitly
+uses `CUDA_LAUNCH_BLOCKING=1` for bounded correctness diagnosis, and the report
+records this setting. It is not an asynchronous-execution or performance gate.
+Do not replace the stream or relax equality to conceal a repeat failure. The
+older nine-frame stream was also rejected; its rejection alone does not prove
+that stream corruption or a producing-environment mismatch caused the problem.
+Decoder features, reconstructed frames, reset features, repeated execution after
+provider reset, input preservation, and independent sessions require exact
+equality. Both stage contracts reject foreign buffers/stages/dependencies,
+invalid shapes, names, types, access modes, slices, aliasing, model identities,
+unknown stages, and malformed output contracts before executing kernels.
+
+To test the provider independently of native entropy, replay the recorded
+latents/context/scales through the same verified binary with normal CUDA
+launches. This checks exact inputs, intermediate features, frames, reset
+features, two independent sessions, reset/reuse, and both stage contracts.
+It verifies source, input, binary, and vector digests before loading the binding:
+
+```sh
+rtk proxy env PYTHONPATH=build/dcvcuf-python-deps CUDA_LAUNCH_BLOCKING=0 \
+  .venv/bin/python scripts/backends/dcvcuf/replay_nvcr_session.py \
+  build/dcvcuf-nvcr-synthesis/report.json \
+  build/dcvcuf-nvcr-synthesis/replay.json
+```
+
+The output JSON must be new. The saved vectors are the fixed reference; this
+replay does not execute or validate native entropy decoding.
 
 This is a synchronous, single-caller correctness bridge with in-memory verified
-weights and feature dimensions limited to 256x256. It is built only by the probe,
+weights and feature dimensions limited to 256x256 (even dimensions for synthesis). It is built only by the probe,
 does not register a production codec/provider, and is not a deployable standalone
 backend. Artifact loading, asynchronous execution, UF entropy integration,
 native-byte interoperability, adapter lifecycle, and performance remain separate

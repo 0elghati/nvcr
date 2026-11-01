@@ -9,8 +9,9 @@
 namespace nvcr::dcvcuf {
 using Weights = std::map<std::string, at::Tensor>;
 std::shared_ptr<provider::experimental::IProviderSession> make_recon_session(
-    const Weights& weights, int device);
+    const Weights& recon_weights, const Weights& decoder_weights, int device);
 provider::experimental::ExecutableStageDescriptor recon_descriptor(int height, int width);
+provider::experimental::ExecutableStageDescriptor decoder_descriptor(int height, int width);
 // Probe-only transfers; tensor layout at the interface is contiguous NHWC FP16.
 void upload(const provider::experimental::BufferHandle&, const at::Tensor&);
 at::Tensor download(const provider::experimental::BufferHandle&,

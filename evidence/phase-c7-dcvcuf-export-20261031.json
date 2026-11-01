@@ -86,7 +86,8 @@
     }
   },
   "remaining_gates": [
-    "remaining UF execution stages and entropy integration against pinned native vectors",
+    "resolve native asynchronous repeatability before integrating entropy or claiming full native interoperability",
+    "remaining UF context/prior/image/encoder execution stages and entropy integration against pinned vectors",
     "full NVCR encode/decode interoperability before production registration",
     "codec-owned I/chunk/tail/reset lifecycle and full/short-chunk drain/reset tests"
   ],
@@ -242,11 +243,12 @@
       }
     }
   },
-  "status": "stage_probe_passed",
-  "date": "2026-10-31",
+  "status": "synthesis_stage_passed_native_async_replay_open",
+  "date": "2026-11-01",
   "cpu_release_tests": {
     "passed": 25,
-    "failed": 0
+    "failed": 0,
+    "date": "2026-11-01"
   },
   "architecture_boundary": {
     "passed": true,
@@ -267,13 +269,14 @@
     "backend": "onnx_cpu"
   },
   "nvcr_provider_session": {
-    "scope": "experimental_nvcr_provider_session_hts_reconstruction",
+    "scope": "experimental_nvcr_provider_session_hts_synthesis",
     "reference_commit": "cbdae87a5445114cdc7f48816da63ea80bdeac40",
     "gpu": "NVIDIA GeForce RTX 4070",
     "torch": "2.13.0+cu126",
     "cuda": "12.6",
     "execution_setup": "upstream src.utils.common.set_torch_env",
-    "session_binary_sha256": "457ec570b7c4fe2e86ab52b8d270a0d36b7b3cb124b1b9217208724ef4a5eb00",
+    "cuda_launch_blocking": "1",
+    "session_binary_sha256": "ca161dea1f06902855b986cce7ac9c8ec57209027658818b95688978568fd416",
     "generated_versions_sha256": "2690fa3472e82975921fad5df83df331dc5bdc08ee76221517f9f1573aeeb870",
     "inputs": {
       "image_checkpoint": {
@@ -294,17 +297,17 @@
       }
     },
     "source_sha256": {
-      "scripts/backends/dcvcuf/probe_nvcr_session.py": "8b9fb2896e583f16870e3df8952b23a74a436c01c8ef5bd9cd2aeb2136b32291",
-      "scripts/backends/dcvcuf/session_probe.cpp": "1bc513a5eec63df14460fbe6a48618e4e3224c101ecd461efce75fafc6abf5ae",
-      "src/dcvcuf/backend/upstream/recon_session.cpp": "76f9279ba4bf2e511f526b7d2c7515595c7f88aa943a568f91bace37e0dd1c22",
-      "src/dcvcuf/backend/upstream/recon_session.hpp": "19a2bfbb6ebdd516fa7bbb0b223f26e1e53331790c42fc471e0aaea23c08d3fc",
+      "scripts/backends/dcvcuf/probe_nvcr_session.py": "452a6900333dd621ba7c1d8a760e78823a53850c13fa8c49aacd4f85c8d50d04",
+      "scripts/backends/dcvcuf/session_probe.cpp": "f72b8f06da77eece1db73afacf9d055b2ae8a90637661c10186420da034a3026",
+      "src/dcvcuf/backend/upstream/recon_session.cpp": "030c3a823e44be93e329232439be3d240ef989294faa907857cc87d19f0f8183",
+      "src/dcvcuf/backend/upstream/recon_session.hpp": "b5577c0c8b32decb3da0e2933f94f39a5bf19a9651ebd32f1eb4284b50a24a18",
       "include/nvcr/provider/experimental/session.hpp": "5124ce6a0d573664ba82d666d9ba40d1e812ed6324f8930ee643aedaf17d06b0"
     },
     "capture_source_sha256": {
-      "capture_hts.h": "fef4d8f4508167eefb4cbf503a633c0e3e8e7b22b33cc63ef4c74134f5dc155b",
+      "capture_hts.h": "9aa8d9d9a83c42992e0bf2c94ec70578caa6043707a3fee727e5aecef685f61e",
       "capture_hts.cpp": "c870b1f6e36fa2c58626b1c6fe09a023d0afeb5e3f404dba07922f78f8f4d483"
     },
-    "vectors_sha256": "46e6f86e997ad54a40d9fed5fdfb4c925cafcc179bccca55590a34bb5131c6cd",
+    "vectors_sha256": "c68d8a42bcd2365cb062e1739444b71aee577067cffe004e5bb0e1e185dc9c27",
     "tensor_sha256": {
       "intra0_frame": "04f8e7f2b4edba38f6c130a2879dc3f1eba428967a3ef43a06bf2c53a7b90b3b",
       "chunk0_feature": "59a64d1e0e3b16b1ef592897d52d38031c8fbdd3dbce6be9c2a65e4bd03965a5",
@@ -312,11 +315,23 @@
       "chunk0_reset": "8125306af5f2fc0244b48465a4a4656bba20c0eaecb964d425e2fc181915819a",
       "chunk0_nvcr_frames": "544f3f498a656361304a6c92f261eb8ac942f48f2c431e546aea9fd873ade17a",
       "chunk0_nvcr_reset": "8125306af5f2fc0244b48465a4a4656bba20c0eaecb964d425e2fc181915819a",
+      "chunk0_latent": "10142a29d73d9fd9e52b72d8489bdd7053fb26cd9d8f644b1d4e6dd399eac989",
+      "chunk0_context": "700d5d8faab3d59a5a223bdc7fa629af1bb4b8ddfaa861a96f727648ed1781e5",
+      "chunk0_quant": "bc10491cc2408633e7798b58851dd0129be6b45aa6315b090be8555ebbe8c43a",
+      "chunk0_nvcr_feature": "59a64d1e0e3b16b1ef592897d52d38031c8fbdd3dbce6be9c2a65e4bd03965a5",
+      "chunk0_pipeline_frames": "544f3f498a656361304a6c92f261eb8ac942f48f2c431e546aea9fd873ade17a",
+      "chunk0_pipeline_reset": "8125306af5f2fc0244b48465a4a4656bba20c0eaecb964d425e2fc181915819a",
       "chunk1_feature": "d36dde4e6e1e16d97252ee051071340f165beb9f14e5a36b9e38da3683a16834",
       "chunk1_frames": "02759c0373a9362386a92bf1344528e4fc50fafa7aff1668120e60e24cdd35fb",
       "chunk1_reset": "2e4e733340d69cf466092b43d77f17c21a9584d98840654340bbdb296b72c5a3",
       "chunk1_nvcr_frames": "02759c0373a9362386a92bf1344528e4fc50fafa7aff1668120e60e24cdd35fb",
-      "chunk1_nvcr_reset": "2e4e733340d69cf466092b43d77f17c21a9584d98840654340bbdb296b72c5a3"
+      "chunk1_nvcr_reset": "2e4e733340d69cf466092b43d77f17c21a9584d98840654340bbdb296b72c5a3",
+      "chunk1_latent": "04b479f0d7bdb876057cb4ca17f81f1737888497096ec06ceb3fb4267841ca76",
+      "chunk1_context": "05d210bbee02a9e63b03542b2b75a987cfa67ea77e0f0e902465ec39e6e6a76d",
+      "chunk1_quant": "bc10491cc2408633e7798b58851dd0129be6b45aa6315b090be8555ebbe8c43a",
+      "chunk1_nvcr_feature": "d36dde4e6e1e16d97252ee051071340f165beb9f14e5a36b9e38da3683a16834",
+      "chunk1_pipeline_frames": "02759c0373a9362386a92bf1344528e4fc50fafa7aff1668120e60e24cdd35fb",
+      "chunk1_pipeline_reset": "2e4e733340d69cf466092b43d77f17c21a9584d98840654340bbdb296b72c5a3"
     },
     "chunks": [
       {
@@ -334,7 +349,13 @@
           "reset_exact": true,
           "input_preserved": true,
           "reset_reuse_exact": true,
-          "independent_session_exact": true
+          "independent_session_exact": true,
+          "decoder_inputs_preserved": true,
+          "decoder_feature_exact": true,
+          "pipeline_frames_exact": true,
+          "pipeline_reset_exact": true,
+          "pipeline_reset_reuse_exact": true,
+          "pipeline_independent_session_exact": true
         }
       },
       {
@@ -352,34 +373,60 @@
           "reset_exact": true,
           "input_preserved": true,
           "reset_reuse_exact": true,
-          "independent_session_exact": true
+          "independent_session_exact": true,
+          "decoder_inputs_preserved": true,
+          "decoder_feature_exact": true,
+          "pipeline_frames_exact": true,
+          "pipeline_reset_exact": true,
+          "pipeline_reset_reuse_exact": true,
+          "pipeline_independent_session_exact": true
         }
       }
     ],
     "contract_checks": [
-      "foreign_stage",
-      "missing_binding",
-      "foreign_buffer",
-      "shape",
-      "name",
-      "dtype",
-      "access",
-      "size",
-      "offset",
-      "null_buffer",
-      "overlap",
-      "foreign_dependency",
-      "same_session_dependency",
-      "model_identity",
-      "unverified_artifact",
-      "unsupported_memory"
+      "dcvcuf.hts.reconstruction:foreign_stage",
+      "dcvcuf.hts.reconstruction:missing_binding",
+      "dcvcuf.hts.reconstruction:foreign_buffer",
+      "dcvcuf.hts.reconstruction:shape",
+      "dcvcuf.hts.reconstruction:name",
+      "dcvcuf.hts.reconstruction:dtype",
+      "dcvcuf.hts.reconstruction:access",
+      "dcvcuf.hts.reconstruction:size",
+      "dcvcuf.hts.reconstruction:offset",
+      "dcvcuf.hts.reconstruction:null_buffer",
+      "dcvcuf.hts.reconstruction:overlap",
+      "dcvcuf.hts.reconstruction:foreign_dependency",
+      "dcvcuf.hts.reconstruction:same_session_dependency",
+      "dcvcuf.hts.reconstruction:model_identity",
+      "dcvcuf.hts.reconstruction:unverified_artifact",
+      "dcvcuf.hts.reconstruction:unsupported_memory",
+      "dcvcuf.hts.reconstruction:output_contract",
+      "dcvcuf.hts.reconstruction:unknown_stage",
+      "dcvcuf.hts.decoder:foreign_stage",
+      "dcvcuf.hts.decoder:missing_binding",
+      "dcvcuf.hts.decoder:foreign_buffer",
+      "dcvcuf.hts.decoder:shape",
+      "dcvcuf.hts.decoder:name",
+      "dcvcuf.hts.decoder:dtype",
+      "dcvcuf.hts.decoder:access",
+      "dcvcuf.hts.decoder:size",
+      "dcvcuf.hts.decoder:offset",
+      "dcvcuf.hts.decoder:null_buffer",
+      "dcvcuf.hts.decoder:overlap",
+      "dcvcuf.hts.decoder:foreign_dependency",
+      "dcvcuf.hts.decoder:same_session_dependency",
+      "dcvcuf.hts.decoder:model_identity",
+      "dcvcuf.hts.decoder:unverified_artifact",
+      "dcvcuf.hts.decoder:unsupported_memory",
+      "dcvcuf.hts.decoder:output_contract",
+      "dcvcuf.hts.decoder:unknown_stage"
     ],
     "intra_repeat_checks_passed": 1,
-    "acceptance": "exact equality for every output and reset feature",
+    "acceptance": "exact equality for decoder feature, reconstructed frames, reset feature, and preserved inputs",
     "passed": true,
     "c7_complete": false,
     "limitations": [
-      "reconstruction stage only; no registered codec or provider",
+      "decoder and reconstruction stages only; no registered codec or provider",
       "synchronous Torch/upstream bridge, not a standalone deployment",
       "codec lifecycle and NVCR entropy/bitstream paths still pending"
     ],
@@ -387,14 +434,15 @@
       "runs": 2,
       "all_tensor_digests_equal": true,
       "vectors_digest_equal": true,
-      "tensor_count": 11
+      "tensor_count": 23
     }
   },
   "rejected_reference_stream": {
     "sha256": "a9bcc803acb31802de58295ca96ddd13149ed592e87ee34e68373436a847ded1",
     "reason": "native upstream I-frame repeat decode differs with current library; producing environment not established",
     "old_i_payload_sha256": "75e2ee5efe8d2c3ffc4a18372bc0aa9278f6952776b992b754825ac2806b38e7",
-    "old_i_payload_bytes": 597
+    "old_i_payload_bytes": 597,
+    "qualification": "Repeat failures also occurred with the current stream; prior rejection does not establish stream corruption or a producing-environment mismatch."
   },
   "dcvcrt_regression": {
     "build": "Release",
@@ -405,6 +453,42 @@
     ],
     "engine_contracts_passed": true,
     "ip_roundtrip_passed": true,
-    "payload_bytes": 202
+    "payload_bytes": 202,
+    "date": "2026-11-01",
+    "cuda_launch_blocking": "unset"
+  },
+  "provider_tensor_replay": {
+    "scope": "provider_synthesis_replay_without_native_entropy",
+    "cuda_launch_blocking": "0",
+    "replay_source_sha256": "bc2a11ce9d14faa67067bfaa78de4cf7c471f1fc20aab09fe5df0c9273916b92",
+    "reference_report_sha256": "303bef46d5508a148e89bbd01dcc302f13d4894ec5081d7aea546ca72cfb9730",
+    "vectors_sha256": "c68d8a42bcd2365cb062e1739444b71aee577067cffe004e5bb0e1e185dc9c27",
+    "session_binary_sha256": "ca161dea1f06902855b986cce7ac9c8ec57209027658818b95688978568fd416",
+    "chunks": 2,
+    "pipeline_runs": 6,
+    "passed": true,
+    "contract_checks": 36
+  },
+  "native_async_replay": {
+    "status": "failed_repeatability",
+    "date": "2026-11-01",
+    "stream_sha256": "7b2ebb14719082381ea8363ff9511545d5200dfb6a543db84d6782279be3fe7a",
+    "extension_sha256": "cf2be0cc51d3766a9c1c8b19eb513a6fe6337f9b9d864ac527a3bcc9718bf805",
+    "scope": "unmodified upstream image decoder; no NVCR provider execution",
+    "explicit_device_sync_between_calls": true,
+    "normal_launch_tensor_sha256": [
+      "994b4c04b552c9ccf3312cecd8cb872c96461d460ff31643d7590f9d4c75f28e",
+      "76f4ef946d8359bbc178abf603efb7ab8a1b8ee36eeb63f5ca135d61ac650f7e",
+      "0c61da67270741e508af31eb4ec4a91c1e76a1408885fd9dfdc0bb2b02ac23d8"
+    ],
+    "blocking_launch_repeat_count": 3,
+    "blocking_launch_tensor_sha256": "04f8e7f2b4edba38f6c130a2879dc3f1eba428967a3ef43a06bf2c53a7b90b3b",
+    "root_cause": "unresolved; blocking launch mode passes, call-boundary synchronization alone is insufficient",
+    "implication": "native asynchronous entropy/execution gate remains open; historical repeat passes do not close it"
+  },
+  "provenance_tests": {
+    "passed": 7,
+    "failed": 0,
+    "date": "2026-11-01"
   }
 }

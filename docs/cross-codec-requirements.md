@@ -571,19 +571,21 @@ suitability unresolved. The original next experiment held DCVC-RT constant while
 testing the provider axis. On 2026-10-31 the user prioritized DCVC-UF instead.
 C7 now has an executable pinned-source stage probe: the upstream fused
 shuffle/clamp kernel matches exactly, a real HT-S frame branch passes ONNX CPU
-and TensorRT FP32 checks, and the upstream I/P path completes a nine-frame
-QCIF encode/decode smoke with one full eight-frame chunk. The upstream Python
+and TensorRT FP32 checks, and the upstream I/P path completes a 17-frame
+QCIF encode/decode smoke with two full eight-frame chunks. The upstream Python
 and fused reconstruction heads failed the predeclared `atol=3e-3, rtol=3e-3`
 comparison (maximum frame error `0.009521484375`). The first divergence is in
 the fused 1x1 convolution's FP16 accumulation, before bias/activation; exact
-stage input/repeat/reset checks pass. The experimental NVCR provider-session
-bridge now reproduces all eight reconstructed frames and the unclamped reset
-feature exactly from a real native-stream decode feature. Its capture proxy
-matches the original upstream decoder, and provider reset/reuse, independent
-sessions, and binding rejection checks pass. It reuses the original fused
-operators with their arithmetic intact; it introduces no UF policy into the
-generic contracts. Other stages, entropy integration, and the codec adapter/chunk
-lifecycle gates remain open. See
+stage input/repeat/reset checks pass. The experimental provider-session bridge now connects
+synthesis decoding and reconstruction through a shared opaque device buffer.
+Both intermediate features, sixteen frames, and two unclamped reset features
+match the native vector exactly. Two independent blocking-reference runs and
+normal-launch frozen-vector replay pass, including reset/reuse, independent
+sessions, and both stages' contract checks. The original fused arithmetic stays
+intact, with no UF policy in generic contracts. Native asynchronous I-frame
+replay also failed outside NVCR, so that execution/entropy gate must be resolved
+before full integration claims. Context/prior, image, encoder, entropy, and
+codec adapter/chunk lifecycle gates remain open. See
 [the C7 evidence](../evidence/phase-c7-dcvcuf-export-20261031.md).
 
 ## Explicit non-goals

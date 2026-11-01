@@ -4,6 +4,7 @@
 import contextlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -27,6 +28,32 @@ session_spec.loader.exec_module(session_probe)
 
 
 class ProvenanceTests(unittest.TestCase):
+    def test_tensor_replay_rejects_mismatched_artifacts_before_loading(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "binding").mkdir()
+            artifact = root / "input"
+            binary = root / "binding/nvcr_dcvcuf_session_probe.so"
+            vectors = root / "vectors.npz"
+            for path in (artifact, binary, vectors):
+                path.write_bytes(b"fixture")
+            digest = session_probe.sha256(artifact)
+            for wrong in ("source", "input", "binary", "vectors"):
+                expected = lambda name: "0" * 64 if name == wrong else digest
+                report = {"passed": True,
+                          "source_sha256": {str(artifact): expected("source")},
+                          "inputs": {"fixture": {"path": str(artifact), "sha256": expected("input")}},
+                          "session_binary_sha256": expected("binary"), "vectors_sha256": expected("vectors")}
+                (root / "report.json").write_text(json.dumps(report))
+                with self.subTest(wrong=wrong):
+                    result = subprocess.run([sys.executable, str(SCRIPT.with_name("replay_nvcr_session.py")),
+                                             str(root / "report.json"), str(root / "output.json")],
+                                            capture_output=True, text=True)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("SHA-256 mismatch", result.stderr)
+                    self.assertNotIn("ModuleNotFoundError", result.stderr)
+                    self.assertFalse((root / "output.json").exists())
+
     def test_session_probe_rejects_unverified_native_stream_before_loading(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

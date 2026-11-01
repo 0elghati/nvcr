@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -31,8 +32,9 @@ def capture_sources(root, output):
     if header.count(marker) != 1 or implementation.count("DMCHTSProxy::DMCHTSProxy()") != 1:
         raise ValueError("unexpected pinned proxy source layout")
     header = header.replace(marker, marker + "\n"
-        "    std::tuple<at::Tensor, at::Tensor> snapshot() const {\n"
-        "        return {m_feature_p.clone(), m_feature_i.clone()};\n"
+        "    std::vector<at::Tensor> snapshot() const {\n"
+        "        return {m_feature_p.clone(), m_feature_i.clone(), m_y_hat.clone(),\n"
+        "                m_ctx.clone(), m_q_decoder[m_qp].clone()};\n"
         "    }\n").replace("DMCHTSProxy", "NVCRCaptureHTSProxy")
     implementation = ('// Copyright (c) Microsoft Corporation. MIT License.\n'
                       '#include <c10/cuda/CUDAGuard.h>\n#include <torch/torch.h>\n'
@@ -122,6 +124,7 @@ def main(argv=None):
     capture = binding.CaptureHTS()
     capture.set_param(state, 0)
     weights = video_model.recon_head.state_dict()
+    decoder_weights = video_model.decoder.state_dict()
     stream = io.BytesIO(args.stream.read_bytes())
     sps_helper = SPSHelper()
     checks = []
@@ -137,7 +140,9 @@ def main(argv=None):
             sps = sps_helper.get_sps_by_id(header['sps_id'])
             qp, ec_part, reset, payload = read_ip_remaining(stream)
             if header['nal_type'] == NalType.NAL_I:
+                torch.cuda.synchronize()
                 decoded = image_model.decompress(payload, sps, qp, ec_part)['x_hat'].clone()
+                torch.cuda.synchronize()
                 repeated_intra = image_model.decompress(payload, sps, qp, ec_part)['x_hat'].clone()
                 torch.cuda.synchronize()
                 if not torch.equal(decoded, repeated_intra):
@@ -150,15 +155,17 @@ def main(argv=None):
             if header['nal_type'] != NalType.NAL_P:
                 raise ValueError("unsupported native NAL")
             encoded = np.frombuffer(payload, dtype=np.uint8).copy()
+            torch.cuda.synchronize()
             expected = [x.clone() for x in original.decompress(
                 encoded, qp, sps['height'], sps['width'], ec_part, reset)]
+            torch.cuda.synchronize()
             captured_frames = [x.clone() for x in capture.decompress(
                 encoded, qp, sps['height'], sps['width'], ec_part, reset)]
-            feature, reset_feature = capture.snapshot()
+            feature, reset_feature, latent, context, quant = capture.snapshot()
             torch.cuda.synchronize()
             if session is None:
-                session = binding.SessionProbe(weights, feature.shape[2], feature.shape[3], 0)
-                other = binding.SessionProbe(weights, feature.shape[2], feature.shape[3], 0)
+                session = binding.SessionProbe(weights, decoder_weights, feature.shape[2], feature.shape[3], 0)
+                other = binding.SessionProbe(weights, decoder_weights, feature.shape[2], feature.shape[3], 0)
             value = feature.permute(0, 2, 3, 1).contiguous().cpu()
             preserved, frames, actual_reset = session.run(value)
             expected_frames = torch.cat(expected).permute(0, 2, 3, 1).contiguous().cpu()
@@ -166,6 +173,12 @@ def main(argv=None):
             session.reset()
             repeated = session.run(value)
             independent = other.run(value)
+            synthesis_inputs = [x.permute(0, 2, 3, 1).contiguous().cpu()
+                                for x in (latent, context, quant)]
+            pipeline = session.run_pipeline(*synthesis_inputs)
+            session.reset()
+            pipeline_repeated = session.run_pipeline(*synthesis_inputs)
+            pipeline_independent = other.run_pipeline(*synthesis_inputs)
             check = {
                 "capture_matches_original": all(torch.equal(a, b) for a, b in
                                                 zip(expected, captured_frames, strict=True)),
@@ -177,10 +190,24 @@ def main(argv=None):
                 "independent_session_exact": all(torch.equal(a, b) for a, b in
                                                   zip(repeated, independent, strict=True)),
             }
+            check.update({
+                "decoder_inputs_preserved": all(torch.equal(a, b) for a, b in
+                                                zip(synthesis_inputs, pipeline[:3], strict=True)),
+                "decoder_feature_exact": torch.equal(pipeline[3], value),
+                "pipeline_frames_exact": torch.equal(pipeline[4], expected_frames),
+                "pipeline_reset_exact": torch.equal(pipeline[5], expected_reset),
+                "pipeline_reset_reuse_exact": all(torch.equal(a, b) for a, b in
+                                                 zip(pipeline, pipeline_repeated, strict=True)),
+                "pipeline_independent_session_exact": all(torch.equal(a, b) for a, b in
+                    zip(pipeline, pipeline_independent, strict=True)),
+            })
             index = len(checks)
             for name, tensor in (("feature", value), ("frames", expected_frames),
                                  ("reset", expected_reset), ("nvcr_frames", frames),
-                                 ("nvcr_reset", actual_reset)):
+                                 ("nvcr_reset", actual_reset),
+                                 ("latent", synthesis_inputs[0]), ("context", synthesis_inputs[1]),
+                                 ("quant", synthesis_inputs[2]), ("nvcr_feature", pipeline[3]),
+                                 ("pipeline_frames", pipeline[4]), ("pipeline_reset", pipeline[5])):
                 arrays[f"chunk{index}_{name}"] = tensor.numpy()
             checks.append({"qp": qp, "reset_feature_memory": reset,
                            "feature_shape_nhwc": list(value.shape), "checks": check})
@@ -189,10 +216,11 @@ def main(argv=None):
         rejection_checks = session.rejection_checks(other)
     np.savez(output / "vectors.npz", **arrays)
     report = {
-        "scope": "experimental_nvcr_provider_session_hts_reconstruction",
+        "scope": "experimental_nvcr_provider_session_hts_synthesis",
         "reference_commit": revision, "gpu": torch.cuda.get_device_name(),
         "torch": torch.__version__, "cuda": torch.version.cuda,
         "execution_setup": "upstream src.utils.common.set_torch_env",
+        "cuda_launch_blocking": os.environ.get("CUDA_LAUNCH_BLOCKING", "0"),
         "session_binary_sha256": sha256(Path(binding.__file__)),
         "generated_versions_sha256": sha256(
             args.nvcr_build / "generated/include/nvcr/common/versions.hpp"),
@@ -211,10 +239,10 @@ def main(argv=None):
                           for name, value in arrays.items()},
         "chunks": checks, "contract_checks": rejection_checks,
         "intra_repeat_checks_passed": intra_replays,
-        "acceptance": "exact equality for every output and reset feature",
+        "acceptance": "exact equality for decoder feature, reconstructed frames, reset feature, and preserved inputs",
         "passed": all(all(item['checks'].values()) for item in checks),
         "c7_complete": False,
-        "limitations": ["reconstruction stage only; no registered codec or provider",
+        "limitations": ["decoder and reconstruction stages only; no registered codec or provider",
                         "synchronous Torch/upstream bridge, not a standalone deployment",
                         "codec lifecycle and NVCR entropy/bitstream paths still pending"],
     }
