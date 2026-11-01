@@ -106,6 +106,10 @@ def main(argv=None):
     # Match the reference worker's full setup, including deterministic CUBLAS
     # and cuDNN selection, before creating streams or executing model operations.
     set_torch_env()
+    # The pinned CUDA proxy uses empty scratch tensors. Keep deterministic
+    # initialization enabled so every native reference decode writes the same
+    # complete tensor before the provider stages consume it.
+    torch.utils.deterministic.fill_uninitialized_memory = True
     torch.cuda.set_stream(torch.cuda.Stream())
     binding = load_binding(root, args.extension, output, args.nvcr_build.resolve())
     image_model = DMCI().eval()

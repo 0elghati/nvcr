@@ -243,7 +243,7 @@
       }
     }
   },
-  "status": "synthesis_stage_passed_native_async_replay_open",
+  "status": "synthesis_stage_passed_native_async_replay_resolved",
   "date": "2026-11-01",
   "cpu_release_tests": {
     "passed": 25,
@@ -274,9 +274,10 @@
     "gpu": "NVIDIA GeForce RTX 4070",
     "torch": "2.13.0+cu126",
     "cuda": "12.6",
-    "execution_setup": "upstream src.utils.common.set_torch_env",
-    "cuda_launch_blocking": "1",
-    "session_binary_sha256": "ca161dea1f06902855b986cce7ac9c8ec57209027658818b95688978568fd416",
+    "execution_setup": "upstream src.utils.common.set_torch_env plus deterministic empty-tensor initialization",
+    "cuda_launch_blocking": "0",
+    "deterministic_fill_uninitialized_memory": true,
+    "session_binary_sha256": "247565a98a81e2b2f4140640f09bda57b7264b3dd8e6ec9c9986a483b54c2587",
     "generated_versions_sha256": "2690fa3472e82975921fad5df83df331dc5bdc08ee76221517f9f1573aeeb870",
     "inputs": {
       "image_checkpoint": {
@@ -297,7 +298,7 @@
       }
     },
     "source_sha256": {
-      "scripts/backends/dcvcuf/probe_nvcr_session.py": "452a6900333dd621ba7c1d8a760e78823a53850c13fa8c49aacd4f85c8d50d04",
+      "scripts/backends/dcvcuf/probe_nvcr_session.py": "78f9dd73673fc7d6a32096b2fc523ed5ccd9da1afb35ea59719f7eb072236dd5",
       "scripts/backends/dcvcuf/session_probe.cpp": "f72b8f06da77eece1db73afacf9d055b2ae8a90637661c10186420da034a3026",
       "src/dcvcuf/backend/upstream/recon_session.cpp": "030c3a823e44be93e329232439be3d240ef989294faa907857cc87d19f0f8183",
       "src/dcvcuf/backend/upstream/recon_session.hpp": "b5577c0c8b32decb3da0e2933f94f39a5bf19a9651ebd32f1eb4284b50a24a18",
@@ -461,30 +462,33 @@
     "scope": "provider_synthesis_replay_without_native_entropy",
     "cuda_launch_blocking": "0",
     "replay_source_sha256": "bc2a11ce9d14faa67067bfaa78de4cf7c471f1fc20aab09fe5df0c9273916b92",
-    "reference_report_sha256": "303bef46d5508a148e89bbd01dcc302f13d4894ec5081d7aea546ca72cfb9730",
+    "reference_report_sha256": "d42d1ebb57b427fda4ace43bbb265a9cf10737b63a8a7341b911bf6ea0976937",
     "vectors_sha256": "c68d8a42bcd2365cb062e1739444b71aee577067cffe004e5bb0e1e185dc9c27",
-    "session_binary_sha256": "ca161dea1f06902855b986cce7ac9c8ec57209027658818b95688978568fd416",
+    "session_binary_sha256": "247565a98a81e2b2f4140640f09bda57b7264b3dd8e6ec9c9986a483b54c2587",
     "chunks": 2,
     "pipeline_runs": 6,
     "passed": true,
     "contract_checks": 36
   },
   "native_async_replay": {
-    "status": "failed_repeatability",
+    "status": "passed_after_deterministic_initialization",
     "date": "2026-11-01",
     "stream_sha256": "7b2ebb14719082381ea8363ff9511545d5200dfb6a543db84d6782279be3fe7a",
     "extension_sha256": "cf2be0cc51d3766a9c1c8b19eb513a6fe6337f9b9d864ac527a3bcc9718bf805",
     "scope": "unmodified upstream image decoder; no NVCR provider execution",
     "explicit_device_sync_between_calls": true,
-    "normal_launch_tensor_sha256": [
+    "historical_uninitialized_normal_launch_tensor_sha256": [
       "994b4c04b552c9ccf3312cecd8cb872c96461d460ff31643d7590f9d4c75f28e",
       "76f4ef946d8359bbc178abf603efb7ab8a1b8ee36eeb63f5ca135d61ac650f7e",
       "0c61da67270741e508af31eb4ec4a91c1e76a1408885fd9dfdc0bb2b02ac23d8"
     ],
-    "blocking_launch_repeat_count": 3,
+    "deterministic_fill_uninitialized_memory": true,
+    "normal_launch_repeat_count": 3,
+    "normal_launch_tensor_sha256": "04f8e7f2b4edba38f6c130a2879dc3f1eba428967a3ef43a06bf2c53a7b90b3b",
+    "fresh_processes": 3,
     "blocking_launch_tensor_sha256": "04f8e7f2b4edba38f6c130a2879dc3f1eba428967a3ef43a06bf2c53a7b90b3b",
-    "root_cause": "unresolved; blocking launch mode passes, call-boundary synchronization alone is insufficient",
-    "implication": "native asynchronous entropy/execution gate remains open; historical repeat passes do not close it"
+    "root_cause": "pinned upstream setup disabled deterministic initialization for empty CUDA scratch tensors",
+    "implication": "normal asynchronous native replay is stable; entropy gate may proceed"
   },
   "provenance_tests": {
     "passed": 7,

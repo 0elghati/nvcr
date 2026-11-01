@@ -1,8 +1,9 @@
 # Phase C7 DCVC-UF stage export — 2026-10-31
 
 Updated 2026-11-01. Status: synthesis-decoder and reconstruction stage parity
-passes; native asynchronous I-frame repeatability remains unresolved. C7 stays
-open. The earlier Python/fused arithmetic divergence remains localized to the
+passes, and native asynchronous I-frame replay is stable after restoring
+deterministic empty-tensor initialization. C7 stays open for the remaining
+codec stages and lifecycle. The earlier Python/fused arithmetic divergence remains localized to the
 first convolution. The user prioritized
 starting DCVC-UF integration on 2026-10-31. This experiment builds on the existing
 codec-owned sessions and grouped/delayed-output contracts. It does not register
@@ -54,7 +55,8 @@ feature CPU probe passes, covering the first shared-pair boundary.
 
 The initial upstream nine-frame QCIF smoke run was superseded by the fresh
 17-frame reference described below. Its retained stream failed repeat decoding
-with the current library; that compatibility decision is documented below.
+before the deterministic empty-tensor initialization fix; that historical
+compatibility decision is documented below.
 The current upstream run reports 1 I-frame and 16 P-frames at QP 32, aggregate
 BPP `0.027796345811051695`, and aggregate PSNR `38.68018492283872`.
 These are upstream reference metrics, not full NVCR codec results.
@@ -156,27 +158,24 @@ both stages, including foreign handles, malformed bindings, byte bounds,
 overlap, model/artifact identity, unknown stages, malformed output contracts,
 and accepted same-session dependencies.
 
-Two independent capture-and-stage processes under `CUDA_LAUNCH_BLOCKING=1`
+Two independent capture-and-stage processes under `CUDA_LAUNCH_BLOCKING=0`
 produce identical hashes for all 23 tensors and the vector archive. Separately,
 the verified binary replays those frozen vectors with `CUDA_LAUNCH_BLOCKING=0`:
 six two-stage runs across two sessions, exact input/output equality, and all
-36 contract checks pass. This separates provider-stage validation from the
-native entropy path's unresolved asynchronous behavior. Provider submission
-itself remains synchronous and single-caller; concurrent sessions and async
-completion are not claimed.
+36 contract checks pass. Provider submission itself remains synchronous and
+single-caller; concurrent sessions and async completion are not claimed.
 
 ### Native replay limitation
 
-Normal asynchronous replay of the current native I-frame failed the repeat
-check before NVCR stages ran. An upstream-only reproduction also produced
-unequal outputs despite device synchronization between calls. In a separate
-blocking-launch process, all three I-frame decodes matched the previously
-recorded digest
-`04f8e7f2b4edba38f6c130a2879dc3f1eba428967a3ef43a06bf2c53a7b90b3b`.
-These observations narrow the investigation to the native execution path but
-do not establish the faulty operation. The exact gate remains in place; normal
-native replay and entropy integration remain open. No reference arithmetic,
-entropy syntax, checkpoint, or upstream source was changed to pass the stage gate.
+The initial normal-launch failure came from the pinned upstream setup disabling
+deterministic initialization for empty CUDA scratch tensors. The probe now
+re-enables `torch.utils.deterministic.fill_uninitialized_memory` after the
+upstream environment setup. Three fresh normal-launch processes each decode
+the I-frame repeatedly to digest
+`04f8e7f2b4edba38f6c130a2879dc3f1eba428967a3ef43a06bf2c53a7b90b3b`, and the
+full native-to-provider probe passes without `CUDA_LAUNCH_BLOCKING`. No
+reference arithmetic, entropy syntax, checkpoint, or upstream source was
+changed.
 
 The older nine-frame stream, SHA-256
 `a9bcc803acb31802de58295ca96ddd13149ed592e87ee34e68373436a847ded1`,
@@ -184,9 +183,8 @@ was rejected after an earlier repeat failure. Its I payload was 597 bytes,
 SHA-256 `75e2ee5efe8d2c3ffc4a18372bc0aa9278f6952776b992b754825ac2806b38e7`;
 the current stream's I payload is 601 bytes,
 SHA-256 `d1bf03da978629a870a3236750aa8ddd4c503cfb7a583ae19919eeb05004f988`.
-The recurrence with the current stream means the earlier rejection is not
-proof of stream corruption or a producing-environment mismatch. Historical
-successful repeat runs are also insufficient to close this asynchronous gate.
+The earlier rejection predates the deterministic-initialization fix and is
+retained as a compatibility decision; it is not used as current stage evidence.
 
 DCVC-RT regression: the Release engine-contract and I/P round-trip executables
 pass on `build/engines-rtx4070-exact-20260805/qcif` (176x144, 202 payload bytes).
@@ -224,9 +222,9 @@ Use the provider command in the probe instructions, adding
 to replay the retained failing feature exactly. Exit code 1 records the unchanged
 numerical gate failure; the lifecycle checks pass independently.
 
-The current NVCR stage run is `build/dcvcuf-nvcr-synthesis-20261101-3/report.json`;
-its independent capture replay is run `-2`. The stage-only replay result is
-`build/dcvcuf-nvcr-synthesis-20261101-3/replay-final.json`. Commands are in the probe
+The current NVCR stage run is `build/dcvcuf-nvcr-final-20261101-2/report.json`;
+its independent capture replay is run `-1`. The stage-only replay result is
+`build/dcvcuf-nvcr-final-20261101-1/replay.json`. Commands are in the probe
 README. Raw vectors and build products stay local; compact records are retained
 under `nvcr_provider_session`, `provider_tensor_replay`, and
 `native_async_replay` in the adjacent JSON evidence.
@@ -236,9 +234,9 @@ under `nvcr_provider_session`, `provider_tensor_replay`, and
 The initial automated checkpoint links redirected to HTTP 403, but the required
 files were subsequently provided manually. These checks remain necessary:
 
-1. Resolve native asynchronous repeatability before integrating entropy. Extend
-   beyond the exact synthesis/reconstruction stages to context/prior, image, and
-   encoder execution, using pinned vectors and preserving native arithmetic. Validate more chunks, reset transitions, and targets
+1. Extend beyond the exact synthesis/reconstruction stages to context/prior,
+   image, encoder, and entropy execution, using pinned vectors and preserving
+   native arithmetic. Validate more chunks, reset transitions, and targets
    before making broader equivalence claims.
 2. Close the C7 pinned encode/decode vector gate inside NVCR before registering an adapter;
    then implement UF-owned I/chunk/tail/reset policy and private AU metadata,

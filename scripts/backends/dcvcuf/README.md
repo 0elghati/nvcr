@@ -159,7 +159,7 @@ rtk proxy env PYTHONPATH=build/dcvcuf-python-deps \
   --output_path build/dcvcuf-reference-session-20261031.json
 
 rtk proxy env PYTHONPATH=build/dcvcuf-python-deps CUDA_HOME=/usr/local/cuda-12.6 MAX_JOBS=2 \
-  CUDA_LAUNCH_BLOCKING=1 \
+  CUDA_LAUNCH_BLOCKING=0 \
   .venv/bin/python scripts/backends/dcvcuf/probe_nvcr_session.py \
   --reference-root assets/dcvc-uf-reference --nvcr-build build-cpu \
   --image-checkpoint /home/oelghati/dcvc-uf/cvpr2026_image.pth.tar \
@@ -177,14 +177,15 @@ The probe output directory must be new. The recorded stream is a fresh 17-frame
 QCIF upstream run with two predicted chunks and reset interval 8. Supply the digest of your own generated native stream when
 reproducing elsewhere. The diagnostic requires explicit input digests and uses
 the upstream parser. It also uses the reference worker's `set_torch_env()` setup.
-The I-frame must decode identically twice before its features are used. Normal
-asynchronous native replay showed intermittent differences even for the current
-17-frame stream. This is also reproducible without NVCR. The command explicitly
-uses `CUDA_LAUNCH_BLOCKING=1` for bounded correctness diagnosis, and the report
-records this setting. It is not an asynchronous-execution or performance gate.
-Do not replace the stream or relax equality to conceal a repeat failure. The
-older nine-frame stream was also rejected; its rejection alone does not prove
-that stream corruption or a producing-environment mismatch caused the problem.
+The I-frame must decode identically twice before its features are used. The
+probe matches the pinned reference setup and then enables
+`torch.utils.deterministic.fill_uninitialized_memory`; the upstream setup
+otherwise disables initialization for empty CUDA scratch tensors. With
+`CUDA_LAUNCH_BLOCKING=0`, three fresh processes now produce the same I-frame
+digest and the full provider probe passes. Do not replace the stream or relax
+equality to conceal a repeat failure. The older nine-frame stream was rejected
+before this initialization fix; its rejection alone does not prove stream
+corruption or a producing-environment mismatch.
 Decoder features, reconstructed frames, reset features, repeated execution after
 provider reset, input preservation, and independent sessions require exact
 equality. Both stage contracts reject foreign buffers/stages/dependencies,

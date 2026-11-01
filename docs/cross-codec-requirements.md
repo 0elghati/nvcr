@@ -579,13 +579,13 @@ the fused 1x1 convolution's FP16 accumulation, before bias/activation; exact
 stage input/repeat/reset checks pass. The experimental provider-session bridge now connects
 synthesis decoding and reconstruction through a shared opaque device buffer.
 Both intermediate features, sixteen frames, and two unclamped reset features
-match the native vector exactly. Two independent blocking-reference runs and
-normal-launch frozen-vector replay pass, including reset/reuse, independent
-sessions, and both stages' contract checks. The original fused arithmetic stays
-intact, with no UF policy in generic contracts. Native asynchronous I-frame
-replay also failed outside NVCR, so that execution/entropy gate must be resolved
-before full integration claims. Context/prior, image, encoder, entropy, and
-codec adapter/chunk lifecycle gates remain open. See
+match the native vector exactly. Two independent normal-launch reference runs
+and normal-launch frozen-vector replay pass, including reset/reuse, independent
+sessions, and both stages' contract checks. Restoring deterministic
+initialization for the upstream empty CUDA scratch tensors closes the native
+I-frame replay gate. The original fused arithmetic stays intact, with no UF
+policy in generic contracts. Context/prior, image, encoder, entropy, and codec
+adapter/chunk lifecycle gates remain open. See
 [the C7 evidence](../evidence/phase-c7-dcvcuf-export-20261031.md).
 
 ## Explicit non-goals
