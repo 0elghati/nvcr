@@ -114,6 +114,14 @@ target_link_libraries(nvcr_rans_conformance_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_rans_conformance_tests)
 add_test(NAME nvcr_rans_conformance COMMAND nvcr_rans_conformance_tests)
 
+add_executable(nvcr_dcvcuf_rans_conformance_tests dcvcuf_rans_conformance_tests.cpp)
+target_include_directories(
+    nvcr_dcvcuf_rans_conformance_tests PRIVATE
+        "${PROJECT_SOURCE_DIR}/src/dcvcuf/entropy")
+target_link_libraries(nvcr_dcvcuf_rans_conformance_tests PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_dcvcuf_rans_conformance_tests)
+add_test(NAME nvcr_dcvcuf_rans_conformance COMMAND nvcr_dcvcuf_rans_conformance_tests)
+
 if(TARGET nvcr_cli)
     add_test(
         NAME nvcr_cli_version

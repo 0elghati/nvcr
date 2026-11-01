@@ -208,6 +208,27 @@ rtk proxy env PYTHONPATH=build/dcvcuf-python-deps CUDA_LAUNCH_BLOCKING=0 \
 The output JSON must be new. The saved vectors are the fixed reference; this
 replay does not execute or validate native entropy decoding.
 
+## Codec-local UF entropy boundary
+
+The codec-local `nvcr::dcvcuf::UfRansCodec` in
+`src/dcvcuf/entropy/uf_rans_codec.cpp` preserves the pinned UF rANS framing
+without adding UF terms to the shared runtime or provider contracts. It supports
+coder parallelism 1 through 8, packed `y` symbols, channel-indexed `z` symbols,
+reversed paired streams with the upstream zero-byte overlap, the offset header
+and optional tail, and encoder reset. The CPU Release conformance test exercises
+all eight partition counts and exact post-reset byte repeatability:
+
+```sh
+rtk proxy cmake --build build-cpu --target nvcr_dcvcuf_rans_conformance_tests
+rtk proxy ./build-cpu/tests/nvcr_dcvcuf_rans_conformance_tests
+```
+
+This closes only the codec-local rANS round-trip gate. It is deliberately not
+called by the current provider probe: exact upstream model-symbol byte parity,
+the remaining context/prior/image/encoder stages, artifact-backed loading, and
+the UF adapter's I/chunk/tail/reset lifecycle must pass before registration as a
+working NVCR codec.
+
 This is a synchronous, single-caller correctness bridge with in-memory verified
 weights and feature dimensions limited to 256x256 (even dimensions for synthesis). It is built only by the probe,
 does not register a production codec/provider, and is not a deployable standalone

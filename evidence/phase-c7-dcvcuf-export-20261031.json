@@ -86,10 +86,10 @@
     }
   },
   "remaining_gates": [
-    "resolve native asynchronous repeatability before integrating entropy or claiming full native interoperability",
-    "remaining UF context/prior/image/encoder execution stages and entropy integration against pinned vectors",
+    "remaining UF context/prior/image/encoder execution stages and exact upstream entropy-vector parity",
     "full NVCR encode/decode interoperability before production registration",
-    "codec-owned I/chunk/tail/reset lifecycle and full/short-chunk drain/reset tests"
+    "codec-owned I/chunk/tail/reset lifecycle and full/short-chunk drain/reset tests",
+    "artifact-backed loading and target-aware provider execution"
   ],
   "stages": {
     "shuffle_clamp": {
@@ -243,7 +243,7 @@
       }
     }
   },
-  "status": "synthesis_stage_passed_native_async_replay_resolved",
+  "status": "synthesis_stage_passed_native_async_replay_resolved_entropy_codec_local_conformance",
   "date": "2026-11-01",
   "cpu_release_tests": {
     "passed": 25,
@@ -494,5 +494,36 @@
     "passed": 7,
     "failed": 0,
     "date": "2026-11-01"
+  },
+  "uf_entropy": {
+    "status": "passed_codec_local_round_trip",
+    "implementation": "src/dcvcuf/entropy/uf_rans_codec.cpp",
+    "header": "src/dcvcuf/entropy/uf_rans_codec.hpp",
+    "source_sha256": "cbd8550cf27287d39e855eab12191a50c70e4a34cd9b8487cdae99d14aa19af6",
+    "header_sha256": "ec502c262a6d9833afbcce2f0b8186b57ec3fba8eabfba1152381a71ffdbb89b",
+    "coder_parallelism": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "checks": [
+      "UF packed-y symbols",
+      "UF z channel partitioning",
+      "merged stream framing",
+      "decode round trip",
+      "encoder reset and byte-repeat"
+    ],
+    "rules_preserved": [
+      "one stream for parallelism 1",
+      "reversed paired streams with overlap for parallelism 2",
+      "offset header, paired groups, and optional tail for parallelism 3 through 8"
+    ],
+    "test_command": "cmake --build build-cpu --target nvcr_dcvcuf_rans_conformance_tests && ./build-cpu/tests/nvcr_dcvcuf_rans_conformance_tests",
+    "limitation": "self-conformance only; exact upstream model-symbol byte parity and UF adapter wiring remain open"
   }
 }

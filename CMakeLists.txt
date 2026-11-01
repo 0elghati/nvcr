@@ -93,6 +93,7 @@ target_sources(
         src/common/error.cpp
         src/common/sha256.cpp
         src/configuration/configuration.cpp
+        src/dcvcuf/entropy/uf_rans_codec.cpp
         src/dcvcrt/adapter.cpp
         src/dcvcrt/orchestration.cpp
         src/dcvcrt/payload.cpp

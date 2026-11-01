@@ -186,6 +186,17 @@ SHA-256 `d1bf03da978629a870a3236750aa8ddd4c503cfb7a583ae19919eeb05004f988`.
 The earlier rejection predates the deterministic-initialization fix and is
 retained as a compatibility decision; it is not used as current stage evidence.
 
+### Codec-local UF entropy gate
+
+`src/dcvcuf/entropy/uf_rans_codec.cpp` now preserves the UF entropy rules inside
+the codec boundary: coder parallelism 1 through 8, packed `y` symbols,
+channel-indexed `z` symbols, reversed paired streams with zero-byte overlap,
+the offset header and optional tail, decode order, and encoder reset. The CPU
+Release conformance executable exercises every partition count, exact decode
+round trips, and exact post-reset stream repeatability. This is codec-local
+self-conformance only. It does not yet prove exact upstream model-symbol bytes
+or connect entropy to the remaining UF model stages and adapter lifecycle.
+
 DCVC-RT regression: the Release engine-contract and I/P round-trip executables
 pass on `build/engines-rtx4070-exact-20260805/qcif` (176x144, 202 payload bytes).
 Their codec/provider selections are now explicit, repairing the missed test

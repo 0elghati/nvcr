@@ -584,8 +584,11 @@ and normal-launch frozen-vector replay pass, including reset/reuse, independent
 sessions, and both stages' contract checks. Restoring deterministic
 initialization for the upstream empty CUDA scratch tensors closes the native
 I-frame replay gate. The original fused arithmetic stays intact, with no UF
-policy in generic contracts. Context/prior, image, encoder, entropy, and codec
-adapter/chunk lifecycle gates remain open. See
+policy in generic contracts. A codec-local UF rANS wrapper now preserves the
+one-to-eight coder partition, merged-stream framing, and reset behavior, with
+CPU Release round-trip conformance for every partition count. Exact upstream
+model-symbol bytes, context/prior/image/encoder stages, artifact-backed loading,
+and codec adapter/chunk lifecycle gates remain open. See
 [the C7 evidence](../evidence/phase-c7-dcvcuf-export-20261031.md).
 
 ## Explicit non-goals
