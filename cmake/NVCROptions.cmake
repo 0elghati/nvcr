@@ -5,6 +5,7 @@ option(NVCR_BUILD_CLI "Build the native nvcr command-line tool" ON)
 option(NVCR_BUILD_REFERENCE_TOOLS "Build the developer-only Python reference launcher" OFF)
 option(NVCR_FETCH_DEPENDENCIES "Download missing lightweight dependencies" OFF)
 option(NVCR_ENABLE_TENSORRT "Build the TensorRT/CUDA backend" OFF)
+option(NVCR_ENABLE_ONNXRUNTIME "Build the ONNX Runtime execution providers" OFF)
 # NVCR_ENABLE_CUDA is currently implied by NVCR_ENABLE_TENSORRT. It remains an
 # explicit option so CUDA support can be separated from TensorRT later.
 option(NVCR_ENABLE_CUDA "Enable CUDA support (implied when NVCR_ENABLE_TENSORRT is ON)" OFF)
@@ -35,6 +36,12 @@ set(
     ""
     CACHE STRING
     "Semicolon-separated additional DCVC-RT TensorRT engine directories for profile-matrix tests")
+
+set(
+    NVCR_ONNXRUNTIME_MODEL_DIR
+    ""
+    CACHE PATH
+    "Directory containing exported DCVC-RT ONNX stages and entropy assets for ONNX Runtime tests")
 
 set(
     NVCR_DCVCRT_720P_GOLDEN_INPUT

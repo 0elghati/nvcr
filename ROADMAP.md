@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-11-01
 
 ## Product direction
 
@@ -46,6 +46,7 @@ not count as additional production codecs/providers or performance baselines.
 |---|---|---|
 | Runtime and stream contracts | Implemented | Maintain parser, reset, flush, delayed-output, and I/P coverage |
 | TensorRT provider path | v2 extraction complete through B7 | Maintain the accepted ownership, byte, lifecycle, target, and performance gates; a second provider remains separate |
+| ONNX Runtime provider path | Experimental (C8) | CPU self-conformance and TensorRT regression pass. Open: the CUDA and QNN execution providers, and a stream-level provider identity so a mismatched decoder fails instead of reconstructing wrong frames (a stream change requiring separate approval) |
 | Binary and container packaging | Implemented | The engine-bundle packager now carries the NVCR and upstream notices inside the installed bundle; republish existing catalog archives and verify manifests/digests before the release gate. Complete provenance, clean-package, and version-first container-tag checks |
 | Public documentation and onboarding | Implemented | Keep the project identity, contributions, reference comparisons, latest-release examples, and platform workflows current |
 | CLI and artifact-client build identity | Implemented | Keep `version.txt`, build metadata, both version commands, citation metadata, and package checks consistent |
@@ -169,6 +170,8 @@ and gap classifications are recorded in
 | C6.6 | Session send/receive contract clarification | Complete 2026-09-15 | Send success consumes input, receive-side `try_again` reports delayed readiness, and a registered multi-input decoder fixture proves order, timestamps, flush/drain, and reset/reuse without changing production behavior; see [the C6.6 evidence](evidence/phase-c6-6-session-contract-20260915.md) |
 | C6.7 | Current-main rebase and minor-release compatibility | Complete 2026-10-26 with documented GPU-contention exception | The twelve-commit `main-advanced` stack is rebased onto v1.0.8 and the public 1.0 source seams are retained. CPU, install-consumer, sanitizer/fuzz, TensorRT non-GPU, available-profile GPU, pinned-golden, and byte-parity gates pass; two 1080p tests were omitted because they could not coexist with the active GPU workload. See [the C6.7 evidence](evidence/main-advanced-rebase-vetting-20261026.md) |
 | C7 | DCVC-UF fused-operator feasibility | Pending; separate codec axis | One fused operator and one frame-specific high-throughput branch match a pinned upstream encode/decode vector without generic runtime code owning UF branch semantics |
+| C8 | Second provider: ONNX Runtime | Exit gates pass 2026-11-01 on the CPU execution provider; not yet merged. Prioritized ahead of C7 on 2026-11-01. Host transforms match the CUDA kernels with zero differences, all six exact-profile TensorRT suites pass, and TensorRT streams are byte-identical to `main`. Cross-provider streams decode without error to wrong frames; see [the C8 evidence](evidence/phase-c8-onnxruntime-provider-20261101.md) | DCVC-RT runs through a provider-neutral host backend whose transforms match the CUDA kernels; an ONNX Runtime session passes I/P self-conformance (encoder and decoder reconstructions identical), determinism, reset/reuse, and lifecycle gates on the exported bundle; TensorRT build and byte parity are unchanged; cross-provider comparison against TensorRT is reported separately |
+| C9 | Snapdragon edge target through ONNX Runtime QNN | Pending; target device not yet chosen | ARM64 build, static-shape QNN context artifacts per profile and SoC/QAIRT version, an NPU partition-coverage gate, and on-device self-conformance and measurements |
 
 C0 confirmed that C1 could proceed without a new chunk API. The existing
 session verbs were sufficient. C1 now routes the production path through
@@ -228,9 +231,14 @@ so the tested pair is not byte/payload interchangeable with the reference path.
 MLVC self-conformance, MLVC's general suitability, and ONNX Runtime CUDA's
 suitability as an NVCR provider remain unresolved.
 
-C6.5 brings the CLI into line with the existing session contract. The next
-experiment holds DCVC-RT constant and tests a second provider, with ONNX Runtime
-CUDA as the current candidate. C7 remains a pending, separate DCVC-UF codec-axis
+C6.5 brings the CLI into line with the existing session contract. C8 holds
+DCVC-RT constant and tests ONNX Runtime as the second provider. It was
+prioritized ahead of C7 on 2026-11-01 so that one provider implementation can
+cover CPU development, CUDA comparison, and a Snapdragon NPU through the QNN
+execution provider (C9). The TensorRT backend's inter-stage CUDA kernels are
+not reusable on those targets, so C8 adds host implementations of the same
+transforms behind a provider-neutral DCVC-RT backend rather than changing the
+accepted TensorRT path. C7 remains a pending, separate DCVC-UF codec-axis
 experiment. The minimum capability vocabulary remains open in
 [the cross-codec audit](docs/cross-codec-requirements.md#open-questions-requiring-prototypes).
 
@@ -277,7 +285,8 @@ The current release does not commit to CPU neural-codec inference, Windows or
 macOS production support, universal TensorRT-plan portability, INT8 release
 support, a stable C ABI, upstream Python payload interchangeability, an
 industry-standard neural bitstream, or unrestricted model/checkpoint/engine
-redistribution.
+redistribution. The ONNX Runtime CPU path added in C8 is a development and
+conformance path, not a production CPU-inference commitment.
 
 ## v1.x maintenance and release gates
 

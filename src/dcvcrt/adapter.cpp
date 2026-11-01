@@ -3,6 +3,7 @@
 #include "nvcr/dcvcrt/backend.hpp"
 #include "nvcr/runtime/registry.hpp"
 
+#include "host_backend.hpp"
 #include "session.hpp"
 
 #if defined(NVCR_HAS_TENSORRT)
@@ -44,18 +45,16 @@ public:
         std::shared_ptr<provider::experimental::IProviderSession>
             provider_session) override {
 #if defined(NVCR_HAS_TENSORRT)
-        static_cast<void>(configuration);
-        auto backend = make_tensorrt_backend(std::move(provider_session));
+        if (configuration.provider.id == tensorrt_provider_descriptor().id) {
+            auto backend = make_tensorrt_backend(std::move(provider_session));
+            if (!backend) return backend.error();
+            return make_sessions(configuration, std::move(backend.value()));
+        }
+#endif
+        // Other providers run DCVC-RT's inter-stage transforms on the host.
+        auto backend = make_host_backend(std::move(provider_session));
         if (!backend) return backend.error();
         return make_sessions(configuration, std::move(backend.value()));
-#else
-        static_cast<void>(configuration);
-        static_cast<void>(provider_session);
-        return Error(
-            ErrorCode::dependency_unavailable,
-            "DCVC-RT has no production execution provider in this build",
-            "dcvcrt");
-#endif
     }
 };
 

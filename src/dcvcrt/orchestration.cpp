@@ -11,26 +11,6 @@
 namespace nvcr::dcvcrt {
 namespace {
 
-constexpr std::array<std::string_view, 7> intra_stage_ids{
-    "i_analysis.plan",
-    "i_hyper_analysis.plan",
-    "i_hyper_synthesis.plan",
-    "i_spatial_prior_1.plan",
-    "i_spatial_prior_2.plan",
-    "i_spatial_prior_3.plan",
-    "i_synthesis.plan",
-};
-
-constexpr std::array<std::string_view, 7> predicted_stage_ids{
-    "p_reference_frame.plan",
-    "p_reference_feature.plan",
-    "p_analysis.plan",
-    "p_hyper_analysis.plan",
-    "p_prior.plan",
-    "p_spatial_prior.plan",
-    "p_synthesis.plan",
-};
-
 Error orchestration_error(std::string message) {
     return Error(ErrorCode::backend_error, std::move(message), "dcvcrt.orchestration");
 }

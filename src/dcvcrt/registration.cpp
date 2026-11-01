@@ -6,6 +6,9 @@
 #if defined(NVCR_HAS_TENSORRT)
 #include "nvcr/dcvcrt/tensorrt_backend.hpp"
 #endif
+#if defined(NVCR_HAS_ONNXRUNTIME)
+#include "../provider/onnxruntime/session.hpp"
+#endif
 
 namespace nvcr::dcvcrt {
 
@@ -78,6 +81,9 @@ void register_codec() {
 void register_execution_providers() {
 #if defined(NVCR_HAS_TENSORRT)
     register_tensorrt_provider();
+#endif
+#if defined(NVCR_HAS_ONNXRUNTIME)
+    provider::onnxruntime::register_providers();
 #endif
 }
 

@@ -14,5 +14,10 @@ if(@NVCR_ENABLE_TENSORRT@)
     find_dependency(TensorRT)
 endif()
 
+if(@NVCR_ENABLE_ONNXRUNTIME@)
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
+    find_dependency(OnnxRuntime)
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/NVCRTargets.cmake")
 check_required_components(NVCR)

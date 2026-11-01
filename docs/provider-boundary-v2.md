@@ -149,6 +149,8 @@ The minimum contract concepts are:
 
 - MemoryDomain: host, pinned_host, or provider_device.
 - BufferHandle: opaque storage with explicit size, domain, owner, and lifetime.
+  Host-domain buffers may expose `host_bytes()`; the C8 host backend uses this
+  to run DCVC-RT transforms for providers without CUDA.
 - TensorView: name, data type, shape, access mode, and a buffer slice.
 - ExecutionDependency: prior provider event(s), never a raw CUDA type.
 - Completion: an opaque event that can be waited on or chained.

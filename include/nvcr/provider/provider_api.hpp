@@ -23,7 +23,8 @@ namespace nvcr::provider {
 enum class ProviderKind : std::uint8_t {
     tensorrt = 0,
     cpu_reference,  // deterministic test provider
-    // future: onnx_runtime, openvino, core_ml, directml
+    onnx_runtime,
+    // future: openvino, core_ml, directml
 };
 
 struct ProviderDescriptor {
