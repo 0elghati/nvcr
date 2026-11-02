@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/0elghati/nvcr/compare/v1.0.8...v1.1.0) (2026-10-26)
+
+
+### Features
+
+* integrate provider-session runtime architecture ([#173](https://github.com/0elghati/nvcr/issues/173)) ([3ecddde](https://github.com/0elghati/nvcr/commit/3ecdddefd26efbda72cb81be903dc749a2ed28ac))
+
 ## [1.0.8](https://github.com/0elghati/nvcr/compare/v1.0.7...v1.0.8) (2026-10-14)
 
 
