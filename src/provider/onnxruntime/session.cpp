@@ -258,6 +258,9 @@ public:
             }
         }
         try {
+            // Execution providers load shared libraries that log through the
+            // default logger, which exists only once an Env does.
+            (void)environment();
             Ort::SessionOptions options;
             options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
             if (target_.runtime_name == "CUDAExecutionProvider") {
