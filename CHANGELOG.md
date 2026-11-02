@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/0elghati/nvcr/compare/v1.1.0...v1.2.0) (2026-11-02)
+
+
+### Features
+
+* **provider:** add ONNX Runtime provider with host DCVC-RT backend ([#206](https://github.com/0elghati/nvcr/issues/206)) ([c214669](https://github.com/0elghati/nvcr/commit/c2146695e3e123d1fd2d765fd8dcad5d081842fe))
+* **provider:** Add SnapDragon QNN provider ([#207](https://github.com/0elghati/nvcr/issues/207)) ([e25db3d](https://github.com/0elghati/nvcr/commit/e25db3d8a30001013d6a140c19c4e13b67dd0352))
+
 ## [1.1.0](https://github.com/0elghati/nvcr/compare/v1.0.8...v1.1.0) (2026-10-26)
 
 
