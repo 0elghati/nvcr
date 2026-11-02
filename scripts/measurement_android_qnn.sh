@@ -39,13 +39,14 @@ for case in ${CASES:-qcif:176x144 cif:352x288 360p:640x360 540p:960x540 720p:128
         cool_down; state
         for rep in warmup 1 2 3; do
             for dir in encode decode; do
-                if [ $dir = encode ]; then
-                    args="-i inputs/$name.yuv -o s-$name-$p.nvcr -s $size"
+                # Positional parameters keep each argument whole; plain sh has no arrays.
+                if [ "$dir" = encode ]; then
+                    set -- -i "inputs/$name.yuv" -o "s-$name-$p.nvcr" -s "$size"
                 else
-                    args="-i s-$name-$p.nvcr -o s-$name-$p.yuv"
+                    set -- -i "s-$name-$p.nvcr" -o "s-$name-$p.yuv"
                 fi
                 start=$(cut -d' ' -f1 /proc/uptime)
-                ./nvcr $dir $args --frames 33 --provider $p --engine-dir models-$name > s.log 2>&1
+                ./nvcr "$dir" "$@" --frames 33 --provider "$p" --engine-dir "models-$name" > s.log 2>&1
                 status=$?
                 end=$(cut -d' ' -f1 /proc/uptime)
                 line=$(grep -E "^(Encoded|Decoded) |^nvcr:" s.log | head -2 | tr '\n' ' ')
@@ -53,7 +54,7 @@ for case in ${CASES:-qcif:176x144 cif:352x288 360p:640x360 540p:960x540 720p:128
                 echo "result $name $size $p $dir $rep rc=$status process_s=$(awk "BEGIN{print $end-$start}") $wake | $line"
             done
         done
-        sha256sum s-$name-$p.nvcr s-$name-$p.yuv 2>/dev/null
+        sha256sum "s-$name-$p.nvcr" "s-$name-$p.yuv" 2>/dev/null
     done
 done
 state
