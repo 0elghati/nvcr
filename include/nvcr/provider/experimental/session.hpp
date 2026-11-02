@@ -55,6 +55,10 @@ public:
     [[nodiscard]] virtual std::size_t size_bytes() const noexcept = 0;
     [[nodiscard]] virtual MemoryDomain domain() const noexcept = 0;
     [[nodiscard]] virtual std::string_view owner_id() const noexcept = 0;
+
+    // Host-addressable storage for host and pinned_host buffers whose provider
+    // allows codec-side access; empty for device storage.
+    [[nodiscard]] virtual std::span<std::byte> host_bytes() noexcept { return {}; }
 };
 
 using BufferHandle = std::shared_ptr<IProviderBuffer>;

@@ -64,6 +64,41 @@ Rebuild applications when upgrading NVCR; cross-release ABI compatibility is
 not guaranteed. Public API compatibility follows the
 [release policy](reference.md#stability-boundary).
 
+## ONNX Runtime build (experimental, roadmap C8)
+
+The ONNX Runtime providers run DCVC-RT through a provider-neutral host backend.
+Extract an ONNX Runtime C/C++ release (validated with 1.26.0) and point CMake
+at it:
+
+```bash
+cmake -S . -B build-ort \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DNVCR_ENABLE_ONNXRUNTIME=ON \
+  -DOnnxRuntime_ROOT=/opt/onnxruntime \
+  -DNVCR_ONNXRUNTIME_MODEL_DIR="$PWD/build/models/dcvcrt"
+cmake --build build-ort --parallel
+ctest --test-dir build-ort --output-on-failure -R "host_ops|onnxruntime"
+```
+
+The model directory is the FP16 export written by
+`scripts/backends/dcvcrt/export_i_onnx.py` and `export_p_onnx.py`: the
+fourteen `*.onnx` stages plus `i_entropy.bin`, `i_quant.bin`, `p_entropy.bin`,
+and `p_quant.bin`. Without it, only the session contract test is registered.
+
+One provider is registered per execution provider in the linked runtime:
+`onnxruntime-cpu`, `onnxruntime-cuda` (GPU packages), and `onnxruntime-qnn`
+(Qualcomm packages; not yet validated on a device). Select one with
+`--provider` and pass the model directory with `--engine-dir`:
+
+```bash
+build-ort/cli/nvcr encode --provider onnxruntime-cpu \
+  --engine-dir build/models/dcvcrt -s 176x144 -i input.yuv -o output.nvcr
+```
+
+The CPU provider is a development and conformance path, not a production
+inference target. Encode and decode with the same provider: a stream from one
+provider decodes on another without an error but reconstructs the wrong frames.
+
 ## TensorRT runtime build
 
 Additional prerequisites are:

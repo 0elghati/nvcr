@@ -40,6 +40,9 @@ if(NVCR_ENABLE_TENSORRT)
     find_package(CUDAToolkit REQUIRED)
     find_package(TensorRT REQUIRED)
 endif()
+if(NVCR_ENABLE_ONNXRUNTIME)
+    find_package(OnnxRuntime REQUIRED)
+endif()
 
 add_subdirectory(third_party/dcvc_rans)
 
@@ -94,6 +97,8 @@ target_sources(
         src/common/sha256.cpp
         src/configuration/configuration.cpp
         src/dcvcrt/adapter.cpp
+        src/dcvcrt/host_backend.cpp
+        src/dcvcrt/host_ops.cpp
         src/dcvcrt/orchestration.cpp
         src/dcvcrt/payload.cpp
         src/dcvcrt/rans_codec.cpp
@@ -147,6 +152,12 @@ if(NVCR_ENABLE_TENSORRT)
         CUDA_STANDARD 17
         CUDA_STANDARD_REQUIRED ON
         CUDA_EXTENSIONS OFF)
+endif()
+
+if(NVCR_ENABLE_ONNXRUNTIME)
+    target_sources(nvcr PRIVATE src/provider/onnxruntime/session.cpp)
+    target_link_libraries(nvcr PRIVATE OnnxRuntime::OnnxRuntime)
+    target_compile_definitions(nvcr PRIVATE NVCR_HAS_ONNXRUNTIME=1)
 endif()
 
 if(NVCR_BUILD_EXAMPLES)
@@ -245,7 +256,7 @@ install(
     NAMESPACE NVCR::
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/NVCR")
 install(
-    FILES cmake/FindTensorRT.cmake
+    FILES cmake/FindTensorRT.cmake cmake/FindOnnxRuntime.cmake
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/NVCR")
 
 configure_package_config_file(

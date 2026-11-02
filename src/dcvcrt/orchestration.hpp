@@ -12,9 +12,32 @@
 #include <cstdint>
 #include <filesystem>
 #include <span>
+#include <string_view>
 #include <vector>
 
 namespace nvcr::dcvcrt {
+
+// Stage identities in IntraStage/PredictedStage order. The text before the
+// first '.' names the stage artifact within a bundle.
+inline constexpr std::array<std::string_view, 7> intra_stage_ids{
+    "i_analysis.plan",
+    "i_hyper_analysis.plan",
+    "i_hyper_synthesis.plan",
+    "i_spatial_prior_1.plan",
+    "i_spatial_prior_2.plan",
+    "i_spatial_prior_3.plan",
+    "i_synthesis.plan",
+};
+
+inline constexpr std::array<std::string_view, 7> predicted_stage_ids{
+    "p_reference_frame.plan",
+    "p_reference_feature.plan",
+    "p_analysis.plan",
+    "p_hyper_analysis.plan",
+    "p_prior.plan",
+    "p_spatial_prior.plan",
+    "p_synthesis.plan",
+};
 
 enum class IntraStage : std::uint8_t {
     analysis = 0,

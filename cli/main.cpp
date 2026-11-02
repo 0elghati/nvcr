@@ -99,7 +99,7 @@ void usage(std::ostream& out) {
         << "      --provider ID         Execution provider id (default: tensorrt)\n"
         << "      --engine-profile NAME Installed engine profile, for example 720p\n"
         << "                            (default: inferred from encoded dimensions)\n"
-        << "      --engine-dir DIR      Custom TensorRT engine and entropy asset directory\n"
+        << "      --engine-dir DIR      Custom engine or ONNX model directory with entropy assets\n"
         << "                            (overrides backend/profile selection)\n"
         << "      --frames N            Encode input/decode output frame limit; 0 means all\n"
         << "      --qp N                I-frame QP (default: 32)\n"
@@ -704,7 +704,10 @@ nvcr::Result<nvcr::Runtime> create_runtime(
                 "; use --engine-profile or --engine-dir for a custom bundle",
             "cli");
     }
-    if (!engine_bundle_exists(engine_dir)) {
+    // Only TensorRT bundles carry engine_manifest.json; other providers report
+    // their own missing stage artifacts.
+    const bool tensorrt = options.provider_id.empty() || options.provider_id == "tensorrt";
+    if (tensorrt && !engine_bundle_exists(engine_dir)) {
         const std::string profile = options.engine_profile.empty()
             ? engine_profile_for_dimensions(width, height)
             : options.engine_profile;
@@ -715,7 +718,7 @@ nvcr::Result<nvcr::Runtime> create_runtime(
             "cli");
     }
     if (options.verbose) {
-        std::cout << "Using TensorRT engine bundle: " << engine_dir << '\n';
+        std::cout << "Using engine bundle: " << engine_dir << '\n';
     }
     nvcr::RuntimeConfiguration configuration;
     configuration.artifacts.intra_engine_path = engine_dir;

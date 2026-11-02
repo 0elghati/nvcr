@@ -103,6 +103,31 @@ target_link_libraries(nvcr_dcvcrt_orchestration_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_dcvcrt_orchestration_tests)
 add_test(NAME nvcr_dcvcrt_orchestration COMMAND nvcr_dcvcrt_orchestration_tests)
 
+add_executable(nvcr_dcvcrt_host_ops_tests dcvcrt_host_ops_tests.cpp)
+target_include_directories(
+    nvcr_dcvcrt_host_ops_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcrt")
+target_link_libraries(nvcr_dcvcrt_host_ops_tests PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_dcvcrt_host_ops_tests)
+add_test(NAME nvcr_dcvcrt_host_ops COMMAND nvcr_dcvcrt_host_ops_tests)
+
+if(NVCR_ENABLE_ONNXRUNTIME)
+    add_executable(nvcr_onnxruntime_roundtrip_tests onnxruntime_roundtrip_tests.cpp)
+    target_include_directories(
+        nvcr_onnxruntime_roundtrip_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcrt")
+    target_link_libraries(nvcr_onnxruntime_roundtrip_tests PRIVATE NVCR::nvcr)
+    nvcr_set_project_warnings(nvcr_onnxruntime_roundtrip_tests)
+    add_test(NAME nvcr_onnxruntime_session_contract
+        COMMAND nvcr_onnxruntime_roundtrip_tests onnxruntime-cpu)
+    if(NVCR_ONNXRUNTIME_MODEL_DIR)
+        add_test(NAME nvcr_onnxruntime_cpu_ip_frame_roundtrip
+            COMMAND nvcr_onnxruntime_roundtrip_tests onnxruntime-cpu
+                "${NVCR_ONNXRUNTIME_MODEL_DIR}")
+        set_tests_properties(
+            nvcr_onnxruntime_cpu_ip_frame_roundtrip
+            PROPERTIES LABELS "onnxruntime" TIMEOUT 900)
+    endif()
+endif()
+
 add_executable(nvcr_rans_conformance_tests rans_conformance_tests.cpp)
 target_link_libraries(nvcr_rans_conformance_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_rans_conformance_tests)
@@ -135,7 +160,9 @@ endif()
 if(NVCR_ENABLE_TENSORRT)
     add_executable(nvcr_cuda_ops_tests cuda_ops_tests.cpp)
     target_include_directories(
-        nvcr_cuda_ops_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcrt/backend/tensorrt")
+        nvcr_cuda_ops_tests PRIVATE
+            "${PROJECT_SOURCE_DIR}/src/dcvcrt/backend/tensorrt"
+            "${PROJECT_SOURCE_DIR}/src/dcvcrt")
     target_link_libraries(nvcr_cuda_ops_tests PRIVATE NVCR::nvcr CUDA::cudart)
     nvcr_set_project_warnings(nvcr_cuda_ops_tests)
     add_test(NAME nvcr_cuda_ops COMMAND nvcr_cuda_ops_tests)
