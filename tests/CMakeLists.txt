@@ -110,6 +110,12 @@ target_link_libraries(nvcr_dcvcrt_host_ops_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_dcvcrt_host_ops_tests)
 add_test(NAME nvcr_dcvcrt_host_ops COMMAND nvcr_dcvcrt_host_ops_tests)
 
+add_executable(nvcr_mlvc_unit_tests mlvc_unit_tests.cpp)
+target_include_directories(nvcr_mlvc_unit_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/mlvc")
+target_link_libraries(nvcr_mlvc_unit_tests PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_mlvc_unit_tests)
+add_test(NAME nvcr_mlvc_unit COMMAND nvcr_mlvc_unit_tests)
+
 if(NVCR_ENABLE_ONNXRUNTIME)
     add_executable(nvcr_onnxruntime_roundtrip_tests onnxruntime_roundtrip_tests.cpp)
     target_include_directories(
@@ -126,6 +132,23 @@ if(NVCR_ENABLE_ONNXRUNTIME)
             nvcr_onnxruntime_cpu_ip_frame_roundtrip
             PROPERTIES LABELS "onnxruntime" TIMEOUT 900)
     endif()
+
+    add_executable(nvcr_mlvc_parity_tests mlvc_parity_tests.cpp)
+    target_link_libraries(nvcr_mlvc_parity_tests PRIVATE NVCR::nvcr)
+    nvcr_set_project_warnings(nvcr_mlvc_parity_tests)
+    # NVCR_MLVC_PARITY_CASES is a list of "BUNDLE|REFERENCE|INPUT|W|H|FRAMES|PERIOD"
+    # entries, optionally ending in "|decode-only", recorded with
+    # scripts/backends/mlvc/reference_vectors.py.
+    set(mlvc_case_index 0)
+    foreach(mlvc_case IN LISTS NVCR_MLVC_PARITY_CASES)
+        string(REPLACE "|" ";" mlvc_case_fields "${mlvc_case}")
+        add_test(NAME nvcr_mlvc_cpu_parity_${mlvc_case_index}
+            COMMAND nvcr_mlvc_parity_tests onnxruntime-cpu ${mlvc_case_fields})
+        set_tests_properties(
+            nvcr_mlvc_cpu_parity_${mlvc_case_index}
+            PROPERTIES LABELS "onnxruntime;mlvc" TIMEOUT 900)
+        math(EXPR mlvc_case_index "${mlvc_case_index} + 1")
+    endforeach()
 endif()
 
 add_executable(nvcr_rans_conformance_tests rans_conformance_tests.cpp)

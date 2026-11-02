@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <memory>
 #include <new>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -65,11 +66,36 @@ std::string next_owner_id() {
     return "onnxruntime-session-" + std::to_string(++next);
 }
 
+// A plain file stem: codec bundles name parts such as "i_analysis" or
+// "MLVCEncoder_320x192"; separators and dots are never accepted.
 bool simple_component_id(std::string_view id) {
     return !id.empty() && std::all_of(id.begin(), id.end(), [](char character) {
         return (character >= 'a' && character <= 'z') ||
+            (character >= 'A' && character <= 'Z') ||
             (character >= '0' && character <= '9') || character == '_';
     });
+}
+
+std::optional<ONNXTensorElementDataType> onnx_type(session_api::TensorDataType type) {
+    switch (type) {
+    case session_api::TensorDataType::uint8: return ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8;
+    case session_api::TensorDataType::int8: return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8;
+    case session_api::TensorDataType::int32: return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32;
+    case session_api::TensorDataType::float16: return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16;
+    case session_api::TensorDataType::float32: return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
+    }
+    return std::nullopt;
+}
+
+std::size_t element_bytes(session_api::TensorDataType type) {
+    switch (type) {
+    case session_api::TensorDataType::uint8:
+    case session_api::TensorDataType::int8: return 1;
+    case session_api::TensorDataType::float16: return 2;
+    case session_api::TensorDataType::int32:
+    case session_api::TensorDataType::float32: return 4;
+    }
+    return 0;
 }
 
 std::string hex(std::span<const std::byte> bytes) {
@@ -133,12 +159,28 @@ public:
     }
     [[nodiscard]] std::string_view owner_id() const noexcept override { return owner_id_; }
 
-    [[nodiscard]] bool float16_only() const noexcept {
-        const auto is_half = [](ONNXTensorElementDataType type) {
-            return type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16;
+    // Every floating-point input and output uses the declared precision;
+    // integer tensors (for example a quality index) are unaffected.
+    [[nodiscard]] bool float_tensors_are(ONNXTensorElementDataType precision) const noexcept {
+        const auto matches = [precision](ONNXTensorElementDataType type) {
+            const bool floating = type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16 ||
+                type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ||
+                type == ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE ||
+                type == ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16;
+            return !floating || type == precision;
         };
-        return std::all_of(input_types_.begin(), input_types_.end(), is_half) &&
-            std::all_of(output_types_.begin(), output_types_.end(), is_half);
+        return std::all_of(input_types_.begin(), input_types_.end(), matches) &&
+            std::all_of(output_types_.begin(), output_types_.end(), matches);
+    }
+
+    [[nodiscard]] std::optional<ONNXTensorElementDataType> type_of(
+        std::string_view name, bool output) const noexcept {
+        const auto& names = output ? output_names_ : input_names_;
+        const auto& types = output ? output_types_ : input_types_;
+        for (std::size_t index = 0; index < names.size(); ++index) {
+            if (names[index] == name) return types[index];
+        }
+        return std::nullopt;
     }
 
     const std::vector<std::string>& input_names() const noexcept { return input_names_; }
@@ -228,13 +270,32 @@ public:
                 options.AddConfigEntry("session.disable_cpu_ep_fallback", "1");
                 options.AppendExecutionProvider("QNN", {{"backend_path", qnn_htp_backend}});
             }
+            const auto precision = declared_precision(descriptor.artifact.precision);
+            if (!precision) {
+                return session_error(
+                    ErrorCode::incompatible_precision,
+                    "ONNX stage precision must be fp16 or fp32: " + path.string());
+            }
             auto stage = std::make_shared<const OrtStage>(
                 std::move(descriptor), owner_id_,
                 Ort::Session(environment(), path.c_str(), options));
-            if (!stage->float16_only()) {
+            if (!stage->float_tensors_are(*precision)) {
                 return session_error(
                     ErrorCode::incompatible_precision,
-                    "ONNX stage must use float16 inputs and outputs: " + path.string());
+                    std::string("ONNX stage must use ") +
+                        (*precision == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ? "fp32" : "fp16") +
+                        " floating-point inputs and outputs: " + path.string());
+            }
+            for (const auto& contract : stage->descriptor().tensors) {
+                const auto expected = onnx_type(contract.data_type);
+                const auto actual = stage->type_of(
+                    contract.name, contract.access != session_api::TensorAccess::read);
+                if (!expected || actual != expected) {
+                    return session_error(
+                        ErrorCode::invalid_argument,
+                        "ONNX stage tensor " + contract.name +
+                            " is missing or has another type: " + path.string());
+                }
             }
             return session_api::ExecutableStage(std::move(stage));
         } catch (const Ort::Exception& exception) {
@@ -277,13 +338,14 @@ public:
                         return session_error(
                             ErrorCode::invalid_argument, "missing stage tensor " + name);
                     }
-                    auto checked = validate(*tensor, writable);
+                    const auto expected = concrete->type_of(name, writable);
+                    auto checked = validate(*tensor, writable, expected);
                     if (!checked) return checked.error();
                     auto bytes = tensor->storage.buffer->host_bytes().subspan(
                         tensor->storage.offset_bytes, tensor->storage.size_bytes);
                     values.push_back(Ort::Value::CreateTensor(
                         memory, bytes.data(), bytes.size(), tensor->shape.data(),
-                        tensor->shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16));
+                        tensor->shape.size(), *expected));
                     ++bound;
                 }
                 return {};
@@ -320,12 +382,21 @@ public:
     [[nodiscard]] Result<void> reset() override { return {}; }
 
 private:
+    [[nodiscard]] static std::optional<ONNXTensorElementDataType> declared_precision(
+        std::string_view precision) noexcept {
+        // An undeclared precision keeps the provider's original fp16-only rule.
+        if (precision.empty() || precision == "fp16") return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16;
+        if (precision == "fp32") return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
+        return std::nullopt;
+    }
+
     [[nodiscard]] Result<void> validate(
-        const session_api::TensorView& tensor, bool writable) const {
+        const session_api::TensorView& tensor, bool writable,
+        std::optional<ONNXTensorElementDataType> model_type) const {
         const bool access_ok = writable ?
             tensor.access != session_api::TensorAccess::read :
             tensor.access != session_api::TensorAccess::write;
-        if (!access_ok || tensor.data_type != session_api::TensorDataType::float16) {
+        if (!access_ok || !model_type || onnx_type(tensor.data_type) != model_type) {
             return session_error(
                 ErrorCode::invalid_argument,
                 "tensor " + std::string(tensor.name) + " has the wrong access or data type");
@@ -346,7 +417,7 @@ private:
             elements *= static_cast<std::size_t>(dimension);
         }
         const auto end = tensor.storage.offset_bytes + tensor.storage.size_bytes;
-        if (tensor.storage.size_bytes != elements * sizeof(std::uint16_t) ||
+        if (tensor.storage.size_bytes != elements * element_bytes(tensor.data_type) ||
             end < tensor.storage.offset_bytes || end > buffer->size_bytes()) {
             return session_error(
                 ErrorCode::invalid_argument,

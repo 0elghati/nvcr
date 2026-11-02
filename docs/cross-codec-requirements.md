@@ -509,6 +509,12 @@ reference path. MLVC's general suitability, an MLVC ORT self-conformant path,
 and ONNX Runtime CUDA's suitability as an NVCR provider remain unresolved. See
 [the C6 evidence](../evidence/phase-c6-mlvc-cuda-equivalence-20260914.md).
 
+C10 (2026-11-02, by user direction) integrates MLVC under a separate gate.
+NVCR must reproduce MLVC's own conversion runtime exactly, given the same
+published bundle and execution provider. That gate passes on ONNX Runtime CPU;
+the C5/C6 export result is unchanged. See
+[the C10 evidence](../evidence/phase-c10-mlvc-codec-20261102.md).
+
 ## Open questions requiring prototypes
 
 | Question | Proposed experiment | Answer/decision rule |

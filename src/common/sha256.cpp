@@ -130,28 +130,36 @@ private:
 Result<std::string> sha256_file(
     const std::filesystem::path& path,
     std::string_view subsystem) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
-        return Error(
-            ErrorCode::io_error,
-            "cannot open file for SHA-256: " + path.string(),
-            std::string(subsystem));
-    }
+    return sha256_files(std::span(&path, 1), subsystem);
+}
+
+Result<std::string> sha256_files(
+    std::span<const std::filesystem::path> paths,
+    std::string_view subsystem) {
     Sha256 sha256;
     std::array<std::byte, 1024U * 1024U> buffer{};
-    while (input) {
-        input.read(reinterpret_cast<char*>(buffer.data()),
-                   static_cast<std::streamsize>(buffer.size()));
-        const auto count = input.gcount();
-        if (count > 0) {
-            sha256.update(std::span(buffer.data(), static_cast<std::size_t>(count)));
+    for (const auto& path : paths) {
+        std::ifstream input(path, std::ios::binary);
+        if (!input) {
+            return Error(
+                ErrorCode::io_error,
+                "cannot open file for SHA-256: " + path.string(),
+                std::string(subsystem));
         }
-    }
-    if (!input.eof()) {
-        return Error(
-            ErrorCode::io_error,
-            "failed while hashing file: " + path.string(),
-            std::string(subsystem));
+        while (input) {
+            input.read(reinterpret_cast<char*>(buffer.data()),
+                       static_cast<std::streamsize>(buffer.size()));
+            const auto count = input.gcount();
+            if (count > 0) {
+                sha256.update(std::span(buffer.data(), static_cast<std::size_t>(count)));
+            }
+        }
+        if (!input.eof()) {
+            return Error(
+                ErrorCode::io_error,
+                "failed while hashing file: " + path.string(),
+                std::string(subsystem));
+        }
     }
     const auto digest = sha256.finish();
     std::ostringstream output;

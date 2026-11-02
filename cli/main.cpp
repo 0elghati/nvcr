@@ -1,4 +1,5 @@
 #include <nvcr/dcvcrt/adapter.hpp>
+#include <nvcr/mlvc/codec.hpp>
 #include <nvcr/nvcr.hpp>
 #ifdef NVCR_MEASUREMENT_CUDA
 #include <cuda_runtime_api.h>
@@ -59,6 +60,7 @@ struct Options final {
     std::size_t frames{};
     std::uint32_t qp{32};
     std::uint32_t gop_size{32};
+    bool gop_size_set{};
     std::int64_t frame_period_us{16'667};
     std::int32_t device_id{};
     bool profile{};
@@ -95,15 +97,18 @@ void usage(std::ostream& out) {
         << "      --width N             Raw input width (encode only)\n"
         << "      --height N            Raw input height (encode only)\n"
         << "      --backend NAME        Installed backend selector (default: NVCR_BACKEND or default)\n"
-        << "      --codec ID            Codec adapter id (default: dcvc-rt)\n"
-        << "      --provider ID         Execution provider id (default: tensorrt)\n"
+        << "      --codec ID            Codec adapter id: dcvc-rt or mlvc (default: dcvc-rt)\n"
+        << "      --provider ID         Execution provider id (default: tensorrt;\n"
+        << "                            mlvc: onnxruntime-cpu)\n"
         << "      --engine-profile NAME Installed engine profile, for example 720p\n"
         << "                            (default: inferred from encoded dimensions)\n"
-        << "      --engine-dir DIR      Custom engine or ONNX model directory with entropy assets\n"
+        << "      --engine-dir DIR      Custom engine or ONNX model directory with entropy assets;\n"
+        << "                            for mlvc, the MLVC ONNX bundle directory\n"
         << "                            (overrides backend/profile selection)\n"
         << "      --frames N            Encode input/decode output frame limit; 0 means all\n"
         << "      --qp N                I-frame QP (default: 32)\n"
-        << "      --gop-size N          GOP size; 1 explicitly requests all-intra (default: 32)\n"
+        << "      --gop-size N          GOP size; 1 explicitly requests all-intra (default: 32;\n"
+        << "                            mlvc: the bundle's own I period)\n"
         << "  -r, --fps FPS             Input frame rate (default: 60)\n"
         << "      --frame-period-us N   Exact timestamp interval (alternative to --fps)\n"
         << "      --device-id N         CUDA device (default: 0)\n"
@@ -214,6 +219,7 @@ fs::path resolve_engine_dir(
 
 void bootstrap_registry() {
     nvcr::dcvcrt::register_codec();
+    nvcr::mlvc::register_codec();
     nvcr::dcvcrt::register_execution_providers();
 }
 
@@ -447,6 +453,7 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 std::cerr << "nvcr: invalid GOP size: " << value << '\n';
                 return false;
             }
+            options.gop_size_set = true;
         } else if (argument == "--device-id") {
             const auto value = value_after(argument);
             if (value.empty() || !parse_number(value, options.device_id)) {
@@ -695,6 +702,14 @@ RecordRead read_record(std::istream& input, std::vector<std::byte>& bytes) {
 
 nvcr::Result<nvcr::Runtime> create_runtime(
     const Options& options, std::uint32_t width, std::uint32_t height) {
+    // MLVC bundles hold every canvas size; there is no installed profile tree.
+    const bool mlvc = options.codec_id == nvcr::mlvc::codec_descriptor().id;
+    if (mlvc && options.engine_dir.empty() && std::getenv("NVCR_ENGINE_DIR") == nullptr) {
+        return nvcr::Error(
+            nvcr::ErrorCode::invalid_argument,
+            "MLVC needs --engine-dir pointing at an MLVC ONNX bundle (bundle_manifest.json)",
+            "cli");
+    }
     const auto engine_dir = resolve_engine_dir(options, width, height);
     if (engine_dir.empty()) {
         return nvcr::Error(
@@ -706,7 +721,10 @@ nvcr::Result<nvcr::Runtime> create_runtime(
     }
     // Only TensorRT bundles carry engine_manifest.json; other providers report
     // their own missing stage artifacts.
-    const bool tensorrt = options.provider_id.empty() || options.provider_id == "tensorrt";
+    // MLVC defaults to the validated ONNX Runtime CPU provider.
+    const std::string provider_id =
+        !options.provider_id.empty() ? options.provider_id : (mlvc ? "onnxruntime-cpu" : "");
+    const bool tensorrt = provider_id.empty() || provider_id == "tensorrt";
     if (tensorrt && !engine_bundle_exists(engine_dir)) {
         const std::string profile = options.engine_profile.empty()
             ? engine_profile_for_dimensions(width, height)
@@ -723,10 +741,13 @@ nvcr::Result<nvcr::Runtime> create_runtime(
     nvcr::RuntimeConfiguration configuration;
     configuration.artifacts.intra_engine_path = engine_dir;
     configuration.codec.id = options.codec_id;
-    if (!options.provider_id.empty()) configuration.provider.id = options.provider_id;
+    if (!provider_id.empty()) configuration.provider.id = provider_id;
     configuration.provider.device_id = options.device_id;
     configuration.codec.intra_qp = options.qp;
     configuration.codec.gop_size = options.gop_size;
+    if (mlvc && !options.gop_size_set) {
+        configuration.codec.gop_size = nvcr::mlvc::use_model_iframe_period;
+    }
     configuration.provider.enable_profiling = options.profile;
     configuration.runtime.log_level =
         options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
