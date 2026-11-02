@@ -218,7 +218,154 @@
     "readme_recipe": {
       "reset_interval": 128,
       "skip_thres": 0.15,
-      "status": "capture running at commit time"
+      "status": "captured",
+      "report_sha256": "7999a4920b486fa411328ffccb3320d8cce32513a302a7046a50f43ea9436fed",
+      "points": [
+        {
+          "sequence": "BasketballDrive_1920x1080_50",
+          "qp": 0,
+          "stream_sha256": "15d81f7eeaf83b41f897dca0c45a188a5152c3f77902b3172188847068edf0d6",
+          "ave_all_frame_bpp": 0.001168,
+          "ave_all_frame_psnr_y": 27.126933,
+          "bpp_change_vs_nvcr_recipe": -0.1335,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.076
+        },
+        {
+          "sequence": "BasketballDrive_1920x1080_50",
+          "qp": 21,
+          "stream_sha256": "31c363330606991ed1ff757a8f57087f376118d9c40d94a422594e75407941fe",
+          "ave_all_frame_bpp": 0.00459,
+          "ave_all_frame_psnr_y": 30.984283,
+          "bpp_change_vs_nvcr_recipe": -0.0803,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.057
+        },
+        {
+          "sequence": "BasketballDrive_1920x1080_50",
+          "qp": 42,
+          "stream_sha256": "0821764d9fd5f17b2f66fccbb58dd8b4a8a29083ef811d3249f35f42d68eb93c",
+          "ave_all_frame_bpp": 0.016241,
+          "ave_all_frame_psnr_y": 34.108562,
+          "bpp_change_vs_nvcr_recipe": -0.0501,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.014
+        },
+        {
+          "sequence": "BasketballDrive_1920x1080_50",
+          "qp": 63,
+          "stream_sha256": "b323679564af651cde0040239343cc1636ca378e1519c42c1b6081e4f41f35fa",
+          "ave_all_frame_bpp": 0.052792,
+          "ave_all_frame_psnr_y": 36.046768,
+          "bpp_change_vs_nvcr_recipe": -0.0233,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.051
+        },
+        {
+          "sequence": "Kimono_1920x1080_24",
+          "qp": 0,
+          "stream_sha256": "a6134f945f0a1b102574cac6b028d0181aeb2b4fb5ccb58a6945c7f85dc2e045",
+          "ave_all_frame_bpp": 0.000716,
+          "ave_all_frame_psnr_y": 28.928921,
+          "bpp_change_vs_nvcr_recipe": -0.1982,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.229
+        },
+        {
+          "sequence": "Kimono_1920x1080_24",
+          "qp": 21,
+          "stream_sha256": "1b01c032b2a1d3c356a1c6e8c3e1640ded7ebd630eaf3c088ccdbd5740a1b218",
+          "ave_all_frame_bpp": 0.003203,
+          "ave_all_frame_psnr_y": 32.922358,
+          "bpp_change_vs_nvcr_recipe": -0.1164,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.123
+        },
+        {
+          "sequence": "Kimono_1920x1080_24",
+          "qp": 42,
+          "stream_sha256": "02f2f7fd98a459e9ce382efeabe278d0c145a30d463f0b2ad6ba6dbd9e0da346",
+          "ave_all_frame_bpp": 0.01225,
+          "ave_all_frame_psnr_y": 36.75577,
+          "bpp_change_vs_nvcr_recipe": -0.0674,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.012
+        },
+        {
+          "sequence": "Kimono_1920x1080_24",
+          "qp": 63,
+          "stream_sha256": "2c7505611fe81b3f2967551ccab4e930eab0a34653807d88440af93efb053a21",
+          "ave_all_frame_bpp": 0.041198,
+          "ave_all_frame_psnr_y": 39.732509,
+          "bpp_change_vs_nvcr_recipe": -0.0303,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.052
+        },
+        {
+          "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+          "qp": 0,
+          "stream_sha256": "4567d14c4fa0830c67f01bca4bac85ee51068441c0a65eb6c74d288167181111",
+          "ave_all_frame_bpp": 0.000935,
+          "ave_all_frame_psnr_y": 29.251542,
+          "bpp_change_vs_nvcr_recipe": -0.1129,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.039
+        },
+        {
+          "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+          "qp": 21,
+          "stream_sha256": "114c00ebe10cd6ca95a261aa002c235b34180c24a44353bb3869971617261fbc",
+          "ave_all_frame_bpp": 0.0032,
+          "ave_all_frame_psnr_y": 33.750441,
+          "bpp_change_vs_nvcr_recipe": -0.0585,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.028
+        },
+        {
+          "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+          "qp": 42,
+          "stream_sha256": "23ec316bbb94de6a53fd903c1355910cdbd1a2bb6128c11d42a6e79f133993ad",
+          "ave_all_frame_bpp": 0.010732,
+          "ave_all_frame_psnr_y": 37.753193,
+          "bpp_change_vs_nvcr_recipe": -0.0331,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.053
+        },
+        {
+          "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+          "qp": 63,
+          "stream_sha256": "c64e1624e9bf1d1786d08162f4f5c8bae7f67a00a1ea248663dc4893e501e1b0",
+          "ave_all_frame_bpp": 0.034443,
+          "ave_all_frame_psnr_y": 41.043088,
+          "bpp_change_vs_nvcr_recipe": -0.0179,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.059
+        },
+        {
+          "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+          "qp": 0,
+          "stream_sha256": "2edb94aca4902f055f0dd1c42a2ae4743927d6751c58e6fbf09137ca782bebd8",
+          "ave_all_frame_bpp": 0.000311,
+          "ave_all_frame_psnr_y": 36.018648,
+          "bpp_change_vs_nvcr_recipe": -0.5582,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.367
+        },
+        {
+          "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+          "qp": 21,
+          "stream_sha256": "76b217eb2315befb6ea0a1d9d9d2e69cab1364f0e606b8a0d716b45041e7cd1e",
+          "ave_all_frame_bpp": 0.000739,
+          "ave_all_frame_psnr_y": 40.070096,
+          "bpp_change_vs_nvcr_recipe": -0.545,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.09
+        },
+        {
+          "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+          "qp": 42,
+          "stream_sha256": "34b249a04e38e1d76db21053af451ef2d23caf55e9876c4404015d1936418c88",
+          "ave_all_frame_bpp": 0.001921,
+          "ave_all_frame_psnr_y": 42.427287,
+          "bpp_change_vs_nvcr_recipe": -0.5229,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.061
+        },
+        {
+          "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+          "qp": 63,
+          "stream_sha256": "18da99e9188660dd0181f5c86f1a7e7723a20d2c4514e410bbdc0cdb360eb183",
+          "ave_all_frame_bpp": 0.005948,
+          "ave_all_frame_psnr_y": 43.407432,
+          "bpp_change_vs_nvcr_recipe": -0.4356,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.025
+        }
+      ]
     }
   },
   "stage_vectors": {

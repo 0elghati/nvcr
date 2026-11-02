@@ -84,10 +84,14 @@ G3's BD-rate uses upstream `compare_bd_rate.py` with its defaults
 (`--compare_between class`, `--distortion_metrics psnr`, the 6:1:1 weighted
 YUV PSNR), this reference as the anchor.
 
-A second capture with upstream's README recipe (`--reset_interval 128`,
-`--skip_thres 0.15`) was still running at commit time; NVCR cannot express
-that recipe yet (C7 remaining gate), so it is context for later, not a C8 gate
-input. It will be recorded when complete.
+Upstream's README recipe (`--reset_interval 128`, `--skip_thres 0.15`, same
+QPs and intra period) was captured with the same tool. Against the recipe above
+it spends fewer bits at nearly the same PSNR-Y on every point: 2-13% fewer on
+BasketballDrive, 3-20% on Kimono, 2-11% on Jockey and 44-56% on HoneyBee, with
+PSNR-Y changes between -0.23 and +0.37 dB. NVCR cannot express this recipe yet
+(C7 remaining gate), so it is not a C8 gate input. Faithfulness to Microsoft's
+published operating point does, however, require NVCR to support it; the
+reference is retained for that comparison.
 
 ## Reference 2: per-stage tensors (upstream PyTorch and fused)
 
