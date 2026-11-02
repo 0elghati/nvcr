@@ -223,6 +223,9 @@ public:
                 cuda.device_id = device_id_;
                 options.AppendExecutionProvider_CUDA(cuda);
             } else if (target_.runtime_name == "QNNExecutionProvider") {
+                // Every node must run on the HTP; a silent CPU fallback would
+                // misreport where the codec executes.
+                options.AddConfigEntry("session.disable_cpu_ep_fallback", "1");
                 options.AppendExecutionProvider("QNN", {{"backend_path", qnn_htp_backend}});
             }
             auto stage = std::make_shared<const OrtStage>(

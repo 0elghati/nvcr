@@ -289,7 +289,8 @@ Result<CodecEncodeResult> encode_intra(
          {"common_padded", &common_padded.value()}});
     if (!ran) return ran.error();
 
-    const auto spatial_count = static_cast<std::size_t>(y_height) * y_width;
+    const auto spatial_count =
+        static_cast<std::size_t>(y_height) * static_cast<std::size_t>(y_width);
     const auto prior_count = 256 * spatial_count;
     std::vector<Half> params(514 * spatial_count);
     std::vector<Half> common(prior_count);
@@ -450,7 +451,8 @@ Result<CodecDecodeResult> decode_intra(
          {"common_padded", &common_padded.value()}});
     if (!ran) return ran.error();
 
-    const auto spatial_count = static_cast<std::size_t>(y_height) * y_width;
+    const auto spatial_count =
+        static_cast<std::size_t>(y_height) * static_cast<std::size_t>(y_width);
     const auto prior_count = 256 * spatial_count;
     std::vector<Half> params(514 * spatial_count);
     std::vector<Half> common(prior_count);
@@ -582,7 +584,8 @@ Result<CodecEncodeResult> encode_predicted(
     const auto y_height4 = round_up(y_height, 4);
     const auto y_width4 = round_up(y_width, 4);
     const auto prior_shape = shape4d(128, y_height, y_width);
-    const auto prior_count = static_cast<std::size_t>(128) * y_height * y_width;
+    const auto prior_count =
+        128U * static_cast<std::size_t>(y_height) * static_cast<std::size_t>(y_width);
 
     auto q_feature = quant_tensor(session, orchestration.feature_quantization(), qp, 256);
     if (!q_feature) return q_feature.error();
@@ -761,7 +764,8 @@ Result<CodecDecodeResult> decode_predicted(
     const auto z_height = round_up(y_height, 4) / 4;
     const auto z_width = round_up(y_width, 4) / 4;
     const auto prior_shape = shape4d(128, y_height, y_width);
-    const auto prior_count = static_cast<std::size_t>(128) * y_height * y_width;
+    const auto prior_count =
+        128U * static_cast<std::size_t>(y_height) * static_cast<std::size_t>(y_width);
 
     auto q_feature = quant_tensor(
         session, orchestration.feature_quantization(), info.qp, 256);
@@ -784,7 +788,8 @@ Result<CodecDecodeResult> decode_predicted(
 
     auto stream_set = orchestration.begin_decode(info);
     if (!stream_set) return stream_set.error();
-    const auto per_channel = static_cast<std::size_t>(z_height) * z_width;
+    const auto per_channel =
+        static_cast<std::size_t>(z_height) * static_cast<std::size_t>(z_width);
     auto z_values = orchestration.decode_z(128 * per_channel, info.qp, per_channel);
     if (!z_values) return z_values.error();
     auto z = allocate_tensor(session, dims(128, z_height, z_width));

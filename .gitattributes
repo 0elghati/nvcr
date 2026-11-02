@@ -1,1 +1,2 @@
 *.json text eol=lf
+scripts/measurement_android_qnn.sh text eol=lf
