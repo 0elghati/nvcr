@@ -45,6 +45,7 @@ if(NVCR_ENABLE_ONNXRUNTIME)
 endif()
 
 add_subdirectory(third_party/dcvc_rans)
+add_subdirectory(third_party/msrtc_rans)
 
 # ---------------------------------------------------------------------------
 # Module-boundary interface targets
@@ -94,6 +95,7 @@ target_sources(
         src/codec/sequence_state.cpp
         src/codec/runtime.cpp
         src/common/error.cpp
+        src/common/json.cpp
         src/common/sha256.cpp
         src/configuration/configuration.cpp
         src/dcvcrt/adapter.cpp
@@ -106,12 +108,19 @@ target_sources(
         src/dcvcrt/session.cpp
         src/logging/logger.cpp
         src/memory/memory_pool.cpp
+        src/mlvc/bundle.cpp
+        src/mlvc/entropy.cpp
+        src/mlvc/host_ops.cpp
+        src/mlvc/record.cpp
+        src/mlvc/registration.cpp
+        src/mlvc/session.cpp
         src/runtime/frame.cpp
         src/runtime/packet.cpp
         src/runtime/registry.cpp
         src/runtime/runtime.cpp
         src/statistics/statistics.cpp
-        $<TARGET_OBJECTS:nvcr_dcvc_rans>)
+        $<TARGET_OBJECTS:nvcr_dcvc_rans>
+        $<TARGET_OBJECTS:nvcr_msrtc_rans>)
 
 target_include_directories(
     nvcr
@@ -121,6 +130,8 @@ target_include_directories(
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 target_include_directories(
     nvcr SYSTEM PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dcvc_rans/src")
+target_include_directories(
+    nvcr SYSTEM PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/msrtc_rans/include")
 
 target_compile_features(nvcr PUBLIC cxx_std_20)
 target_link_libraries(nvcr PRIVATE Threads::Threads)
