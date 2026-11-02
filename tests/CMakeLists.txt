@@ -7,6 +7,9 @@ if(Python3_Interpreter_FOUND)
         NAME nvcr_dcvcuf_reference_capture
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/dcvcuf_reference_capture_tests.py")
     add_test(
+        NAME nvcr_dcvcuf_tensorrt_stages
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/dcvcuf_tensorrt_stage_tests.py")
+    add_test(
         NAME nvcr_dcvcuf_architecture_boundary
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/dcvcuf_architecture_tests.py")
     add_test(
@@ -173,6 +176,13 @@ if(NVCR_ENABLE_TENSORRT)
     target_link_libraries(
         nvcr_tensorrt_session_tests PRIVATE NVCR::nvcr CUDA::cudart TensorRT::TensorRT)
     nvcr_set_project_warnings(nvcr_tensorrt_session_tests)
+
+    # Offline per-stage conformance runner (used by C8 DCVC-UF stage checks).
+    add_executable(nvcr_tensorrt_stage_runner tensorrt_stage_runner.cpp)
+    target_include_directories(nvcr_tensorrt_stage_runner PRIVATE "${PROJECT_SOURCE_DIR}/src")
+    target_link_libraries(
+        nvcr_tensorrt_stage_runner PRIVATE NVCR::nvcr CUDA::cudart TensorRT::TensorRT)
+    nvcr_set_project_warnings(nvcr_tensorrt_stage_runner)
 
     add_executable(nvcr_tensorrt_roundtrip_tests tensorrt_roundtrip_tests.cpp)
     target_link_libraries(nvcr_tensorrt_roundtrip_tests PRIVATE NVCR::nvcr)

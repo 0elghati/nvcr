@@ -181,7 +181,76 @@ duplicate loads, execution before finalize, a second finalize and loading after
 finalize, then executes the stage. Not yet covered by a test: a bundle with an
 extra or missing file, which DCVC-RT still rejects with its exact-set check.
 
+## Phase 2: per-stage ONNX and TensorRT export
+
+`scripts/backends/dcvcuf/tensorrt_stages.py` defines 20 stages (7 image, 13
+HT-S) built from pinned upstream modules in the order upstream's inference path
+composes them. Glue stays outside, where the fused path has it: the HT-S
+hyper-decoder output is cropped before the prior stage fuses it with the
+temporal prior; the image prior stage returns fusion and reduction outputs at
+the padded latent size (the reduction is 1x1, so cropping both is exact); the
+reconstruction head is unclamped, as upstream's PyTorch head.
+
+`export_tensorrt_stages.py` exports FP32 ONNX (opset 17, dynamic H and W),
+checks each graph on ONNX Runtime CPU against the PyTorch stage at 256x256 and
+128x192 frames, and builds TensorRT 10.9 plans with DCVC-RT's recipe (`--fp16`,
+builder optimization level 2, 1 GiB workspace, timing cache, dynamic 1080p
+profile with 64x64 minimum) plus explicit FP16 I/O formats. DCVC-RT gets FP16
+I/O by exporting FP16 ONNX instead; this is the one recipe difference. It
+writes an `nvcr.engine-bundle.v2` manifest (`dcvcuf-cvpr2026-hts`, 20 plans plus
+`stages.json`, 307 MiB), which NVCR's generic TensorRT session accepts.
+
+All 20 ONNX graphs match PyTorch FP32 within 2.8e-06 of each output's peak.
+
+`check_tensorrt_stages.py` maps the 41 recorded upstream calls of the crop
+vector (one I frame, three HT-S groups including the reset) onto the stages,
+feeds each plan the recorded FP32 inputs rounded to FP16 through
+`nvcr_tensorrt_stage_runner` (NVCR's generic session, generic descriptors), and
+compares with the FP32 outputs. The same FP16 inputs also run through upstream's
+own PyTorch stage in its FP16 channels-last configuration:
+
+| Stage | Cases | TensorRT/upstream FP16 mean error | max error |
+|---|---:|---|---|
+| `i_encoder` | 1 | 3.08-3.08x | 6.39-6.39x |
+| `i_hyper_encoder` | 1 | 2.05-2.05x | 1.86-1.86x |
+| `i_hyper_decoder` | 2 | 2.20-2.21x | 2.39-2.88x |
+| `i_spatial_prior_1` | 1 | 2.26-2.26x | 1.91-1.91x |
+| `i_spatial_prior_2` | 1 | 2.30-2.30x | 1.88-1.88x |
+| `i_spatial_prior_3` | 1 | 2.36-2.36x | 2.73-2.73x |
+| `i_decoder` | 1 | 1.59-1.59x | 2.29-2.29x |
+| `p_feature_adaptor_i` | 2 | 2.16-2.20x | 1.60-2.20x |
+| `p_feature_adaptor_m` | 1 | 2.72-2.72x | 1.95-1.95x |
+| `p_feature_extractor` | 3 | 2.20-2.30x | 1.30-1.53x |
+| `p_encoder` | 3 | 4.55-4.64x | 9.02-11.24x |
+| `p_hyper_encoder` | 3 | 2.39-2.52x | 1.57-6.44x |
+| `p_hyper_decoder` | 3 | 1.67-1.69x | 1.15-1.71x |
+| `p_prior` | 6 | 2.53-3.36x | 3.53-6.17x |
+| `p_spatial_prior_1` | 3 | 2.55-2.59x | 2.25-3.52x |
+| `p_spatial_prior_2` | 3 | 2.56-2.59x | 2.18-3.67x |
+| `p_spatial_prior_3` | 3 | 2.60-2.64x | 2.99-7.49x |
+| `p_decoder` | 3 | 2.32-2.73x | 1.77-3.34x |
+| `p_reconstruction` | 3 | 1.73-1.75x | 1.73-2.17x |
+| `p_reset` | 1 | 2.02-2.02x | 1.77-1.77x |
+
+All plans load through generic descriptors, resolve the expected shapes and
+produce finite outputs. TensorRT FP16 error is consistently 1.6-3x upstream
+PyTorch FP16 error, and 3-4.7x on the two encoders, whose outputs reach the
+hundreds. A diagnostic build with FP32 layers (FP16 I/O) brings the encoders and
+HT-S prior to 0.3-0.6x, so the gap is TensorRT's FP16 kernels; builder
+optimization level 5 does not change it. FP32 costs 2.3-2.6x on those stages at
+1080p (image encoder 17.0 to 38.5 ms, HT-S encoder 13.4 to 31.2 ms, HT-S prior
+5.9 to 15.4 ms per call).
+
+PyTorch FP16 is a stricter band than upstream's deployed path: the C7 diagnostic
+found the fused CUTLASS first convolution at about 6x PyTorch FP16 error against
+an FP64 oracle (mean 0.00194 vs 0.00033), while fused and PyTorch sequence
+quality agree (32.69 vs 32.73 dB mean PSNR-Y on the crop vector). The per-stage
+ratios are therefore an early warning, not a gate. The plans stay FP16; the
+sequence-level gates in phase 4 decide, with FP32 for named stages as the
+recorded fallback if G3 fails.
+
 ## Next
 
-Phase 2: per-stage ONNX/TensorRT export of the DCVC-UF stages, checked in
-isolation against the stored reference tensors.
+Phase 3: codec-local CUDA glue (masks, masked quantization following the fused
+`y / clamp_min(q_dec)` form, skip-aware entropy indexes, crops, pixel shuffles),
+checked against upstream's kernels.

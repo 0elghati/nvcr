@@ -1,7 +1,7 @@
 {
   "schema": "nvcr.evidence.phase-c8.v1",
   "date": "2026-11-02",
-  "phase": 1,
+  "phase": 2,
   "status": "complete",
   "upstream": {
     "repository": "https://github.com/microsoft/DCVC",
@@ -469,5 +469,318 @@
     "provider_limits": [
       "rank-4 FP16 tensors"
     ]
+  },
+  "phase_2_stage_export": {
+    "status": "complete",
+    "stages": {
+      "i_encoder": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          3.081,
+          3.081
+        ],
+        "max_error_ratio": [
+          6.386,
+          6.386
+        ],
+        "onnx_worst_error_to_peak": 2.777056739048933e-06,
+        "plan_sha256": "d46e115bcf6ff2fb88f0b22ec407d38beca9b649c572c52d85fa44de8f567fbf"
+      },
+      "i_hyper_encoder": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          2.053,
+          2.053
+        ],
+        "max_error_ratio": [
+          1.862,
+          1.862
+        ],
+        "onnx_worst_error_to_peak": 1.7845919293751861e-06,
+        "plan_sha256": "d444de985ae48d4c177e51f044838d108715ffd5217984549186b74d55c3c073"
+      },
+      "i_hyper_decoder": {
+        "outputs_checked": 2,
+        "mean_error_ratio": [
+          2.199,
+          2.214
+        ],
+        "max_error_ratio": [
+          2.394,
+          2.885
+        ],
+        "onnx_worst_error_to_peak": 1.1153884627974506e-06,
+        "plan_sha256": "cc6b0a8631445982fbaa63b6386cb5885d2e89c31737ec1a78a9868aefe0db3e"
+      },
+      "i_spatial_prior_1": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          2.26,
+          2.26
+        ],
+        "max_error_ratio": [
+          1.915,
+          1.915
+        ],
+        "onnx_worst_error_to_peak": 9.092036677467368e-07,
+        "plan_sha256": "15efacd20b33be5849a9d40827f8bd126b3d0310b7b8f9e8bca32a5c4a38f446"
+      },
+      "i_spatial_prior_2": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          2.297,
+          2.297
+        ],
+        "max_error_ratio": [
+          1.875,
+          1.875
+        ],
+        "onnx_worst_error_to_peak": 5.449874911746088e-07,
+        "plan_sha256": "edeb6c4a445567a14ef62a1c4ec33c966f76500c67fc3f5097ac6a9997f8cf86"
+      },
+      "i_spatial_prior_3": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          2.356,
+          2.356
+        ],
+        "max_error_ratio": [
+          2.733,
+          2.733
+        ],
+        "onnx_worst_error_to_peak": 7.428794028079384e-07,
+        "plan_sha256": "12f77f20ae10c27e416858d4588a6ac0105c4402c58e61cd281f6950e117cb78"
+      },
+      "i_decoder": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          1.586,
+          1.586
+        ],
+        "max_error_ratio": [
+          2.289,
+          2.289
+        ],
+        "onnx_worst_error_to_peak": 1.3836639782540366e-06,
+        "plan_sha256": "556ac51397a79e3ffc9199d4b76894e194404892900d0db3bc195b633fc4c0e0"
+      },
+      "p_feature_adaptor_i": {
+        "outputs_checked": 2,
+        "mean_error_ratio": [
+          2.162,
+          2.196
+        ],
+        "max_error_ratio": [
+          1.597,
+          2.204
+        ],
+        "onnx_worst_error_to_peak": 3.5051318635614405e-07,
+        "plan_sha256": "8c285ff8e3a51eb0fc8e7176db678e309fa1a026ff6113987cbdf7ea1f781a87"
+      },
+      "p_feature_adaptor_m": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          2.717,
+          2.717
+        ],
+        "max_error_ratio": [
+          1.954,
+          1.954
+        ],
+        "onnx_worst_error_to_peak": 7.911240674325387e-07,
+        "plan_sha256": "d5dcbaae70886682f6a06657f53d6064d79682695518b9a6f59b4c5cbfc62aa8"
+      },
+      "p_feature_extractor": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          2.195,
+          2.297
+        ],
+        "max_error_ratio": [
+          1.296,
+          1.53
+        ],
+        "onnx_worst_error_to_peak": 5.159444609865156e-07,
+        "plan_sha256": "e9c467958a571a638ae1cdcca5f134d4aba3c92fb4110edf29c91074fb5c47bb"
+      },
+      "p_encoder": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          4.549,
+          4.644
+        ],
+        "max_error_ratio": [
+          9.022,
+          11.238
+        ],
+        "onnx_worst_error_to_peak": 2.0266219593862427e-06,
+        "plan_sha256": "0a27c6611cd2ab5178e818545d7cf82fd318727eaf450ad884f6555e9abffc86"
+      },
+      "p_hyper_encoder": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          2.393,
+          2.525
+        ],
+        "max_error_ratio": [
+          1.57,
+          6.438
+        ],
+        "onnx_worst_error_to_peak": 1.1805351847650896e-06,
+        "plan_sha256": "a2ee24360888a52148bf272683cfb2e1a83bfa1d63aea99001c777dfae6d57a1"
+      },
+      "p_hyper_decoder": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          1.668,
+          1.689
+        ],
+        "max_error_ratio": [
+          1.152,
+          1.707
+        ],
+        "onnx_worst_error_to_peak": 8.899871990174542e-07,
+        "plan_sha256": "da0464cd54b962859cb7d92b8acc39fe527ea0480571a497a1359dfc95c6c156"
+      },
+      "p_prior": {
+        "outputs_checked": 6,
+        "mean_error_ratio": [
+          2.527,
+          3.364
+        ],
+        "max_error_ratio": [
+          3.527,
+          6.171
+        ],
+        "onnx_worst_error_to_peak": 1.5184211184941284e-06,
+        "plan_sha256": "a4e1b60fb37e2152e26033576718a3e4db00a4df6aac2f69b61d21c5b6dac9fb"
+      },
+      "p_spatial_prior_1": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          2.551,
+          2.592
+        ],
+        "max_error_ratio": [
+          2.25,
+          3.522
+        ],
+        "onnx_worst_error_to_peak": 6.912185293963721e-07,
+        "plan_sha256": "17d70ce8beaf2966a8ee261d9f178ccf141c3bf99064822760bfd302c39f19cf"
+      },
+      "p_spatial_prior_2": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          2.556,
+          2.593
+        ],
+        "max_error_ratio": [
+          2.18,
+          3.673
+        ],
+        "onnx_worst_error_to_peak": 4.553517583226007e-07,
+        "plan_sha256": "03289d6f6dd6d19eb05231aa030f3c469662e96e2246d983901f06dc817a0cf4"
+      },
+      "p_spatial_prior_3": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          2.602,
+          2.642
+        ],
+        "max_error_ratio": [
+          2.992,
+          7.492
+        ],
+        "onnx_worst_error_to_peak": 4.6371388881596297e-07,
+        "plan_sha256": "91243b7a85e69d7de20b8b6ddb41a9cb86864ca01d7964240f9a6b15e1ce2897"
+      },
+      "p_decoder": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          2.32,
+          2.733
+        ],
+        "max_error_ratio": [
+          1.77,
+          3.341
+        ],
+        "onnx_worst_error_to_peak": 4.277783275521469e-07,
+        "plan_sha256": "0d44ccf365304d807d83ac3a4da6c268b070baa05fbb09876aabf6a04024a405"
+      },
+      "p_reconstruction": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          1.729,
+          1.753
+        ],
+        "max_error_ratio": [
+          1.73,
+          2.173
+        ],
+        "onnx_worst_error_to_peak": 2.4782263036957292e-06,
+        "plan_sha256": "6825482817ec970bd72369665c9714a00ef550bd779ec6b26999f0c9424c31e3"
+      },
+      "p_reset": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          2.02,
+          2.02
+        ],
+        "max_error_ratio": [
+          1.766,
+          1.766
+        ],
+        "onnx_worst_error_to_peak": 1.6487866814352272e-06,
+        "plan_sha256": "fd24fc90a67a27e31657517f6294618b4c13d9db4a384589d0613d80be81f2e8"
+      }
+    },
+    "bundle_manifest_sha256": "5f79c9429830d9e93d7a2ec871024b7e30f2db6b8de01a2721747c68f18fbdf8",
+    "export_report_sha256": "f79707cb99edbccc03e89ae8c2bd6b61ff17d3f5f8a1887537b2997b4086aac3",
+    "check_report_sha256": "072c0c8ba8cf4fc58dd6fff43710a7ea114c43e9fc1a92f863997a8a42102a26",
+    "build": {
+      "tensorrt": "10.9.0",
+      "flags": "--fp16 --builderOptimizationLevel=2 --memPoolSize=workspace:1024 FP16 I/O",
+      "profile": {
+        "name": "1080p",
+        "frame_min": [
+          64,
+          64
+        ],
+        "frame_opt": [
+          1088,
+          1920
+        ],
+        "frame_max": [
+          1088,
+          1920
+        ]
+      }
+    },
+    "fp32_layer_diagnostic": {
+      "stages": [
+        "i_encoder",
+        "p_encoder",
+        "p_prior"
+      ],
+      "error_ratio_vs_upstream_fp16": [
+        0.34,
+        1.06
+      ],
+      "time_1080p_ms": {
+        "i_encoder": [
+          16.98,
+          38.51
+        ],
+        "p_encoder": [
+          13.36,
+          31.21
+        ],
+        "p_prior": [
+          5.93,
+          15.36
+        ]
+      }
+    },
+    "band_note": "upstream PyTorch FP16 is stricter than upstream fused CUTLASS FP16 (C7: about 6x on the first convolution); per-stage ratios are diagnostic, sequence gates decide"
   }
 }
