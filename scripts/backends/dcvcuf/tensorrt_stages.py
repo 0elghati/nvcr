@@ -9,8 +9,12 @@ pixel conversion) stays outside the stages, where the fused path also has it:
   1x1 convolution, so it commutes with the crop);
 - the HT-S hyper-decoder output is cropped in glue to the temporal prior's size
   before the prior stage fuses them, as in the fused path;
-- the reconstruction head stays unclamped, as upstream's PyTorch head; the
-  fused path clamps frames for display.
+- the image decoder and the HT-S reconstruction head end before their final
+  8x pixel shuffle, where the fused path ends its networks; glue applies
+  upstream's pixel_shuffle_8 with its [-0.5, 0.5] clamp. The fused path uses
+  the clamped I frame for the HT-S reference feature;
+- the reset head (frame branch 7) stays a separate stage, used identically by
+  encoder and decoder, as the fused decoder's forward_reset.
 """
 
 from __future__ import annotations
@@ -56,7 +60,7 @@ STAGES = {
         [("scales_means", 512, "latent")]),
     "i_decoder": (
         [("y_hat", 256, "latent"), ("q_dec", 384, "scalar")],
-        [("frame_hat", 3, "frame")]),
+        [("frame_pre_shuffle", 192, "feature")]),
     "p_feature_adaptor_i": (
         [("feature", 192, "feature")],
         [("memory", 512, "feature")]),
@@ -93,11 +97,17 @@ STAGES = {
         [("feature", 512, "feature")]),
     "p_reconstruction": (
         [("feature", 512, "feature")],
-        [("frames", 24, "frame")]),
+        [(f"frame_{index}_pre_shuffle", 192, "feature") for index in range(8)]),
     "p_reset": (
         [("feature", 512, "feature")],
         [("reset_feature", 192, "feature")]),
 }
+
+
+def tensor_format(channels):
+    """TensorRT I/O format: hwc8 (NHWC when C % 8 == 0, upstream's channels-last
+    layout and the glue kernels' layout) except for 3-channel frames."""
+    return "hwc8" if channels % 8 == 0 else "chw"
 
 
 def axis_size(frame_size, axis):
@@ -146,6 +156,16 @@ def modules(image, video):
         params = image.y_prior_fusion(image.hyper_dec(z_hat))
         return params, image.y_spatial_prior_reduction(params)
 
+    def reconstruction_pre_shuffle(feature):
+        # upstream ReconHead.internal_forward (HT-S) without the pixel shuffle
+        head = video.recon_head
+        outputs = []
+        for index in range(8):
+            if index % 2 == 0:
+                common = head.conv1[index // 2](feature)
+            outputs.append(head.conv2[index](common))
+        return tuple(outputs)
+
     def video_prior_params(hyper_params, memory, q_feature):
         params = video.y_prior_fusion(
             hyper_params, video.temporal_prior_encoder(memory, q_feature))
@@ -158,7 +178,8 @@ def modules(image, video):
         "i_spatial_prior_1": (image_prior(image.y_spatial_prior_adaptor_1), image),
         "i_spatial_prior_2": (image_prior(image.y_spatial_prior_adaptor_2), image),
         "i_spatial_prior_3": (image_prior(image.y_spatial_prior_adaptor_3), image),
-        "i_decoder": (lambda y_hat, q_dec: image.dec(y_hat, q_dec), image),
+        "i_decoder": (lambda y_hat, q_dec: image.dec.dec_2(image.dec.dec_1(y_hat) * q_dec),
+                      image),
         "p_feature_adaptor_i": (lambda feature: video.feature_adaptor_i(feature), video),
         "p_feature_adaptor_m": (
             lambda memory, feature: video.feature_adaptor_m(memory, feature), video),
@@ -173,8 +194,7 @@ def modules(image, video):
         "p_spatial_prior_3": (video_prior(video.y_spatial_prior_adaptor_3), video),
         "p_decoder": (
             lambda y_hat, context, q: video.decoder(y_hat, context, q), video),
-        "p_reconstruction": (
-            lambda feature: torch.cat(video.recon_head(feature), dim=1), video),
+        "p_reconstruction": (reconstruction_pre_shuffle, video),
         "p_reset": (lambda feature: video.recon_head(feature, for_reset=True), video),
     }
     return {name: Stage(function, owner).eval()

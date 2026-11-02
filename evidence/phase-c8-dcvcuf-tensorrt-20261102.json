@@ -1,7 +1,7 @@
 {
   "schema": "nvcr.evidence.phase-c8.v1",
   "date": "2026-11-02",
-  "phase": 2,
+  "phase": 3,
   "status": "complete",
   "upstream": {
     "repository": "https://github.com/microsoft/DCVC",
@@ -782,5 +782,60 @@
       }
     },
     "band_note": "upstream PyTorch FP16 is stricter than upstream fused CUTLASS FP16 (C7: about 6x on the first convolution); per-stage ratios are diagnostic, sequence gates decide"
+  },
+  "phase_3_glue": {
+    "status": "complete",
+    "kernels": 25,
+    "parity_checks": 219,
+    "bit_identical": true,
+    "fault_injection": {
+      "SCALE_MAX_16_to_15_failures": 18,
+      "subtraction_round_toward_zero_failures": 82
+    },
+    "compile_flags": "-O3 --use_fast_math --extra-device-vectorization --expt-relaxed-constexpr; __CUDA_NO_HALF_OPERATORS__ __CUDA_NO_HALF_CONVERSIONS__ __CUDA_NO_BFLOAT16_CONVERSIONS__ __CUDA_NO_HALF2_OPERATORS__",
+    "glue_kernels_inc_sha256": "107ee4de250d5bac4c1b9b5a1df71d9c921b75fc555231b042daaa144b3277b5",
+    "stage_layout": "hwc8 for C % 8 == 0, chw for 3-channel frames",
+    "decoder_stage_ends": "before pixel_shuffle_8; glue clamps as the fused path",
+    "builder_optimization_level": 5,
+    "stage_error_ratio_vs_upstream_fp16": [
+      1.423,
+      4.648
+    ],
+    "bundle_manifest_sha256": "da7ebbaa5dc2bb14a0cfc7727e4f6fec036a688a43e387c3e41362c87867c7b9",
+    "timing_1080p_median_ms": {
+      "stages": {
+        "i_encoder": 11.5128,
+        "i_hyper_encoder": 0.163834,
+        "i_hyper_decoder": 1.93434,
+        "i_spatial_prior_1": 2.15347,
+        "i_spatial_prior_2": 2.15807,
+        "i_spatial_prior_3": 2.1545,
+        "i_decoder": 21.7718,
+        "p_feature_adaptor_i": 5.8665,
+        "p_feature_adaptor_m": 9.30661,
+        "p_feature_extractor": 7.20691,
+        "p_encoder": 10.1571,
+        "p_hyper_encoder": 0.278534,
+        "p_hyper_decoder": 0.439301,
+        "p_prior": 4.03404,
+        "p_spatial_prior_1": 2.13197,
+        "p_spatial_prior_2": 2.12838,
+        "p_spatial_prior_3": 2.13196,
+        "p_decoder": 10.8119,
+        "p_reconstruction": 34.3184,
+        "p_reset": 5.08621
+      },
+      "pipelines": {
+        "intra_encode": 41.849,
+        "intra_decode": 30.172,
+        "group_encode": 48.627,
+        "group_decode": 72.509
+      }
+    },
+    "upstream_fused_1080p_ms": {
+      "group_encode": 31.7,
+      "group_decode": 43.6,
+      "scope": "test_video.py CUDA-event timer: model, glue and entropy"
+    }
   }
 }

@@ -26,6 +26,36 @@ try:
 except ImportError:  # pragma: no cover
     numpy = None
 
+ROOT = Path(__file__).resolve().parents[1]
+GLUE = ROOT / "src/dcvcuf/backend/tensorrt"
+REFERENCE = ROOT / "assets/dcvc-uf-reference"
+
+
+class GluePortTests(unittest.TestCase):
+    def test_generated_kernels_carry_provenance_and_no_libtorch(self):
+        text = (GLUE / "glue_kernels.inc").read_text(encoding="utf-8")
+        port = load("port_glue_kernels")
+        self.assertIn(port.PINNED_REFERENCE_COMMIT, text)
+        code = "\n".join(line for line in text.splitlines() if not line.startswith("//"))
+        self.assertNotIn("at::", code)
+        self.assertNotIn("torch", code)
+
+    def test_every_ported_kernel_has_a_launcher(self):
+        import re
+
+        kernels = set(re.findall(r"__global__ void (\w+)\(",
+                                 (GLUE / "glue_kernels.inc").read_text(encoding="utf-8")))
+        launchers = (GLUE / "glue.cu").read_text(encoding="utf-8")
+        self.assertGreaterEqual(len(kernels), 25)
+        for kernel in sorted(kernels):
+            with self.subTest(kernel=kernel):
+                self.assertRegex(launchers, rf"\b{kernel}\b(<[^>]*>)?\s*<<<|\b{kernel}<")
+
+    @unittest.skipUnless((REFERENCE / ".git").exists(), "pinned upstream checkout not present")
+    def test_generated_kernels_match_pinned_upstream(self):
+        port = load("port_glue_kernels")
+        self.assertEqual(port.main(["--reference-root", str(REFERENCE), "--check"]), 0)
+
 
 class StageTableTests(unittest.TestCase):
     def test_tensor_names_are_unique_and_axes_known(self):
@@ -106,7 +136,19 @@ class CheckerMappingTests(unittest.TestCase):
         self.assertEqual(image_prior["inputs"]["y_hat"].shape[1], 256)
         self.assertEqual(image_prior["inputs"]["common"].shape[1], 256)
         frames = next(case for case in cases if case["stage"] == "p_reconstruction")
-        self.assertEqual(frames["outputs"]["frames"].shape[1], 24)
+        self.assertEqual(len(frames["outputs"]), 8)
+        self.assertEqual(frames["outputs"]["frame_7_pre_shuffle"].shape[1:], (192, 8, 8))
+
+    def test_pre_shuffle_reference_inverts_the_8x_shuffle(self):
+        frame = numpy.arange(3 * 16 * 24, dtype=numpy.float32).reshape(1, 3, 16, 24)
+        packed = check.pixel_unshuffle_8(frame)
+        self.assertEqual(packed.shape, (1, 192, 2, 3))
+        # torch.pixel_unshuffle order: channel c*64 + i*8 + j holds pixel (8h+i, 8w+j)
+        self.assertEqual(packed[0, 1 * 64 + 2 * 8 + 5, 1, 2], frame[0, 1, 8 + 2, 16 + 5])
+
+    def test_tensor_formats_follow_channel_counts(self):
+        self.assertEqual(stages.tensor_format(3), "chw")
+        self.assertEqual(stages.tensor_format(192), "hwc8")
 
     def test_unknown_upstream_calls_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "unmapped"):

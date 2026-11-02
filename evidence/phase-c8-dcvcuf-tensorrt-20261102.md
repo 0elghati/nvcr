@@ -249,8 +249,100 @@ ratios are therefore an early warning, not a gate. The plans stay FP16; the
 sequence-level gates in phase 4 decide, with FP32 for named stages as the
 recorded fallback if G3 fails.
 
+## Phase 3: glue kernels and stage boundaries
+
+### Glue port, bit-identical to upstream
+
+`scripts/backends/dcvcuf/port_glue_kernels.py` copies every `__global__` and
+`__device__` function from pinned upstream `elementwise/stream.cu`,
+`cat_and_pad.cu` and `shuffle.cu` into
+`src/dcvcuf/backend/tensorrt/glue_kernels.inc` (25 kernels and one helper),
+renaming only `at::Half` to `Half`; `--check` and a CTest case verify the
+committed file regenerates from the pinned checkout. `glue_types.cuh`
+reproduces what the kernels take from libtorch and upstream headers: a `Half`
+with c10::Half's device semantics (round-to-nearest conversions, each
+`Half op Half` in float, `Half op float` yielding float), an accessor with
+`PackedTensorAccessor32` indexing, and upstream's `load2`/`store2`, intrinsic
+wrappers and constants. `glue.cu` replaces upstream's `at::Tensor` wrappers with
+libtorch-free launchers using the same instantiations, launch shapes and
+dispatch. The kernels compile with upstream's flags: `-O3 --use_fast_math
+--extra-device-vectorization` from its `setup.py` and torch's
+`COMMON_NVCC_FLAGS` (`__CUDA_NO_HALF*` macros, `--expt-relaxed-constexpr`). The
+macros are part of the arithmetic: they disable native `__half` operators, so
+comparisons and operations go through float as upstream's do. The target builds
+warning-free in the native (CUDA 12.6) and TensorRT (CUDA 12.8) configurations.
+
+`tests/dcvcuf_glue_parity_tests.cpp` (native DCVC-UF build) runs the compiled
+upstream kernels and the port on identical channels-last inputs: all 65,536
+FP16 patterns through `round_z` and scale-to-index, plus random, exact `.5`
+boundary, tiny and large values on four latent shapes, both skip thresholds,
+odd sizes, in-place variants and all shuffle/pad/crop paths. All 219 checks are
+bit-identical. Injected faults are detected: `SCALE_MAX` 16 to 15 fails 18
+checks; round-toward-zero subtraction fails 82.
+
+### Stage boundaries now follow the fused path
+
+- Latent and feature tensors bind as TensorRT `hwc8`, which is NHWC for
+  `C % 8 == 0`: upstream's channels-last layout. The glue kernels then run
+  verbatim, including their paired-channel loads, and flat kernels such as
+  `round_z` read hyper-latent symbols in upstream's HWC stream order. Only the
+  3-channel frame input stays CHW. Accuracy and speed are unchanged by the
+  layout (error ratios within 2.6%, stage times within 3%).
+- The image decoder and HT-S reconstruction head end before their final 8x
+  pixel shuffle, as the fused networks do; glue applies upstream's
+  `pixel_shuffle_8` with its [-0.5, 0.5] clamp. The fused path builds the HT-S
+  reference feature from this clamped I frame, which upstream's PyTorch head
+  does not clamp. The reset head stays a separate stage used identically on
+  both sides, as the fused decoder's `forward_reset`.
+- Plans build at TensorRT builder optimization level 5 instead of DCVC-RT's 2.
+  At 1080p this cuts the reconstruction head from 55 to 34 ms, the image
+  decoder from 33 to 22 ms, the image encoder from 17 to 12 ms and the HT-S
+  encoder from 14 to 10 ms; a fixed-shape profile gains only 2 ms more on the
+  reconstruction head. Isolated accuracy is unchanged: mean error
+  1.42-4.65x upstream PyTorch FP16, all outputs finite.
+
+### Model-only speed against upstream (RTX 4070, 1080p, median of 50)
+
+| Stage | ms |
+|---|---:|
+| `p_reconstruction` | 34.32 |
+| `i_decoder` | 21.77 |
+| `i_encoder` | 11.51 |
+| `p_decoder` | 10.81 |
+| `p_encoder` | 10.16 |
+| `p_feature_adaptor_m` | 9.31 |
+| `p_feature_extractor` | 7.21 |
+| `p_feature_adaptor_i` | 5.87 |
+| `p_reset` | 5.09 |
+| `p_prior` | 4.03 |
+| `i_spatial_prior_2` | 2.16 |
+| `i_spatial_prior_3` | 2.15 |
+| `i_spatial_prior_1` | 2.15 |
+| `p_spatial_prior_1` | 2.13 |
+| `p_spatial_prior_3` | 2.13 |
+| `p_spatial_prior_2` | 2.13 |
+| `i_hyper_decoder` | 1.93 |
+| `p_hyper_decoder` | 0.44 |
+| `p_hyper_encoder` | 0.28 |
+| `i_hyper_encoder` | 0.16 |
+
+| Operation | TensorRT FP16 stages | Upstream fused, whole operation (test_video.py timer) |
+|---|---:|---:|
+| I frame encode | 41.8 ms | - |
+| I frame decode | 30.2 ms | - |
+| 8-frame group encode | 48.6 ms | 31.7 ms |
+| 8-frame group decode | 72.5 ms | 43.6 ms |
+
+The TensorRT figures exclude glue, entropy coding and copies; upstream's
+include its model, glue and entropy coding. On this GPU TensorRT FP16 is
+therefore at least 1.5x slower than upstream's fused CUTLASS kernels for a
+group encode and 1.7x for a group decode, before glue and entropy are added.
+Upstream tunes those kernels for 2080 Ti, 4090, A100, H100 and B200. TensorRT
+FP16 is not the faster mode here; its value is a single provider and
+portability to targets without upstream's CUTLASS build.
+
 ## Next
 
-Phase 3: codec-local CUDA glue (masks, masked quantization following the fused
-`y / clamp_min(q_dec)` form, skip-aware entropy indexes, crops, pixel shuffles),
-checked against upstream's kernels.
+Phase 4: the DCVC-UF TensorRT execution path (stage sequencing, glue, entropy,
+lifecycle) behind a codec-agnostic execution-mode choice, with fused CUDA as
+the default, then the sequence gates and speed.

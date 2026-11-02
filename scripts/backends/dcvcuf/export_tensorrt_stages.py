@@ -174,6 +174,11 @@ def shape_arguments(stage):
     return {key: ",".join(values) for key, values in shapes.items()}
 
 
+def io_formats(tensors):
+    return ",".join(f"fp16:{tensorrt_stages.tensor_format(channels)}"
+                    for _name, channels, _axis in tensors)
+
+
 def build_engine(args, stage, onnx_path, bundle, timing_cache):
     shapes = shape_arguments(stage)
     command = [
@@ -182,9 +187,9 @@ def build_engine(args, stage, onnx_path, bundle, timing_cache):
         f"--maxShapes={shapes['max']}",
         # NVCR's TensorRT session binds FP16 tensors. DCVC-RT gets FP16 I/O by
         # exporting FP16 ONNX; these graphs stay FP32 (as checked above) and
-        # request FP16 I/O explicitly.
-        f"--inputIOFormats={','.join(['fp16:chw'] * len(tensorrt_stages.STAGES[stage][0]))}",
-        f"--outputIOFormats={','.join(['fp16:chw'] * len(tensorrt_stages.STAGES[stage][1]))}",
+        # request FP16 I/O explicitly, in each tensor's glue layout.
+        f"--inputIOFormats={io_formats(tensorrt_stages.STAGES[stage][0])}",
+        f"--outputIOFormats={io_formats(tensorrt_stages.STAGES[stage][1])}",
         # DCVC-RT's TensorRT recipe (scripts/backends/dcvcrt/build_tensorrt.sh).
         *(["--fp16"] if args.precision == "fp16" else []), f"--device={args.device}", f"--memPoolSize=workspace:{args.workspace_mib}",
         f"--builderOptimizationLevel={args.builder_optimization_level}",
@@ -263,6 +268,7 @@ def stage_contracts(stages):
         inputs, outputs = tensorrt_stages.STAGES[stage]
         contracts[stage] = [
             {"name": name, "access": access, "channels": channels, "axis": axis,
+             "format": tensorrt_stages.tensor_format(channels),
              "profile": tensorrt_stages.profile_shapes(channels, axis)}
             for access, tensors in (("read", inputs), ("write", outputs))
             for name, channels, axis in tensors]

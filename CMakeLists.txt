@@ -168,6 +168,31 @@ if(NVCR_ENABLE_TENSORRT)
         CUDA_EXTENSIONS OFF)
 endif()
 
+if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
+    # DCVC-UF glue kernels for its TensorRT path, generated from pinned upstream
+    # device code. Upstream's compile flags and half macros are part of the
+    # arithmetic: they select fast-math intrinsics and route Half through float.
+    # The flags mirror upstream setup.py plus torch's COMMON_NVCC_FLAGS.
+    list(GET CMAKE_CUDA_ARCHITECTURES 0 NVCR_DCVCUF_GLUE_SM)
+    string(REGEX REPLACE "[^0-9].*$" "" NVCR_DCVCUF_GLUE_SM "${NVCR_DCVCUF_GLUE_SM}")
+    add_library(nvcr_dcvcuf_glue OBJECT src/dcvcuf/backend/tensorrt/glue.cu)
+    target_compile_options(nvcr_dcvcuf_glue PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-O3;--use_fast_math;--extra-device-vectorization;--expt-relaxed-constexpr>
+        # Upstream's kernels declare a few unused locals (warning 177).
+        $<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress=177>)
+    target_compile_definitions(nvcr_dcvcuf_glue PRIVATE
+        CURRENT_DEVICE_SM=${NVCR_DCVCUF_GLUE_SM}
+        __CUDA_NO_HALF_OPERATORS__
+        __CUDA_NO_HALF_CONVERSIONS__
+        __CUDA_NO_BFLOAT16_CONVERSIONS__
+        __CUDA_NO_HALF2_OPERATORS__)
+    set_target_properties(nvcr_dcvcuf_glue PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        CUDA_STANDARD 17
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_EXTENSIONS OFF)
+endif()
+
 if(NVCR_ENABLE_DCVC_UF)
     if(NOT IS_DIRECTORY "${NVCR_DCVCUF_SOURCE_ROOT}/src/layers/extensions/inference")
         message(FATAL_ERROR
@@ -253,6 +278,17 @@ if(NVCR_ENABLE_DCVC_UF)
         "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/entropy")
     target_link_libraries(nvcr PRIVATE ${TORCH_LIBRARIES} CUDA::cudart)
     target_compile_definitions(nvcr PRIVATE NVCR_HAS_DCVC_UF=1)
+
+    # Bitwise parity of NVCR's DCVC-UF glue port with the pinned upstream kernels.
+    add_executable(nvcr_dcvcuf_glue_parity_tests
+        tests/dcvcuf_glue_parity_tests.cpp
+        $<TARGET_OBJECTS:nvcr_dcvcuf_glue>)
+    target_include_directories(nvcr_dcvcuf_glue_parity_tests PRIVATE
+        "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/backend/tensorrt")
+    target_link_libraries(nvcr_dcvcuf_glue_parity_tests PRIVATE
+        nvcr ${TORCH_LIBRARIES} CUDA::cudart)
+    target_compile_features(nvcr_dcvcuf_glue_parity_tests PRIVATE cxx_std_20)
 
     add_executable(nvcr_dcvcuf_native_roundtrip
         tests/dcvcuf_native_roundtrip.cpp)

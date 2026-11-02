@@ -70,6 +70,13 @@ def recorded_calls(arrays):
     return ordered
 
 
+def pixel_unshuffle_8(x):
+    """Inverse of the 8x pixel shuffle, in torch's channel order."""
+    n, c, h, w = x.shape
+    return (x.reshape(n, c, h // 8, 8, w // 8, 8).transpose(0, 1, 3, 5, 2, 4)
+            .reshape(n, c * 64, h // 8, w // 8))
+
+
 def stage_cases(calls):
     """Maps recorded module calls onto the exported stages."""
     import numpy as np
@@ -101,7 +108,7 @@ def stage_cases(calls):
                         {"scales_means": calls[index + 1][2][0]}, 2)
         elif name == "image.dec":
             used = case("i_decoder", {"y_hat": inputs[0], "q_dec": inputs[1]},
-                        {"frame_hat": outputs[0]})
+                        {"frame_pre_shuffle": pixel_unshuffle_8(outputs[0])})
         elif name == "video.feature_adaptor_i":
             used = case("p_feature_adaptor_i", {"feature": inputs[0]}, {"memory": outputs[0]})
         elif name == "video.feature_adaptor_m":
@@ -134,7 +141,8 @@ def stage_cases(calls):
                         {"feature": outputs[0]})
         elif name == "video.recon_head" and len(outputs) == 8:
             used = case("p_reconstruction", {"feature": inputs[0]},
-                        {"frames": np.concatenate(outputs, axis=1)})
+                        {f"frame_{index}_pre_shuffle": pixel_unshuffle_8(output)
+                         for index, output in enumerate(outputs)})
         elif name == "video.recon_head":
             used = case("p_reset", {"feature": inputs[0]}, {"reset_feature": outputs[0]})
         else:
@@ -157,9 +165,12 @@ def write_job(cases, bundle, directory, model):
             lines.append(f"tensor {tensor['name']} {tensor['access']} {' '.join(map(str, dims))}")
     for case in cases:
         lines.append(f"run {case['stage']}.plan {len(case['inputs'])} {len(case['outputs'])}")
+        formats = {tensor["name"]: tensor.get("format", "chw")
+                   for tensor in contracts[case["stage"]]}
         for name, value in case["inputs"].items():
             path = directory / f"{case['label']}.{name}.in.f16"
-            np.ascontiguousarray(value, dtype=np.float16).tofile(path)
+            stored = value.transpose(0, 2, 3, 1) if formats[name] == "hwc8" else value
+            np.ascontiguousarray(stored, dtype=np.float16).tofile(path)
             lines.append(f"input {name} {' '.join(map(str, value.shape))} {path.resolve()}")
         for name in case["outputs"]:
             lines.append(f"output {name} {(directory / (case['label'] + '.' + name + '.out.f16')).resolve()}")
@@ -218,6 +229,7 @@ def main(argv=None):
         raise RuntimeError(f"stage runner failed: {completed.stderr[-2000:]}")
     shapes = [line.split()[1:] for line in completed.stdout.splitlines()
               if line.startswith("shape ")]
+    contracts = json.loads((args.bundle / "stages.json").read_text(encoding="utf-8"))["stages"]
 
     image, video = export.load_models(args)
     modules = tensorrt_stages.modules(image.half().cuda().to(memory_format=torch.channels_last),
@@ -231,7 +243,14 @@ def main(argv=None):
             _, *dims = shapes[shape_index]
             shape_index += 1
             path = work / f"{case['label']}.{name}.out.f16"
-            actual = np.fromfile(path, dtype=np.float16).reshape([int(d) for d in dims])
+            dims = [int(d) for d in dims]
+            layout = next(t.get("format", "chw") for t in contracts[case["stage"]]
+                          if t["name"] == name)
+            if layout == "hwc8":  # NHWC bytes for NCHW logical dims
+                actual = np.fromfile(path, dtype=np.float16).reshape(
+                    [dims[0], dims[2], dims[3], dims[1]]).transpose(0, 3, 1, 2)
+            else:
+                actual = np.fromfile(path, dtype=np.float16).reshape(dims)
             trt = error(reference, actual.astype(np.float32))
             torch16 = error(reference, torch_output)
             within = (trt.get("finite", False) and "shape_mismatch" not in trt and
