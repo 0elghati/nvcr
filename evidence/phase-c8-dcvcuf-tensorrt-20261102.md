@@ -139,6 +139,49 @@ JSON evidence.
   JSON.
 - `build/dcvcuf-c8-stage-vectors-20261102/`: stage report and crop tensors.
 
+## Phase 1: codec-agnostic TensorRT provider session
+
+The TensorRT provider session held DCVC-RT's stage table, bundle file list,
+model-manifest checks, warm-up shapes, quantization caches, decode staging and
+symbol buffers. It now lives in `src/provider/tensorrt/session.{hpp,cpp}`
+(`nvcr::tensorrt`) and holds none of them:
+
+- Codecs supply each stage's tensor contract and warm-up shapes. The session
+  validates the contract against the deserialized engine's own I/O (names,
+  modes, FP16, rank 4, fixed and dynamic axes) and accepts only files that
+  `engine.sha256` lists and that passed digest checks, each at most once.
+  Generic descriptors warm up at the engine's optimization-profile minimum.
+- Creating a session (`make_provider_session`, the registered `tensorrt`
+  factory) validates the bundle identity, target, CUDA/TensorRT versions and
+  every listed file's digest, and loads no stages. The codec loads its stages
+  and calls `finalize_stages()` (shared workspace, warm-up, CUDA graphs).
+- DCVC-RT keeps its 14-stage table and warm-up shapes, its exact 20-file
+  bundle set and model-manifest identities (checked before any stage loads),
+  its device state, its `[nvcr.dcvcrt] [info] TensorRT mode:` log line, and its
+  public `register_tensorrt_provider()`/`tensorrt_provider_descriptor()`,
+  which now forward to the generic provider. Load order, and therefore stage
+  indices, are unchanged.
+- Current provider limits: rank-4 FP16 tensors only.
+
+Verification on the RTX 4070 (CUDA 12.8, TensorRT 10.9, Release):
+
+| Check | Before | After |
+|---|---|---|
+| B7 65-frame Akiyo QCIF GOP-8 stream / decoded YUV, catalog bundle | `98966844...` / `10e02e46...` | identical |
+| Same in low-memory context mode | `98966844...` / `10e02e46...` | identical |
+| 100-frame BasketballDrive 1080p stream / decoded YUV | `d96d4bcb...` / `53e2d1d6...` | identical |
+| 1080p codec FPS encode / decode (5 runs, 10 warm-up) | 56.8 / 45.0 | 57.5 / 44.9 |
+| TensorRT build CTest (engine contracts, 1080p round trip, pinned Python I-frame golden) | 31/31 | 32/32 |
+| CPU build CTest | 27/27 | 27/27 |
+
+The added `nvcr_tensorrt_session_contracts` test loads a DCVC-RT plan through
+a generic descriptor and checks rejection of a mismatched tensor name, a wrong
+fixed axis, a file outside the verified bundle and a foreign provider, plus
+duplicate loads, execution before finalize, a second finalize and loading after
+finalize, then executes the stage. Not yet covered by a test: a bundle with an
+extra or missing file, which DCVC-RT still rejects with its exact-set check.
+
 ## Next
 
-Phase 1: manifest-driven TensorRT stage loading, with DCVC-RT byte parity.
+Phase 2: per-stage ONNX/TensorRT export of the DCVC-UF stages, checked in
+isolation against the stored reference tensors.

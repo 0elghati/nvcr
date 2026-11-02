@@ -155,6 +155,7 @@ if(NVCR_ENABLE_TENSORRT)
     target_sources(
         nvcr
         PRIVATE
+            src/provider/tensorrt/session.cpp
             src/dcvcrt/backend/tensorrt/cuda_ops.cu
             src/dcvcrt/backend/tensorrt/engine_specs.cpp
             src/dcvcrt/backend/tensorrt/backend.cpp)

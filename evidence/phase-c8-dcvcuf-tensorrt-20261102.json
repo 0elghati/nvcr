@@ -1,7 +1,7 @@
 {
   "schema": "nvcr.evidence.phase-c8.v1",
   "date": "2026-11-02",
-  "phase": 0,
+  "phase": 1,
   "status": "complete",
   "upstream": {
     "repository": "https://github.com/microsoft/DCVC",
@@ -439,5 +439,35 @@
       }
     ],
     "note": "per-stage FP16-vs-FP32 errors are cumulative; phase 2 checks exported stages in isolation from stored inputs"
+  },
+  "phase_1_provider_split": {
+    "status": "complete",
+    "date": "2026-11-02",
+    "location": "src/provider/tensorrt/session.{hpp,cpp}",
+    "build": "build-c1-release-cuda128 (CUDA 12.8, TensorRT 10.9, Release)",
+    "parity": {
+      "b7_qcif_stream_sha256": "9896684474818032506d32ac7d065a7710d9c26197a9d374f275d2b65f83f81a",
+      "b7_qcif_yuv_sha256": "10e02e460ec4477e9a7e41f72bbb44c5222e0f6773bf581cf874f74b97363008",
+      "b7_identical_performance_mode": true,
+      "b7_identical_low_memory_mode": true,
+      "hd_100_frame_identical": true
+    },
+    "codec_fps_1080p": {
+      "before": {
+        "encode": 56.8,
+        "decode": 45.0
+      },
+      "after": {
+        "encode": 57.5,
+        "decode": 44.9
+      }
+    },
+    "tests": {
+      "tensorrt_build": "32/32",
+      "cpu_build": "27/27"
+    },
+    "provider_limits": [
+      "rank-4 FP16 tensors"
+    ]
   }
 }

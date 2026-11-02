@@ -168,6 +168,12 @@ if(NVCR_ENABLE_TENSORRT)
     target_link_libraries(nvcr_tensorrt_engine_tests PRIVATE NVCR::nvcr)
     nvcr_set_project_warnings(nvcr_tensorrt_engine_tests)
 
+    add_executable(nvcr_tensorrt_session_tests tensorrt_session_tests.cpp)
+    target_include_directories(nvcr_tensorrt_session_tests PRIVATE "${PROJECT_SOURCE_DIR}/src")
+    target_link_libraries(
+        nvcr_tensorrt_session_tests PRIVATE NVCR::nvcr CUDA::cudart TensorRT::TensorRT)
+    nvcr_set_project_warnings(nvcr_tensorrt_session_tests)
+
     add_executable(nvcr_tensorrt_roundtrip_tests tensorrt_roundtrip_tests.cpp)
     target_link_libraries(nvcr_tensorrt_roundtrip_tests PRIVATE NVCR::nvcr)
     nvcr_set_project_warnings(nvcr_tensorrt_roundtrip_tests)
@@ -195,11 +201,14 @@ if(NVCR_ENABLE_TENSORRT)
         set_property(GLOBAL APPEND PROPERTY NVCR_TENSORRT_TEST_PROFILES "${engine_profile_id}")
         add_test(NAME nvcr_tensorrt_engine_contracts${profile_test_suffix}
             COMMAND nvcr_tensorrt_engine_tests "${engine_dir}")
+        add_test(NAME nvcr_tensorrt_session_contracts${profile_test_suffix}
+            COMMAND nvcr_tensorrt_session_tests "${engine_dir}")
         add_test(NAME nvcr_tensorrt_ip_frame_roundtrip${profile_test_suffix}
             COMMAND nvcr_tensorrt_roundtrip_tests "${engine_dir}"
                 "${optimum_width}" "${optimum_height}")
         set_tests_properties(
             nvcr_tensorrt_engine_contracts${profile_test_suffix}
+            nvcr_tensorrt_session_contracts${profile_test_suffix}
             nvcr_tensorrt_ip_frame_roundtrip${profile_test_suffix}
             PROPERTIES LABELS "gpu;profile-${engine_profile_id}")
     endfunction()
