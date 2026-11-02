@@ -10,12 +10,11 @@
 
 namespace nvcr::dcvcuf {
 
-// UF keeps its entropy partitioning and stream framing inside the codec. This
-// wrapper intentionally has no dependency on NVCR runtime or provider types.
+// DCVC-UF owns this entropy contract. CDF group 0 is z and group 1 is y,
+// matching the pinned upstream implementation.
 struct UfRansCdfTable final {
     std::vector<std::vector<std::int32_t>> values;
     std::vector<std::int32_t> sizes;
-    std::vector<std::int32_t> offsets;
 };
 
 class UfRansCodec final {
@@ -32,14 +31,14 @@ public:
     [[nodiscard]] Result<std::size_t> add_cdf(UfRansCdfTable table);
     void clear_cdfs() noexcept;
 
-    // Symbols use the same packed int16 representation as the upstream UF
-    // encoder: signed value in the high byte, CDF row in the low byte.
+    // Symbols use upstream UF's packed int16 representation: signed value in
+    // the high byte and y CDF row in the low byte.
     [[nodiscard]] Result<void> encode_y(std::span<const std::int16_t> symbols,
                                         std::size_t cdf_group);
     [[nodiscard]] Result<void> encode_z(std::span<const std::int8_t> symbols,
                                         std::size_t cdf_group,
-                                        std::size_t start_offset,
-                                        std::size_t per_channel_size);
+                                        std::size_t cdf_offset,
+                                        std::size_t channel_count);
     [[nodiscard]] Result<std::vector<std::byte>> finish_encode();
     void reset_encoder() noexcept;
 
@@ -48,7 +47,7 @@ public:
         std::span<const std::uint8_t> indexes, std::size_t cdf_group);
     [[nodiscard]] Result<std::vector<std::int8_t>> decode_z(
         std::size_t symbol_count, std::size_t cdf_group,
-        std::size_t start_offset, std::size_t per_channel_size);
+        std::size_t cdf_offset, std::size_t channel_count);
 
 private:
     struct Impl;

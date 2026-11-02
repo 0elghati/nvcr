@@ -119,6 +119,13 @@ target_include_directories(
     nvcr_dcvcuf_rans_conformance_tests PRIVATE
         "${PROJECT_SOURCE_DIR}/src/dcvcuf/entropy")
 target_link_libraries(nvcr_dcvcuf_rans_conformance_tests PRIVATE NVCR::nvcr)
+# libnvcr carries the codec-local UF entropy objects only in DCVC-UF builds.
+if(NOT NVCR_ENABLE_DCVC_UF)
+    target_sources(
+        nvcr_dcvcuf_rans_conformance_tests PRIVATE
+            $<TARGET_OBJECTS:nvcr_dcvcuf_entropy>
+            $<TARGET_OBJECTS:nvcr_dcvcuf_rans>)
+endif()
 nvcr_set_project_warnings(nvcr_dcvcuf_rans_conformance_tests)
 add_test(NAME nvcr_dcvcuf_rans_conformance COMMAND nvcr_dcvcuf_rans_conformance_tests)
 

@@ -86,10 +86,9 @@
     }
   },
   "remaining_gates": [
-    "remaining UF context/prior/image/encoder execution stages and exact upstream entropy-vector parity",
-    "full NVCR encode/decode interoperability before production registration",
-    "codec-owned I/chunk/tail/reset lifecycle and full/short-chunk drain/reset tests",
-    "artifact-backed loading and target-aware provider execution"
+    "upstream README speed/RD recipe (--reset_interval 128, --skip_thres 0.15) and intra-period -1 are not yet configurable; NVCR fixes reset interval 32 and skip threshold 0",
+    "provider decision: dcvcuf-upstream-cuda is a second provider; the user directed a TensorRT-provider port on 2026-11-02",
+    "target packaging and clean release-suite gates"
   ],
   "stages": {
     "shuffle_clamp": {
@@ -243,7 +242,7 @@
       }
     }
   },
-  "status": "synthesis_reconstruction_entropy_self_conformance_and_video_demo_passed",
+  "status": "native_entropy_and_artifact_backed_synthesis_reconstruction_parity_passed",
   "date": "2026-11-02",
   "cpu_release_tests": {
     "passed": 26,
@@ -571,5 +570,154 @@
       "timing is not full bitstream decode speed",
       "codec is not registered for production use"
     ]
+  },
+  "native_entropy_parity": {
+    "status": "passed",
+    "reference_commit": "cbdae87a5445114cdc7f48816da63ea80bdeac40",
+    "stream_sha256": "7b2ebb14719082381ea8363ff9511545d5200dfb6a543db84d6782279be3fe7a",
+    "video_checkpoint_sha256": "565607d84943ee79072a5760d34a200d5724b4bb72c6bc24bfab41e8ae4f5f47",
+    "report_sha256": "a5a9ead4ed8a142f4d805e14ba0e9e70eaccd8f502fff88a52d247c6045cf128",
+    "vectors_sha256": "97fc56193355ee1d96a40f573ee161fb7bca5060f46065a311f85d616f910af8",
+    "predicted_chunks": 2,
+    "checks": {
+      "z_symbols_exact": true,
+      "y_symbols_exact": true,
+      "decoder_feature_exact": true,
+      "frames_exact": true,
+      "reset_feature_exact": true,
+      "provider_contract_checks": 36
+    },
+    "cpu_conformance_parallelism": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "dcvcrt_entropy_unchanged": true
+  },
+  "artifact_backed_stage_loading": {
+    "status": "passed",
+    "format": "torchscript_named_buffer_archive",
+    "artifact_sha256": "6f2b418bee783db5daceb08ba8f1338e79cb286f0cb04ec043058ccab53ee181",
+    "report_sha256": "51f3b180ce093fd76a69ed5f498a29df1c38ad6a9082d8c4a6b8e8313f3e9546",
+    "tensor_count": 385,
+    "verification": "NVCR SHA-256 before LibTorch load",
+    "in_memory_python_weight_injection": false,
+    "exact_native_parity_preserved": true
+  },
+  "native_cli_golden_20261102": {
+    "status": "passed",
+    "build": "build-dcvcuf-native-cu126 (CUDA 12.6, SM89, Release, opt-in NVCR_ENABLE_DCVC_UF)",
+    "gpu": "NVIDIA GeForce RTX 4070, driver 580.178.04, otherwise idle",
+    "upstream": {
+      "commit": "cbdae87a5445114cdc7f48816da63ea80bdeac40",
+      "script": "test_video.py",
+      "model_structure": "hts",
+      "qp_i": 32,
+      "qp_p": 32,
+      "reset_interval": 32,
+      "skip_thres": 0
+    },
+    "fixes": [
+      "intra decision once per upstream step (I frame or eight-frame HT-S group)",
+      "HT-S feature-memory reset when (step + 8) % 32 == 1, signalled in predicted payload byte 6",
+      "input normalization uses upstream tensor ops: uint8 4:4:4 -> half -> /255 -> -0.5",
+      "CLI warm-up drives sessions through the generic send/drain driver"
+    ],
+    "vectors": [
+      {
+        "sequence": "akiyo_qcif 176x144",
+        "frames": 300,
+        "nvcr_gop": 32,
+        "upstream_intra_period": 32,
+        "i_frames": [
+          0,
+          33
+        ],
+        "upstream_units": 40,
+        "identical_units": 40,
+        "upstream_bin_sha256": "ee2ca4cf684287b5c5dfb8f7d4eeae296c2045adffed74fdcb4928d0e5f940bd",
+        "nvcr_stream_sha256": "4d50d869336003fc356bd5a53f5f81b83cbd3f0eeb4656d791314194446f6cf8",
+        "decoded_yuv_sha256": "d9a97eb96545a3e443fe2a096a8886bd4f1a9c049fa8a530bb664530ba008be9",
+        "decoded_equal_to_upstream": true
+      },
+      {
+        "sequence": "BasketballDrive 1920x1080",
+        "frames": 500,
+        "nvcr_gop": 32,
+        "upstream_intra_period": 32,
+        "i_frames": [
+          0,
+          33
+        ],
+        "upstream_units": 65,
+        "identical_units": 65,
+        "upstream_bin_sha256": "95860283e588d0b59ef2e8b776b9299e88914ca5f0e5ef08c7afc140d9171f38",
+        "nvcr_stream_sha256": "c859f8457942afbd5afc54d64f4d4217021fae775437257a13042b018b32bb6b",
+        "decoded_yuv_sha256": "71975f6c76aeed5c8ce00eab0ea237b83a19c275dee3f64915a819ff4a887288",
+        "decoded_equal_to_upstream": true,
+        "note": "upstream schedule places no intra frame or reset after frame 33; mean per-frame PSNR-Y 23.18 dB, frames 400-499 6.79 dB, identical in both runtimes"
+      },
+      {
+        "sequence": "BasketballDrive 1920x1080",
+        "frames": 500,
+        "nvcr_gop": 65536,
+        "upstream_intra_period": -1,
+        "i_frames": [
+          0
+        ],
+        "upstream_units": 64,
+        "identical_units": 64,
+        "upstream_bin_sha256": "bcf04be27a12e483d81b8aaba1ab2466a0562c84bd976aeae6c3c7eb7eaab875",
+        "nvcr_stream_sha256": "75678bff0791f406e339988036205d8dcb8ddf41030819e51ba90d1999adfce6",
+        "decoded_yuv_sha256": "3ba300b6c2c7972562ca50225a16e6de91fa2b52b67f20f6a0f126d6db1e0dc7",
+        "mean_per_frame_psnr_y_db": {
+          "nvcr_8bit": 32.747,
+          "upstream_float": 32.758
+        }
+      },
+      {
+        "sequence": "akiyo_qcif 176x144",
+        "frames": 9,
+        "nvcr_gop": 32,
+        "nvcr_stream_bytes": 1450,
+        "nvcr_stream_sha256": "39da424d492bd5dd4b7588b97d4e10e091782446736517f6b2b5d924d047f7bb",
+        "decoded_yuv_sha256": "aee8172786b4008163c902b3145b46f46d5301cfd86a256924bfefed8fff8352",
+        "note": "supersedes the earlier 9-frame hashes recorded before the input-normalization fix"
+      }
+    ],
+    "warm_reset_identity": "500-frame 1080p measured run (33 warm-up frames, reset, rewind) equals a fresh run for stream and decoded YUV",
+    "performance_1080p": {
+      "sequence": "BasketballDrive 1920x1080, QP 32, intra only at frame 0",
+      "protocol": "100 measured frames after 10 warm-up frames, 10 independent processes per operation; process FPS timed by a Python perf_counter wrapper, not scripts/measurement_campaign.py",
+      "encode": {
+        "process_fps_mean": 51.6,
+        "process_fps_sd": 0.3,
+        "codec_fps_mean": 183.8
+      },
+      "decode": {
+        "process_fps_mean": 43.8,
+        "process_fps_sd": 0.6,
+        "codec_fps_mean": 135.1
+      },
+      "initialization_seconds": 0.52,
+      "fixed_process_startup_seconds_approx": 1.3,
+      "upstream_model_timer_fps": {
+        "encode": 252.5,
+        "decode": 183.4,
+        "note": "upstream test_video.py CUDA-event timer around compress/decompress only, 97 frames, first 4 units skipped"
+      },
+      "round_trip_vs_python": {
+        "frames": 100,
+        "python_seconds": 14.81,
+        "nvcr_seconds": 3.93,
+        "ratio": 3.77,
+        "note": "Python process also computes PSNR; 5 runs each"
+      }
+    }
   }
 }

@@ -238,19 +238,24 @@ rtk proxy cmake --build build-cpu --target nvcr_dcvcuf_rans_conformance_tests
 rtk proxy ./build-cpu/tests/nvcr_dcvcuf_rans_conformance_tests
 ```
 
-This closes only the codec-local rANS round-trip gate. It is deliberately not
-called by the current provider probe: exact upstream model-symbol byte parity,
-the remaining context/prior/image/encoder stages, artifact-backed loading, and
-the UF adapter's I/chunk/tail/reset lifecycle must pass before registration as a
-working NVCR codec.
+The native-stream probe now runs this codec-local implementation before the
+provider stages. Against the hash-pinned 17-frame QCIF stream and CVPR 2026 HT-S
+checkpoint, both predicted chunks match upstream z and y symbols exactly. The
+existing decoder-feature, frame, reset, reuse, independent-session, and 36
+provider-contract checks remain exact.
 
-This is a synchronous, single-caller correctness bridge with in-memory verified
-weights and feature dimensions limited to 256x256 (even dimensions for synthesis). It is built only by the probe,
-does not register a production codec/provider, and is not a deployable standalone
-backend. Artifact loading, asynchronous execution, UF entropy integration,
-native-byte interoperability, adapter lifecycle, and full-codec performance
-remain separate gates. Provider reset here clears no codec reference state: UF reference-memory
-reset belongs to the future codec adapter.
+This closes the native entropy compatibility gate. The remaining
+context/prior/image/encoder stages, artifact-backed loading, and UF adapter
+I/chunk/tail/reset lifecycle must pass before registration as a working NVCR
+codec.
+
+This is a synchronous, single-caller correctness bridge with digest-verified
+LibTorch stage artifacts and feature dimensions limited to 256x256 (even
+dimensions for synthesis). It is built only by the probe and does not register
+a production codec/provider. Image/context/prior/encoder execution, asynchronous
+submission, adapter lifecycle, and full-codec performance remain separate gates.
+Provider reset here clears no codec reference state: UF reference-memory reset
+belongs to the future codec adapter.
 
 This probe does not add a DCVC-UF option, stage, or lifecycle rule to NVCR's
 shared runtime, provider, or configuration code. A future UF adapter owns its

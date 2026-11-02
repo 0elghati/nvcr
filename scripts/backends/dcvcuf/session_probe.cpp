@@ -1,5 +1,6 @@
 #include <torch/extension.h>
 #include "recon_session.hpp"
+#include "uf_rans_codec.hpp"
 #include "capture_hts.h"
 
 namespace {
@@ -11,13 +12,73 @@ template<class T> T checked(Result<T> result) {
 }
 void checked(Result<void> result) { TORCH_CHECK(result, result.error().describe()); }
 
+std::vector<std::byte> digest_bytes(std::string_view hex) {
+    TORCH_CHECK(hex.size() == 64, "SHA-256 must contain 64 hex characters");
+    auto digit = [](char value) -> unsigned {
+        if (value >= '0' && value <= '9') return value - '0';
+        if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+        if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+        TORCH_CHECK(false, "invalid SHA-256 character");
+        return 0;
+    };
+    std::vector<std::byte> result(32);
+    for (std::size_t i = 0; i < result.size(); ++i)
+        result[i] = static_cast<std::byte>((digit(hex[2 * i]) << 4U) | digit(hex[2 * i + 1]));
+    return result;
+}
+
+dcvcuf::UfRansCdfTable cdf_table(const at::Tensor& values, const at::Tensor& sizes) {
+    TORCH_CHECK(values.device().is_cpu() && values.scalar_type() == at::kInt &&
+                values.dim() == 2 && values.is_contiguous(), "CDF values must be contiguous CPU int32");
+    TORCH_CHECK(sizes.device().is_cpu() && sizes.scalar_type() == at::kInt &&
+                sizes.dim() == 1 && sizes.is_contiguous() && sizes.size(0) == values.size(0),
+                "CDF sizes must be contiguous CPU int32 rows");
+    dcvcuf::UfRansCdfTable table;
+    const auto* value = values.const_data_ptr<std::int32_t>();
+    const auto* size = sizes.const_data_ptr<std::int32_t>();
+    table.values.resize(values.size(0));
+    table.sizes.assign(size, size + sizes.numel());
+    for (std::int64_t row = 0; row < values.size(0); ++row) {
+        table.values[row].assign(value + row * values.size(1), value + (row + 1) * values.size(1));
+    }
+    return table;
+}
+
+std::tuple<at::Tensor, at::Tensor> decode_entropy(
+    const at::Tensor& z_cdf, const at::Tensor& z_sizes,
+    const at::Tensor& y_cdf, const at::Tensor& y_sizes,
+    const at::Tensor& stream, const at::Tensor& y_indexes,
+    std::size_t parallel, std::size_t qp, std::size_t z_channels,
+    std::size_t z_height, std::size_t z_width) {
+    TORCH_CHECK(stream.device().is_cpu() && stream.scalar_type() == at::kByte &&
+                stream.dim() == 1 && stream.is_contiguous(), "stream must be contiguous CPU uint8");
+    TORCH_CHECK(y_indexes.device().is_cpu() && y_indexes.scalar_type() == at::kByte &&
+                y_indexes.dim() == 1 && y_indexes.is_contiguous(),
+                "y indexes must be contiguous CPU uint8");
+    dcvcuf::UfRansCodec codec;
+    checked(codec.set_entropy_coder_parallel(parallel));
+    const auto z_group = checked(codec.add_cdf(cdf_table(z_cdf, z_sizes)));
+    const auto y_group = checked(codec.add_cdf(cdf_table(y_cdf, y_sizes)));
+    checked(codec.set_stream(std::span(
+        reinterpret_cast<const std::byte*>(stream.const_data_ptr<std::uint8_t>()), stream.numel())));
+    const auto plane = z_height * z_width;
+    auto z = checked(codec.decode_z(z_channels * plane, z_group, qp * z_channels, z_channels));
+    auto y = checked(codec.decode_y(std::span(y_indexes.const_data_ptr<std::uint8_t>(),
+                                             y_indexes.numel()), y_group));
+    auto options = at::TensorOptions().dtype(at::kChar).device(at::kCPU);
+    return {at::from_blob(z.data(), {static_cast<std::int64_t>(z.size())}, options).clone(),
+            at::from_blob(y.data(), {static_cast<std::int64_t>(y.size())}, options).clone()};
+}
+
 class Probe {
 public:
-    Probe(const dcvcuf::Weights& weights, const dcvcuf::Weights& decoder_weights,
+    Probe(const std::string& artifact_path, const std::string& artifact_sha256,
           int h, int w, int device)
-        : session(dcvcuf::make_recon_session(weights, decoder_weights, device)),
-          stage(checked(session->load_stage(dcvcuf::recon_descriptor(h, w)))),
-          decoder(checked(session->load_stage(dcvcuf::decoder_descriptor(h, w)))) {
+        : session(dcvcuf::make_recon_session(device)),
+          stage(checked(session->load_stage(dcvcuf::recon_descriptor(
+              h, w, artifact_path, digest_bytes(artifact_sha256))))),
+          decoder(checked(session->load_stage(dcvcuf::decoder_descriptor(
+              h, w, artifact_path, digest_bytes(artifact_sha256))))) {
         bindings = allocate(stage);
         decoder_bindings = allocate(decoder);
         // The synthesis output is the reconstruction input: one opaque device
@@ -133,9 +194,11 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         .def("set_param", &NVCRCaptureHTSProxy::set_param)
         .def("add_ref_feature_from_frame", &NVCRCaptureHTSProxy::add_ref_feature_from_frame)
         .def("decompress", &NVCRCaptureHTSProxy::decompress)
-        .def("snapshot", &NVCRCaptureHTSProxy::snapshot);
+        .def("snapshot", &NVCRCaptureHTSProxy::snapshot)
+        .def("entropy_snapshot", &NVCRCaptureHTSProxy::entropy_snapshot);
+    m.def("decode_entropy", &decode_entropy);
     py::class_<Probe>(m, "SessionProbe")
-        .def(py::init<const dcvcuf::Weights&, const dcvcuf::Weights&, int, int, int>())
+        .def(py::init<const std::string&, const std::string&, int, int, int>())
         .def("run", &Probe::run)
         .def("run_pipeline", &Probe::run_pipeline)
         .def("reset", &Probe::reset)

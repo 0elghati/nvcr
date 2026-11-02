@@ -23,6 +23,7 @@ namespace nvcr::provider {
 enum class ProviderKind : std::uint8_t {
     tensorrt = 0,
     cpu_reference,  // deterministic test provider
+    cuda_fused,     // codec-native fused CUDA execution
     // future: onnx_runtime, openvino, core_ml, directml
 };
 

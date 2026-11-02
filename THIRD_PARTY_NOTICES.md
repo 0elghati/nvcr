@@ -28,6 +28,15 @@ The imported rANS sources under `third_party/dcvc_rans/` carry their own
 `LICENSE.MIT`, `NOTICE.txt`, and upstream attribution. Those files must remain
 with any distribution containing the imported sources or derived binaries.
 
+## DCVC-UF native rANS import
+
+The codec-local entropy sources under `third_party/dcvcuf_rans/` are derived
+from Microsoft/DCVC commit `cbdae87a5445114cdc7f48816da63ea80bdeac40`.
+They retain the upstream MIT license and CompressAI notice in `LICENSE.txt`
+and `NOTICE.txt`; `UPSTREAM.md` records the source paths and NVCR namespace
+modification. This target remains separate from the DCVC-RT rANS target because
+their symbol mappings and stream semantics differ.
+
 ## Runtime dependencies
 
 CUDA and TensorRT are external NVIDIA components discovered by CMake. Their

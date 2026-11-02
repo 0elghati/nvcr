@@ -10,6 +10,11 @@ option(NVCR_ENABLE_TENSORRT "Build the TensorRT/CUDA backend" OFF)
 option(NVCR_ENABLE_CUDA "Enable CUDA support (implied when NVCR_ENABLE_TENSORRT is ON)" OFF)
 # The current umbrella target includes the DCVC-RT adapter when this is enabled.
 option(NVCR_ENABLE_DCVC_RT "Enable the DCVC-RT codec adapter" ON)
+option(NVCR_ENABLE_DCVC_UF "Build the native DCVC-UF fused CUDA provider and codec adapter" OFF)
+set(NVCR_DCVCUF_SOURCE_ROOT "" CACHE PATH
+    "Pinned Microsoft/DCVC checkout containing the DCVC-UF fused inference sources")
+set(NVCR_DCVCUF_CUTLASS_ROOT "" CACHE PATH
+    "Pinned CUTLASS checkout used by the DCVC-UF fused inference sources")
 # Reserved for the future stream/manifest inspection tool.
 option(NVCR_ENABLE_TOOLS "Build stream and manifest inspection tools" OFF)
 # Enables libFuzzer targets under tests/fuzz/.

@@ -168,7 +168,7 @@ and gap classifications are recorded in
 | C6.5 | Generic CLI session driving | Complete 2026-09-15 | Encode/decode use session send, full receive drain, directional flush, and final drain through the same driver exercised by the grouped fixture; see [the C6.5 evidence](evidence/phase-c6-5-cli-session-driver-20260915.md) |
 | C6.6 | Session send/receive contract clarification | Complete 2026-09-15 | Send success consumes input, receive-side `try_again` reports delayed readiness, and a registered multi-input decoder fixture proves order, timestamps, flush/drain, and reset/reuse without changing production behavior; see [the C6.6 evidence](evidence/phase-c6-6-session-contract-20260915.md) |
 | C6.7 | Current-main rebase and minor-release compatibility | Complete 2026-10-26 with documented GPU-contention exception | The twelve-commit `main-advanced` stack is rebased onto v1.0.8 and the public 1.0 source seams are retained. CPU, install-consumer, sanitizer/fuzz, TensorRT non-GPU, available-profile GPU, pinned-golden, and byte-parity gates pass; two 1080p tests were omitted because they could not coexist with the active GPU workload. See [the C6.7 evidence](evidence/main-advanced-rebase-vetting-20261026.md) |
-| C7 | DCVC-UF fused-operator feasibility | In progress; prioritized by user 2026-10-31 | Pinned fused shuffle/clamp, real HT-S branch export, and a fresh upstream 17-frame I/P encode/decode pass. Upstream Python/fused divergence localized to FP16 convolution accumulation; standalone binding and exact stage lifecycle checks pass. Generic runtime configuration now has no implicit codec, provider, model, or stream identity and an architecture test rejects UF terms in shared code. On 2026-11-01 the experimental provider session connects UF synthesis and reconstruction through a shared device buffer: both features, 16 frames, and two reset features match exactly under normal asynchronous CUDA execution. Deterministic initialization of upstream empty scratch tensors resolves native I-frame replay. The codec-local UF rANS wrapper now passes exact round-trip and reset conformance for coder parallelism 1 through 8 while preserving UF framing. A 17-frame viewable QCIF demo combines the verified native I-frame with 16 exact NVCR provider-stage frames; three 200-repetition provider samples have a 1434.829 fps median, explicitly excluding native entropy and I-frame decode. Remaining: context/prior/image/encoder stages, exact upstream entropy-vector parity, artifact-backed loading, and adapter/chunk lifecycle. See [the C7 evidence](evidence/phase-c7-dcvcuf-export-20261031.md) |
+| C7 | DCVC-UF fused-operator feasibility | Working opt-in native CLI; validation open 2026-11-02 | Pinned DMCI and HT-S fused sources now build into NVCR without a Python ABI dependency. The registered dcvc-uf adapter owns I/eight-frame/tail/timestamp/reset lifecycle and the registered dcvcuf-upstream-cuda provider owns weights, CUDA execution, and reference state. Streams and decoded frames are byte-identical to pinned upstream test_video.py on 300 QCIF and 500 BasketballDrive 1080p frames; 1080p RTX 4070 throughput is 51.6/43.8 process FPS and 183.8/135.1 codec FPS (encode/decode). Remaining: provider decision (user directed a TensorRT-provider port on 2026-11-02), upstream README recipe options, packaging, and clean release gates. See [the C7 evidence](evidence/phase-c7-dcvcuf-export-20261031.md) |
 
 C0 confirmed that C1 could proceed without a new chunk API. The existing
 session verbs were sufficient. C1 now routes the production path through
@@ -244,8 +244,14 @@ vector. Two separate processes under normal asynchronous reference execution
 preserve all 23 tensor hashes; six provider-only pipeline replays with normal
 CUDA launches also pass exactly. The pinned upstream setup's disabled empty-
 tensor initialization was restored in the UF execution setup, closing the
-native I-frame replay gate. Next are the remaining stages, entropy, and
-codec-owned adapter/chunk lifecycle. Earlier stream rejections do not establish
+native I-frame replay gate. On 2026-11-02 the full pinned DMCI/HT-S native
+path was connected to registered codec/provider sessions and the normal NVCR
+CLI. The pinned Python/native golden then exposed and fixed the step-based
+frame-type schedule, the HT-S feature-memory reset, and FP16 input
+normalization; streams and reconstructions are now byte-identical to upstream at
+QCIF and 1080p. Moving pixel conversion onto the GPU and keeping models across
+resets raised 1080p codec FPS to 183.8/135.1. The user then directed a port to
+the existing TensorRT provider instead of the second fused-CUDA provider. Earlier stream rejections do not establish
 stream corruption or an environment mismatch.
 Shared runtime/provider APIs remain unchanged. The DCVC-RT/ONNX Runtime CUDA experiment remains separate and
 deferred. The minimum capability vocabulary remains open in

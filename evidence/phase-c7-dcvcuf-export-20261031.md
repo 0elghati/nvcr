@@ -1,13 +1,14 @@
 # Phase C7 DCVC-UF stage export — 2026-10-31
 
-Updated 2026-11-01. Status: synthesis-decoder and reconstruction stage parity
-passes, and native asynchronous I-frame replay is stable after restoring
-deterministic empty-tensor initialization. C7 stays open for the remaining
-codec stages and lifecycle. The earlier Python/fused arithmetic divergence remains localized to the
-first convolution. The user prioritized
-starting DCVC-UF integration on 2026-10-31. This experiment builds on the existing
-codec-owned sessions and grouped/delayed-output contracts. It does not register
-a supported DCVC-UF codec or alter the DCVC-RT production path.
+Updated 2026-11-02. Status: the opt-in native build registers DCVC-UF and its
+pinned fused-CUDA provider, and the normal NVCR C++ CLI encodes and decodes
+intra plus HT-S grouped access units. The runtime binary has no Python ABI
+dependency. The pinned Python/native golden and the 500-frame HD measurement
+pass (see the golden section below). C7 stays open for the provider decision,
+the upstream README recipe options, and package gates. The earlier Python/fused arithmetic divergence remains
+localized to the first convolution. The user prioritized DCVC-UF integration
+on 2026-10-31. The integration uses the existing codec-owned sessions and
+grouped/delayed-output contracts and does not alter the DCVC-RT production path.
 
 ## Inputs and boundary
 
@@ -165,6 +166,50 @@ six two-stage runs across two sessions, exact input/output equality, and all
 36 contract checks pass. Provider submission itself remains synchronous and
 single-caller; concurrent sessions and async completion are not claimed.
 
+### Native UF entropy parity  2026-11-02
+
+NVCR now builds a separate, codec-local `nvcr_dcvcuf_rans` target from the
+pinned DCVC-UF rANS source. It is namespaced independently from
+`third_party/dcvc_rans`, so DCVC-RT's entropy implementation and bitstream
+behavior are unchanged. The UF wrapper enforces upstream CDF identity
+(`z=0`, `y=1`), signed bypass mapping, global z-channel indexing,
+one-to-eight coder partitioning, paired-stream overlap/header framing, and
+z-before-y decode order.
+
+The CPU conformance binary passes exact round trip and post-reset byte
+repeatability for all coder counts 1 through 8. The native-stream gate then
+uses the verified CVPR 2026 HT-S checkpoint and the retained 17-frame QCIF
+stream. For both predicted chunks, decoded z symbols and y symbols match the
+upstream fused decoder exactly. The existing decoder feature, all sixteen
+predicted frames, both reset features, repeat/reuse checks, independent-session
+checks, and all 36 provider contract rejections remain exact.
+
+The passing report is
+`build/dcvcuf-nvcr-entropy-parity-20261102-3/report.json`, SHA-256
+`a5a9ead4ed8a142f4d805e14ba0e9e70eaccd8f502fff88a52d247c6045cf128`.
+Its vector archive SHA-256 is
+`97fc56193355ee1d96a40f573ee161fb7bca5060f46065a311f85d616f910af8`.
+This proves native UF entropy compatibility for the tested HT-S stream. It does
+not register the codec; image/context/prior/encoder artifact loading and the
+codec-owned chunk lifecycle remain open.
+
+### Artifact-backed UF stage loading  2026-11-02
+
+The synthesis decoder and reconstruction stages no longer receive in-memory
+Python weight maps. The offline exporter writes 385 decoder/reconstruction
+tensors to a LibTorch archive. Each C++ provider session receives only the
+artifact path and expected SHA-256, verifies the file with NVCR's SHA-256
+implementation, deserializes named tensors through LibTorch, enforces CUDA
+FP16 stage weights, and caches one artifact identity for all loaded stages.
+
+The same native-stream gate passes after this change with no tensor hash
+changes. The stage artifact SHA-256 is
+`6f2b418bee783db5daceb08ba8f1338e79cb286f0cb04ec043058ccab53ee181`.
+The passing report SHA-256 is
+`51f3b180ce093fd76a69ed5f498a29df1c38ad6a9082d8c4a6b8e8313f3e9546`.
+The artifact is generated from the already hash-verified CVPR 2026 HT-S
+checkpoint and is not committed to the generic NVCR source package.
+
 ### Viewable NVCR provider output and speed — 2026-11-02
 
 The verified replay now emits a lossless H.264/YUV420 MP4 containing 17 QCIF
@@ -259,18 +304,106 @@ README. Raw vectors and build products stay local; compact records are retained
 under `nvcr_provider_session`, `provider_tensor_replay`, and
 `native_async_replay` in the adjacent JSON evidence.
 
+## Native NVCR CLI gate - 2026-11-02
+
+The opt-in CUDA 12.6/SM89 Release build compiles the pinned DMCI and HT-S fused
+sources into libnvcr and registers dcvc-uf with dcvcuf-upstream-cuda. Python is
+used only by the offline checkpoint-to-bundle converter. The linked CLI has no
+Python or libtorch_python dependency.
+
+A normal NVCR CLI run encoded nine QCIF Akiyo frames as one intra access unit
+and one eight-frame predicted access unit, then decoded all nine frames. The
+commands used build-dcvcuf-native-cu126/cli/nvcr encode and decode with codec
+dcvc-uf, provider dcvcuf-upstream-cuda, QP 32, GOP 32, and the converted
+dcvcuf-cvpr2026-hts.pt bundle.
+
+After the golden fixes below, this nine-frame stream is 1,450 bytes with SHA-256
+39da424d492bd5dd4b7588b97d4e10e091782446736517f6b2b5d924d047f7bb and the
+342,144-byte decoded YUV has SHA-256
+aee8172786b4008163c902b3145b46f46d5301cfd86a256924bfefed8fff8352. These
+supersede the hashes first recorded here, which came from the earlier FP32
+input normalization and matched only NVCR's own proxy, not upstream. A
+five-frame run also passes: the encoder pads the short HT-S tail internally and
+the decoder emits only the five real timestamps and frames.
+
+## Pinned Python/native golden - 2026-11-02
+
+The first long runs exposed three departures from pinned upstream
+`test_video.py`, each now fixed in codec-local DCVC-UF code:
+
+- Frame type was decided per frame, so GOP 32 split an HT-S group at frame 65.
+  Upstream decides once per step (one I frame or one eight-frame group); NVCR now
+  does the same. With intra period 32 this places I frames only at 0 and 33,
+  exactly as upstream does.
+- HT-S feature memory was never reset. Upstream resets when
+  `(step + 8) % reset_interval == 1` (default 32) and signals the bit in the
+  stream. NVCR now does the same and carries the bit in the previously reserved
+  predicted-payload byte 6; streams without a reset are unchanged.
+- Input normalization ran in FP32 with one rounding. NVCR now runs upstream's
+  tensor operations: nearest-neighbour uint8 4:4:4 expansion (equal to
+  `scipy.ndimage.zoom(order=0)` for a factor of two), then FP16 conversion,
+  `/255` and `-0.5`.
+
+Upstream ran with the pinned checkpoints, QP 32, `--reset_interval 32` and the
+default skip threshold 0, which are the values NVCR currently fixes. Every
+upstream entropy unit appears byte-identical in the NVCR stream with the same
+entropy-parallel and reset fields, and NVCR's decoded YUV equals upstream's
+saved reconstruction:
+
+| Sequence | Frames | Intra period | Units identical | Decoded YUV |
+|---|---:|---|---:|---|
+| Akiyo QCIF | 300 | 32 | 40/40 | identical |
+| BasketballDrive 1080p | 500 | 32 | 65/65 | identical |
+| BasketballDrive 1080p | 500 | -1 (NVCR GOP 65536) | 64/64 | 32.747 dB mean per-frame PSNR-Y vs upstream float 32.758 dB |
+
+Upstream's intra-period-32 schedule never places another I frame or reset after
+frame 33. On BasketballDrive this degrades to 6.79 dB PSNR-Y over frames
+400-499 in both runtimes; it is upstream behavior, not an NVCR defect. Upstream's
+own test configuration uses intra period -1, which NVCR reproduces with any GOP
+larger than the sequence. The CLI's PSNR is computed from pooled MSE; upstream
+averages per-frame PSNR, and the two agree when averaged the same way.
+
+The 500-frame 1080p measured run (33 warm-up frames, session reset, rewind)
+produces the same stream and decoded YUV as a fresh run.
+
+## Performance - 2026-11-02
+
+Nsight Systems and synchronized stage timers showed NVCR's host-side work costing
+almost as much as the fused models: per 1080p eight-frame group, 28.7 ms of CPU
+4:4:4 expansion and copies against 38.4 ms of encoder model time, and 18.5 ms of
+per-frame output conversion and copies against 49.5 ms of decoder model time.
+Every session reset and decoded I frame also rebuilt both fused models, which
+discarded processed weights and all captured CUDA graphs.
+
+The session now uploads only 4:2:0 planes in one pinned copy per group and
+expands them on the device, converts all decoded frames of a group with one
+device-to-host copy, and keeps its models across resets. Upstream also keeps its
+models for a whole sequence; an I frame replaces the HT-S reference state. All
+golden vectors above were re-run after this change and remain byte-identical.
+
+BasketballDrive 1080p, QP 32, intra only at frame 0, RTX 4070 otherwise idle,
+100 measured frames after 10 warm-up frames, ten independent processes per
+operation:
+
+| Operation | Process FPS (mean, SD) | Codec FPS (mean) |
+|---|---:|---:|
+| Encode | 51.6 (0.3) | 183.8 |
+| Decode | 43.8 (0.6) | 135.1 |
+
+Process FPS here is a Python `perf_counter` wrapper, not
+`scripts/measurement_campaign.py`. About 1.3 s of each process is startup:
+0.28 s process and library load, 0.52 s weight load, and first-use CUDA graph
+capture for all 64 QPs as upstream does. Upstream's own timer, CUDA events
+around `compress`/`decompress` only, gives 252.5 / 183.4 FPS on this GPU. A
+100-frame 1080p encode-plus-decode round trip takes 3.93 s in NVCR and 14.81 s
+in upstream Python (five runs each; the Python process also computes PSNR).
+
 ## Remaining gates
 
-The initial automated checkpoint links redirected to HTTP 403, but the required
-files were subsequently provided manually. These checks remain necessary:
-
-1. Extend beyond the exact synthesis/reconstruction stages to context/prior,
-   image, encoder, and entropy execution, using pinned vectors and preserving
-   native arithmetic. Validate more chunks, reset transitions, and targets
-   before making broader equivalence claims.
-2. Close the C7 pinned encode/decode vector gate inside NVCR before registering an adapter;
-   then implement UF-owned I/chunk/tail/reset policy and private AU metadata,
-   with real full/short-chunk, drain/reset, and reference tests.
-
-No chunk API, generic runtime UF policy, capability taxonomy, production model
-bundle, upstream bitstream compatibility, or full UF performance claim is added.
+1. Decide the provider. `dcvcuf-upstream-cuda` is a second provider; on
+   2026-11-02 the user directed a port to the existing TensorRT provider.
+2. Make the upstream README recipe configurable (intra period -1,
+   `--reset_interval 128`, `--skip_thres 0.15`). The decoder also depends on the
+   skip threshold, so it must be carried in the stream.
+3. Close target packaging and clean release-suite gates before calling C7
+   complete.

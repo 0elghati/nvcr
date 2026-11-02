@@ -2,6 +2,7 @@
 """Keep the bounded DCVC-UF experiment outside NVCR's shared contracts."""
 
 from pathlib import Path
+import re
 import unittest
 
 
@@ -39,6 +40,43 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         self.assertEqual(header.count("std::string model_id{};"), 2)
         self.assertEqual(header.count("std::string bitstream_model_id{};"), 2)
         self.assertIn("std::string provider_id{};", header)
+
+    def test_core_library_takes_uf_code_only_in_uf_builds(self):
+        cmake = without_uf_build_block((ROOT / "CMakeLists.txt").read_text(encoding="utf-8"))
+        for command in ("target_sources", "target_include_directories",
+                        "target_link_libraries"):
+            for arguments in target_calls(cmake, command, "nvcr"):
+                with self.subTest(command=command):
+                    self.assertNotIn("dcvcuf", arguments.lower())
+
+    def test_cli_holds_no_uf_identity(self):
+        # The CLI may call the opt-in UF module; artifact, provider, and model
+        # identities stay inside that module.
+        content = (ROOT / "cli/main.cpp").read_text(encoding="utf-8")
+        for allowed in ("nvcr::dcvcuf::", "nvcr/dcvcuf/backend.hpp", "NVCR_CLI_HAS_DCVC_UF"):
+            content = content.replace(allowed, "")
+        for term in UF_TERMS:
+            with self.subTest(term=term):
+                self.assertNotIn(term, content.lower())
+
+
+def without_uf_build_block(cmake):
+    """Drops top-level ``if(NVCR_ENABLE_DCVC_UF)`` blocks."""
+    return re.sub(r"^if\(NVCR_ENABLE_DCVC_UF\)\n.*?^endif\(\)\n", "", cmake,
+                  flags=re.MULTILINE | re.DOTALL)
+
+
+def target_calls(cmake, command, target):
+    """Returns the argument text of each ``command(target ...)`` call."""
+    calls = []
+    for match in re.finditer(rf"\b{command}\(\s*{target}\s", cmake):
+        depth = 1
+        for index in range(match.end(), len(cmake)):
+            depth += {"(": 1, ")": -1}.get(cmake[index], 0)
+            if depth == 0:
+                calls.append(cmake[match.end():index])
+                break
+    return calls
 
 
 if __name__ == "__main__":

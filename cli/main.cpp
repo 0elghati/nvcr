@@ -1,4 +1,7 @@
 #include <nvcr/dcvcrt/adapter.hpp>
+#ifdef NVCR_CLI_HAS_DCVC_UF
+#include <nvcr/dcvcuf/backend.hpp>
+#endif
 #include <nvcr/nvcr.hpp>
 #ifdef NVCR_MEASUREMENT_CUDA
 #include <cuda_runtime_api.h>
@@ -215,6 +218,10 @@ fs::path resolve_engine_dir(
 void bootstrap_registry() {
     nvcr::dcvcrt::register_codec();
     nvcr::dcvcrt::register_execution_providers();
+#ifdef NVCR_CLI_HAS_DCVC_UF
+    nvcr::dcvcuf::register_codec();
+    nvcr::dcvcuf::register_execution_provider();
+#endif
 }
 
 int codec_list_command() {
@@ -693,8 +700,37 @@ RecordRead read_record(std::istream& input, std::vector<std::byte>& bytes) {
     return input ? RecordRead::record : RecordRead::error;
 }
 
+// Generic CLI options apply on top of the selected codec's own defaults.
+void apply_common_options(const Options& options, nvcr::RuntimeConfiguration& configuration) {
+    if (!options.provider_id.empty()) configuration.provider.id = options.provider_id;
+    configuration.provider.device_id = options.device_id;
+    configuration.codec.intra_qp = options.qp;
+    configuration.codec.gop_size = options.gop_size;
+    configuration.provider.enable_profiling = options.profile;
+    configuration.runtime.log_level =
+        options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
+}
+
 nvcr::Result<nvcr::Runtime> create_runtime(
     const Options& options, std::uint32_t width, std::uint32_t height) {
+    bootstrap_registry();
+    if (!nvcr::runtime::Registry::instance().find_codec(options.codec_id)) {
+        return nvcr::Error(
+            nvcr::ErrorCode::dependency_unavailable,
+            "codec " + options.codec_id +
+                " is not registered in this NVCR build; see: nvcr codec list",
+            "cli");
+    }
+#ifdef NVCR_CLI_HAS_DCVC_UF
+    // Opt-in codec modules own their artifact, provider, and model identities.
+    if (options.codec_id == nvcr::dcvcuf::codec_descriptor().id) {
+        auto configuration = nvcr::dcvcuf::runtime_configuration(options.engine_dir);
+        if (!configuration) return configuration.error();
+        apply_common_options(options, configuration.value());
+        return nvcr::Runtime::create(configuration.value());
+    }
+#endif
+
     const auto engine_dir = resolve_engine_dir(options, width, height);
     if (engine_dir.empty()) {
         return nvcr::Error(
@@ -722,16 +758,10 @@ nvcr::Result<nvcr::Runtime> create_runtime(
     configuration.codec.id = options.codec_id;
     // The CLI currently ships the DCVC-RT/TensorRT integration. Keep that
     // product choice here rather than in the generic runtime configuration.
-    configuration.provider.id = options.provider_id.empty() ? "tensorrt" : options.provider_id;
+    configuration.provider.id = "tensorrt";
     configuration.artifacts.model_id = "dcvcrt-cvpr2025";
     configuration.stream.bitstream_model_id = "dcvcrt";
-    configuration.provider.device_id = options.device_id;
-    configuration.codec.intra_qp = options.qp;
-    configuration.codec.gop_size = options.gop_size;
-    configuration.provider.enable_profiling = options.profile;
-    configuration.runtime.log_level =
-        options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
-    bootstrap_registry();
+    apply_common_options(options, configuration);
     return nvcr::Runtime::create(configuration);
 }
 
@@ -771,15 +801,23 @@ bool write_measurement(const Options& options, std::size_t frames, double second
 bool warm_encoder(const Options& options, nvcr::Runtime& runtime, std::ifstream& input,
                   std::size_t frame_bytes) {
     if (options.warmup_frames == 0) return true;
+    // Warm-up uses the same session driver as encoding, so grouped codecs that
+    // buffer input before emitting an access unit warm up correctly.
+    std::chrono::nanoseconds ignored{};
+    auto discard = [](nvcr::Packet&&) -> nvcr::Result<void> { return {}; };
     std::vector<std::byte> raw(frame_bytes);
     for (std::size_t index = 0; index < options.warmup_frames; ++index) {
         input.read(reinterpret_cast<char*>(raw.data()), static_cast<std::streamsize>(raw.size()));
         if (!input) return false;
         auto frame = nvcr::Frame::copy_from(options.width, options.height,
             nvcr::PixelFormat::yuv420p8, raw, nvcr::Timestamp{0});
-        if (!frame || !runtime.encode(frame.value())) return false;
+        if (!frame ||
+            !nvcr::cli::send_frame_and_drain(runtime, frame.value(), discard, ignored))
+            return false;
     }
-    if (!runtime.flush() || !runtime.reset() || !measurement_sync(options)) return false;
+    if (!nvcr::cli::flush_and_drain_encoder(runtime, discard, ignored) || !runtime.reset() ||
+        !measurement_sync(options))
+        return false;
     input.clear();
     input.seekg(0);
     return static_cast<bool>(input);
@@ -788,12 +826,25 @@ bool warm_encoder(const Options& options, nvcr::Runtime& runtime, std::ifstream&
 bool warm_decoder(const Options& options, nvcr::Runtime& runtime, std::ifstream& input,
                   std::vector<std::byte>& wire) {
     if (options.warmup_frames == 0) return true;
-    for (std::size_t index = 0; index < options.warmup_frames; ++index) {
-        if (index > 0 && read_record(input, wire) != RecordRead::record) return false;
+    // Count decoded frames, not access units: one grouped access unit may
+    // carry several frames.
+    std::chrono::nanoseconds ignored{};
+    std::size_t warmed = 0;
+    auto discard = [&](nvcr::Frame&&) -> nvcr::Result<void> {
+        ++warmed;
+        return {};
+    };
+    constexpr auto unlimited = std::numeric_limits<std::size_t>::max();
+    for (bool first = true; warmed < options.warmup_frames; first = false) {
+        if (!first && read_record(input, wire) != RecordRead::record) return false;
         auto packet = nvcr::PacketIO::deserialize(wire);
-        if (!packet || !runtime.decode(packet.value())) return false;
+        if (!packet || !nvcr::cli::send_access_unit_and_drain(
+                           runtime, packet.value(), discard, unlimited, ignored))
+            return false;
     }
-    if (!runtime.flush() || !runtime.reset() || !measurement_sync(options)) return false;
+    if (!nvcr::cli::flush_and_drain_decoder(runtime, discard, unlimited, ignored) ||
+        !runtime.reset() || !measurement_sync(options))
+        return false;
     input.clear();
     input.seekg(8);  // NVCS v1 sequence header; decode starts again at frame zero.
     return read_record(input, wire) == RecordRead::record;
