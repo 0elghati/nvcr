@@ -165,6 +165,25 @@ six two-stage runs across two sessions, exact input/output equality, and all
 36 contract checks pass. Provider submission itself remains synchronous and
 single-caller; concurrent sessions and async completion are not claimed.
 
+### Viewable NVCR provider output and speed — 2026-11-02
+
+The verified replay now emits a lossless H.264/YUV420 MP4 containing 17 QCIF
+frames at 176x144: one verified native I-frame followed by sixteen predicted
+frames produced by the NVCR `dcvcuf.hts.decoder` and
+`dcvcuf.hts.reconstruction` provider stages. FFprobe reads all 17 frames at
+30 fps. The MP4 SHA-256 is
+`ea8d2a6e1c47a7d216caacb6c1af8d2d9bfac18df9714f8ebebef35f02f64efa`.
+All provider tensors remain exact, and the 36 contract checks pass.
+
+Three normal-launch timing samples each execute 200 repetitions of two
+8-frame chunks after ten warm-up repetitions, including host uploads/downloads.
+They report 1471.420, 1424.189, and 1434.829 fps; the median is 1434.829 fps,
+or 5.576 ms per eight-frame chunk, on the NVIDIA GeForce RTX 4070. This is
+provider synthesis/reconstruction speed from frozen native entropy-decoded
+tensors. It is not full UF bitstream decode speed. The I-frame, entropy decode,
+remaining context/prior stages, artifact loading, and registered adapter are
+still outside this timing boundary.
+
 ### Native replay limitation
 
 The initial normal-launch failure came from the pinned upstream setup disabling

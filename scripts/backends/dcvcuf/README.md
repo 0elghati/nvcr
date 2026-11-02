@@ -206,7 +206,22 @@ rtk proxy env PYTHONPATH=build/dcvcuf-python-deps CUDA_LAUNCH_BLOCKING=0 \
 ```
 
 The output JSON must be new. The saved vectors are the fixed reference; this
-replay does not execute or validate native entropy decoding.
+replay does not execute or validate native entropy decoding. Add a lossless MP4
+and a timed provider-stage loop with:
+
+```sh
+rtk proxy env PYTHONPATH=build/dcvcuf-python-deps CUDA_LAUNCH_BLOCKING=0 \
+  .venv/bin/python scripts/backends/dcvcuf/replay_nvcr_session.py \
+  build/dcvcuf-nvcr-synthesis/report.json build/dcvcuf-nvcr-demo.json \
+  --video-output build/dcvcuf-nvcr-demo.mp4 --fps 30 \
+  --warmup-runs 10 --benchmark-runs 200
+```
+
+The MP4 contains the verified native I-frame followed by sixteen frames produced
+by the NVCR synthesis and reconstruction stages. The timing covers those two
+provider stages from frozen entropy-decoded tensors, including host transfers.
+It is not full bitstream decode speed; the JSON records this scope and the
+remaining native I-frame/entropy boundary explicitly.
 
 ## Codec-local UF entropy boundary
 
@@ -233,8 +248,8 @@ This is a synchronous, single-caller correctness bridge with in-memory verified
 weights and feature dimensions limited to 256x256 (even dimensions for synthesis). It is built only by the probe,
 does not register a production codec/provider, and is not a deployable standalone
 backend. Artifact loading, asynchronous execution, UF entropy integration,
-native-byte interoperability, adapter lifecycle, and performance remain separate
-gates. Provider reset here clears no codec reference state: UF reference-memory
+native-byte interoperability, adapter lifecycle, and full-codec performance
+remain separate gates. Provider reset here clears no codec reference state: UF reference-memory
 reset belongs to the future codec adapter.
 
 This probe does not add a DCVC-UF option, stage, or lifecycle rule to NVCR's

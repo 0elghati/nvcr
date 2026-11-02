@@ -243,10 +243,10 @@
       }
     }
   },
-  "status": "synthesis_stage_passed_native_async_replay_resolved_entropy_codec_local_conformance",
-  "date": "2026-11-01",
+  "status": "synthesis_reconstruction_entropy_self_conformance_and_video_demo_passed",
+  "date": "2026-11-02",
   "cpu_release_tests": {
-    "passed": 25,
+    "passed": 26,
     "failed": 0,
     "date": "2026-11-01"
   },
@@ -525,5 +525,51 @@
     ],
     "test_command": "cmake --build build-cpu --target nvcr_dcvcuf_rans_conformance_tests && ./build-cpu/tests/nvcr_dcvcuf_rans_conformance_tests",
     "limitation": "self-conformance only; exact upstream model-symbol byte parity and UF adapter wiring remain open"
+  },
+  "nvcr_decoded_video_demo": {
+    "status": "passed_experimental_provider_demo",
+    "date": "2026-11-02",
+    "replay_source_sha256": "9610cf21b406000749bc524a9817b1ccc76230c2509eea595b734b54c319d646",
+    "reference_report_sha256": "d42d1ebb57b427fda4ace43bbb265a9cf10737b63a8a7341b911bf6ea0976937",
+    "vectors_sha256": "c68d8a42bcd2365cb062e1739444b71aee577067cffe004e5bb0e1e185dc9c27",
+    "session_binary_sha256": "247565a98a81e2b2f4140640f09bda57b7264b3dd8e6ec9c9986a483b54c2587",
+    "video": {
+      "path": "build/dcvcuf-nvcr-demo-final-20261102.mp4",
+      "sha256": "ea8d2a6e1c47a7d216caacb6c1af8d2d9bfac18df9714f8ebebef35f02f64efa",
+      "codec": "h264 lossless",
+      "pixel_format": "yuv420p",
+      "width": 176,
+      "height": 144,
+      "frames": 17,
+      "fps": 30
+    },
+    "composition": {
+      "native_intra_frames": 1,
+      "nvcr_provider_predicted_frames": 16
+    },
+    "validation": {
+      "exact_provider_tensors": true,
+      "contract_checks": 36,
+      "ffprobe_frame_count": 17
+    },
+    "timing": {
+      "scope": "NVCR provider synthesis and reconstruction from frozen native tensors, including host transfers",
+      "gpu": "NVIDIA GeForce RTX 4070",
+      "warmup_repetitions": 10,
+      "measured_repetitions": 200,
+      "frames_per_repetition": 16,
+      "sample_fps": [
+        1471.4202456796386,
+        1424.1894652651042,
+        1434.8291830345886
+      ],
+      "median_fps": 1434.8291830345886,
+      "median_milliseconds_per_chunk": 5.575576587507385
+    },
+    "limitations": [
+      "I-frame and entropy-decoded tensors come from the pinned native reference",
+      "timing is not full bitstream decode speed",
+      "codec is not registered for production use"
+    ]
   }
 }
