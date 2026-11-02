@@ -1,0 +1,60 @@
+{
+  "schema": "nvcr.dcvcuf.reference_sequences.v1",
+  "purpose": "C8 DCVC-UF TensorRT fidelity reference set; paths are relative to --dataset-root",
+  "sequences": [
+    {
+      "name": "BasketballDrive_1920x1080_50",
+      "class": "HEVC_B",
+      "path": "hd/BasketballDrive_1920x1080_50.yuv",
+      "sha256": "dc89d33e4910379dca548c5a807c2c83dde471014a09a852c370bd49fb354543",
+      "width": 1920,
+      "height": 1080,
+      "frames": 500
+    },
+    {
+      "name": "Kimono_1920x1080_24",
+      "class": "HEVC_B",
+      "path": "hd/Kimono_1920x1080_24.yuv",
+      "sha256": "4708b443662722a081cff8eaa9fd3426be76b1f6d144c78d0d477ffd98df14c2",
+      "width": 1920,
+      "height": 1080,
+      "frames": 240
+    },
+    {
+      "name": "Jockey_1920x1080_120fps_420_8bit_YUV",
+      "class": "UVG",
+      "path": "hd/Jockey_1920x1080_120fps_420_8bit_YUV.yuv",
+      "sha256": "4a8b31553559114d1376e10fd15b324e172b659f960fcb009eac8da3007a4c7d",
+      "width": 1920,
+      "height": 1080,
+      "frames": 600
+    },
+    {
+      "name": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+      "class": "UVG",
+      "path": "hd/HoneyBee_1920x1080_120fps_420_8bit_YUV.yuv",
+      "sha256": "50e47af98d7828123f898869b7d3a820bbbba635d35d240c5c4c965e8ae712de",
+      "width": 1920,
+      "height": 1080,
+      "frames": 600
+    }
+  ],
+  "stage_vectors": [
+    {
+      "name": "BasketballDrive_crop256",
+      "path": "hd/BasketballDrive_1920x1080_50.yuv",
+      "sha256": "dc89d33e4910379dca548c5a807c2c83dde471014a09a852c370bd49fb354543",
+      "width": 1920,
+      "height": 1080,
+      "crop": {"x": 832, "y": 412, "width": 256, "height": 256},
+      "note": "Upstream forward_one_frame equals the fused stage structure only when the 1/16 latent is a multiple of 4 (no pad_for_y); 256x256 and 1920x1080 satisfy this, QCIF does not"
+    },
+    {
+      "name": "BasketballDrive_1920x1080_50",
+      "path": "hd/BasketballDrive_1920x1080_50.yuv",
+      "sha256": "dc89d33e4910379dca548c5a807c2c83dde471014a09a852c370bd49fb354543",
+      "width": 1920,
+      "height": 1080
+    }
+  ]
+}

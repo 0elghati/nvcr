@@ -1,0 +1,296 @@
+{
+  "schema": "nvcr.evidence.phase-c8.v1",
+  "date": "2026-11-02",
+  "phase": 0,
+  "status": "complete",
+  "upstream": {
+    "repository": "https://github.com/microsoft/DCVC",
+    "commit": "cbdae87a5445114cdc7f48816da63ea80bdeac40"
+  },
+  "checkpoints": {
+    "image": "b3b900de23f30e4fc437010ddffe6a5413a56d6cfd97fb6235adbcd2b6973302",
+    "video": "565607d84943ee79072a5760d34a200d5724b4bb72c6bc24bfab41e8ae4f5f47"
+  },
+  "environment": {
+    "torch": "2.13.0+cu126",
+    "cuda": "12.6",
+    "gpu": "NVIDIA GeForce RTX 4070",
+    "python": "3.12.3",
+    "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39"
+  },
+  "gates": {
+    "recipe": {
+      "intra_period": -1,
+      "reset_interval": 32,
+      "skip_thres": 0,
+      "qps": [
+        0,
+        21,
+        42,
+        63
+      ]
+    },
+    "G1_drift_free": "TensorRT encoder reconstruction equals TensorRT decoder output byte for byte on every frame of all reference sequences and QPs",
+    "G2_format": "UF payload syntax, UF rANS framing, entropy-parallel and reset signalling unchanged",
+    "G3_fidelity": {
+      "mean_psnr_y_db_abs_delta_max": 0.05,
+      "total_bits_relative_delta_max": 0.01,
+      "bd_rate_abs_max_percent": 0.5,
+      "bd_rate_tool": "upstream compare_bd_rate.py --compare_between class --distortion_metrics psnr"
+    },
+    "G4_interoperability": "reported only",
+    "precision": "TensorRT FP16 first; FP32 layers recorded",
+    "performance": "reported against fused provider and upstream Python; user requires not slower",
+    "approved": "user, 2026-11-02"
+  },
+  "rd_reference": {
+    "report_sha256": "fa08a0abebfd3dc9e15aa1459437ae33774fa8a8066202296bde37192ac407bd",
+    "manifest_sha256": "74a7a694a2ea01937fa8622ab50c51253c9dd60fd3ace6864a6969bd1311175f",
+    "recipe": {
+      "qps": [
+        0,
+        21,
+        42,
+        63
+      ],
+      "intra_period": -1,
+      "reset_interval": 32,
+      "skip_thres": 0.0,
+      "frames_override": null
+    },
+    "points": [
+      {
+        "sequence": "BasketballDrive_1920x1080_50",
+        "qp": 0,
+        "frames": 500,
+        "stream_sha256": "34ba70e0557db80d30f01235a7574c5185ceead97305c057e75451476a5529c9",
+        "ave_all_frame_bpp": 0.001348,
+        "ave_all_frame_psnr": 29.339476,
+        "ave_all_frame_psnr_y": 27.202977
+      },
+      {
+        "sequence": "BasketballDrive_1920x1080_50",
+        "qp": 21,
+        "frames": 500,
+        "stream_sha256": "17b45e653b161282c2b066faf497f8f5ad8b3a418cb483610850900f1d646349",
+        "ave_all_frame_bpp": 0.004991,
+        "ave_all_frame_psnr": 33.025521,
+        "ave_all_frame_psnr_y": 31.04142
+      },
+      {
+        "sequence": "BasketballDrive_1920x1080_50",
+        "qp": 42,
+        "frames": 500,
+        "stream_sha256": "cb75de96b1bf3a2bb737d2e7a2902a41feec87476e4942c64cc1708e80c79e81",
+        "ave_all_frame_bpp": 0.017097,
+        "ave_all_frame_psnr": 35.875322,
+        "ave_all_frame_psnr_y": 34.094804
+      },
+      {
+        "sequence": "BasketballDrive_1920x1080_50",
+        "qp": 63,
+        "frames": 500,
+        "stream_sha256": "1685d8e1f1e72c4b23f1b15ffd65cf6b864db54496526d13b1eecf347d131f4c",
+        "ave_all_frame_bpp": 0.054053,
+        "ave_all_frame_psnr": 37.623691,
+        "ave_all_frame_psnr_y": 35.995763
+      },
+      {
+        "sequence": "Kimono_1920x1080_24",
+        "qp": 0,
+        "frames": 240,
+        "stream_sha256": "742168a892a455fc92bfbfe4ea1bf7b5a49062ac644679ed2b5e05031779ee94",
+        "ave_all_frame_bpp": 0.000893,
+        "ave_all_frame_psnr": 31.721416,
+        "ave_all_frame_psnr_y": 29.157573
+      },
+      {
+        "sequence": "Kimono_1920x1080_24",
+        "qp": 21,
+        "frames": 240,
+        "stream_sha256": "13168454454e4cfac096f7159db331877e7d355b0bc44a8ec0a5be64355e8f9c",
+        "ave_all_frame_bpp": 0.003625,
+        "ave_all_frame_psnr": 35.06033,
+        "ave_all_frame_psnr_y": 33.045108
+      },
+      {
+        "sequence": "Kimono_1920x1080_24",
+        "qp": 42,
+        "frames": 240,
+        "stream_sha256": "e99e2e3373ef0cd5f3c6f2dbd26b37d4306acad7f1c0607760673fce48add1de",
+        "ave_all_frame_bpp": 0.013136,
+        "ave_all_frame_psnr": 38.203371,
+        "ave_all_frame_psnr_y": 36.767524
+      },
+      {
+        "sequence": "Kimono_1920x1080_24",
+        "qp": 63,
+        "frames": 240,
+        "stream_sha256": "2f15473f386a968d186afb1c83d2c114aeb2e9db8824b8084c05d940689106df",
+        "ave_all_frame_bpp": 0.042484,
+        "ave_all_frame_psnr": 40.670691,
+        "ave_all_frame_psnr_y": 39.680288
+      },
+      {
+        "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+        "qp": 0,
+        "frames": 600,
+        "stream_sha256": "35d61635055d5f1fe689acb97acd68ef8249a1dde60a02e41fa80ff578dc9f85",
+        "ave_all_frame_bpp": 0.001054,
+        "ave_all_frame_psnr": 31.173122,
+        "ave_all_frame_psnr_y": 29.212765
+      },
+      {
+        "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+        "qp": 21,
+        "frames": 600,
+        "stream_sha256": "5f665738c4d5ab5d2796ef18f208cd17bb535fc67debd989135e36a89c1d9f84",
+        "ave_all_frame_bpp": 0.003399,
+        "ave_all_frame_psnr": 35.169552,
+        "ave_all_frame_psnr_y": 33.722274
+      },
+      {
+        "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+        "qp": 42,
+        "frames": 600,
+        "stream_sha256": "818a3ba8ace6759b0e9b4af07b2f63905f427a95efd1861bdddc45581b18caf0",
+        "ave_all_frame_bpp": 0.011099,
+        "ave_all_frame_psnr": 38.677776,
+        "ave_all_frame_psnr_y": 37.700136
+      },
+      {
+        "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+        "qp": 63,
+        "frames": 600,
+        "stream_sha256": "9d38f39ae75b26d87109db0d059046861f8d1f0e56748f886814c96df3878acd",
+        "ave_all_frame_bpp": 0.035072,
+        "ave_all_frame_psnr": 41.545314,
+        "ave_all_frame_psnr_y": 40.983886
+      },
+      {
+        "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+        "qp": 0,
+        "frames": 600,
+        "stream_sha256": "1ebdced6dfa465e7a86e111cbd1e3073156dfb39573ae06cb30aaa1e6fa2c44a",
+        "ave_all_frame_bpp": 0.000704,
+        "ave_all_frame_psnr": 36.304325,
+        "ave_all_frame_psnr_y": 35.651991
+      },
+      {
+        "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+        "qp": 21,
+        "frames": 600,
+        "stream_sha256": "0ecef96225e12037e58ee09d94256e7e0b67342a922b7f1c123e6a667bb3ccb4",
+        "ave_all_frame_bpp": 0.001624,
+        "ave_all_frame_psnr": 40.605274,
+        "ave_all_frame_psnr_y": 40.160533
+      },
+      {
+        "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+        "qp": 42,
+        "frames": 600,
+        "stream_sha256": "65c510b0f341d6512ce726b913aca6c82a0bdac7c857e3ad630e586058eb41f9",
+        "ave_all_frame_bpp": 0.004026,
+        "ave_all_frame_psnr": 42.901697,
+        "ave_all_frame_psnr_y": 42.488482
+      },
+      {
+        "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+        "qp": 63,
+        "frames": 600,
+        "stream_sha256": "047d9bba9969e3a2e47d4f1b2ff76d377cddbebafc1dc0e3475b1df426611345",
+        "ave_all_frame_bpp": 0.010538,
+        "ave_all_frame_psnr": 43.859532,
+        "ave_all_frame_psnr_y": 43.432364
+      }
+    ],
+    "repeatability": {
+      "sequence": "Kimono_1920x1080_24",
+      "qps": [
+        0,
+        21,
+        42,
+        63
+      ],
+      "streams_identical": true,
+      "per_frame_psnr_identical": true
+    },
+    "readme_recipe": {
+      "reset_interval": 128,
+      "skip_thres": 0.15,
+      "status": "capture running at commit time"
+    }
+  },
+  "stage_vectors": {
+    "report_sha256": "b09645c354f1f9625f16f77f2a4ea0d232a5fdbf37bcb4c3b9fc6802a3f5dbec",
+    "crop_tensors_sha256": "31fcae9a640555ea1dbb39dfaa9c8e3d841e1b822290432bca3d39feb77db9e5",
+    "group_resets": [
+      false,
+      true,
+      false
+    ],
+    "qp": 32,
+    "vectors": [
+      {
+        "name": "BasketballDrive_crop256",
+        "size": [
+          256,
+          256
+        ],
+        "crop": {
+          "x": 832,
+          "y": 412,
+          "width": 256,
+          "height": 256
+        },
+        "fused_bytes": {
+          "intra": 677,
+          "predicted": [
+            1056,
+            709,
+            286
+          ]
+        },
+        "mean_psnr_y_vs_source": {
+          "pytorch_fp32": 32.7028,
+          "pytorch_fp16": 32.7322,
+          "fused": 32.6881
+        },
+        "symbols_differing_fp16_vs_fp32": [
+          0.00493,
+          0.00694,
+          0.00685,
+          0.00307
+        ]
+      },
+      {
+        "name": "BasketballDrive_1920x1080_50",
+        "size": [
+          1920,
+          1080
+        ],
+        "crop": null,
+        "fused_bytes": {
+          "intra": 14155,
+          "predicted": [
+            18869,
+            16612,
+            18703
+          ]
+        },
+        "mean_psnr_y_vs_source": {
+          "pytorch_fp32": 33.4929,
+          "pytorch_fp16": 33.4857,
+          "fused": 33.4813
+        },
+        "symbols_differing_fp16_vs_fp32": [
+          0.00235,
+          0.00405,
+          0.0049,
+          0.00524
+        ]
+      }
+    ],
+    "note": "per-stage FP16-vs-FP32 errors are cumulative; phase 2 checks exported stages in isolation from stored inputs"
+  }
+}
