@@ -32,6 +32,7 @@ what it is for before asking you to run commands.
 - [v2 codec/provider boundary RFC](provider-boundary-v2.md)
 - [C++ API](reference.md)
 - [DCVC-RT integration](dcvcrt-integration.md)
+- [MLVC integration](mlvc-integration.md) (experimental)
 - [Bitstreams and access units](bitstream.md)
 - [Elementary-stream specification](spec/nvcr-elementary-stream-v1.md)
 - [Extension guide](extending-nvcr.md)

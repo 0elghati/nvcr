@@ -6,6 +6,9 @@ practice: encode and decode sessions, GPU execution, compatible inference
 engines, a portable bitstream, a command-line tool, packages, and containers.
 
 [DCVC-RT](https://github.com/microsoft/DCVC) is NVCR's first codec integration.
+[MLVC](https://github.com/microsoft/MLVC) is an experimental second codec that
+runs Microsoft's published ONNX bundles through ONNX Runtime; see the
+[MLVC integration](docs/mlvc-integration.md).
 It provides the learned compression method and models. NVCR provides the
 runtime around it, so the same architecture can later host other codecs and
 execution providers.

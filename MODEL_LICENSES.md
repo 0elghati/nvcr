@@ -28,6 +28,18 @@ The model profile is `dcvcrt-cvpr2025`, defined in
 Checkpoint SHA-256 values are recorded in the model profile. Acquisition and
 conversion instructions are in [DCVC-RT artifacts](docs/dcvcrt-artifacts.md).
 
+## MLVC
+
+The MLVC adapter runs Microsoft's MLVC ONNX model bundles. The
+[MLVC repository](https://github.com/microsoft/MLVC) is MIT licensed. Its
+`LICENSE` and `NOTICE` are retained with the vendored rANS coder in
+[third_party/msrtc_rans](third_party/msrtc_rans). The validated bundles come
+from [libmlvc](https://github.com/microsoft/libmlvc), also MIT licensed, and
+their metadata names the public `mlvc-s-perceptual-v1.ckpt` checkpoint, whose
+SHA-256 is listed in the MLVC README. NVCR does not package or
+redistribute MLVC checkpoints or bundles. Pinned identities are in the
+[C10 evidence](evidence/phase-c10-mlvc-codec-20261102.md).
+
 ## Derived assets and distribution
 
 ONNX graphs, entropy/quantization files and TensorRT plans retain the model
