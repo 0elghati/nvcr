@@ -144,7 +144,7 @@ void ycbcr_to_yuv420_test() {
                           127.49F / 255.0F, 127.5F / 255.0F, 1.0F, 1.25F};
     for (std::int32_t y = 0; y < visible_height; ++y) {
         for (std::int32_t x = 0; x < visible_width; ++x) {
-            input[static_cast<std::size_t>(y) * padded_width + x] =
+            input[static_cast<std::size_t>(y * padded_width + x)] =
                 luma[y * visible_width + x];
         }
     }
@@ -204,7 +204,8 @@ void encoder_decoder_symmetry_test() {
     std::uniform_real_distribution<float> scale(0.01F, 20.0F);
     for (const bool quarters : {true, false}) {
         const auto shape = quarters ? four_way : two_way;
-        const auto count = static_cast<std::size_t>(shape.channels) * shape.height * shape.width;
+        const auto count =
+            static_cast<std::size_t>(shape.channels * shape.height * shape.width);
         const auto reduced = quarters ? count / 4 : count / 2;
         const auto stages = quarters ? 4 : 2;
         std::vector<Half> values(count), scales(count), means(count);

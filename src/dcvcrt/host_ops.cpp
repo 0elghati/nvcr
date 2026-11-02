@@ -16,6 +16,11 @@ bool invalid_shape(Shape4D shape) {
     return shape.batch <= 0 || shape.channels <= 0 || shape.height <= 0 || shape.width <= 0;
 }
 
+// Callers validate that dimensions are positive before converting.
+std::size_t size(std::int32_t value) {
+    return static_cast<std::size_t>(value);
+}
+
 std::size_t volume(Shape4D shape) {
     return static_cast<std::size_t>(shape.batch) *
         static_cast<std::size_t>(shape.channels) *
@@ -115,17 +120,20 @@ bool replicate_pad(
     std::int32_t padded_height, std::int32_t padded_width) noexcept {
     if (invalid_shape(input_shape) || padded_height < input_shape.height ||
         padded_width < input_shape.width) return false;
-    const auto planes = static_cast<std::size_t>(input_shape.batch) * input_shape.channels;
+    const auto planes = size(input_shape.batch) * size(input_shape.channels);
+    const auto height = size(input_shape.height);
+    const auto width = size(input_shape.width);
+    const auto out_height = size(padded_height);
+    const auto out_width = size(padded_width);
     if (input.size() < volume(input_shape) ||
-        output.size() < planes * padded_height * padded_width) return false;
+        output.size() < planes * out_height * out_width) return false;
     std::size_t index = 0;
     for (std::size_t plane = 0; plane < planes; ++plane) {
-        for (std::int32_t y = 0; y < padded_height; ++y) {
-            const auto source_y = std::min(y, input_shape.height - 1);
-            for (std::int32_t x = 0; x < padded_width; ++x) {
-                const auto source_x = std::min(x, input_shape.width - 1);
-                output[index++] = input[(plane * input_shape.height + source_y) *
-                    static_cast<std::size_t>(input_shape.width) + source_x];
+        for (std::size_t y = 0; y < out_height; ++y) {
+            const auto source_y = std::min(y, height - 1);
+            for (std::size_t x = 0; x < out_width; ++x) {
+                output[index++] =
+                    input[(plane * height + source_y) * width + std::min(x, width - 1)];
             }
         }
     }
@@ -137,15 +145,18 @@ bool crop_spatial(
     std::int32_t output_height, std::int32_t output_width) noexcept {
     if (invalid_shape(input_shape) || output_height <= 0 || output_width <= 0 ||
         output_height > input_shape.height || output_width > input_shape.width) return false;
-    const auto planes = static_cast<std::size_t>(input_shape.batch) * input_shape.channels;
+    const auto planes = size(input_shape.batch) * size(input_shape.channels);
+    const auto height = size(input_shape.height);
+    const auto width = size(input_shape.width);
+    const auto out_height = size(output_height);
+    const auto out_width = size(output_width);
     if (input.size() < volume(input_shape) ||
-        output.size() < planes * output_height * output_width) return false;
+        output.size() < planes * out_height * out_width) return false;
     std::size_t index = 0;
     for (std::size_t plane = 0; plane < planes; ++plane) {
-        for (std::int32_t y = 0; y < output_height; ++y) {
-            const auto row = (plane * input_shape.height + y) *
-                static_cast<std::size_t>(input_shape.width);
-            for (std::int32_t x = 0; x < output_width; ++x) {
+        for (std::size_t y = 0; y < out_height; ++y) {
+            const auto row = (plane * height + y) * width;
+            for (std::size_t x = 0; x < out_width; ++x) {
                 output[index++] = input[row + x];
             }
         }
@@ -188,25 +199,26 @@ bool rgb24_to_ycbcr_padded(
     std::int32_t padded_height, std::int32_t padded_width) noexcept {
     if (source_width <= 0 || source_height <= 0 || padded_height < source_height ||
         padded_width < source_width) return false;
-    const auto plane = static_cast<std::size_t>(padded_height) * padded_width;
-    if (input.size() < static_cast<std::size_t>(source_width) * source_height * 3U ||
-        output.size() < 3 * plane) return false;
+    const auto width = size(source_width);
+    const auto height = size(source_height);
+    const auto out_width = size(padded_width);
+    const auto out_height = size(padded_height);
+    const auto plane = out_height * out_width;
+    if (input.size() < width * height * 3U || output.size() < 3 * plane) return false;
     constexpr float kr = 0.2126F;
     constexpr float kg = 0.7152F;
     constexpr float kb = 0.0722F;
-    for (std::int32_t y = 0; y < padded_height; ++y) {
-        const auto source_y = y < source_height ? y : source_height - 1;
-        for (std::int32_t x = 0; x < padded_width; ++x) {
-            const auto source_x = x < source_width ? x : source_width - 1;
-            const auto source =
-                (static_cast<std::size_t>(source_y) * source_width + source_x) * 3U;
+    for (std::size_t y = 0; y < out_height; ++y) {
+        const auto source_y = std::min(y, height - 1);
+        for (std::size_t x = 0; x < out_width; ++x) {
+            const auto source = (source_y * width + std::min(x, width - 1)) * 3U;
             const float r = static_cast<float>(input[source]) / 255.0F;
             const float g = static_cast<float>(input[source + 1]) / 255.0F;
             const float b = static_cast<float>(input[source + 2]) / 255.0F;
             const float luma = kr * r + kg * g + kb * b;
             const float cb = 0.5F * (b - luma) / (1.0F - kb) + 0.5F;
             const float cr = 0.5F * (r - luma) / (1.0F - kr) + 0.5F;
-            const auto offset = static_cast<std::size_t>(y) * padded_width + x;
+            const auto offset = y * out_width + x;
             output[offset] = to_half(luma);
             output[plane + offset] = to_half(cb);
             output[2 * plane + offset] = to_half(cr);
@@ -222,21 +234,24 @@ bool yuv420p8_to_ycbcr_padded(
     if (source_width <= 0 || source_height <= 0 || (source_width & 1) != 0 ||
         (source_height & 1) != 0 || padded_height < source_height ||
         padded_width < source_width) return false;
-    const auto y_size = static_cast<std::size_t>(source_width) * source_height;
-    const auto uv_width = source_width / 2;
-    const auto uv_size = static_cast<std::size_t>(uv_width) * (source_height / 2);
-    const auto plane = static_cast<std::size_t>(padded_height) * padded_width;
+    const auto width = size(source_width);
+    const auto height = size(source_height);
+    const auto out_width = size(padded_width);
+    const auto out_height = size(padded_height);
+    const auto y_size = width * height;
+    const auto uv_width = width / 2;
+    const auto uv_size = uv_width * (height / 2);
+    const auto plane = out_height * out_width;
     if (input.size() < y_size + 2 * uv_size || output.size() < 3 * plane) return false;
     const auto u_plane = input.subspan(y_size, uv_size);
     const auto v_plane = input.subspan(y_size + uv_size, uv_size);
-    for (std::int32_t y = 0; y < padded_height; ++y) {
-        const auto source_y = y < source_height ? y : source_height - 1;
-        for (std::int32_t x = 0; x < padded_width; ++x) {
-            const auto source_x = x < source_width ? x : source_width - 1;
-            const auto y_index = static_cast<std::size_t>(source_y) * source_width + source_x;
-            const auto uv_index =
-                static_cast<std::size_t>(source_y / 2) * uv_width + source_x / 2;
-            const auto offset = static_cast<std::size_t>(y) * padded_width + x;
+    for (std::size_t y = 0; y < out_height; ++y) {
+        const auto source_y = std::min(y, height - 1);
+        for (std::size_t x = 0; x < out_width; ++x) {
+            const auto source_x = std::min(x, width - 1);
+            const auto y_index = source_y * width + source_x;
+            const auto uv_index = (source_y / 2) * uv_width + source_x / 2;
+            const auto offset = y * out_width + x;
             output[offset] = to_half(static_cast<float>(input[y_index]) / 255.0F);
             output[plane + offset] = to_half(static_cast<float>(u_plane[uv_index]) / 255.0F);
             output[2 * plane + offset] =
@@ -253,33 +268,33 @@ bool ycbcr_padded_to_yuv420p8(
         visible_width <= 0 || visible_height <= 0 || (visible_width & 1) != 0 ||
         (visible_height & 1) != 0 || visible_width > input_shape.width ||
         visible_height > input_shape.height) return false;
-    const auto y_size = static_cast<std::size_t>(visible_width) * visible_height;
+    const auto width = size(visible_width);
+    const auto height = size(visible_height);
+    const auto stride = size(input_shape.width);
+    const auto y_size = width * height;
     const auto uv_size = y_size / 4;
     if (input.size() < volume(input_shape) || output.size() < y_size + 2 * uv_size) {
         return false;
     }
-    const auto plane = static_cast<std::size_t>(input_shape.height) * input_shape.width;
-    for (std::int32_t y = 0; y < visible_height; ++y) {
-        for (std::int32_t x = 0; x < visible_width; ++x) {
-            output[static_cast<std::size_t>(y) * visible_width + x] = quantize_luma(
-                load(input, static_cast<std::size_t>(y) * input_shape.width + x));
+    const auto plane = size(input_shape.height) * stride;
+    for (std::size_t y = 0; y < height; ++y) {
+        for (std::size_t x = 0; x < width; ++x) {
+            output[y * width + x] = quantize_luma(load(input, y * stride + x));
         }
     }
-    const auto uv_width = visible_width / 2;
-    for (std::int32_t uv_y = 0; uv_y < visible_height / 2; ++uv_y) {
-        for (std::int32_t uv_x = 0; uv_x < uv_width; ++uv_x) {
+    const auto uv_width = width / 2;
+    for (std::size_t uv_y = 0; uv_y < height / 2; ++uv_y) {
+        for (std::size_t uv_x = 0; uv_x < uv_width; ++uv_x) {
             float cb_sum = 0.0F;
             float cr_sum = 0.0F;
-            for (std::int32_t dy = 0; dy < 2; ++dy) {
-                for (std::int32_t dx = 0; dx < 2; ++dx) {
-                    const auto spatial =
-                        static_cast<std::size_t>(uv_y * 2 + dy) * input_shape.width +
-                        uv_x * 2 + dx;
+            for (std::size_t dy = 0; dy < 2; ++dy) {
+                for (std::size_t dx = 0; dx < 2; ++dx) {
+                    const auto spatial = (uv_y * 2 + dy) * stride + uv_x * 2 + dx;
                     cb_sum += load(input, plane + spatial);
                     cr_sum += load(input, 2 * plane + spatial);
                 }
             }
-            const auto index = static_cast<std::size_t>(uv_y) * uv_width + uv_x;
+            const auto index = uv_y * uv_width + uv_x;
             output[y_size + index] = quantize_chroma(cb_sum * 0.25F);
             output[y_size + uv_size + index] = quantize_chroma(cr_sum * 0.25F);
         }
