@@ -5,6 +5,8 @@
 #include <cmath>
 #include <fstream>
 #include <iterator>
+#include <locale>
+#include <sstream>
 #include <new>
 #include <utility>
 
@@ -163,8 +165,12 @@ private:
         const char* last = input_.data() + offset_;
         Value value;
         value.kind = Value::Kind::number;
-        const auto parsed = std::from_chars(first, last, value.number_value);
-        if (parsed.ec != std::errc{} || parsed.ptr != last || !std::isfinite(value.number_value)) {
+        // Android's libc++ has no floating-point from_chars; a classic-locale
+        // stream parses the already validated JSON token the same way.
+        std::istringstream stream{std::string(first, last)};
+        stream.imbue(std::locale::classic());
+        stream >> value.number_value;
+        if (stream.fail() || !stream.eof() || !std::isfinite(value.number_value)) {
             return fail("invalid JSON number at offset " + std::to_string(start));
         }
         if (integral) {
