@@ -118,6 +118,11 @@ explicitly selects all-intra development mode. Normal operation uses I/P
 coding. `--codec`, `--provider`, `--device-id`, `--engine-profile`, and
 `--engine-dir` override their defaults.
 
+`--codec mlvc` selects the experimental MLVC codec. It needs `--engine-dir`
+pointing at an extracted MLVC ONNX bundle and defaults to `--provider
+onnxruntime-cpu`. Without `--gop-size` it keeps the bundle's own I period. See
+[MLVC integration](mlvc-integration.md).
+
 Each successful encoder submission consumes that frame. The CLI then receives
 every access unit currently available and treats receive-side `try_again` as a
 request for more input. At end of input it flushes only the encoder and
