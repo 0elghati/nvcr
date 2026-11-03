@@ -108,8 +108,12 @@ Compatibility position, as validated (see the
 - **Across targets or providers** (for example, encoded on CPU and decoded on
   the Snapdragon NPU), MLVC is designed so that entropy decoding still works:
   scales are sent explicitly through `z`. Reconstructions are not expected to
-  be identical and can drift until the next I or LTR-recovery frame. NVCR has
-  not measured this yet.
+  be identical and can drift until the next I or LTR-recovery frame. On the
+  S25, decodes of one 640x360 stream on two backends fall to 34–43 dB Y PSNR
+  between each other by frame 63, then recover at the frame-64 LTR recovery.
+- **Same provider, different CPU architecture**: not identical either. ONNX
+  Runtime's arm64 CPU kernels produce different FP16 results from x86, so
+  upstream-runtime parity is established on x86 only.
 - **Not** consistent with MLVC's PyTorch reference beyond what the exported
   graph itself provides. That is an export property; see C5/C6 in the
   [roadmap](../ROADMAP.md).
@@ -124,7 +128,7 @@ it is a stream-format change outside this integration.
 | Provider | Status for MLVC |
 |---|---|
 | `onnxruntime-cpu` | Validated: upstream-runtime parity on the generic and qualcomm bundles |
-| `onnxruntime-qnn` (Snapdragon NPU) | Not run: needs the C9 arm64 Android build and a device |
+| `onnxruntime-qnn` (Snapdragon NPU) | Runs on the S25 with every node on the HTP; no upstream reference on the device, so parity is not established |
 | `onnxruntime-cuda` | Not validated for MLVC |
 | `tensorrt` | Rejected with `incompatible_target`; the TensorRT session loads DCVC-RT engine bundles only |
 
@@ -145,17 +149,47 @@ extracted bundle, and run `nvcr encode/decode --codec mlvc --provider
 onnxruntime-qnn --engine-dir <bundle>`. The provider disables CPU fallback, so a
 part the NPU cannot run fails to load instead of silently running on the CPU.
 
-Two differences from upstream remain open for the device run:
+On the S25 (2026-11-03), both parts load and run with CPU fallback disabled.
+Streams decode across the NPU, the phone CPU and x86 CPU without an entropy
+error, with the drift described above.
 
-- Upstream's QNN session uses `ORT_DISABLE_ALL` graph optimization,
-  `htp_performance_mode=burst` and `htp_graph_finalization_optimization_mode=3`.
-  NVCR's QNN provider uses `ORT_ENABLE_ALL` and sets only the backend path.
-- Upstream validated QNN with ONNX Runtime 1.24.4 on Windows on Arm, while NVCR
-  C9 uses 1.26.0 on Android.
+Upstream's QNN session (`_model_wrapper.py`) uses `ORT_DISABLE_ALL` graph
+optimization, `htp_performance_mode=burst` and
+`htp_graph_finalization_optimization_mode=3`. MLVC requests the same settings
+for its stages through codec provider options (`qnn.graph_optimization`,
+`qnn.htp_performance_mode`, `qnn.htp_graph_finalization_optimization_mode`).
+On the S25 they produced byte-identical streams and reconstructions to
+ONNX Runtime's defaults while cutting the mean model time at 640x360 from
+13.8 ms to 2.4 ms (encode) and from 15.3 ms to 3.2 ms (decode). They are not
+provider defaults: as defaults, QNN failed to finalize DCVC-RT's `i_analysis`
+graph. Other codecs keep ONNX Runtime's defaults (`ORT_ENABLE_ALL`, backend
+path only).
 
-The proposed device gate is: both parts load with CPU fallback disabled; a
-stream encoded on the device decodes on x86 CPU without an entropy error, and
-the reverse; and the reconstruction difference is reported.
+`onnxruntime-qnn` also caches compiled HTP graphs as ONNX Runtime EPContext
+models, by default in `<bundle>/.nvcr-cache`. The cache file name is a digest
+of the ONNX Runtime version, the session and QNN options, the SoC and build
+fingerprint, the name, size and modification time of each QNN library next to
+`libQnnHtp.so`, and the bytes of the source model and its external data files.
+A changed input therefore never reuses an old graph. An entry that fails to
+load is deleted and rebuilt, and a model whose compiled graph cannot be saved
+loads uncached. Each MLVC part is compiled only when a session
+first needs it, so an encode-only process never compiles the decoder.
+
+| Variable | Effect |
+|---|---|
+| `NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION` | `disable`, `basic`, `extended` or `all`; overrides the codec request and the default |
+| `NVCR_QNN_HTP_PERFORMANCE_MODE` | QNN `htp_performance_mode`, for example `burst`, `balanced` or `default`; overrides the codec request |
+| `NVCR_QNN_HTP_FINALIZATION_MODE` | QNN `htp_graph_finalization_optimization_mode` (`0` is ONNX Runtime's default); overrides the codec request |
+| `NVCR_ONNXRUNTIME_CACHE_DIR` | Cache directory for compiled QNN graphs; `off` disables the cache |
+
+The CLI prints the codec time to the first output, which includes lazy model
+loading, separately from the steady rate of the remaining frames.
+
+With `--verbose`, the MLVC sessions log mean host, model and entropy time per
+frame when they flush. Before the cache, short CLI runs on the device were
+dominated by session creation, about 4.8 s at 640x360, which is outside these
+phases. See the
+[C10 evidence](../evidence/phase-c10-mlvc-codec-20261102.md#snapdragon-device-run--2026-11-03).
 
 ## Reproducing the parity gate
 

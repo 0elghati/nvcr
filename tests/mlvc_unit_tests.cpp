@@ -195,6 +195,16 @@ void placement_tests() {
             check(output == frame, "input preparation and output finishing invert");
         }
     }
+    ModelParameters tiny = model;
+    tiny.width = 2;
+    tiny.height = 2;
+    std::vector<std::byte> nan_tensor(3U * 4U * 2U);
+    for (std::size_t index = 0; index < nan_tensor.size(); index += 2U) {
+        nan_tensor[index + 1U] = std::byte{0x7e};  // fp16 NaN 0x7e00, little endian
+    }
+    std::vector<std::byte> output(6, std::byte{1});
+    host_ops::finish_output(nan_tensor, host_ops::place(2, 2, tiny).value(), Precision::fp16, output);
+    check(output == std::vector<std::byte>(6), "NaN model output maps to 0");
 }
 
 void conversion_tests() {

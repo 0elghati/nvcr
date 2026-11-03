@@ -18,4 +18,6 @@ namespace nvcr::detail {
     std::span<const std::filesystem::path> paths,
     std::string_view subsystem);
 
+[[nodiscard]] std::string sha256_text(std::string_view text);
+
 }  // namespace nvcr::detail

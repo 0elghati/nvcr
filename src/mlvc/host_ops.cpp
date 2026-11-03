@@ -1,10 +1,12 @@
 #include "host_ops.hpp"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cmath>
 #include <cstring>
 #include <string>
+#include <type_traits>
 
 namespace nvcr::mlvc::host_ops {
 namespace {
@@ -22,25 +24,90 @@ float load(std::span<const std::byte> tensor, Precision precision, std::size_t i
     return value;
 }
 
-void store(std::span<std::byte> tensor, Precision precision, std::size_t index, float value) noexcept {
-    if (precision == Precision::fp16) {
-        const Half half = to_half(value);
-        std::memcpy(tensor.data() + index * sizeof(Half), &half, sizeof(Half));
-        return;
-    }
-    std::memcpy(tensor.data() + index * sizeof(float), &value, sizeof(float));
-}
-
-// numpy keeps fp16 tensors fp16 between host steps; fp32 tensors are exact.
-float round_to_precision(float value, Precision precision) noexcept {
-    return precision == Precision::fp16 ? to_float(to_half(value)) : value;
-}
-
 std::byte to_u8(float value) noexcept {
     // np.round(255 * v).clip(0, 255) in float32; nearbyint rounds half to even.
+    // NaN has no defined uint8 cast, so it maps to 0.
+    if (std::isnan(value)) return std::byte{0};
     const float scaled = std::nearbyint(255.0F * value);
     const float clipped = std::clamp(scaled, 0.0F, 255.0F);
     return static_cast<std::byte>(static_cast<std::uint8_t>(clipped));
+}
+
+// Lookup tables built from the scalar conversions, so results are identical.
+template <class Value>
+const std::array<Value, 256>& input_table() {
+    static const auto table = [] {
+        std::array<Value, 256> values{};
+        for (unsigned sample = 0; sample < 256U; ++sample) {
+            const float value = static_cast<float>(sample) / 255.0F;
+            if constexpr (std::is_same_v<Value, Half>) {
+                values[sample] = to_half(value);
+            } else {
+                values[sample] = value;
+            }
+        }
+        return values;
+    }();
+    return table;
+}
+
+const std::array<std::uint8_t, 65536>& half_to_u8_table() {
+    static const auto table = [] {
+        std::array<std::uint8_t, 65536> values{};
+        for (std::uint32_t half = 0; half < 65536U; ++half) {
+            values[half] = std::to_integer<std::uint8_t>(to_u8(to_float(static_cast<Half>(half))));
+        }
+        return values;
+    }();
+    return table;
+}
+
+const std::array<float, 65536>& half_to_float_table() {
+    static const auto table = [] {
+        std::array<float, 65536> values{};
+        for (std::uint32_t half = 0; half < 65536U; ++half) {
+            values[half] = to_float(static_cast<Half>(half));
+        }
+        return values;
+    }();
+    return table;
+}
+
+template <class Value>
+void prepare_planes(
+    std::span<const std::byte> i420, const Placement& placement, std::span<std::byte> output) {
+    const auto& table = input_table<Value>();
+    const std::size_t width = placement.frame_width;
+    const std::size_t height = placement.frame_height;
+    const std::size_t canvas_width = placement.canvas_width;
+    const std::size_t canvas_height = placement.canvas_height;
+    const std::size_t plane = canvas_width * canvas_height;
+    const auto* luma = i420.data();
+    const auto* cb = luma + width * height;
+    const auto* cr = cb + (width / 2U) * (height / 2U);
+    // The image on the canvas before padding (transposed if needed).
+    const std::size_t image_width = placement.transposed ? height : width;
+    const std::size_t image_height = placement.transposed ? width : height;
+    auto* out = output.data();
+    const auto put = [&](std::size_t index, std::byte sample) {
+        std::memcpy(out + index * sizeof(Value), &table[std::to_integer<unsigned>(sample)],
+                    sizeof(Value));
+    };
+
+    for (std::size_t y = 0; y < canvas_height; ++y) {
+        // Edge padding repeats the last row and column of the placed image.
+        const std::size_t image_y = std::min(y, image_height - 1U);
+        for (std::size_t x = 0; x < canvas_width; ++x) {
+            const std::size_t image_x = std::min(x, image_width - 1U);
+            const std::size_t row = placement.transposed ? image_x : image_y;
+            const std::size_t column = placement.transposed ? image_y : image_x;
+            const std::size_t chroma = (row / 2U) * (width / 2U) + column / 2U;
+            const std::size_t index = y * canvas_width + x;
+            put(index, luma[row * width + column]);
+            put(plane + index, cb[chroma]);
+            put(2U * plane + index, cr[chroma]);
+        }
+    }
 }
 
 }  // namespace
@@ -109,34 +176,10 @@ void prepare_input(
     const Placement& placement,
     Precision precision,
     std::span<std::byte> output) {
-    const std::size_t width = placement.frame_width;
-    const std::size_t height = placement.frame_height;
-    const std::size_t canvas_width = placement.canvas_width;
-    const std::size_t canvas_height = placement.canvas_height;
-    const std::size_t plane = canvas_width * canvas_height;
-    const auto* luma = i420.data();
-    const auto* cb = luma + width * height;
-    const auto* cr = cb + (width / 2U) * (height / 2U);
-    // The image on the canvas before padding (transposed if needed).
-    const std::size_t image_width = placement.transposed ? height : width;
-    const std::size_t image_height = placement.transposed ? width : height;
-
-    for (std::size_t y = 0; y < canvas_height; ++y) {
-        // Edge padding repeats the last row and column of the placed image.
-        const std::size_t image_y = std::min(y, image_height - 1U);
-        for (std::size_t x = 0; x < canvas_width; ++x) {
-            const std::size_t image_x = std::min(x, image_width - 1U);
-            const std::size_t row = placement.transposed ? image_x : image_y;
-            const std::size_t column = placement.transposed ? image_y : image_x;
-            const std::size_t chroma = (row / 2U) * (width / 2U) + column / 2U;
-            const std::size_t index = y * canvas_width + x;
-            store(output, precision, index,
-                  static_cast<float>(std::to_integer<unsigned>(luma[row * width + column])) / 255.0F);
-            store(output, precision, plane + index,
-                  static_cast<float>(std::to_integer<unsigned>(cb[chroma])) / 255.0F);
-            store(output, precision, 2U * plane + index,
-                  static_cast<float>(std::to_integer<unsigned>(cr[chroma])) / 255.0F);
-        }
+    if (precision == Precision::fp16) {
+        prepare_planes<Half>(i420, placement, output);
+    } else {
+        prepare_planes<float>(i420, placement, output);
     }
 }
 
@@ -156,23 +199,48 @@ void finish_output(
     };
 
     auto* luma = i420.data();
-    for (std::size_t row = 0; row < height; ++row) {
-        for (std::size_t column = 0; column < width; ++column) {
-            luma[row * width + column] = to_u8(sample(0, row, column));
+    if (precision == Precision::fp16) {
+        const auto& table = half_to_u8_table();
+        for (std::size_t row = 0; row < height; ++row) {
+            for (std::size_t column = 0; column < width; ++column) {
+                const std::size_t y = placement.transposed ? column : row;
+                const std::size_t x = placement.transposed ? row : column;
+                Half half{};
+                std::memcpy(&half, x_hat.data() + (y * canvas_width + x) * sizeof(Half),
+                            sizeof(Half));
+                luma[row * width + column] = static_cast<std::byte>(table[half]);
+            }
+        }
+    } else {
+        for (std::size_t row = 0; row < height; ++row) {
+            for (std::size_t column = 0; column < width; ++column) {
+                luma[row * width + column] = to_u8(sample(0, row, column));
+            }
         }
     }
     // _downsample_uv: float32 reshape(h/2, 2, w/2, 2).mean(axis=(1, 3)),
     // accumulated top-left, top-right, bottom-left, bottom-right.
+    const auto* halves = precision == Precision::fp16 ? &half_to_float_table() : nullptr;
+    const auto* u8 = precision == Precision::fp16 ? &half_to_u8_table() : nullptr;
     for (std::size_t channel = 1; channel < 3U; ++channel) {
         auto* chroma = luma + width * height + (channel - 1U) * (width / 2U) * (height / 2U);
+        const auto value = [&](std::size_t row, std::size_t column) {
+            if (halves == nullptr) return sample(channel, row, column);
+            const std::size_t y = placement.transposed ? column : row;
+            const std::size_t x = placement.transposed ? row : column;
+            Half half{};
+            std::memcpy(&half, x_hat.data() + (channel * plane + y * canvas_width + x) * sizeof(Half),
+                        sizeof(Half));
+            return (*halves)[half];
+        };
         for (std::size_t row = 0; row < height / 2U; ++row) {
             for (std::size_t column = 0; column < width / 2U; ++column) {
-                float sum = sample(channel, 2U * row, 2U * column);
-                sum += sample(channel, 2U * row, 2U * column + 1U);
-                sum += sample(channel, 2U * row + 1U, 2U * column);
-                sum += sample(channel, 2U * row + 1U, 2U * column + 1U);
-                chroma[row * (width / 2U) + column] =
-                    to_u8(round_to_precision(sum / 4.0F, precision));
+                float sum = value(2U * row, 2U * column);
+                sum += value(2U * row, 2U * column + 1U);
+                sum += value(2U * row + 1U, 2U * column);
+                sum += value(2U * row + 1U, 2U * column + 1U);
+                chroma[row * (width / 2U) + column] = u8 != nullptr ?
+                    static_cast<std::byte>((*u8)[to_half(sum / 4.0F)]) : to_u8(sum / 4.0F);
             }
         }
     }

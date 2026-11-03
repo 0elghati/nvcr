@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <span>
 #include <string>
@@ -91,6 +92,8 @@ struct ExecutableStageDescriptor final {
     std::string stage_id;
     ArtifactDescriptor artifact;
     std::vector<TensorContract> tensors;
+    // Codec-requested settings keyed by target, e.g. "qnn.htp_performance_mode".
+    std::map<std::string, std::string, std::less<>> provider_options;
 };
 
 class IExecutableStage {

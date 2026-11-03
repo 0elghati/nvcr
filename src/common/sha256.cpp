@@ -125,6 +125,14 @@ private:
     std::size_t total_bytes_{};
 };
 
+template <class Digest>
+std::string to_hex(const Digest& digest) {
+    std::ostringstream output;
+    output << std::hex << std::setfill('0');
+    for (const auto byte : digest) output << std::setw(2) << static_cast<unsigned>(byte);
+    return output.str();
+}
+
 }  // namespace
 
 Result<std::string> sha256_file(
@@ -161,11 +169,13 @@ Result<std::string> sha256_files(
                 std::string(subsystem));
         }
     }
-    const auto digest = sha256.finish();
-    std::ostringstream output;
-    output << std::hex << std::setfill('0');
-    for (const auto byte : digest) output << std::setw(2) << static_cast<unsigned>(byte);
-    return output.str();
+    return to_hex(sha256.finish());
+}
+
+std::string sha256_text(std::string_view text) {
+    Sha256 sha256;
+    sha256.update(std::as_bytes(std::span(text.data(), text.size())));
+    return to_hex(sha256.finish());
 }
 
 }  // namespace nvcr::detail

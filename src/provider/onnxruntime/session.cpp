@@ -10,18 +10,31 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <map>
 #include <memory>
 #include <new>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
+
+#if defined(__ANDROID__)
+#include <sys/system_properties.h>
+#endif
+#if !defined(_WIN32)
+#include <dlfcn.h>
+#endif
 
 namespace nvcr::provider::onnxruntime {
 namespace {
@@ -54,6 +67,138 @@ constexpr const char* qnn_htp_backend = "libQnnHtp.so";
 
 Error session_error(ErrorCode code, std::string message) {
     return Error(code, std::move(message), std::string(subsystem));
+}
+
+std::string environment_value(const char* name) {
+    const char* value = std::getenv(name);
+    return value == nullptr ? std::string{} : std::string(value);
+}
+
+std::optional<GraphOptimizationLevel> optimization_level(std::string_view level) {
+    if (level == "disable") return GraphOptimizationLevel::ORT_DISABLE_ALL;
+    if (level == "basic") return GraphOptimizationLevel::ORT_ENABLE_BASIC;
+    if (level == "extended") return GraphOptimizationLevel::ORT_ENABLE_EXTENDED;
+    if (level == "all") return GraphOptimizationLevel::ORT_ENABLE_ALL;
+    return std::nullopt;
+}
+
+struct QnnSettings final {
+    GraphOptimizationLevel level{GraphOptimizationLevel::ORT_ENABLE_ALL};
+    std::map<std::string, std::string> options{{"backend_path", qnn_htp_backend}};
+};
+
+// Settings a codec requested for a stage ("qnn.*"); NVCR_QNN_* variables override them.
+Result<QnnSettings> qnn_settings(const session_api::ExecutableStageDescriptor& descriptor) {
+    QnnSettings settings;
+    for (const auto& [key, value] : descriptor.provider_options) {
+        if (!key.starts_with("qnn.")) continue;
+        const auto name = key.substr(4);
+        if (name == "graph_optimization" && optimization_level(value)) {
+            settings.level = *optimization_level(value);
+        } else if (name == "htp_performance_mode" ||
+                   name == "htp_graph_finalization_optimization_mode") {
+            settings.options[name] = value;
+        } else {
+            return session_error(ErrorCode::invalid_argument,
+                                 "unsupported provider option: " + key + "=" + value);
+        }
+    }
+    if (const auto mode = environment_value("NVCR_QNN_HTP_PERFORMANCE_MODE"); !mode.empty()) {
+        settings.options["htp_performance_mode"] = mode;
+    }
+    if (const auto mode = environment_value("NVCR_QNN_HTP_FINALIZATION_MODE"); !mode.empty()) {
+        settings.options["htp_graph_finalization_optimization_mode"] = mode;
+    }
+    return settings;
+}
+
+// External data files named by an ONNX model: each TensorProto.external_data
+// entry serializes as 0a 08 "location" 12 <length> <file>.
+std::optional<std::vector<std::string>> external_data_files(std::string_view model) {
+    constexpr std::string_view marker{"\x0a\x08location\x12", 11};
+    std::vector<std::string> files;
+    for (auto at = model.find(marker); at != std::string_view::npos;
+         at = model.find(marker, at + 1)) {
+        const auto start = at + marker.size() + 1;
+        if (start > model.size()) return std::nullopt;
+        const auto length = static_cast<unsigned char>(model[start - 1]);
+        if (length == 0U || length >= 0x80U || start + length > model.size()) return std::nullopt;
+        std::string name(model.substr(start, length));
+        if (name.find_first_of("/\\") != std::string::npos || name.starts_with("..")) {
+            return std::nullopt;
+        }
+        if (std::find(files.begin(), files.end(), name) == files.end()) files.push_back(name);
+    }
+    return files;
+}
+
+// The SoC, OS build and QNN libraries a compiled graph was built for; empty
+// when the QNN libraries cannot be located.
+const std::string& qnn_target_identity() {
+    static const std::string identity = [] {
+        std::string result;
+#if defined(__ANDROID__)
+        for (const char* property : {"ro.soc.model", "ro.build.fingerprint"}) {
+            char value[PROP_VALUE_MAX]{};
+            __system_property_get(property, value);
+            result += std::string(property) + "=" + value + "\n";
+        }
+#endif
+#if !defined(_WIN32)
+        void* handle = dlopen(qnn_htp_backend, RTLD_LAZY | RTLD_LOCAL);
+        if (handle == nullptr) return std::string{};
+        Dl_info info{};
+        void* symbol = dlsym(handle, "QnnInterface_getProviders");
+        if (symbol == nullptr || dladdr(symbol, &info) == 0 || info.dli_fname == nullptr) {
+            dlclose(handle);
+            return std::string{};
+        }
+        std::vector<fs::path> libraries;
+        std::error_code error;
+        for (const auto& entry : fs::directory_iterator(fs::path(info.dli_fname).parent_path(), error)) {
+            if (entry.path().filename().string().starts_with("libQnn")) libraries.push_back(entry.path());
+        }
+        dlclose(handle);
+        std::sort(libraries.begin(), libraries.end());
+        for (const auto& library : libraries) {
+            const auto modified = fs::last_write_time(library, error).time_since_epoch().count();
+            result += library.filename().string() + "=" + std::to_string(fs::file_size(library, error)) +
+                ":" + std::to_string(static_cast<long long>(modified)) + "\n";
+        }
+#endif
+        return result;
+    }();
+    return identity;
+}
+
+// Compiled QNN graphs are cached as EPContext models in <bundle>/.nvcr-cache
+// (NVCR_ONNXRUNTIME_CACHE_DIR, or "off"). The file name hashes everything that
+// shapes the compiled graph, so a changed input never reuses an old one.
+std::optional<fs::path> context_cache_path(
+    const fs::path& model, const std::string& component_id, const std::string& bundle,
+    const QnnSettings& settings) {
+    const auto configured = environment_value("NVCR_ONNXRUNTIME_CACHE_DIR");
+    if (configured == "off" || qnn_target_identity().empty()) return std::nullopt;
+    const fs::path directory = configured.empty() ? fs::path(bundle) / ".nvcr-cache" : fs::path(configured);
+    std::error_code error;
+    fs::create_directories(directory, error);
+    if (!fs::is_directory(directory, error)) return std::nullopt;
+
+    std::ifstream input(model, std::ios::binary);
+    const std::string bytes{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    const auto data = external_data_files(bytes);
+    if (!input || !data) return std::nullopt;
+
+    std::string key = std::string("onnxruntime=") + OrtGetApiBase()->GetVersionString() + "\n" +
+        "graph=" + std::to_string(static_cast<int>(settings.level)) + "\n" + qnn_target_identity() +
+        "model=" + detail::sha256_text(bytes) + "\n";
+    for (const auto& [name, value] : settings.options) key += name + "=" + value + "\n";
+    for (const auto& name : *data) {
+        auto digest = detail::sha256_file(model.parent_path() / name, subsystem);
+        if (!digest) return std::nullopt;
+        key += name + "=" + digest.value() + "\n";
+    }
+    return directory / (component_id + "-" + detail::sha256_text(key).substr(0, 32) + ".onnx");
 }
 
 Ort::Env& environment() {
@@ -243,6 +388,8 @@ public:
                 ErrorCode::invalid_argument,
                 "stage component id must be a lowercase identifier: " + artifact.component_id);
         }
+        auto qnn_requested = qnn_settings(descriptor);
+        if (!qnn_requested) return qnn_requested.error();
         const auto path = fs::path(artifact.path) / (artifact.component_id + ".onnx");
         std::error_code error;
         if (!fs::is_regular_file(path, error)) {
@@ -258,18 +405,60 @@ public:
             }
         }
         try {
-            Ort::SessionOptions options;
-            options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-            if (target_.runtime_name == "CUDAExecutionProvider") {
-                OrtCUDAProviderOptions cuda{};
-                cuda.device_id = device_id_;
-                options.AppendExecutionProvider_CUDA(cuda);
-            } else if (target_.runtime_name == "QNNExecutionProvider") {
-                // Every node must run on the HTP; a silent CPU fallback would
-                // misreport where the codec executes.
-                options.AddConfigEntry("session.disable_cpu_ep_fallback", "1");
-                options.AppendExecutionProvider("QNN", {{"backend_path", qnn_htp_backend}});
+            // Execution providers load shared libraries that log through the
+            // default logger, which exists only once an Env does.
+            (void)environment();
+            const bool qnn = target_.runtime_name == "QNNExecutionProvider";
+            auto settings = qnn_requested.value();
+            if (!qnn) settings.level = GraphOptimizationLevel::ORT_ENABLE_ALL;
+            settings.level = optimization_level(environment_value("NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION"))
+                                 .value_or(settings.level);
+            const auto level = settings.level;
+            const auto make_options = [&](const fs::path* context_output) {
+                Ort::SessionOptions options;
+                options.SetGraphOptimizationLevel(level);
+                if (target_.runtime_name == "CUDAExecutionProvider") {
+                    OrtCUDAProviderOptions cuda{};
+                    cuda.device_id = device_id_;
+                    options.AppendExecutionProvider_CUDA(cuda);
+                } else if (qnn) {
+                    // Every node must run on the HTP; a silent CPU fallback would
+                    // misreport where the codec executes.
+                    options.AddConfigEntry("session.disable_cpu_ep_fallback", "1");
+                    if (context_output != nullptr) {
+                        options.AddConfigEntry("ep.context_enable", "1");
+                        options.AddConfigEntry("ep.context_embed_mode", "1");
+                        options.AddConfigEntry("ep.context_file_path", context_output->c_str());
+                    }
+                    options.AppendExecutionProvider(
+                        "QNN", std::unordered_map<std::string, std::string>(
+                                   settings.options.begin(), settings.options.end()));
+                }
+                return options;
+            };
+
+            std::optional<Ort::Session> session;
+            const auto cached = qnn ?
+                context_cache_path(path, artifact.component_id, artifact.path, settings) : std::nullopt;
+            if (cached && fs::is_regular_file(*cached, error)) {
+                try {
+                    session.emplace(environment(), cached->c_str(), make_options(nullptr));
+                } catch (const Ort::Exception&) {
+                    fs::remove(*cached, error);  // stale or damaged; rebuilt below
+                }
             }
+            if (!session && cached) {
+                auto temporary = *cached;
+                temporary += "." + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+                try {
+                    session.emplace(environment(), path.c_str(), make_options(&temporary));
+                    fs::rename(temporary, *cached, error);
+                } catch (const Ort::Exception&) {
+                    // Caching is optional; the plain load below reports real errors.
+                }
+                fs::remove(temporary, error);
+            }
+            if (!session) session.emplace(environment(), path.c_str(), make_options(nullptr));
             const auto precision = declared_precision(descriptor.artifact.precision);
             if (!precision) {
                 return session_error(
@@ -277,8 +466,7 @@ public:
                     "ONNX stage precision must be fp16 or fp32: " + path.string());
             }
             auto stage = std::make_shared<const OrtStage>(
-                std::move(descriptor), owner_id_,
-                Ort::Session(environment(), path.c_str(), options));
+                std::move(descriptor), owner_id_, std::move(*session));
             if (!stage->float_tensors_are(*precision)) {
                 return session_error(
                     ErrorCode::incompatible_precision,
