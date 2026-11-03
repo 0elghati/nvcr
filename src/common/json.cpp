@@ -165,8 +165,7 @@ private:
         const char* last = input_.data() + offset_;
         Value value;
         value.kind = Value::Kind::number;
-        // Android's libc++ has no floating-point from_chars; a classic-locale
-        // stream parses the already validated JSON token the same way.
+        // Android's libc++ has no floating-point from_chars.
         std::istringstream stream{std::string(first, last)};
         stream.imbue(std::locale::classic());
         stream >> value.number_value;

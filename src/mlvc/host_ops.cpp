@@ -31,8 +31,7 @@ std::byte to_u8(float value) noexcept {
     return static_cast<std::byte>(static_cast<std::uint8_t>(clipped));
 }
 
-// Every 8-bit sample maps to one model value, and every fp16 model value to one
-// 8-bit sample, so tables built with the scalar conversions above are exact.
+// Lookup tables built from the scalar conversions, so results are identical.
 template <class Value>
 const std::array<Value, 256>& input_table() {
     static const auto table = [] {
@@ -238,7 +237,6 @@ void finish_output(
                 sum += value(2U * row, 2U * column + 1U);
                 sum += value(2U * row + 1U, 2U * column);
                 sum += value(2U * row + 1U, 2U * column + 1U);
-                // fp16 tensors stay fp16 between numpy steps: cast the mean back.
                 chroma[row * (width / 2U) + column] = u8 != nullptr ?
                     static_cast<std::byte>((*u8)[to_half(sum / 4.0F)]) : to_u8(sum / 4.0F);
             }

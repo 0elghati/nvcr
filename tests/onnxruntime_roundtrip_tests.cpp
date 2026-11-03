@@ -99,8 +99,7 @@ int session_contract(const nvcr::runtime::ProviderEntry& entry,
         return fail("missing ONNX stage was not reported as missing_artifact");
     }
 
-    // Codec-requested options: unknown QNN keys and values are rejected on
-    // every ONNX Runtime target; other namespaces are ignored.
+    // Unknown qnn options are rejected; other targets' options are ignored.
     for (const auto& [key, value] : {std::pair{"qnn.unknown", "1"},
                                      std::pair{"qnn.graph_optimization", "fast"}}) {
         auto options = missing;

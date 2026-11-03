@@ -9,19 +9,17 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <fstream>
-#include <functional>
 #include <iterator>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <new>
 #include <optional>
 #include <span>
@@ -76,7 +74,7 @@ std::string environment_value(const char* name) {
     return value == nullptr ? std::string{} : std::string(value);
 }
 
-std::optional<GraphOptimizationLevel> parse_graph_optimization_level(std::string_view level) {
+std::optional<GraphOptimizationLevel> optimization_level(std::string_view level) {
     if (level == "disable") return GraphOptimizationLevel::ORT_DISABLE_ALL;
     if (level == "basic") return GraphOptimizationLevel::ORT_ENABLE_BASIC;
     if (level == "extended") return GraphOptimizationLevel::ORT_ENABLE_EXTENDED;
@@ -84,156 +82,123 @@ std::optional<GraphOptimizationLevel> parse_graph_optimization_level(std::string
     return std::nullopt;
 }
 
-// NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION=disable|basic|extended|all overrides the
-// level the stage would otherwise use.
-GraphOptimizationLevel graph_optimization_level(GraphOptimizationLevel fallback) {
-    return parse_graph_optimization_level(environment_value("NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION"))
-        .value_or(fallback);
-}
+struct QnnSettings final {
+    GraphOptimizationLevel level{GraphOptimizationLevel::ORT_ENABLE_ALL};
+    std::map<std::string, std::string> options{{"backend_path", qnn_htp_backend}};
+};
 
-// QNN HTP compiled-graph cache
-//
-// Compiling the HTP graphs dominates QNN session creation (seconds per
-// stage). ONNX Runtime can save the compiled graph as an EPContext model and
-// load that instead. A cached model is used only when everything that shapes
-// the compiled graph is unchanged, so its file name is a digest of: the ONNX
-// Runtime version, the session and QNN options, the device (SoC and build
-// fingerprint), the QNN libraries next to libQnnHtp.so (name, size, mtime),
-// and the bytes of the source model and every external data file it names.
-
-std::string file_identity(const fs::path& path) {
-    std::error_code error;
-    const auto size = fs::file_size(path, error);
-    if (error) return {};
-    const auto modified = fs::last_write_time(path, error);
-    if (error) return {};
-    return std::to_string(size) + ":" +
-        std::to_string(static_cast<long long>(modified.time_since_epoch().count()));
-}
-
-// Contents digest, memoized per (path, size, mtime) so a weights file shared by
-// several stages is read once per process.
-std::string file_digest(const fs::path& path) {
-    static std::mutex mutex;
-    static std::map<std::string, std::string, std::less<>> digests;
-    const auto key = path.string() + "|" + file_identity(path);
-    {
-        std::scoped_lock lock(mutex);
-        if (const auto found = digests.find(key); found != digests.end()) return found->second;
+// Settings a codec requested for a stage ("qnn.*"); NVCR_QNN_* variables override them.
+Result<QnnSettings> qnn_settings(const session_api::ExecutableStageDescriptor& descriptor) {
+    QnnSettings settings;
+    for (const auto& [key, value] : descriptor.provider_options) {
+        if (!key.starts_with("qnn.")) continue;
+        const auto name = key.substr(4);
+        if (name == "graph_optimization" && optimization_level(value)) {
+            settings.level = *optimization_level(value);
+        } else if (name == "htp_performance_mode" ||
+                   name == "htp_graph_finalization_optimization_mode") {
+            settings.options[name] = value;
+        } else {
+            return session_error(ErrorCode::invalid_argument,
+                                 "unsupported provider option: " + key + "=" + value);
+        }
     }
-    auto digest = detail::sha256_file(path, subsystem);
-    if (!digest) return {};
-    std::scoped_lock lock(mutex);
-    digests.emplace(key, digest.value());
-    return digest.value();
+    if (const auto mode = environment_value("NVCR_QNN_HTP_PERFORMANCE_MODE"); !mode.empty()) {
+        settings.options["htp_performance_mode"] = mode;
+    }
+    if (const auto mode = environment_value("NVCR_QNN_HTP_FINALIZATION_MODE"); !mode.empty()) {
+        settings.options["htp_graph_finalization_optimization_mode"] = mode;
+    }
+    return settings;
 }
 
-// TensorProto.external_data entries serialize as {key: "location", value: file},
-// that is 0a 08 "location" 12 <length> <file>. Names are returned in order of
-// first appearance; an unreadable reference makes the model uncacheable.
+// External data files named by an ONNX model: each TensorProto.external_data
+// entry serializes as 0a 08 "location" 12 <length> <file>.
 std::optional<std::vector<std::string>> external_data_files(std::string_view model) {
     constexpr std::string_view marker{"\x0a\x08location\x12", 11};
     std::vector<std::string> files;
     for (auto at = model.find(marker); at != std::string_view::npos;
-         at = model.find(marker, at + marker.size())) {
-        const auto length_at = at + marker.size();
-        if (length_at >= model.size()) return std::nullopt;
-        const auto length = static_cast<unsigned char>(model[length_at]);
-        if (length == 0U || length >= 0x80U || length_at + 1U + length > model.size()) {
+         at = model.find(marker, at + 1)) {
+        const auto start = at + marker.size() + 1;
+        if (start > model.size()) return std::nullopt;
+        const auto length = static_cast<unsigned char>(model[start - 1]);
+        if (length == 0U || length >= 0x80U || start + length > model.size()) return std::nullopt;
+        std::string name(model.substr(start, length));
+        if (name.find_first_of("/\\") != std::string::npos || name.starts_with("..")) {
             return std::nullopt;
         }
-        std::string name(model.substr(length_at + 1U, length));
-        if (name.find("..") != std::string::npos || name.find('/') != std::string::npos ||
-            name.find('\\') != std::string::npos) {
-            return std::nullopt;
-        }
-        if (std::find(files.begin(), files.end(), name) == files.end()) {
-            files.push_back(std::move(name));
-        }
+        if (std::find(files.begin(), files.end(), name) == files.end()) files.push_back(name);
     }
     return files;
 }
 
-std::string device_identity() {
-#if defined(__ANDROID__)
-    std::string identity;
-    for (const char* property : {"ro.soc.manufacturer", "ro.soc.model", "ro.build.fingerprint"}) {
-        char value[PROP_VALUE_MAX]{};
-        __system_property_get(property, value);
-        identity += std::string(property) + "=" + value + "\n";
-    }
-    return identity;
-#else
-    return "host\n";
-#endif
-}
-
-// Empty when the QNN libraries cannot be located; caching is then disabled.
-const std::string& qnn_library_identity() {
+// The SoC, OS build and QNN libraries a compiled graph was built for; empty
+// when the QNN libraries cannot be located.
+const std::string& qnn_target_identity() {
     static const std::string identity = [] {
         std::string result;
+#if defined(__ANDROID__)
+        for (const char* property : {"ro.soc.model", "ro.build.fingerprint"}) {
+            char value[PROP_VALUE_MAX]{};
+            __system_property_get(property, value);
+            result += std::string(property) + "=" + value + "\n";
+        }
+#endif
 #if !defined(_WIN32)
         void* handle = dlopen(qnn_htp_backend, RTLD_LAZY | RTLD_LOCAL);
-        if (handle == nullptr) return result;
+        if (handle == nullptr) return std::string{};
         Dl_info info{};
         void* symbol = dlsym(handle, "QnnInterface_getProviders");
-        if (symbol != nullptr && dladdr(symbol, &info) != 0 && info.dli_fname != nullptr) {
-            std::error_code error;
-            std::vector<std::string> names;
-            for (const auto& entry :
-                 fs::directory_iterator(fs::path(info.dli_fname).parent_path(), error)) {
-                const auto name = entry.path().filename().string();
-                if (name.rfind("libQnn", 0) == 0) names.push_back(name);
-            }
-            std::sort(names.begin(), names.end());
-            for (const auto& name : names) {
-                result += name + "=" +
-                    file_identity(fs::path(info.dli_fname).parent_path() / name) + "\n";
-            }
+        if (symbol == nullptr || dladdr(symbol, &info) == 0 || info.dli_fname == nullptr) {
+            dlclose(handle);
+            return std::string{};
+        }
+        std::vector<fs::path> libraries;
+        std::error_code error;
+        for (const auto& entry : fs::directory_iterator(fs::path(info.dli_fname).parent_path(), error)) {
+            if (entry.path().filename().string().starts_with("libQnn")) libraries.push_back(entry.path());
         }
         dlclose(handle);
+        std::sort(libraries.begin(), libraries.end());
+        for (const auto& library : libraries) {
+            const auto modified = fs::last_write_time(library, error).time_since_epoch().count();
+            result += library.filename().string() + "=" + std::to_string(fs::file_size(library, error)) +
+                ":" + std::to_string(static_cast<long long>(modified)) + "\n";
+        }
 #endif
         return result;
     }();
     return identity;
 }
 
-// NVCR_ONNXRUNTIME_CACHE_DIR selects the directory; "off" disables the cache.
-// By default the cache lives in <bundle>/.nvcr-cache.
-std::optional<fs::path> cache_directory(const std::string& bundle) {
-    const auto configured = environment_value("NVCR_ONNXRUNTIME_CACHE_DIR");
-    if (configured == "off") return std::nullopt;
-    fs::path directory = configured.empty() ? fs::path(bundle) / ".nvcr-cache" : fs::path(configured);
-    std::error_code error;
-    fs::create_directories(directory, error);
-    if (error || !fs::is_directory(directory, error)) return std::nullopt;
-    return directory;
-}
-
+// Compiled QNN graphs are cached as EPContext models in <bundle>/.nvcr-cache
+// (NVCR_ONNXRUNTIME_CACHE_DIR, or "off"). The file name hashes everything that
+// shapes the compiled graph, so a changed input never reuses an old one.
 std::optional<fs::path> context_cache_path(
     const fs::path& model, const std::string& component_id, const std::string& bundle,
-    const std::string& session_key) {
-    const auto& libraries = qnn_library_identity();
-    if (libraries.empty()) return std::nullopt;
-    const auto directory = cache_directory(bundle);
-    if (!directory) return std::nullopt;
+    const QnnSettings& settings) {
+    const auto configured = environment_value("NVCR_ONNXRUNTIME_CACHE_DIR");
+    if (configured == "off" || qnn_target_identity().empty()) return std::nullopt;
+    const fs::path directory = configured.empty() ? fs::path(bundle) / ".nvcr-cache" : fs::path(configured);
+    std::error_code error;
+    fs::create_directories(directory, error);
+    if (!fs::is_directory(directory, error)) return std::nullopt;
 
     std::ifstream input(model, std::ios::binary);
-    std::string bytes{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
-    if (!input.eof() && input.fail()) return std::nullopt;
+    const std::string bytes{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
     const auto data = external_data_files(bytes);
-    if (!data) return std::nullopt;
+    if (!input || !data) return std::nullopt;
 
-    std::string material = "nvcr-onnxruntime-qnn-context-v1\n";
-    material += std::string("onnxruntime=") + OrtGetApiBase()->GetVersionString() + "\n";
-    material += session_key + device_identity() + libraries;
-    material += "model=" + detail::sha256_text(bytes) + "\n";
+    std::string key = std::string("onnxruntime=") + OrtGetApiBase()->GetVersionString() + "\n" +
+        "graph=" + std::to_string(static_cast<int>(settings.level)) + "\n" + qnn_target_identity() +
+        "model=" + detail::sha256_text(bytes) + "\n";
+    for (const auto& [name, value] : settings.options) key += name + "=" + value + "\n";
     for (const auto& name : *data) {
-        const auto digest = file_digest(model.parent_path() / name);
-        if (digest.empty()) return std::nullopt;
-        material += "data:" + name + "=" + digest + "\n";
+        auto digest = detail::sha256_file(model.parent_path() / name, subsystem);
+        if (!digest) return std::nullopt;
+        key += name + "=" + digest.value() + "\n";
     }
-    return *directory / (component_id + "-" + detail::sha256_text(material).substr(0, 32) + ".onnx");
+    return directory / (component_id + "-" + detail::sha256_text(key).substr(0, 32) + ".onnx");
 }
 
 Ort::Env& environment() {
@@ -423,17 +388,8 @@ public:
                 ErrorCode::invalid_argument,
                 "stage component id must be a lowercase identifier: " + artifact.component_id);
         }
-        for (const auto& [key, value] : descriptor.provider_options) {
-            if (key.rfind("qnn.", 0) != 0) continue;
-            const bool known = (key == "qnn.graph_optimization" &&
-                                parse_graph_optimization_level(value)) ||
-                key == "qnn.htp_performance_mode" ||
-                key == "qnn.htp_graph_finalization_optimization_mode";
-            if (!known) {
-                return session_error(ErrorCode::invalid_argument,
-                                     "unsupported provider option: " + key + "=" + value);
-            }
-        }
+        auto qnn_requested = qnn_settings(descriptor);
+        if (!qnn_requested) return qnn_requested.error();
         const auto path = fs::path(artifact.path) / (artifact.component_id + ".onnx");
         std::error_code error;
         if (!fs::is_regular_file(path, error)) {
@@ -453,36 +409,14 @@ public:
             // default logger, which exists only once an Env does.
             (void)environment();
             const bool qnn = target_.runtime_name == "QNNExecutionProvider";
-            // A codec may request QNN settings for its stages ("qnn." options);
-            // without them the provider keeps ONNX Runtime's defaults. The
-            // NVCR_* environment variables override both.
-            GraphOptimizationLevel requested_level = GraphOptimizationLevel::ORT_ENABLE_ALL;
-            std::map<std::string, std::string> qnn_options{{"backend_path", qnn_htp_backend}};
-            for (const auto& [key, value] : descriptor.provider_options) {
-                if (!qnn || key.rfind("qnn.", 0) != 0) continue;
-                const auto name = key.substr(4);
-                if (name == "graph_optimization") {
-                    requested_level = *parse_graph_optimization_level(value);
-                } else {
-                    qnn_options[name] = value;
-                }
-            }
-            const auto level = graph_optimization_level(requested_level);
-            if (const auto mode = environment_value("NVCR_QNN_HTP_PERFORMANCE_MODE"); !mode.empty()) {
-                qnn_options["htp_performance_mode"] = mode;
-            }
-            if (const auto mode = environment_value("NVCR_QNN_HTP_FINALIZATION_MODE"); !mode.empty()) {
-                qnn_options["htp_graph_finalization_optimization_mode"] = mode;
-            }
+            auto settings = qnn_requested.value();
+            if (!qnn) settings.level = GraphOptimizationLevel::ORT_ENABLE_ALL;
+            settings.level = optimization_level(environment_value("NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION"))
+                                 .value_or(settings.level);
+            const auto level = settings.level;
             const auto make_options = [&](const fs::path* context_output) {
                 Ort::SessionOptions options;
                 options.SetGraphOptimizationLevel(level);
-                if (const auto prefix = environment_value("NVCR_ONNXRUNTIME_PROFILE"); !prefix.empty()) {
-                    options.EnableProfiling((prefix + "-" + artifact.component_id).c_str());
-                }
-                if (environment_value("NVCR_ONNXRUNTIME_DISABLE_CPU_FALLBACK") == "1") {
-                    options.AddConfigEntry("session.disable_cpu_ep_fallback", "1");
-                }
                 if (target_.runtime_name == "CUDAExecutionProvider") {
                     OrtCUDAProviderOptions cuda{};
                     cuda.device_id = device_id_;
@@ -498,39 +432,29 @@ public:
                     }
                     options.AppendExecutionProvider(
                         "QNN", std::unordered_map<std::string, std::string>(
-                                   qnn_options.begin(), qnn_options.end()));
+                                   settings.options.begin(), settings.options.end()));
                 }
                 return options;
             };
 
             std::optional<Ort::Session> session;
-            std::optional<fs::path> cached;
-            if (qnn) {
-                std::string session_key = "graph=" + std::to_string(static_cast<int>(level)) + "\n";
-                for (const auto& [key, value] : qnn_options) session_key += key + "=" + value + "\n";
-                cached = context_cache_path(path, artifact.component_id, artifact.path, session_key);
-            }
+            const auto cached = qnn ?
+                context_cache_path(path, artifact.component_id, artifact.path, settings) : std::nullopt;
             if (cached && fs::is_regular_file(*cached, error)) {
                 try {
                     session.emplace(environment(), cached->c_str(), make_options(nullptr));
                 } catch (const Ort::Exception&) {
-                    // A stale or damaged entry is rebuilt from the source model.
-                    fs::remove(*cached, error);
+                    fs::remove(*cached, error);  // stale or damaged; rebuilt below
                 }
             }
             if (!session && cached) {
                 auto temporary = *cached;
-                temporary.replace_extension(
-                    "tmp" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
-                    ".onnx");
+                temporary += "." + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
                 try {
                     session.emplace(environment(), path.c_str(), make_options(&temporary));
-                } catch (const Ort::Exception&) {
-                    // Saving the compiled graph is an optimization; the plain
-                    // load below reports any real error with the model.
-                }
-                if (session && fs::is_regular_file(temporary, error)) {
                     fs::rename(temporary, *cached, error);
+                } catch (const Ort::Exception&) {
+                    // Caching is optional; the plain load below reports real errors.
                 }
                 fs::remove(temporary, error);
             }

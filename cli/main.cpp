@@ -772,8 +772,7 @@ bool measurement_sync(const Options& options) {
 #endif
 }
 
-// Codec time up to the first output includes lazy model loading (graph
-// compilation on some providers), so the steady rate is reported apart from it.
+// Time to the first output includes lazy model loading, so report the rest apart.
 void print_steady_rate(std::size_t frames, std::chrono::nanoseconds first,
                        std::chrono::nanoseconds total) {
     if (frames < 2U) return;

@@ -92,10 +92,7 @@ struct ExecutableStageDescriptor final {
     std::string stage_id;
     ArtifactDescriptor artifact;
     std::vector<TensorContract> tensors;
-    // Codec-requested execution settings, namespaced by the execution target
-    // they apply to (for example "qnn.htp_performance_mode"). A provider
-    // applies the keys of its own targets, rejects unknown keys in those
-    // namespaces, and ignores other namespaces.
+    // Codec-requested settings keyed by target, e.g. "qnn.htp_performance_mode".
     std::map<std::string, std::string, std::less<>> provider_options;
 };
 

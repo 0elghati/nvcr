@@ -181,8 +181,6 @@ first needs it, so an encode-only process never compiles the decoder.
 | `NVCR_QNN_HTP_PERFORMANCE_MODE` | QNN `htp_performance_mode`, for example `burst`, `balanced` or `default`; overrides the codec request |
 | `NVCR_QNN_HTP_FINALIZATION_MODE` | QNN `htp_graph_finalization_optimization_mode` (`0` is ONNX Runtime's default); overrides the codec request |
 | `NVCR_ONNXRUNTIME_CACHE_DIR` | Cache directory for compiled QNN graphs; `off` disables the cache |
-| `NVCR_ONNXRUNTIME_DISABLE_CPU_FALLBACK` | `1` disables CPU fallback for the CPU and CUDA providers too |
-| `NVCR_ONNXRUNTIME_PROFILE` | Writes an ONNX Runtime profile per part with this file prefix |
 
 The CLI prints the codec time to the first output, which includes lazy model
 loading, separately from the steady rate of the remaining frames.

@@ -126,9 +126,7 @@ public:
 
     enum class Part { encoder, decoder };
 
-    // Loads each canvas once; encoder and decoder sessions share it. Each ONNX
-    // part is loaded on first use, so an encode-only or decode-only process
-    // never compiles the other part (QNN graph preparation takes seconds).
+    // Canvases are shared by both directions; each part loads on first use.
     [[nodiscard]] Result<std::shared_ptr<const Canvas>> canvas(const BundleModel& model, Part part) {
         std::scoped_lock lock(mutex_);
         auto found = canvases_.find(model.canvas_id);
@@ -211,8 +209,7 @@ private:
         descriptor.artifact.provider_id = provider_id_;
         descriptor.artifact.precision = model.precision == Precision::fp16 ? "fp16" : "fp32";
         descriptor.artifact.path = bundle_.root.string();
-        // MLVC's own QNN session (_model_wrapper.py) runs without ONNX Runtime
-        // graph rewrites, in burst mode, with finalization mode 3.
+        // Same QNN settings as upstream's _model_wrapper.py.
         descriptor.provider_options = {
             {"qnn.graph_optimization", "disable"},
             {"qnn.htp_performance_mode", "burst"},
@@ -299,9 +296,7 @@ struct Shared final {
     RuntimeConfiguration configuration;
 };
 
-// Where codec time goes, per direction: host input/output conversion, model
-// execution through the provider, and symbol conversion plus entropy coding.
-// Logged on flush so a slow target can be attributed.
+// Mean host, model and entropy time per frame, logged on flush.
 class PhaseTimes final {
 public:
     using Clock = std::chrono::steady_clock;
@@ -414,8 +409,7 @@ private:
         placement_ = placement.value();
         scheduler_.emplace(loop);
         references_.clear();
-        // Per-frame input and latent tensors are reused; only the output
-        // feature is fresh each frame because the reference store keeps it.
+        // Reused every frame; output features are not, the reference store keeps them.
         auto& state = *shared_.state;
         auto x = state.allocate(canvas_->image_shape, canvas_->float_type);
         if (!x) return x.error();
@@ -595,7 +589,6 @@ private:
         if (!canvas_ || canvas_->model != model) {
             auto canvas = shared_.state->canvas(*model, SharedState::Part::decoder);
             if (!canvas) return canvas.error();
-            // Latent, Q and output tensors are reused for every frame on this canvas.
             auto& state = *shared_.state;
             const auto& loaded = *canvas.value();
             auto z = state.allocate(loaded.z_shape, loaded.float_type);
