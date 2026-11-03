@@ -168,4 +168,14 @@ Result<std::string> sha256_files(
     return output.str();
 }
 
+std::string sha256_text(std::string_view text) {
+    Sha256 sha256;
+    sha256.update(std::as_bytes(std::span(text.data(), text.size())));
+    const auto digest = sha256.finish();
+    std::ostringstream output;
+    output << std::hex << std::setfill('0');
+    for (const auto byte : digest) output << std::setw(2) << static_cast<unsigned>(byte);
+    return output.str();
+}
+
 }  // namespace nvcr::detail

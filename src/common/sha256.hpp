@@ -18,4 +18,7 @@ namespace nvcr::detail {
     std::span<const std::filesystem::path> paths,
     std::string_view subsystem);
 
+// Digest of an in-memory string, as lowercase hex.
+[[nodiscard]] std::string sha256_text(std::string_view text);
+
 }  // namespace nvcr::detail
