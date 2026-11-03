@@ -563,18 +563,42 @@ experiments remain separate axes.
 8. **Provider-axis handoff.** Hold DCVC-RT codec semantics constant and test a
    separately defined provider path, with ONNX Runtime CUDA as the current
    candidate.
-9. **C7 — DCVC-UF fused-operator feasibility.** Keep this as a pending,
-   separate codec-axis experiment. Compare one fused operator and
-   one frame-specific high-throughput branch against a pinned upstream vector
-   without moving UF branch semantics into generic runtime code.
+9. **C7 — DCVC-UF fused-operator feasibility.** Active by user priority on
+   2026-10-31; keep this a separate codec-axis experiment. Compare one fused
+   operator and one frame-specific high-throughput branch against a pinned upstream vector
+   without moving UF branch semantics into generic runtime code. A future UF
+   adapter owns UF lifecycle and access-unit details; the generic provider
+   contract remains stages, tensors, buffers, submissions, and reset only.
 
 **Inference.** C5 and C6 reject the tested default FP16 MLVC/ORT-CUDA pair for
 strict reference consistency and byte/payload interchange with the reference
 path. They leave MLVC self-conformance and ONNX Runtime CUDA provider
-suitability unresolved. After C6.5, the next bounded experiment holds DCVC-RT
-constant while testing the provider axis. C7 remains pending until a concrete
-DCVC-UF operator path preserves the selected bitstream and reconstruction
-contract.
+suitability unresolved. The original next experiment held DCVC-RT constant while
+testing the provider axis. On 2026-10-31 the user prioritized DCVC-UF instead.
+C7 now has an executable pinned-source stage probe: the upstream fused
+shuffle/clamp kernel matches exactly, a real HT-S frame branch passes ONNX CPU
+and TensorRT FP32 checks, and the upstream I/P path completes a 17-frame
+QCIF encode/decode smoke with two full eight-frame chunks. The upstream Python
+and fused reconstruction heads failed the predeclared `atol=3e-3, rtol=3e-3`
+comparison (maximum frame error `0.009521484375`). The first divergence is in
+the fused 1x1 convolution's FP16 accumulation, before bias/activation; exact
+stage input/repeat/reset checks pass. The experimental provider-session bridge now connects
+synthesis decoding and reconstruction through a shared opaque device buffer.
+Both intermediate features, sixteen frames, and two unclamped reset features
+match the native vector exactly. Two independent normal-launch reference runs
+and normal-launch frozen-vector replay pass, including reset/reuse, independent
+sessions, and both stages' contract checks. Restoring deterministic
+initialization for the upstream empty CUDA scratch tensors closes the native
+I-frame replay gate. The original fused arithmetic stays intact, with no UF
+policy in generic contracts. A codec-local UF rANS wrapper now preserves the
+one-to-eight coder partition, merged-stream framing, and reset behavior, with
+CPU Release round-trip conformance for every partition count. The replay now
+emits a viewable 17-frame QCIF MP4 and records a three-sample 1434.829 fps median
+for provider synthesis/reconstruction from frozen tensors, including host
+transfers. The native I-frame and entropy decode remain outside that timing.
+Exact upstream model-symbol bytes, context/prior/image/encoder stages,
+artifact-backed loading, and codec adapter/chunk lifecycle gates remain open. See
+[the C7 evidence](../evidence/phase-c7-dcvcuf-export-20261031.md).
 
 ## Explicit non-goals
 

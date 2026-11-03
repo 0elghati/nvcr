@@ -24,6 +24,7 @@ enum class ProviderKind : std::uint8_t {
     tensorrt = 0,
     cpu_reference,  // deterministic test provider
     onnx_runtime,
+    cuda_fused,  // codec-native fused CUDA execution
     // future: openvino, core_ml, directml
 };
 

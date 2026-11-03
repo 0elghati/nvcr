@@ -406,6 +406,8 @@ void runtime_construction_contract() {
     nvcr::RuntimeConfiguration configuration;
     configuration.codec.id = "test-codec";
     configuration.provider.id = "test-cpu";
+    configuration.artifacts.model_id = "test-codec";
+    configuration.stream.bitstream_model_id = "test-codec";
     configuration.runtime.log_level = nvcr::LogLevel::off;
 
     auto runtime = nvcr::Runtime::create(configuration);
@@ -437,6 +439,8 @@ void registered_grouped_session_contract() {
     nvcr::RuntimeConfiguration configuration;
     configuration.codec.id = "test-codec";
     configuration.provider.id = "test-cpu";
+    configuration.artifacts.model_id = "test-codec";
+    configuration.stream.bitstream_model_id = "test-codec";
     configuration.runtime.log_level = nvcr::LogLevel::off;
 
     auto runtime = nvcr::Runtime::create(configuration);
@@ -572,6 +576,8 @@ void cli_session_driver_contract() {
     nvcr::RuntimeConfiguration configuration;
     configuration.codec.id = "test-codec";
     configuration.provider.id = "test-cpu";
+    configuration.artifacts.model_id = "test-codec";
+    configuration.stream.bitstream_model_id = "test-codec";
     configuration.runtime.log_level = nvcr::LogLevel::off;
 
     auto runtime = nvcr::Runtime::create(configuration);
@@ -738,6 +744,8 @@ void codec_adapter_contract() {
     nvcr::RuntimeConfiguration configuration;
     configuration.codec.id = "test-codec";
     configuration.provider.id = "test-cpu";
+    configuration.artifacts.model_id = "test-codec";
+    configuration.stream.bitstream_model_id = "test-codec";
     auto provider_session = nvcr::test_support::make_test_provider_session();
     auto sessions = adapter->create_sessions(configuration, provider_session);
     expect(sessions.has_value(), "test adapter creates codec sessions");
