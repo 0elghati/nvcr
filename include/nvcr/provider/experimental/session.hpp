@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <span>
 #include <string>
@@ -91,6 +92,11 @@ struct ExecutableStageDescriptor final {
     std::string stage_id;
     ArtifactDescriptor artifact;
     std::vector<TensorContract> tensors;
+    // Codec-requested execution settings, namespaced by the execution target
+    // they apply to (for example "qnn.htp_performance_mode"). A provider
+    // applies the keys of its own targets, rejects unknown keys in those
+    // namespaces, and ignores other namespaces.
+    std::map<std::string, std::string, std::less<>> provider_options;
 };
 
 class IExecutableStage {

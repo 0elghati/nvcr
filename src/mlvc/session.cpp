@@ -211,6 +211,13 @@ private:
         descriptor.artifact.provider_id = provider_id_;
         descriptor.artifact.precision = model.precision == Precision::fp16 ? "fp16" : "fp32";
         descriptor.artifact.path = bundle_.root.string();
+        // MLVC's own QNN session (_model_wrapper.py) runs without ONNX Runtime
+        // graph rewrites, in burst mode, with finalization mode 3.
+        descriptor.provider_options = {
+            {"qnn.graph_optimization", "disable"},
+            {"qnn.htp_performance_mode", "burst"},
+            {"qnn.htp_graph_finalization_optimization_mode", "3"},
+        };
         const auto contract = [&](std::string_view name, const std::vector<std::int64_t>& shape,
                                   session_api::TensorAccess access) {
             session_api::TensorContract tensor;

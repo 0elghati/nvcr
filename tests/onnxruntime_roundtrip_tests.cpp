@@ -98,6 +98,24 @@ int session_contract(const nvcr::runtime::ProviderEntry& entry,
     if (absent || absent.error().code() != nvcr::ErrorCode::missing_artifact) {
         return fail("missing ONNX stage was not reported as missing_artifact");
     }
+
+    // Codec-requested options: unknown QNN keys and values are rejected on
+    // every ONNX Runtime target; other namespaces are ignored.
+    for (const auto& [key, value] : {std::pair{"qnn.unknown", "1"},
+                                     std::pair{"qnn.graph_optimization", "fast"}}) {
+        auto options = missing;
+        options.provider_options = {{key, value}};
+        auto invalid = session.value()->load_stage(options);
+        if (invalid || invalid.error().code() != nvcr::ErrorCode::invalid_argument) {
+            return fail(std::string("provider option was not rejected: ") + key);
+        }
+    }
+    auto foreign = missing;
+    foreign.provider_options = {{"tensorrt.anything", "1"}, {"qnn.htp_performance_mode", "burst"}};
+    auto ignored = session.value()->load_stage(foreign);
+    if (ignored || ignored.error().code() != nvcr::ErrorCode::missing_artifact) {
+        return fail("valid or foreign provider options changed stage loading");
+    }
     return 0;
 }
 

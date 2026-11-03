@@ -202,14 +202,70 @@ LTR recovery, as the design note in the
 a QNN stream decoded on the phone CPU loses 0.44 dB PSNR-Y at 640x360 (30.53
 versus 30.97 dB) and 0.02 dB at QCIF.
 
+## Snapdragon speed run — 2026-11-03
+
+Same phone and packages as the device run above, after commits `b6640b10`
+(parts loaded on demand, table-driven host conversion), `39b420e2` (QNN
+settings and compiled-graph cache) and `56b690d2` (first-output reporting).
+In that build MLVC's QNN settings were provider defaults.
+[`run_device_speed_checks.sh`](../scripts/backends/mlvc/run_device_speed_checks.sh)
+at `c85dc43a` ran with the phone awake, thermal status 0 throughout, battery
+28.1 to 32.4 °C. Single runs; not a controlled measurement.
+
+**Output.** MLVC QCIF and 640x360 streams and reconstructions match the
+earlier device run byte for byte. Cold-cache and warm-cache runs are
+identical, and burst and balanced modes give identical 360p streams and
+540p reconstructions.
+
+**Setup.** Codec time to the first output (one part compiled or loaded):
+
+| Clip | Cold, compiles and caches | Warm, loads the cache |
+|---|---:|---:|
+| 176x144 encode / decode | 1.20 / 1.05 s | 0.36 / 0.36 s |
+| 640x360 encode / decode | 2.31 / 1.33 s | 0.35 / 0.34 s |
+| 960x540 encode / decode | 5.08 / 4.97 s | 0.43 / 0.48 s |
+
+Before these changes, a 640x360 encode spent about 4.8 s here, compiling
+both parts.
+
+**Steady rate** after the first output (fps; first → last of the burst
+runs, range of the balanced runs, each 540p run):
+
+| Clip | Mode | Encode fps | Decode fps | Encode host / model / entropy | Decode host / model / entropy |
+|---|---|---:|---:|---|---|
+| 640x360, 300 frames, 5 runs | burst | 320 → 270 | 303 → 242 | 0.40 / 2.31 / 0.38 ms → 0.63 / 2.40 / 0.60 | 0.53 / 2.42 / 0.35 → 0.93 / 2.59 / 0.62 |
+| 640x360, 300 frames, 5 runs | balanced | 94–114 | 156–168 | 2.61 / 4.50 / 2.03 ms → 2.36 / 4.41 / 1.82 | 1.40 / 4.10 / 0.83 → 1.19 / 4.04 / 0.69 |
+| 960x540, 192 frames, 2 runs | burst | 123 / 138 | 118 / 111 | 1.33 / 5.39 / 1.32 ms | 1.52 / 5.93 / 0.99 ms |
+| 960x540, 192 frames, 2 runs | balanced | 58 / 52 | 74 / 73 | 4.51 / 9.00 / 3.36 ms | 2.77 / 9.05 / 1.56 ms |
+
+- At 640x360 in burst mode, host and entropy time rose by 58–77% from the
+  third run while model time rose by 4–7%. The CPU side slowed, not the
+  NPU; thermal status stayed 0. The cause (CPU frequency or core placement) was
+  not measured.
+- Balanced mode roughly doubles model time and also raises host and entropy
+  time several times, so it lowers CPU clocks as well as NPU clocks.
+- At 960x540, burst mode runs at 111–138 fps in both directions.
+
+**DCVC-RT with these defaults fails.** With the C9 bundles, QNN failed to
+finalize `i_analysis` ("Failed to finalize QNN graph") at QCIF and 640x360,
+cold and warm. With the old settings (`NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION=all`,
+`NVCR_QNN_HTP_PERFORMANCE_MODE=default`, `NVCR_QNN_HTP_FINALIZATION_MODE=0`,
+cache off), the same build reproduces the C9 digests (QCIF `3c61869e…` /
+`75c78264…`, 640x360 `668831dc…` / `cb3ed584…`) at 24.1 / 30.2 fps (QCIF)
+and 4.0 / 5.2 fps (640x360) steady. The settings were therefore moved from
+provider defaults to MLVC's stage requests; see the
+[MLVC integration](../docs/mlvc-integration.md#snapdragon). That change has
+not yet run on the device.
+
 ## Not tested
 
 - Upstream-runtime parity on arm64. The phone CPU does not reproduce the x86
   references, and no upstream reference was generated on the device.
 - Closed-loop equality between encoder and decoder reconstructions on the
   device, and which of the three upstream QNN options gives the speedup.
-- QNN context caching. Session creation dominates short CLI runs on the
-  device.
+- The compiled-graph cache with DCVC-RT, and MLVC's QNN settings as codec
+  requests rather than provider defaults, on the device.
+- Which MLVC QNN setting prevents DCVC-RT's `i_analysis` from finalizing.
 - ONNX Runtime CUDA beyond a diagnostic run.
 - The standard MLVC model (`dmc61sbr_reglu`), PSNR checkpoints, FP32 bundles
   and HEAD-exported NHWC bundles. NHWC bundles fail closed.

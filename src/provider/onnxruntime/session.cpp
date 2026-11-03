@@ -76,15 +76,19 @@ std::string environment_value(const char* name) {
     return value == nullptr ? std::string{} : std::string(value);
 }
 
-// NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION=disable|basic|extended|all overrides the
-// provider's default level.
-GraphOptimizationLevel graph_optimization_level(GraphOptimizationLevel fallback) {
-    const auto level = environment_value("NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION");
+std::optional<GraphOptimizationLevel> parse_graph_optimization_level(std::string_view level) {
     if (level == "disable") return GraphOptimizationLevel::ORT_DISABLE_ALL;
     if (level == "basic") return GraphOptimizationLevel::ORT_ENABLE_BASIC;
     if (level == "extended") return GraphOptimizationLevel::ORT_ENABLE_EXTENDED;
     if (level == "all") return GraphOptimizationLevel::ORT_ENABLE_ALL;
-    return fallback;
+    return std::nullopt;
+}
+
+// NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION=disable|basic|extended|all overrides the
+// level the stage would otherwise use.
+GraphOptimizationLevel graph_optimization_level(GraphOptimizationLevel fallback) {
+    return parse_graph_optimization_level(environment_value("NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION"))
+        .value_or(fallback);
 }
 
 // QNN HTP compiled-graph cache
@@ -419,6 +423,17 @@ public:
                 ErrorCode::invalid_argument,
                 "stage component id must be a lowercase identifier: " + artifact.component_id);
         }
+        for (const auto& [key, value] : descriptor.provider_options) {
+            if (key.rfind("qnn.", 0) != 0) continue;
+            const bool known = (key == "qnn.graph_optimization" &&
+                                parse_graph_optimization_level(value)) ||
+                key == "qnn.htp_performance_mode" ||
+                key == "qnn.htp_graph_finalization_optimization_mode";
+            if (!known) {
+                return session_error(ErrorCode::invalid_argument,
+                                     "unsupported provider option: " + key + "=" + value);
+            }
+        }
         const auto path = fs::path(artifact.path) / (artifact.component_id + ".onnx");
         std::error_code error;
         if (!fs::is_regular_file(path, error)) {
@@ -438,16 +453,21 @@ public:
             // default logger, which exists only once an Env does.
             (void)environment();
             const bool qnn = target_.runtime_name == "QNNExecutionProvider";
-            // QNN defaults follow MLVC's own QNN session (no ONNX Runtime graph
-            // rewrites, burst performance, finalization mode 3); on the S25
-            // they change speed, not output. Environment variables override.
-            const auto level = graph_optimization_level(
-                qnn ? GraphOptimizationLevel::ORT_DISABLE_ALL : GraphOptimizationLevel::ORT_ENABLE_ALL);
-            std::map<std::string, std::string> qnn_options{
-                {"backend_path", qnn_htp_backend},
-                {"htp_performance_mode", "burst"},
-                {"htp_graph_finalization_optimization_mode", "3"},
-            };
+            // A codec may request QNN settings for its stages ("qnn." options);
+            // without them the provider keeps ONNX Runtime's defaults. The
+            // NVCR_* environment variables override both.
+            GraphOptimizationLevel requested_level = GraphOptimizationLevel::ORT_ENABLE_ALL;
+            std::map<std::string, std::string> qnn_options{{"backend_path", qnn_htp_backend}};
+            for (const auto& [key, value] : descriptor.provider_options) {
+                if (!qnn || key.rfind("qnn.", 0) != 0) continue;
+                const auto name = key.substr(4);
+                if (name == "graph_optimization") {
+                    requested_level = *parse_graph_optimization_level(value);
+                } else {
+                    qnn_options[name] = value;
+                }
+            }
+            const auto level = graph_optimization_level(requested_level);
             if (const auto mode = environment_value("NVCR_QNN_HTP_PERFORMANCE_MODE"); !mode.empty()) {
                 qnn_options["htp_performance_mode"] = mode;
             }
@@ -503,11 +523,16 @@ public:
                 temporary.replace_extension(
                     "tmp" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
                     ".onnx");
-                session.emplace(environment(), path.c_str(), make_options(&temporary));
-                if (fs::is_regular_file(temporary, error)) {
-                    fs::rename(temporary, *cached, error);
-                    if (error) fs::remove(temporary, error);
+                try {
+                    session.emplace(environment(), path.c_str(), make_options(&temporary));
+                } catch (const Ort::Exception&) {
+                    // Saving the compiled graph is an optimization; the plain
+                    // load below reports any real error with the model.
                 }
+                if (session && fs::is_regular_file(temporary, error)) {
+                    fs::rename(temporary, *cached, error);
+                }
+                fs::remove(temporary, error);
             }
             if (!session) session.emplace(environment(), path.c_str(), make_options(nullptr));
             const auto precision = declared_precision(descriptor.artifact.precision);

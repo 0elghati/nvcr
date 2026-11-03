@@ -153,13 +153,17 @@ On the S25 (2026-11-03), both parts load and run with CPU fallback disabled.
 Streams decode across the NPU, the phone CPU and x86 CPU without an entropy
 error, with the drift described above.
 
-Upstream's QNN session uses `ORT_DISABLE_ALL` graph optimization,
-`htp_performance_mode=burst` and `htp_graph_finalization_optimization_mode=3`.
-On the S25, those settings produced byte-identical streams and reconstructions
-to NVCR's earlier QNN settings (`ORT_ENABLE_ALL`, backend path only). They cut the mean
-model time at 640x360 from 13.8 ms to 2.4 ms (encode) and from 15.3 ms to
-3.2 ms (decode). They are now the `onnxruntime-qnn` defaults for every codec,
-DCVC-RT included. The CPU and CUDA providers keep `ORT_ENABLE_ALL`.
+Upstream's QNN session (`_model_wrapper.py`) uses `ORT_DISABLE_ALL` graph
+optimization, `htp_performance_mode=burst` and
+`htp_graph_finalization_optimization_mode=3`. MLVC requests the same settings
+for its stages through codec provider options (`qnn.graph_optimization`,
+`qnn.htp_performance_mode`, `qnn.htp_graph_finalization_optimization_mode`).
+On the S25 they produced byte-identical streams and reconstructions to
+ONNX Runtime's defaults while cutting the mean model time at 640x360 from
+13.8 ms to 2.4 ms (encode) and from 15.3 ms to 3.2 ms (decode). They are not
+provider defaults: as defaults, QNN failed to finalize DCVC-RT's `i_analysis`
+graph. Other codecs keep ONNX Runtime's defaults (`ORT_ENABLE_ALL`, backend
+path only).
 
 `onnxruntime-qnn` also caches compiled HTP graphs as ONNX Runtime EPContext
 models, by default in `<bundle>/.nvcr-cache`. The cache file name is a digest
@@ -167,14 +171,15 @@ of the ONNX Runtime version, the session and QNN options, the SoC and build
 fingerprint, the name, size and modification time of each QNN library next to
 `libQnnHtp.so`, and the bytes of the source model and its external data files.
 A changed input therefore never reuses an old graph. An entry that fails to
-load is deleted and rebuilt. Each MLVC part is compiled only when a session
+load is deleted and rebuilt, and a model whose compiled graph cannot be saved
+loads uncached. Each MLVC part is compiled only when a session
 first needs it, so an encode-only process never compiles the decoder.
 
 | Variable | Effect |
 |---|---|
-| `NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION` | `disable`, `basic`, `extended` or `all`; overrides the provider default |
-| `NVCR_QNN_HTP_PERFORMANCE_MODE` | QNN `htp_performance_mode` (default `burst`; for example `balanced` or `default`) |
-| `NVCR_QNN_HTP_FINALIZATION_MODE` | QNN `htp_graph_finalization_optimization_mode` (default `3`; `0` is ONNX Runtime's default) |
+| `NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION` | `disable`, `basic`, `extended` or `all`; overrides the codec request and the default |
+| `NVCR_QNN_HTP_PERFORMANCE_MODE` | QNN `htp_performance_mode`, for example `burst`, `balanced` or `default`; overrides the codec request |
+| `NVCR_QNN_HTP_FINALIZATION_MODE` | QNN `htp_graph_finalization_optimization_mode` (`0` is ONNX Runtime's default); overrides the codec request |
 | `NVCR_ONNXRUNTIME_CACHE_DIR` | Cache directory for compiled QNN graphs; `off` disables the cache |
 | `NVCR_ONNXRUNTIME_DISABLE_CPU_FALLBACK` | `1` disables CPU fallback for the CPU and CUDA providers too |
 | `NVCR_ONNXRUNTIME_PROFILE` | Writes an ONNX Runtime profile per part with this file prefix |
