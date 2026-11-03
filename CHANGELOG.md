@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/0elghati/nvcr/compare/v1.2.0...v1.3.0) (2026-11-03)
+
+
+### Features
+
+* Integrate MLVC Neural video codec ([#209](https://github.com/0elghati/nvcr/issues/209)) ([9c93583](https://github.com/0elghati/nvcr/commit/9c93583038402adf8300043bccfed3e0a1b8ac98))
+* **mlvc:** Snapdragon QNN speed, codec provider settings and graph cache ([#212](https://github.com/0elghati/nvcr/issues/212)) ([1a31ae5](https://github.com/0elghati/nvcr/commit/1a31ae51dc11da126b3457281e0b8066b32840be))
+
 ## [1.2.0](https://github.com/0elghati/nvcr/compare/v1.1.0...v1.2.0) (2026-11-02)
 
 
