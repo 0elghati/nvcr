@@ -124,12 +124,53 @@ public:
         return completion.value()->wait();
     }
 
-    // Loads each canvas once; encoder and decoder sessions share it.
-    [[nodiscard]] Result<std::shared_ptr<const Canvas>> canvas(const BundleModel& model) {
+    enum class Part { encoder, decoder };
+
+    // Loads each canvas once; encoder and decoder sessions share it. Each ONNX
+    // part is loaded on first use, so an encode-only or decode-only process
+    // never compiles the other part (QNN graph preparation takes seconds).
+    [[nodiscard]] Result<std::shared_ptr<const Canvas>> canvas(const BundleModel& model, Part part) {
         std::scoped_lock lock(mutex_);
-        if (const auto found = canvases_.find(model.canvas_id); found != canvases_.end()) {
-            return found->second;
+        auto found = canvases_.find(model.canvas_id);
+        if (found == canvases_.end()) {
+            auto created = create_canvas(model);
+            if (!created) return created.error();
+            found = canvases_.emplace(model.canvas_id, std::move(created.value())).first;
         }
+        auto& canvas = *found->second;
+        const std::vector<std::int64_t> q_shape{1};
+        if (part == Part::encoder && !canvas.encoder) {
+            auto encoder = load_stage(canvas, model.encoder, "mlvc_encoder",
+                                      {{"x", &canvas.image_shape},
+                                       {"ref_feature", &canvas.feature_shape},
+                                       {"q_index_shifted", &q_shape}},
+                                      {{"feature", &canvas.feature_shape},
+                                       {"z_raw", &canvas.z_shape},
+                                       {"y_raw_0", &canvas.y_shape},
+                                       {"y_raw_1", &canvas.y_shape}});
+            if (!encoder) return encoder.error();
+            canvas.encoder = std::move(encoder.value());
+        }
+        if (part == Part::decoder && !canvas.decoder) {
+            auto decoder = load_stage(canvas, model.decoder, "mlvc_decoder",
+                                      {{"z_raw", &canvas.z_shape},
+                                       {"y_raw_0", &canvas.y_shape},
+                                       {"y_raw_1", &canvas.y_shape},
+                                       {"ref_feature", &canvas.feature_shape},
+                                       {"q_index_shifted", &q_shape}},
+                                      {{"x_hat", &canvas.image_shape},
+                                       {"feature", &canvas.feature_shape}});
+            if (!decoder) return decoder.error();
+            canvas.decoder = std::move(decoder.value());
+        }
+        return std::shared_ptr<const Canvas>(found->second);
+    }
+
+private:
+    using Shapes = std::initializer_list<
+        std::pair<std::string_view, const std::vector<std::int64_t>*>>;
+
+    [[nodiscard]] Result<std::shared_ptr<Canvas>> create_canvas(const BundleModel& model) {
         auto verified = verify_digests(model);
         if (!verified) return verified.error();
 
@@ -146,63 +187,6 @@ public:
         canvas->z_shape = {1, latent.z_channels, latent.z_height, latent.z_width};
         canvas->y_shape = {1, latent.y_channels, latent.y_height, latent.y_width};
 
-        const auto load = [&](const ModelPart& part, std::string_view stage,
-                              std::initializer_list<std::pair<std::string_view,
-                                                              const std::vector<std::int64_t>*>>
-                                  inputs,
-                              std::initializer_list<std::pair<std::string_view,
-                                                              const std::vector<std::int64_t>*>>
-                                  outputs) -> Result<session_api::ExecutableStage> {
-            session_api::ExecutableStageDescriptor descriptor;
-            descriptor.stage_id = std::string(stage) + "_" + model.canvas_id;
-            descriptor.artifact.codec_id = std::string(codec_descriptor().id);
-            descriptor.artifact.model_set_id = bundle_.name;
-            descriptor.artifact.component_id = part.component_id;
-            descriptor.artifact.engine_profile_id = model.canvas_id;
-            descriptor.artifact.provider_id = provider_id_;
-            descriptor.artifact.precision = model.precision == Precision::fp16 ? "fp16" : "fp32";
-            descriptor.artifact.path = bundle_.root.string();
-            const auto contract = [&](std::string_view name,
-                                      const std::vector<std::int64_t>& shape,
-                                      session_api::TensorAccess access) {
-                session_api::TensorContract tensor;
-                tensor.name = std::string(name);
-                tensor.data_type = name == "q_index_shifted" ?
-                    session_api::TensorDataType::int32 : canvas->float_type;
-                tensor.access = access;
-                for (const auto dimension : shape) tensor.dimensions.push_back({dimension, dimension});
-                descriptor.tensors.push_back(std::move(tensor));
-            };
-            for (const auto& [name, shape] : inputs) {
-                contract(name, *shape, session_api::TensorAccess::read);
-            }
-            for (const auto& [name, shape] : outputs) {
-                contract(name, *shape, session_api::TensorAccess::write);
-            }
-            return provider_->load_stage(std::move(descriptor));
-        };
-        const std::vector<std::int64_t> q_shape{1};
-        auto encoder = load(model.encoder, "mlvc_encoder",
-                            {{"x", &canvas->image_shape},
-                             {"ref_feature", &canvas->feature_shape},
-                             {"q_index_shifted", &q_shape}},
-                            {{"feature", &canvas->feature_shape},
-                             {"z_raw", &canvas->z_shape},
-                             {"y_raw_0", &canvas->y_shape},
-                             {"y_raw_1", &canvas->y_shape}});
-        if (!encoder) return encoder.error();
-        auto decoder = load(model.decoder, "mlvc_decoder",
-                            {{"z_raw", &canvas->z_shape},
-                             {"y_raw_0", &canvas->y_shape},
-                             {"y_raw_1", &canvas->y_shape},
-                             {"ref_feature", &canvas->feature_shape},
-                             {"q_index_shifted", &q_shape}},
-                            {{"x_hat", &canvas->image_shape},
-                             {"feature", &canvas->feature_shape}});
-        if (!decoder) return decoder.error();
-        canvas->encoder = std::move(encoder.value());
-        canvas->decoder = std::move(decoder.value());
-
         auto entropy = EntropyCoder::create(model);
         if (!entropy) return entropy.error();
         canvas->entropy = std::move(entropy.value());
@@ -211,26 +195,51 @@ public:
         if (!zero) return zero.error();
         std::memset(zero.value().bytes().data(), 0, zero.value().bytes().size());
         canvas->zero_feature = std::move(zero.value());
-
-        std::shared_ptr<const Canvas> loaded = std::move(canvas);
-        canvases_.emplace(model.canvas_id, loaded);
-        return loaded;
+        return canvas;
     }
 
-private:
+    [[nodiscard]] Result<session_api::ExecutableStage> load_stage(
+        const Canvas& canvas, const ModelPart& part, std::string_view stage, Shapes inputs,
+        Shapes outputs) {
+        const auto& model = *canvas.model;
+        session_api::ExecutableStageDescriptor descriptor;
+        descriptor.stage_id = std::string(stage) + "_" + model.canvas_id;
+        descriptor.artifact.codec_id = std::string(codec_descriptor().id);
+        descriptor.artifact.model_set_id = bundle_.name;
+        descriptor.artifact.component_id = part.component_id;
+        descriptor.artifact.engine_profile_id = model.canvas_id;
+        descriptor.artifact.provider_id = provider_id_;
+        descriptor.artifact.precision = model.precision == Precision::fp16 ? "fp16" : "fp32";
+        descriptor.artifact.path = bundle_.root.string();
+        const auto contract = [&](std::string_view name, const std::vector<std::int64_t>& shape,
+                                  session_api::TensorAccess access) {
+            session_api::TensorContract tensor;
+            tensor.name = std::string(name);
+            tensor.data_type = name == "q_index_shifted" ?
+                session_api::TensorDataType::int32 : canvas.float_type;
+            tensor.access = access;
+            for (const auto dimension : shape) tensor.dimensions.push_back({dimension, dimension});
+            descriptor.tensors.push_back(std::move(tensor));
+        };
+        for (const auto& [name, shape] : inputs) {
+            contract(name, *shape, session_api::TensorAccess::read);
+        }
+        for (const auto& [name, shape] : outputs) {
+            contract(name, *shape, session_api::TensorAccess::write);
+        }
+        return provider_->load_stage(std::move(descriptor));
+    }
+
     Bundle bundle_;
     std::shared_ptr<session_api::IProviderSession> provider_;
     std::string provider_id_;
     std::mutex mutex_;
-    std::map<std::string, std::shared_ptr<const Canvas>, std::less<>> canvases_;
+    std::map<std::string, std::shared_ptr<Canvas>, std::less<>> canvases_;
 };
 
-Result<Tensor> q_tensor(SharedState& state, std::uint32_t q_index_shifted) {
-    auto tensor = state.allocate({1}, session_api::TensorDataType::int32);
-    if (!tensor) return tensor.error();
+void write_q(const Tensor& tensor, std::uint32_t q_index_shifted) {
     const auto value = static_cast<std::int32_t>(q_index_shifted);
-    std::memcpy(tensor.value().bytes().data(), &value, sizeof(value));
-    return tensor;
+    std::memcpy(tensor.bytes().data(), &value, sizeof(value));
 }
 
 Precision precision_of(const Canvas& canvas) {
@@ -379,7 +388,7 @@ private:
         }
         auto model = select_model(shared_.state->bundle(), frame.width(), frame.height());
         if (!model) return model.error();
-        auto canvas = shared_.state->canvas(*model.value());
+        auto canvas = shared_.state->canvas(*model.value(), SharedState::Part::encoder);
         if (!canvas) return canvas.error();
         auto placement = host_ops::place(frame.width(), frame.height(), model.value()->parameters);
         if (!placement) return placement.error();
@@ -398,6 +407,21 @@ private:
         placement_ = placement.value();
         scheduler_.emplace(loop);
         references_.clear();
+        // Per-frame input and latent tensors are reused; only the output
+        // feature is fresh each frame because the reference store keeps it.
+        auto& state = *shared_.state;
+        auto x = state.allocate(canvas_->image_shape, canvas_->float_type);
+        if (!x) return x.error();
+        auto q = state.allocate({1}, session_api::TensorDataType::int32);
+        if (!q) return q.error();
+        auto z = state.allocate(canvas_->z_shape, canvas_->float_type);
+        if (!z) return z.error();
+        auto y_0 = state.allocate(canvas_->y_shape, canvas_->float_type);
+        if (!y_0) return y_0.error();
+        auto y_1 = state.allocate(canvas_->y_shape, canvas_->float_type);
+        if (!y_1) return y_1.error();
+        scratch_ = {std::move(x.value()), std::move(q.value()), std::move(z.value()),
+                    std::move(y_0.value()), std::move(y_1.value())};
         shared_.logger->log(LogLevel::info,
                             "MLVC encoder uses canvas " + model.value()->canvas_id);
         return {};
@@ -423,34 +447,25 @@ private:
         }
 
         auto phase = PhaseTimes::Clock::now();
-        auto x = state.allocate(canvas.image_shape, canvas.float_type);
-        if (!x) return x.error();
-        host_ops::prepare_input(frame.data(), placement_, precision, x.value().bytes());
-        auto q = q_tensor(state, shifted_q_index(canvas.model->parameters, q_index, plan.coded_index));
-        if (!q) return q.error();
+        auto& [x, q, z, y_0, y_1] = scratch_;
+        host_ops::prepare_input(frame.data(), placement_, precision, x.bytes());
+        write_q(q, shifted_q_index(canvas.model->parameters, q_index, plan.coded_index));
         auto feature = state.allocate(canvas.feature_shape, canvas.float_type);
         if (!feature) return feature.error();
-        auto z = state.allocate(canvas.z_shape, canvas.float_type);
-        if (!z) return z.error();
-        auto y_0 = state.allocate(canvas.y_shape, canvas.float_type);
-        if (!y_0) return y_0.error();
-        auto y_1 = state.allocate(canvas.y_shape, canvas.float_type);
-        if (!y_1) return y_1.error();
         times_.add(PhaseTimes::host, phase);
         phase = PhaseTimes::Clock::now();
         auto ran = state.run(
             canvas.encoder,
-            {{"x", &x.value()}, {"ref_feature", reference}, {"q_index_shifted", &q.value()}},
-            {{"feature", &feature.value()}, {"z_raw", &z.value()},
-             {"y_raw_0", &y_0.value()}, {"y_raw_1", &y_1.value()}});
+            {{"x", &x}, {"ref_feature", reference}, {"q_index_shifted", &q}},
+            {{"feature", &feature.value()}, {"z_raw", &z}, {"y_raw_0", &y_0}, {"y_raw_1", &y_1}});
         if (!ran) return ran.error();
         times_.add(PhaseTimes::model, phase);
         phase = PhaseTimes::Clock::now();
 
         LatentSymbols symbols;
         for (const auto& [tensor, target] : {
-                 std::pair{&z.value(), &symbols.z}, std::pair{&y_0.value(), &symbols.y_0},
-                 std::pair{&y_1.value(), &symbols.y_1}}) {
+                 std::pair{&z, &symbols.z}, std::pair{&y_0, &symbols.y_0},
+                 std::pair{&y_1, &symbols.y_1}}) {
             auto converted = to_symbols(*tensor, precision);
             if (!converted) return converted.error();
             *target = std::move(converted.value());
@@ -487,6 +502,9 @@ private:
     host_ops::Placement placement_{};
     std::optional<FrameScheduler> scheduler_;
     ReferenceStore<Tensor> references_;
+    struct Scratch final {
+        Tensor x, q, z, y_0, y_1;
+    } scratch_;
     std::deque<Packet> outputs_;
     PhaseTimes times_;
     bool flushed_{false};
@@ -568,8 +586,23 @@ private:
                               std::string(placement.error().message()));
         }
         if (!canvas_ || canvas_->model != model) {
-            auto canvas = shared_.state->canvas(*model);
+            auto canvas = shared_.state->canvas(*model, SharedState::Part::decoder);
             if (!canvas) return canvas.error();
+            // Latent, Q and output tensors are reused for every frame on this canvas.
+            auto& state = *shared_.state;
+            const auto& loaded = *canvas.value();
+            auto z = state.allocate(loaded.z_shape, loaded.float_type);
+            if (!z) return z.error();
+            auto y_0 = state.allocate(loaded.y_shape, loaded.float_type);
+            if (!y_0) return y_0.error();
+            auto y_1 = state.allocate(loaded.y_shape, loaded.float_type);
+            if (!y_1) return y_1.error();
+            auto q = state.allocate({1}, session_api::TensorDataType::int32);
+            if (!q) return q.error();
+            auto x_hat = state.allocate(loaded.image_shape, loaded.float_type);
+            if (!x_hat) return x_hat.error();
+            scratch_ = {std::move(z.value()), std::move(y_0.value()), std::move(y_1.value()),
+                        std::move(q.value()), std::move(x_hat.value())};
             canvas_ = std::move(canvas.value());
             scheduler_.emplace(LoopParameters::from_model(model->parameters));
         }
@@ -633,28 +666,20 @@ private:
             }
         }
 
-        auto z = state.allocate(canvas.z_shape, canvas.float_type);
-        if (!z) return z.error();
-        auto y_0 = state.allocate(canvas.y_shape, canvas.float_type);
-        if (!y_0) return y_0.error();
-        auto y_1 = state.allocate(canvas.y_shape, canvas.float_type);
-        if (!y_1) return y_1.error();
-        from_symbols(symbols.value().z, precision, z.value());
-        from_symbols(symbols.value().y_0, precision, y_0.value());
-        from_symbols(symbols.value().y_1, precision, y_1.value());
+        auto& [z, y_0, y_1, q, x_hat] = scratch_;
+        from_symbols(symbols.value().z, precision, z);
+        from_symbols(symbols.value().y_0, precision, y_0);
+        from_symbols(symbols.value().y_1, precision, y_1);
         times_.add(PhaseTimes::entropy, phase);
         phase = PhaseTimes::Clock::now();
-        auto q = q_tensor(state, shifted_q_index(parameters, q_index, plan.coded_index));
-        if (!q) return q.error();
-        auto x_hat = state.allocate(canvas.image_shape, canvas.float_type);
-        if (!x_hat) return x_hat.error();
+        write_q(q, shifted_q_index(parameters, q_index, plan.coded_index));
         auto feature = state.allocate(canvas.feature_shape, canvas.float_type);
         if (!feature) return feature.error();
         auto ran = state.run(
             canvas.decoder,
-            {{"z_raw", &z.value()}, {"y_raw_0", &y_0.value()}, {"y_raw_1", &y_1.value()},
-             {"ref_feature", reference}, {"q_index_shifted", &q.value()}},
-            {{"x_hat", &x_hat.value()}, {"feature", &feature.value()}});
+            {{"z_raw", &z}, {"y_raw_0", &y_0}, {"y_raw_1", &y_1},
+             {"ref_feature", reference}, {"q_index_shifted", &q}},
+            {{"x_hat", &x_hat}, {"feature", &feature.value()}});
         if (!ran) return ran.error();
         times_.add(PhaseTimes::model, phase);
         phase = PhaseTimes::Clock::now();
@@ -663,7 +688,7 @@ private:
             placement_.frame_width, placement_.frame_height, PixelFormat::yuv420p8,
             packet.timestamp());
         if (!frame) return frame.error();
-        host_ops::finish_output(x_hat.value().bytes(), placement_, precision, frame.value().data());
+        host_ops::finish_output(x_hat.bytes(), placement_, precision, frame.value().data());
 
         references_.save(plan.coded_index, std::move(feature.value()), plan.mark_as_ltr);
         scheduler_->commit(plan);
@@ -686,6 +711,9 @@ private:
     std::optional<FrameScheduler> scheduler_;
     ReferenceStore<Tensor> references_;
     std::optional<Frame> last_output_;
+    struct Scratch final {
+        Tensor z, y_0, y_1, q, x_hat;
+    } scratch_;
     std::deque<Frame> outputs_;
     PhaseTimes times_;
     bool flushed_{false};
