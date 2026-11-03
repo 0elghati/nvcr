@@ -11,7 +11,9 @@
 #include "nvcr/mlvc/codec.hpp"
 
 #include <chrono>
+#include <array>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <deque>
 #include <exception>
@@ -281,6 +283,43 @@ struct Shared final {
     RuntimeConfiguration configuration;
 };
 
+// Where codec time goes, per direction: host input/output conversion, model
+// execution through the provider, and symbol conversion plus entropy coding.
+// Logged on flush so a slow target can be attributed.
+class PhaseTimes final {
+public:
+    using Clock = std::chrono::steady_clock;
+
+    void add(std::size_t phase, Clock::time_point started) {
+        totals_[phase] += Clock::now() - started;
+    }
+    void frame() noexcept { ++frames_; }
+
+    void log(Logger& logger, std::string_view direction) {
+        if (frames_ == 0U) return;
+        const auto milliseconds = [&](std::size_t phase) {
+            return std::chrono::duration<double, std::milli>(totals_[phase]).count() /
+                static_cast<double>(frames_);
+        };
+        char line[192];
+        std::snprintf(line, sizeof(line),
+                      "MLVC %.*s per frame over %zu frames: host %.2f ms, model %.2f ms, "
+                      "entropy %.2f ms",
+                      static_cast<int>(direction.size()), direction.data(), frames_,
+                      milliseconds(host), milliseconds(model), milliseconds(entropy));
+        logger.log(LogLevel::info, line);
+        *this = {};
+    }
+
+    static constexpr std::size_t host = 0;
+    static constexpr std::size_t model = 1;
+    static constexpr std::size_t entropy = 2;
+
+private:
+    std::array<Clock::duration, 3> totals_{};
+    std::size_t frames_{0};
+};
+
 class EncoderSession final : public IEncoderSession {
 public:
     explicit EncoderSession(Shared shared) : shared_(std::move(shared)) {}
@@ -315,6 +354,7 @@ public:
     // MLVC has no lookahead, so flushing emits nothing new.
     [[nodiscard]] Result<void> flush() override {
         flushed_ = true;
+        times_.log(*shared_.logger, "encode");
         return {};
     }
 
@@ -382,6 +422,7 @@ private:
             }
         }
 
+        auto phase = PhaseTimes::Clock::now();
         auto x = state.allocate(canvas.image_shape, canvas.float_type);
         if (!x) return x.error();
         host_ops::prepare_input(frame.data(), placement_, precision, x.value().bytes());
@@ -395,12 +436,16 @@ private:
         if (!y_0) return y_0.error();
         auto y_1 = state.allocate(canvas.y_shape, canvas.float_type);
         if (!y_1) return y_1.error();
+        times_.add(PhaseTimes::host, phase);
+        phase = PhaseTimes::Clock::now();
         auto ran = state.run(
             canvas.encoder,
             {{"x", &x.value()}, {"ref_feature", reference}, {"q_index_shifted", &q.value()}},
             {{"feature", &feature.value()}, {"z_raw", &z.value()},
              {"y_raw_0", &y_0.value()}, {"y_raw_1", &y_1.value()}});
         if (!ran) return ran.error();
+        times_.add(PhaseTimes::model, phase);
+        phase = PhaseTimes::Clock::now();
 
         LatentSymbols symbols;
         for (const auto& [tensor, target] : {
@@ -414,6 +459,8 @@ private:
         if (!payload) return payload.error();
         auto record = serialize_record(static_cast<std::int32_t>(q_index), payload.value());
         if (!record) return record.error();
+        times_.add(PhaseTimes::entropy, phase);
+        times_.frame();
 
         // The encoder references its own feature output, not a decoded one.
         references_.save(plan.coded_index, std::move(feature.value()), plan.mark_as_ltr);
@@ -441,6 +488,7 @@ private:
     std::optional<FrameScheduler> scheduler_;
     ReferenceStore<Tensor> references_;
     std::deque<Packet> outputs_;
+    PhaseTimes times_;
     bool flushed_{false};
 };
 
@@ -474,6 +522,7 @@ public:
 
     [[nodiscard]] Result<void> flush() override {
         flushed_ = true;
+        times_.log(*shared_.logger, "decode");
         return {};
     }
 
@@ -570,6 +619,7 @@ private:
         if (q_index >= parameters.qp_num || access_unit.qp != q_index) {
             return mlvc_error(ErrorCode::malformed_bitstream, "MLVC record has an invalid Q index");
         }
+        auto phase = PhaseTimes::Clock::now();
         auto symbols = canvas.entropy->decode(record.value().payload, q_index);
         if (!symbols) return symbols.error();
 
@@ -592,6 +642,8 @@ private:
         from_symbols(symbols.value().z, precision, z.value());
         from_symbols(symbols.value().y_0, precision, y_0.value());
         from_symbols(symbols.value().y_1, precision, y_1.value());
+        times_.add(PhaseTimes::entropy, phase);
+        phase = PhaseTimes::Clock::now();
         auto q = q_tensor(state, shifted_q_index(parameters, q_index, plan.coded_index));
         if (!q) return q.error();
         auto x_hat = state.allocate(canvas.image_shape, canvas.float_type);
@@ -604,6 +656,8 @@ private:
              {"ref_feature", reference}, {"q_index_shifted", &q.value()}},
             {{"x_hat", &x_hat.value()}, {"feature", &feature.value()}});
         if (!ran) return ran.error();
+        times_.add(PhaseTimes::model, phase);
+        phase = PhaseTimes::Clock::now();
 
         auto frame = Frame::create(
             placement_.frame_width, placement_.frame_height, PixelFormat::yuv420p8,
@@ -618,6 +672,8 @@ private:
             frame.value().data(), frame.value().timestamp());
         if (!retained) return retained.error();
         last_output_ = std::move(retained.value());
+        times_.add(PhaseTimes::host, phase);
+        times_.frame();
         shared_.statistics->record_decode(
             std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - started));
@@ -631,6 +687,7 @@ private:
     ReferenceStore<Tensor> references_;
     std::optional<Frame> last_output_;
     std::deque<Frame> outputs_;
+    PhaseTimes times_;
     bool flushed_{false};
 };
 

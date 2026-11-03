@@ -12,6 +12,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <memory>
@@ -20,6 +21,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -54,6 +56,20 @@ constexpr const char* qnn_htp_backend = "libQnnHtp.so";
 
 Error session_error(ErrorCode code, std::string message) {
     return Error(code, std::move(message), std::string(subsystem));
+}
+
+std::string environment_value(const char* name) {
+    const char* value = std::getenv(name);
+    return value == nullptr ? std::string{} : std::string(value);
+}
+
+// NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION=disable|basic|extended|all (default all).
+GraphOptimizationLevel graph_optimization_level() {
+    const auto level = environment_value("NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION");
+    if (level == "disable") return GraphOptimizationLevel::ORT_DISABLE_ALL;
+    if (level == "basic") return GraphOptimizationLevel::ORT_ENABLE_BASIC;
+    if (level == "extended") return GraphOptimizationLevel::ORT_ENABLE_EXTENDED;
+    return GraphOptimizationLevel::ORT_ENABLE_ALL;
 }
 
 Ort::Env& environment() {
@@ -262,7 +278,14 @@ public:
             // default logger, which exists only once an Env does.
             (void)environment();
             Ort::SessionOptions options;
-            options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+            options.SetGraphOptimizationLevel(graph_optimization_level());
+            // Diagnostic switches; unset, the defaults below are unchanged.
+            if (const auto prefix = environment_value("NVCR_ONNXRUNTIME_PROFILE"); !prefix.empty()) {
+                options.EnableProfiling((prefix + "-" + artifact.component_id).c_str());
+            }
+            if (environment_value("NVCR_ONNXRUNTIME_DISABLE_CPU_FALLBACK") == "1") {
+                options.AddConfigEntry("session.disable_cpu_ep_fallback", "1");
+            }
             if (target_.runtime_name == "CUDAExecutionProvider") {
                 OrtCUDAProviderOptions cuda{};
                 cuda.device_id = device_id_;
@@ -271,7 +294,16 @@ public:
                 // Every node must run on the HTP; a silent CPU fallback would
                 // misreport where the codec executes.
                 options.AddConfigEntry("session.disable_cpu_ep_fallback", "1");
-                options.AppendExecutionProvider("QNN", {{"backend_path", qnn_htp_backend}});
+                std::unordered_map<std::string, std::string> qnn{{"backend_path", qnn_htp_backend}};
+                if (const auto mode = environment_value("NVCR_QNN_HTP_PERFORMANCE_MODE");
+                    !mode.empty()) {
+                    qnn["htp_performance_mode"] = mode;
+                }
+                if (const auto mode = environment_value("NVCR_QNN_HTP_FINALIZATION_MODE");
+                    !mode.empty()) {
+                    qnn["htp_graph_finalization_optimization_mode"] = mode;
+                }
+                options.AppendExecutionProvider("QNN", qnn);
             }
             const auto precision = declared_precision(descriptor.artifact.precision);
             if (!precision) {
