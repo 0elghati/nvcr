@@ -155,24 +155,37 @@ error, with the drift described above.
 
 Upstream's QNN session uses `ORT_DISABLE_ALL` graph optimization,
 `htp_performance_mode=burst` and `htp_graph_finalization_optimization_mode=3`.
-NVCR's QNN provider uses `ORT_ENABLE_ALL` and sets only the backend path. On
-the S25, upstream's settings produced byte-identical streams and
-reconstructions while cutting the mean model time at 640x360 from 13.8 ms to
-2.4 ms (encode) and from 15.3 ms to 3.2 ms (decode). NVCR's defaults are
-unchanged. Until a default is chosen, these environment variables select the
-options for diagnosis:
+On the S25, those settings produced byte-identical streams and reconstructions
+to NVCR's earlier QNN settings (`ORT_ENABLE_ALL`, backend path only). They cut the mean
+model time at 640x360 from 13.8 ms to 2.4 ms (encode) and from 15.3 ms to
+3.2 ms (decode). They are now the `onnxruntime-qnn` defaults for every codec,
+DCVC-RT included. The CPU and CUDA providers keep `ORT_ENABLE_ALL`.
+
+`onnxruntime-qnn` also caches compiled HTP graphs as ONNX Runtime EPContext
+models, by default in `<bundle>/.nvcr-cache`. The cache file name is a digest
+of the ONNX Runtime version, the session and QNN options, the SoC and build
+fingerprint, the name, size and modification time of each QNN library next to
+`libQnnHtp.so`, and the bytes of the source model and its external data files.
+A changed input therefore never reuses an old graph. An entry that fails to
+load is deleted and rebuilt. Each MLVC part is compiled only when a session
+first needs it, so an encode-only process never compiles the decoder.
 
 | Variable | Effect |
 |---|---|
-| `NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION` | `disable`, `basic`, `extended` or `all` (default) |
-| `NVCR_QNN_HTP_PERFORMANCE_MODE` | Passed as QNN `htp_performance_mode`, for example `burst` |
-| `NVCR_QNN_HTP_FINALIZATION_MODE` | Passed as QNN `htp_graph_finalization_optimization_mode`, for example `3` |
+| `NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION` | `disable`, `basic`, `extended` or `all`; overrides the provider default |
+| `NVCR_QNN_HTP_PERFORMANCE_MODE` | QNN `htp_performance_mode` (default `burst`; for example `balanced` or `default`) |
+| `NVCR_QNN_HTP_FINALIZATION_MODE` | QNN `htp_graph_finalization_optimization_mode` (default `3`; `0` is ONNX Runtime's default) |
+| `NVCR_ONNXRUNTIME_CACHE_DIR` | Cache directory for compiled QNN graphs; `off` disables the cache |
 | `NVCR_ONNXRUNTIME_DISABLE_CPU_FALLBACK` | `1` disables CPU fallback for the CPU and CUDA providers too |
 | `NVCR_ONNXRUNTIME_PROFILE` | Writes an ONNX Runtime profile per part with this file prefix |
 
+The CLI prints the codec time to the first output, which includes lazy model
+loading, separately from the steady rate of the remaining frames.
+
 With `--verbose`, the MLVC sessions log mean host, model and entropy time per
-frame when they flush. Short CLI runs on the device are dominated by session
-creation, about 4.8 s at 640x360, which is outside these phases. See the
+frame when they flush. Before the cache, short CLI runs on the device were
+dominated by session creation, about 4.8 s at 640x360, which is outside these
+phases. See the
 [C10 evidence](../evidence/phase-c10-mlvc-codec-20261102.md#snapdragon-device-run--2026-11-03).
 
 ## Reproducing the parity gate
