@@ -254,8 +254,30 @@ cache off), the same build reproduces the C9 digests (QCIF `3c61869e…` /
 `75c78264…`, 640x360 `668831dc…` / `cb3ed584…`) at 24.1 / 30.2 fps (QCIF)
 and 4.0 / 5.2 fps (640x360) steady. The settings were therefore moved from
 provider defaults to MLVC's stage requests; see the
-[MLVC integration](../docs/mlvc-integration.md#snapdragon). That change has
-not yet run on the device.
+[MLVC integration](../docs/mlvc-integration.md#snapdragon).
+
+## Snapdragon check of codec-requested QNN settings — 2026-11-03
+
+Commit `f49dbf3e` (MLVC requests its QNN settings per stage; provider
+defaults restored), same phone, `run_device_speed_checks.sh` at that commit.
+Battery 30.8 to 33.8 °C, thermal status 0. The phone's screen was turned
+off during the last two DCVC-RT runs (burst and finalization mode 3 alone),
+so their speed is not comparable with the others; their output is.
+
+- **MLVC**: QCIF and 640x360 streams and reconstructions match the earlier
+  device runs byte for byte, cold and warm cache. Steady 640x360: 318 / 283 fps
+  (encode / decode) cold, 308 / 280 fps warm; first output after 0.37 s warm.
+- **DCVC-RT with provider defaults** reproduces the C9 digests at QCIF and
+  640x360, with the cache cold and warm (16 cached graphs per bundle). Steady
+  rates: QCIF 29.8–30.1 / 31.7–35.3 fps, 640x360 4.6 / 5.8 fps. DCVC-RT loads
+  its stages while the runtime is created, outside the CLI's codec time, so
+  this run does not show how much the cache shortens its setup.
+- **Which MLVC setting breaks DCVC-RT**: `ORT_DISABLE_ALL` graph optimization
+  alone reproduces "Failed to finalize QNN graph" on `i_analysis`. Burst
+  performance mode alone and finalization mode 3 alone each reproduce the C9
+  QCIF stream (`3c61869e…`). Burst alone ran QCIF at 149 / 181 fps against
+  about 30 / 32 fps with defaults, with the screen off. The combination of
+  burst and finalization mode 3 for DCVC-RT was not run.
 
 ## Not tested
 
@@ -263,9 +285,10 @@ not yet run on the device.
   references, and no upstream reference was generated on the device.
 - Closed-loop equality between encoder and decoder reconstructions on the
   device, and which of the three upstream QNN options gives the speedup.
-- The compiled-graph cache with DCVC-RT, and MLVC's QNN settings as codec
-  requests rather than provider defaults, on the device.
-- Which MLVC QNN setting prevents DCVC-RT's `i_analysis` from finalizing.
+- How much the compiled-graph cache shortens DCVC-RT's setup; the CLI does
+  not report runtime-creation time.
+- DCVC-RT with burst mode (or burst plus finalization mode 3) as a codec
+  request, with the screen on.
 - ONNX Runtime CUDA beyond a diagnostic run.
 - The standard MLVC model (`dmc61sbr_reglu`), PSNR checkpoints, FP32 bundles
   and HEAD-exported NHWC bundles. NHWC bundles fail closed.
