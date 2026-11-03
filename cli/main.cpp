@@ -21,6 +21,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -771,6 +772,21 @@ bool measurement_sync(const Options& options) {
 #endif
 }
 
+// Codec time up to the first output includes lazy model loading (graph
+// compilation on some providers), so the steady rate is reported apart from it.
+void print_steady_rate(std::size_t frames, std::chrono::nanoseconds first,
+                       std::chrono::nanoseconds total) {
+    if (frames < 2U) return;
+    const double first_seconds = std::chrono::duration<double>(first).count();
+    const double rest_seconds = std::chrono::duration<double>(total - first).count();
+    std::cout << "\nFirst output after " << std::fixed << std::setprecision(3) << first_seconds
+              << " s (includes model loading); next " << frames - 1U << " frame(s) "
+              << rest_seconds << " s";
+    if (rest_seconds > 0.0) {
+        std::cout << " (" << static_cast<double>(frames - 1U) / rest_seconds << " fps)";
+    }
+}
+
 bool write_measurement(const Options& options, std::size_t frames, double seconds, double initialization_seconds) {
     if (options.measurement_json.empty()) return true;
     std::ofstream output(options.measurement_json);
@@ -857,6 +873,7 @@ int encode(const Options& options) {
     std::size_t access_unit_index = 0;
     std::uint64_t payload_bytes = 0;
     std::chrono::nanoseconds codec_time{};
+    std::optional<std::chrono::nanoseconds> first_output_time;
     auto emit_packet = [&](nvcr::Packet&& packet) -> nvcr::Result<void> {
         auto wire = nvcr::PacketIO::serialize(packet);
         if (!wire) return wire.error();
@@ -905,6 +922,7 @@ int encode(const Options& options) {
             return 1;
         }
         if (!measurement_sync(options)) return 1;
+        if (!first_output_time && access_unit_index > 0U) first_output_time = codec_time;
         if (options.verbose) {
             const double milliseconds =
                 std::chrono::duration<double, std::milli>(codec_time - previous_time).count();
@@ -945,6 +963,7 @@ int encode(const Options& options) {
     if (seconds > 0.0) {
         std::cout << " (" << static_cast<double>(frame_index) / seconds << " fps)";
     }
+    if (first_output_time) print_steady_rate(frame_index, *first_output_time, codec_time);
     std::cout << "\nWrote " << options.output << '\n';
     return 0;
 }
@@ -1013,6 +1032,7 @@ int decode(const Options& options) {
     std::uint32_t sequence_width = 0;
     std::uint32_t sequence_height = 0;
     std::chrono::nanoseconds codec_time{};
+    std::optional<std::chrono::nanoseconds> first_output_time;
     QualityAccumulator quality;
     std::vector<std::byte> reference_yuv;
     auto emit_frame = [&](nvcr::Frame&& frame) -> nvcr::Result<void> {
@@ -1106,6 +1126,7 @@ int decode(const Options& options) {
             return 1;
         }
         if (!measurement_sync(options)) return 1;
+        if (!first_output_time && frame_index > 0U) first_output_time = codec_time;
         if (options.verbose) {
             const double milliseconds =
                 std::chrono::duration<double, std::milli>(codec_time - previous_time).count();
@@ -1154,6 +1175,7 @@ int decode(const Options& options) {
     if (seconds > 0.0) {
         std::cout << " (" << static_cast<double>(frame_index) / seconds << " fps)";
     }
+    if (first_output_time) print_steady_rate(frame_index, *first_output_time, codec_time);
     if (quality.frame_count > 0U) {
         const auto y_psnr = quality.psnr(0);
         const auto u_psnr = quality.psnr(1);
