@@ -215,6 +215,25 @@ if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
         CUDA_EXTENSIONS OFF)
 endif()
 
+if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
+    # The DCVC-UF codec runs on the TensorRT provider, the native fused path, or both.
+    target_sources(nvcr PRIVATE
+        src/dcvcuf/adapter.cpp
+        src/dcvcuf/registration.cpp
+        $<TARGET_OBJECTS:nvcr_dcvcuf_entropy>
+        $<TARGET_OBJECTS:nvcr_dcvcuf_rans>)
+    target_include_directories(nvcr PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/entropy")
+    target_compile_definitions(nvcr PRIVATE NVCR_HAS_DCVC_UF=1)
+    if(NVCR_ENABLE_TENSORRT)
+        target_sources(nvcr PRIVATE
+            src/dcvcuf/tensorrt_session.cpp
+            src/dcvcuf/backend/tensorrt/frames.cu
+            $<TARGET_OBJECTS:nvcr_dcvcuf_glue>)
+    endif()
+endif()
+
 if(NVCR_ENABLE_DCVC_UF)
     if(NOT IS_DIRECTORY "${NVCR_DCVCUF_SOURCE_ROOT}/src/layers/extensions/inference")
         message(FATAL_ERROR
@@ -287,19 +306,13 @@ if(NVCR_ENABLE_DCVC_UF)
         CUDA_EXTENSIONS OFF)
 
     target_sources(nvcr PRIVATE
-        src/dcvcuf/adapter.cpp
         src/dcvcuf/native_session.cpp
-        src/dcvcuf/registration.cpp
-        $<TARGET_OBJECTS:nvcr_dcvcuf_upstream>
-        $<TARGET_OBJECTS:nvcr_dcvcuf_entropy>
-        $<TARGET_OBJECTS:nvcr_dcvcuf_rans>)
+        $<TARGET_OBJECTS:nvcr_dcvcuf_upstream>)
     target_include_directories(nvcr PRIVATE
         "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/backend/upstream"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/entropy")
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/backend/upstream")
     target_link_libraries(nvcr PRIVATE ${TORCH_LIBRARIES} CUDA::cudart)
-    target_compile_definitions(nvcr PRIVATE NVCR_HAS_DCVC_UF=1)
+    target_compile_definitions(nvcr PRIVATE NVCR_HAS_DCVCUF_NATIVE=1)
 
     # Bitwise parity of NVCR's DCVC-UF glue port with the pinned upstream kernels.
     add_executable(nvcr_dcvcuf_glue_parity_tests

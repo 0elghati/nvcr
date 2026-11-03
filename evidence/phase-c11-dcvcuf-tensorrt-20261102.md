@@ -341,8 +341,38 @@ Upstream tunes those kernels for 2080 Ti, 4090, A100, H100 and B200. TensorRT
 FP16 is not the faster mode here; its value is a single provider and
 portability to targets without upstream's CUTLASS build.
 
-## Next
+## Phase 4: execution path — 2026-11-03
 
-Phase 4: the DCVC-UF TensorRT execution path (stage sequencing, glue, entropy,
-lifecycle) behind a codec-agnostic execution-mode choice, with fused CUDA as
-the default, then the sequence gates and speed.
+`src/dcvcuf/tensorrt_session.cpp` runs DCVC-UF on the generic TensorRT
+session. It follows upstream's fused `compress`/`decompress` for the intra
+frame and the eight-frame HT-S group step for step: the plans replace the fused
+networks, the ported glue kernels run between them, and NVCR's UF rANS coder
+codes on the host. It needs no LibTorch. The adapter wraps a TensorRT session
+when the CLI's `--engine-dir` names a stage bundle; the native fused path stays
+the default for its `.pt` bundle.
+
+- `tables.bin` (added by `add_tensorrt_tables.py`) carries the per-QP scale
+  vectors and z/y CDFs from the native bundle, digest-listed like the plans.
+- `frames.cu` converts YUV420P8 frames with the native path's arithmetic.
+- Glue tensors accept channel-slice views (`stride`), as upstream's chunked
+  tensors are.
+- The TensorRT session's low-memory mode now releases each context after
+  warm-up, as it already did after each run.
+
+Checks on an RTX 4070 shared with a 10 GiB training job, so on plans rebuilt
+with a 256x256 maximum profile (builder level 2) instead of the 1080p bundle,
+whose contexts do not fit beside it. QP 32, upstream recipe:
+
+| Clip | Native fused bytes / PSNR-Y | TensorRT bytes / PSNR-Y |
+|---|---|---|
+| Akiyo QCIF, 17 frames | 1770 / 37.440 dB | 1775 / 37.462 dB |
+| Akiyo QCIF, 65 frames (feature-memory reset at 33) | 4496 / 37.204 dB | 4526 / 37.293 dB |
+| BasketballDrive 200x120 crop, 33 frames (padding, crops) | 2495 / 32.289 dB | 2471 / 32.293 dB |
+
+- Repeated TensorRT encode and decode are byte-identical; quality holds
+  through the reset, so encoder and decoder reference states agree.
+- The native fused path is byte-identical to the branch before the rebase
+  (65-frame Akiyo stream and reconstruction).
+
+Not yet run: the 1080p bundle, gates G1-G3 at 1080p on the reference set,
+upstream decoding NVCR streams (G4), and speed. They wait for a free GPU.

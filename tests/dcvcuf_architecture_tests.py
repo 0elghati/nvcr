@@ -61,8 +61,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
 
 def without_uf_build_block(cmake):
-    """Drops top-level ``if(NVCR_ENABLE_DCVC_UF)`` blocks."""
-    return re.sub(r"^if\(NVCR_ENABLE_DCVC_UF\)\n.*?^endif\(\)\n", "", cmake,
+    """Drops top-level blocks whose condition names NVCR_ENABLE_DCVC_UF."""
+    return re.sub(r"^if\([^)\n]*NVCR_ENABLE_DCVC_UF[^)\n]*\)\n.*?^endif\(\)\n", "", cmake,
                   flags=re.MULTILINE | re.DOTALL)
 
 

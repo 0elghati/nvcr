@@ -53,7 +53,7 @@ Result<std::pair<Weights, Weights>> load_bundle(
             auto name = decode_name(item.name);
             auto value = item.value;
             if (value.is_floating_point()) {
-                value = value.to(at::Device(at::kCUDA, device));
+                value = value.to(at::Device(at::kCUDA, static_cast<c10::DeviceIndex>(device)));
                 value = value.dim() == 4
                     ? value.contiguous(at::MemoryFormat::ChannelsLast)
                     : value.contiguous();
@@ -99,7 +99,7 @@ at::Tensor frames_to_tensor(std::span<const Frame> frames, int device) {
         std::memcpy(staging[index].data_ptr<std::uint8_t>(), frame.data().data(),
                     static_cast<std::size_t>(frame_bytes));
     }
-    auto planes = staging.to(at::Device(at::kCUDA, device), /*non_blocking=*/true);
+    auto planes = staging.to(at::Device(at::kCUDA, static_cast<c10::DeviceIndex>(device)), /*non_blocking=*/true);
     auto y = planes.narrow(1, 0, y_size).reshape({count, 1, height, width});
     auto uv = planes.narrow(1, y_size, y_size / 2)
                   .reshape({count, 2, height / 2, 1, width / 2, 1})
@@ -154,18 +154,18 @@ std::vector<Frame> tensors_to_frames(
     return output;
 }
 
-class NativeSession final : public NativeExecutionSession {
+class NativeSession final : public ExecutionSession {
 public:
     NativeSession(int device, Weights image, Weights video)
         : device_(device),
           owner_("dcvcuf-upstream-cuda-" + std::to_string(++next_owner_)),
-          stream_(at::cuda::getStreamFromPool(false, device)),
+          stream_(at::cuda::getStreamFromPool(false, static_cast<c10::DeviceIndex>(device))),
           image_weights_(std::move(image)),
           video_weights_(std::move(video)) {}
 
     Result<void> initialize() {
         try {
-            c10::cuda::CUDAGuard device_guard(device_);
+            c10::cuda::CUDAGuard device_guard(static_cast<c10::DeviceIndex>(device_));
             at::cuda::CUDAStreamGuard stream_guard(stream_);
             c10::InferenceMode inference;
             rebuild_encoder();
@@ -196,16 +196,16 @@ public:
                        "DCVC-UF native bundle uses codec-local fused submission");
     }
 
-    Result<NativeEncoded> encode_intra(
+    Result<Encoded> encode_intra(
         const Frame& frame, std::uint32_t qp) override {
-        return protect<NativeEncoded>([&] {
+        return protect<Encoded>([&] {
             const auto padding_r = (16 - static_cast<int>(frame.width()) % 16) % 16;
             const auto padding_b = (16 - static_cast<int>(frame.height()) % 16) % 16;
             auto result = image_encoder_->compress(
                 frames_to_tensor(std::span(&frame, 1), device_), static_cast<int>(qp),
                 padding_b, padding_r);
             video_encoder_->add_ref_feature_from_frame(result.reconstruction, true);
-            return NativeEncoded{
+            return Encoded{
                 bytes(result.bit_stream), static_cast<std::uint8_t>(result.entropy_coder_parallel)};
         });
     }
@@ -225,18 +225,18 @@ public:
         });
     }
 
-    Result<NativeEncoded> encode_predicted(
+    Result<Encoded> encode_predicted(
         std::span<const Frame> frames, std::uint32_t qp, bool reset_feature_memory) override {
         if (frames.size() != 8)
             return failure(ErrorCode::invalid_argument,
                            "DCVC-UF HT-S encoding requires exactly eight frames");
-        return protect<NativeEncoded>([&] {
+        return protect<Encoded>([&] {
             auto group = frames_to_tensor(frames, device_);
             const auto padding_r = (16 - static_cast<int>(frames.front().width()) % 16) % 16;
             const auto padding_b = (16 - static_cast<int>(frames.front().height()) % 16) % 16;
             auto result = video_encoder_->compress(
                 group, static_cast<int>(qp), reset_feature_memory, padding_b, padding_r);
-            return NativeEncoded{
+            return Encoded{
                 bytes(result.bit_stream), static_cast<std::uint8_t>(result.entropy_coder_parallel)};
         });
     }
@@ -283,7 +283,7 @@ private:
     template <class T, class Function>
     Result<T> protect(Function&& function) {
         try {
-            c10::cuda::CUDAGuard device_guard(device_);
+            c10::cuda::CUDAGuard device_guard(static_cast<c10::DeviceIndex>(device_));
             at::cuda::CUDAStreamGuard stream_guard(stream_);
             c10::InferenceMode inference;
             if constexpr (std::is_void_v<T>) {
@@ -336,9 +336,9 @@ Result<std::shared_ptr<provider::experimental::IProviderSession>>
 make_native_session(const RuntimeConfiguration& configuration) {
     try {
         const int device = configuration.provider.device_id;
-        c10::cuda::CUDAGuard device_guard(device);
+        c10::cuda::CUDAGuard device_guard(static_cast<c10::DeviceIndex>(device));
         at::cuda::CUDAStreamGuard stream_guard(
-            at::cuda::getStreamFromPool(false, device));
+            at::cuda::getStreamFromPool(false, static_cast<c10::DeviceIndex>(device)));
         c10::InferenceMode inference;
         auto loaded = load_bundle(configuration.artifacts.intra_engine_path, device);
         if (!loaded) return loaded.error();

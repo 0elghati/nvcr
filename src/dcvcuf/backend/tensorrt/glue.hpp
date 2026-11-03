@@ -25,6 +25,7 @@ struct Tensor final {
     int height{};
     int width{};
     Layout layout{Layout::nhwc};
+    int stride{};  // NHWC elements per pixel when this is a channel slice; 0 = channels
 };
 
 using HalfTensor = Tensor<std::uint16_t>;
@@ -113,5 +114,12 @@ constexpr int conditional_scratch_ints = 1024 * 1024;
     HalfTensor out, ConstHalfTensor x, bool clamp, cudaStream_t stream);
 [[nodiscard]] cudaError_t pixel_unshuffle(
     HalfTensor out, ConstHalfTensor x, int downscale_factor, cudaStream_t stream);
+
+// YUV420P8 frames (concatenated) -> FP16 tensor of 3 x frames channels, padded
+// by edge replication to out's size; and a 3-channel frame back to YUV420P8.
+[[nodiscard]] cudaError_t yuv420_to_tensor(
+    HalfTensor out, const std::uint8_t* yuv, int width, int height, cudaStream_t stream);
+[[nodiscard]] cudaError_t tensor_to_yuv420(
+    std::uint8_t* yuv, ConstHalfTensor frame, int width, int height, cudaStream_t stream);
 
 }  // namespace nvcr::dcvcuf::glue

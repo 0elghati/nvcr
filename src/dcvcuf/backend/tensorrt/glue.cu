@@ -25,10 +25,11 @@ GPUTensor4D<T> accessor(const Tensor<U>& tensor) {
     view.sizes[2] = H;
     view.sizes[3] = W;
     if (tensor.layout == Layout::nhwc) {
-        view.strides[0] = H * W * C;
+        const int P = tensor.stride != 0 ? tensor.stride : C;
+        view.strides[0] = H * W * P;
         view.strides[1] = 1;
-        view.strides[2] = W * C;
-        view.strides[3] = C;
+        view.strides[2] = W * P;
+        view.strides[3] = P;
     } else {
         view.strides[0] = C * H * W;
         view.strides[1] = H * W;

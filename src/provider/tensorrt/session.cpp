@@ -774,6 +774,7 @@ Result<void> warm_up_engine(
                 std::string(specification.filename),
             synchronized);
     }
+    if (instance.low_memory_mode) instance.context.reset();
     return {};
 }
 

@@ -1,6 +1,8 @@
 #include "nvcr/dcvcuf/backend.hpp"
 
+#ifdef NVCR_HAS_DCVCUF_NATIVE
 #include "native_session.hpp"
+#endif
 
 #include "nvcr/dcvcuf/adapter.hpp"
 #include "nvcr/runtime/registry.hpp"
@@ -65,6 +67,7 @@ void register_codec() {
 }
 
 void register_execution_provider() {
+#ifdef NVCR_HAS_DCVCUF_NATIVE
     runtime::Registry::instance().register_provider({
         provider::ProviderDescriptor{
             provider::ProviderKind::cuda_fused,
@@ -83,6 +86,7 @@ void register_execution_provider() {
         {},
         make_native_session,
     });
+#endif
 }
 
 Result<RuntimeConfiguration> runtime_configuration(std::filesystem::path bundle) {
@@ -90,9 +94,11 @@ Result<RuntimeConfiguration> runtime_configuration(std::filesystem::path bundle)
         if (const char* value = std::getenv(kBundleEnvironment))
             bundle = value;
     }
-    if (std::filesystem::is_directory(bundle))
+    // A TensorRT stage bundle (engine_manifest.json) runs on the tensorrt provider.
+    const bool tensorrt = std::filesystem::is_regular_file(bundle / "engine_manifest.json");
+    if (std::filesystem::is_directory(bundle) && !tensorrt)
         bundle /= kBundleFile;
-    if (!std::filesystem::is_regular_file(bundle)) {
+    if (!tensorrt && !std::filesystem::is_regular_file(bundle)) {
         return Error(
             ErrorCode::missing_artifact,
             std::string("DCVC-UF requires a weight bundle path or ") + kBundleEnvironment,
@@ -103,7 +109,7 @@ Result<RuntimeConfiguration> runtime_configuration(std::filesystem::path bundle)
     // provider reads it from the single artifact slot.
     configuration.artifacts.intra_engine_path = bundle;
     configuration.codec.id = codec_descriptor().id;
-    configuration.provider.id = kProviderId;
+    configuration.provider.id = tensorrt ? "tensorrt" : kProviderId;
     configuration.artifacts.model_id = kModelId;
     configuration.stream.bitstream_model_id = kModelId;
     return configuration;

@@ -1,6 +1,7 @@
 #include "nvcr/dcvcuf/adapter.hpp"
 
-#include "native_session.hpp"
+#include "execution_session.hpp"
+#include "tensorrt_session.hpp"
 
 #include "nvcr/bitstream/access_unit.hpp"
 #include "nvcr/dcvcuf/backend.hpp"
@@ -60,7 +61,7 @@ struct CodecPayload final {
 };
 
 std::vector<std::byte> make_payload(
-    FrameType type, const NativeEncoded& encoded,
+    FrameType type, const Encoded& encoded,
     std::span<const Timestamp> timestamps, bool reset_feature_memory = false) {
     const auto& magic = type == FrameType::intra ? intra_magic : predicted_magic;
     std::vector<std::byte> output;
@@ -139,7 +140,7 @@ class Encoder final : public IEncoderSession {
 public:
     Encoder(
         RuntimeConfiguration configuration,
-        std::shared_ptr<NativeExecutionSession> provider,
+        std::shared_ptr<ExecutionSession> provider,
         std::shared_ptr<Statistics> statistics)
         : configuration_(std::move(configuration)),
           provider_(std::move(provider)),
@@ -268,7 +269,7 @@ private:
     }
 
     RuntimeConfiguration configuration_;
-    std::shared_ptr<NativeExecutionSession> provider_;
+    std::shared_ptr<ExecutionSession> provider_;
     std::shared_ptr<Statistics> statistics_;
     std::vector<Frame> pending_;
     std::deque<Packet> outputs_;
@@ -283,7 +284,7 @@ class Decoder final : public IDecoderSession {
 public:
     Decoder(
         RuntimeConfiguration configuration,
-        std::shared_ptr<NativeExecutionSession> provider,
+        std::shared_ptr<ExecutionSession> provider,
         std::shared_ptr<Statistics> statistics)
         : configuration_(std::move(configuration)),
           provider_(std::move(provider)),
@@ -362,7 +363,7 @@ public:
 
 private:
     RuntimeConfiguration configuration_;
-    std::shared_ptr<NativeExecutionSession> provider_;
+    std::shared_ptr<ExecutionSession> provider_;
     std::shared_ptr<Statistics> statistics_;
     std::deque<Frame> outputs_;
     bool flushed_{};
@@ -389,11 +390,18 @@ public:
     Result<codec::Sessions> create_sessions(
         const RuntimeConfiguration& configuration,
         std::shared_ptr<provider::experimental::IProviderSession> session) override {
-        auto native = std::dynamic_pointer_cast<NativeExecutionSession>(session);
+        auto native = std::dynamic_pointer_cast<ExecutionSession>(session);
+#ifdef NVCR_HAS_TENSORRT
+        if (!native) {
+            auto wrapped = make_tensorrt_session(session);
+            if (!wrapped) return wrapped.error();
+            native = std::move(wrapped.value());
+        }
+#endif
         if (!native)
             return codec_error(
                 ErrorCode::missing_provider,
-                "DCVC-UF requires the dcvcuf-upstream-cuda provider session");
+                "DCVC-UF runs on the dcvcuf-upstream-cuda or tensorrt provider");
         if (configuration.codec.gop_size != 1 &&
             configuration.codec.gop_size % 8 != 0) {
             return codec_error(
