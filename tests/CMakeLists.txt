@@ -1,6 +1,15 @@
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
     add_test(
+        NAME nvcr_dcvcuf_reference_capture
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/dcvcuf_reference_capture_tests.py")
+    add_test(
+        NAME nvcr_dcvcuf_tensorrt_stages
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/dcvcuf_tensorrt_stage_tests.py")
+    add_test(
+        NAME nvcr_dcvcuf_architecture_boundary
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/dcvcuf_architecture_tests.py")
+    add_test(
         NAME nvcr_artifact_profiles
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/artifact_tool_tests.py")
     add_test(
@@ -156,6 +165,21 @@ target_link_libraries(nvcr_rans_conformance_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_rans_conformance_tests)
 add_test(NAME nvcr_rans_conformance COMMAND nvcr_rans_conformance_tests)
 
+add_executable(nvcr_dcvcuf_rans_conformance_tests dcvcuf_rans_conformance_tests.cpp)
+target_include_directories(
+    nvcr_dcvcuf_rans_conformance_tests PRIVATE
+        "${PROJECT_SOURCE_DIR}/src/dcvcuf/entropy")
+target_link_libraries(nvcr_dcvcuf_rans_conformance_tests PRIVATE NVCR::nvcr)
+# libnvcr carries the codec-local UF entropy objects only in DCVC-UF builds.
+if(NOT NVCR_ENABLE_DCVC_UF)
+    target_sources(
+        nvcr_dcvcuf_rans_conformance_tests PRIVATE
+            $<TARGET_OBJECTS:nvcr_dcvcuf_entropy>
+            $<TARGET_OBJECTS:nvcr_dcvcuf_rans>)
+endif()
+nvcr_set_project_warnings(nvcr_dcvcuf_rans_conformance_tests)
+add_test(NAME nvcr_dcvcuf_rans_conformance COMMAND nvcr_dcvcuf_rans_conformance_tests)
+
 if(TARGET nvcr_cli)
     add_test(
         NAME nvcr_cli_version
@@ -194,6 +218,19 @@ if(NVCR_ENABLE_TENSORRT)
     target_link_libraries(nvcr_tensorrt_engine_tests PRIVATE NVCR::nvcr)
     nvcr_set_project_warnings(nvcr_tensorrt_engine_tests)
 
+    add_executable(nvcr_tensorrt_session_tests tensorrt_session_tests.cpp)
+    target_include_directories(nvcr_tensorrt_session_tests PRIVATE "${PROJECT_SOURCE_DIR}/src")
+    target_link_libraries(
+        nvcr_tensorrt_session_tests PRIVATE NVCR::nvcr CUDA::cudart TensorRT::TensorRT)
+    nvcr_set_project_warnings(nvcr_tensorrt_session_tests)
+
+    # Offline per-stage conformance runner (used by C11 DCVC-UF stage checks).
+    add_executable(nvcr_tensorrt_stage_runner tensorrt_stage_runner.cpp)
+    target_include_directories(nvcr_tensorrt_stage_runner PRIVATE "${PROJECT_SOURCE_DIR}/src")
+    target_link_libraries(
+        nvcr_tensorrt_stage_runner PRIVATE NVCR::nvcr CUDA::cudart TensorRT::TensorRT)
+    nvcr_set_project_warnings(nvcr_tensorrt_stage_runner)
+
     add_executable(nvcr_tensorrt_roundtrip_tests tensorrt_roundtrip_tests.cpp)
     target_link_libraries(nvcr_tensorrt_roundtrip_tests PRIVATE NVCR::nvcr)
     nvcr_set_project_warnings(nvcr_tensorrt_roundtrip_tests)
@@ -221,11 +258,14 @@ if(NVCR_ENABLE_TENSORRT)
         set_property(GLOBAL APPEND PROPERTY NVCR_TENSORRT_TEST_PROFILES "${engine_profile_id}")
         add_test(NAME nvcr_tensorrt_engine_contracts${profile_test_suffix}
             COMMAND nvcr_tensorrt_engine_tests "${engine_dir}")
+        add_test(NAME nvcr_tensorrt_session_contracts${profile_test_suffix}
+            COMMAND nvcr_tensorrt_session_tests "${engine_dir}")
         add_test(NAME nvcr_tensorrt_ip_frame_roundtrip${profile_test_suffix}
             COMMAND nvcr_tensorrt_roundtrip_tests "${engine_dir}"
                 "${optimum_width}" "${optimum_height}")
         set_tests_properties(
             nvcr_tensorrt_engine_contracts${profile_test_suffix}
+            nvcr_tensorrt_session_contracts${profile_test_suffix}
             nvcr_tensorrt_ip_frame_roundtrip${profile_test_suffix}
             PROPERTIES LABELS "gpu;profile-${engine_profile_id}")
     endfunction()

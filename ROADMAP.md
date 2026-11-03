@@ -171,10 +171,11 @@ and gap classifications are recorded in
 | C6.5 | Generic CLI session driving | Complete 2026-09-15 | Encode/decode use session send, full receive drain, directional flush, and final drain through the same driver exercised by the grouped fixture; see [the C6.5 evidence](evidence/phase-c6-5-cli-session-driver-20260915.md) |
 | C6.6 | Session send/receive contract clarification | Complete 2026-09-15 | Send success consumes input, receive-side `try_again` reports delayed readiness, and a registered multi-input decoder fixture proves order, timestamps, flush/drain, and reset/reuse without changing production behavior; see [the C6.6 evidence](evidence/phase-c6-6-session-contract-20260915.md) |
 | C6.7 | Current-main rebase and minor-release compatibility | Complete 2026-10-26 with documented GPU-contention exception | The twelve-commit `main-advanced` stack is rebased onto v1.0.8 and the public 1.0 source seams are retained. CPU, install-consumer, sanitizer/fuzz, TensorRT non-GPU, available-profile GPU, pinned-golden, and byte-parity gates pass; two 1080p tests were omitted because they could not coexist with the active GPU workload. See [the C6.7 evidence](evidence/main-advanced-rebase-vetting-20261026.md) |
-| C7 | DCVC-UF fused-operator feasibility | Pending; separate codec axis | One fused operator and one frame-specific high-throughput branch match a pinned upstream encode/decode vector without generic runtime code owning UF branch semantics |
+| C7 | DCVC-UF fused-operator feasibility | Working opt-in native CLI; validation open 2026-11-02 | Pinned DMCI and HT-S fused sources now build into NVCR without a Python ABI dependency. The registered dcvc-uf adapter owns I/eight-frame/tail/timestamp/reset lifecycle and the registered dcvcuf-upstream-cuda provider owns weights, CUDA execution, and reference state. Streams and decoded frames are byte-identical to pinned upstream test_video.py on 300 QCIF and 500 BasketballDrive 1080p frames; 1080p RTX 4070 throughput is 51.6/43.8 process FPS and 183.8/135.1 codec FPS (encode/decode). Remaining: provider decision (user directed a TensorRT-provider port on 2026-11-02), upstream README recipe options (which save 2-56% bits at nearly equal PSNR on the C8 reference set), packaging, and clean release gates. See [the C7 evidence](evidence/phase-c7-dcvcuf-export-20261031.md) |
 | C8 | Second provider: ONNX Runtime | Exit gates pass 2026-11-01 on the CPU execution provider; not yet merged. Prioritized ahead of C7 on 2026-11-01. Host transforms match the CUDA kernels with zero differences, all six exact-profile TensorRT suites pass, and TensorRT streams are byte-identical to `main`. Cross-provider streams decode without error to wrong frames; see [the C8 evidence](evidence/phase-c8-onnxruntime-provider-20261101.md) | DCVC-RT runs through a provider-neutral host backend whose transforms match the CUDA kernels; an ONNX Runtime session passes I/P self-conformance (encoder and decoder reconstructions identical), determinism, reset/reuse, and lifecycle gates on the exported bundle; TensorRT build and byte parity are unchanged; cross-provider comparison against TensorRT is reported separately |
 | C9 | Snapdragon edge target through ONNX Runtime QNN | In progress on Galaxy S25 (SM8750, Hexagon v79). The arm64 build, the strict NPU placement gate (no CPU fallback), on-device QNN self-conformance, and a 65-frame CLI encode/decode at 176x144 pass. A diagnostic NPU sweep gives 22.7/30.7 fps encode/decode at QCIF, 8.8/10.7 at CIF and 4.0/4.9 at 360p. Open: QNN context artifacts (graphs compile on every launch), 540p and above, the CPU baseline, and a controlled measurement; see [the C9 evidence](evidence/phase-c9-snapdragon-qnn-20261101.md) | ARM64 build, static-shape QNN context artifacts per profile and SoC/QAIRT version, an NPU partition-coverage gate, and on-device self-conformance and measurements |
 | C10 | MLVC codec through ONNX Runtime | Experimental; upstream-runtime parity passes 2026-11-02 on ONNX Runtime 1.26.0 CPU. Prioritized by user direction on 2026-11-02. Microsoft's published libmlvc MLVC-S bundles (generic and qualcomm) run unchanged. Every NVCR record equals the record from MLVC's own conversion runtime, and decoded YUV is byte-identical across six cases: LTR recovery, I-period override, transposed canvas, edge padding, the qualcomm graph on CPU, and a rate-controlled stream with dropped frames. DCVC-RT ONNX Runtime streams are byte-identical to `main`. On 2026-11-03 both parts ran on a Galaxy S25 NPU through `onnxruntime-qnn` with CPU fallback disabled, and streams decoded across NPU, phone CPU and x86 CPU with bounded drift that recovers at LTR recovery; the phone CPU does not reproduce the x86 references, so parity holds on x86 only. On the S25 with MLVC's QNN settings and the compiled-graph cache, 640x360 runs at about 300 fps encode and decode after a 0.35 s cached setup, and 960x540 at 111–138 fps. DCVC-RT keeps ONNX Runtime's QNN defaults and reproduces its C9 digests with the cache. Open: arm64 parity, DCVC-RT burst mode, ONNX Runtime CUDA, the standard MLVC model, NHWC bundles and encoder rate control; see the [C10 evidence](evidence/phase-c10-mlvc-codec-20261102.md) | Byte-identical records and reconstructions against MLVC's conversion runtime for the same bundle and execution provider; reset, malformed-unit and sanitizer gates; DCVC-RT unchanged; QNN device gate as documented in the integration guide |
+| C11 | DCVC-UF on the TensorRT provider | Phases 0-4 complete 2026-11-03: references and gates, codec-agnostic TensorRT session, 20 FP16 plans, glue kernels bit-identical to upstream, and an end-to-end TensorRT execution path passing the 1080p G3 gate on the reference set (max 0.011 dB PSNR-Y, 0.23% bits, BD-rate within 0.03%) at about 71% of the fused path's speed (112/89 vs 158/123 fps at 1080p). Open: G4 (upstream decoding NVCR streams) | Port DCVC-UF from the second fused-CUDA provider to the existing TensorRT provider while staying as close as possible to pinned upstream test_video.py. Phases: 0 reference vectors and gates; 1 codec-agnostic TensorRT session (stage contracts validated against engines) with DCVC-RT byte parity; 2 per-stage ONNX/TensorRT export; 3 codec-local glue kernels; 4 adapter path, engine bundle, gates and performance. See [the C11 evidence](evidence/phase-c11-dcvcuf-tensorrt-20261102.md) |
 
 C0 confirmed that C1 could proceed without a new chunk API. The existing
 session verbs were sufficient. C1 now routes the production path through
@@ -256,8 +257,34 @@ cover CPU development, CUDA comparison, and a Snapdragon NPU through the QNN
 execution provider (C9). The TensorRT backend's inter-stage CUDA kernels are
 not reusable on those targets, so C8 adds host implementations of the same
 transforms behind a provider-neutral DCVC-RT backend rather than changing the
-accepted TensorRT path. C7 remains a pending, separate DCVC-UF codec-axis
-experiment. The minimum capability vocabulary remains open in
+accepted TensorRT path. 
+On 2026-10-31,
+the user prioritized starting DCVC-UF integration, making C7 the active bounded
+experiment. The pinned upstream fused shuffle/clamp kernel matches exactly on
+a synthetic vector; one HT-S frame branch exports and passes ONNX CPU and
+TensorRT FP32 checks, including its unclamped reset feature. This is stage
+feasibility evidence, not a supported codec. Manually supplied checkpoints now
+pass the upstream 17-frame I/P smoke. The upstream Python/fused head comparison
+fails its unchanged numerical limit; the first divergence occurs in the fused
+1x1 convolution's FP16 accumulation. Exact stage buffer/reset checks pass. On 2026-11-01, the
+experimental provider session connects UF synthesis and reconstruction using a
+shared opaque device buffer and an ordinary completion dependency. Both decoder
+features, 16 frames, and two reset features match exactly on the native QCIF
+vector. Two separate processes under normal asynchronous reference execution
+preserve all 23 tensor hashes; six provider-only pipeline replays with normal
+CUDA launches also pass exactly. The pinned upstream setup's disabled empty-
+tensor initialization was restored in the UF execution setup, closing the
+native I-frame replay gate. On 2026-11-02 the full pinned DMCI/HT-S native
+path was connected to registered codec/provider sessions and the normal NVCR
+CLI. The pinned Python/native golden then exposed and fixed the step-based
+frame-type schedule, the HT-S feature-memory reset, and FP16 input
+normalization; streams and reconstructions are now byte-identical to upstream at
+QCIF and 1080p. Moving pixel conversion onto the GPU and keeping models across
+resets raised 1080p codec FPS to 183.8/135.1. The user then directed a port to
+the existing TensorRT provider instead of the second fused-CUDA provider. Earlier stream rejections do not establish
+stream corruption or an environment mismatch.
+Shared runtime/provider APIs remain unchanged. C11 continues that port.
+The minimum capability vocabulary remains open in
 [the cross-codec audit](docs/cross-codec-requirements.md#open-questions-requiring-prototypes).
 
 C6.6 makes the pre-1.1 session contract explicit: successful sends consume

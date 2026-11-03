@@ -33,11 +33,13 @@ find_package(Threads REQUIRED)
 # CUDA_ARCHITECTURES property. Auto-detect the CUDA compiler and the GPU
 # architecture (Jetson or discrete) here so a plain
 # `cmake -DNVCR_ENABLE_TENSORRT=ON` works without manual -D flags.
-if(NVCR_ENABLE_TENSORRT)
+if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
     include(NVCRAutodetect)
     nvcr_autodetect_cuda()
     enable_language(CUDA)
     find_package(CUDAToolkit REQUIRED)
+endif()
+if(NVCR_ENABLE_TENSORRT)
     find_package(TensorRT REQUIRED)
 endif()
 if(NVCR_ENABLE_ONNXRUNTIME)
@@ -46,6 +48,22 @@ endif()
 
 add_subdirectory(third_party/dcvc_rans)
 add_subdirectory(third_party/msrtc_rans)
+add_subdirectory(third_party/dcvcuf_rans)
+
+# DCVC-UF entropy is codec-local. It always builds so its CPU conformance test
+# runs without CUDA, but it enters libnvcr only with NVCR_ENABLE_DCVC_UF.
+add_library(nvcr_dcvcuf_entropy OBJECT src/dcvcuf/entropy/uf_rans_codec.cpp)
+target_include_directories(
+    nvcr_dcvcuf_entropy PRIVATE
+        "${NVCR_GENERATED_INCLUDE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(
+    nvcr_dcvcuf_entropy SYSTEM PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dcvcuf_rans/src")
+target_compile_features(nvcr_dcvcuf_entropy PRIVATE cxx_std_20)
+set_target_properties(
+    nvcr_dcvcuf_entropy PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_EXTENSIONS OFF)
+nvcr_set_project_warnings(nvcr_dcvcuf_entropy)
 
 # ---------------------------------------------------------------------------
 # Module-boundary interface targets
@@ -153,6 +171,7 @@ if(NVCR_ENABLE_TENSORRT)
     target_sources(
         nvcr
         PRIVATE
+            src/provider/tensorrt/session.cpp
             src/dcvcrt/backend/tensorrt/cuda_ops.cu
             src/dcvcrt/backend/tensorrt/engine_specs.cpp
             src/dcvcrt/backend/tensorrt/backend.cpp)
@@ -169,6 +188,152 @@ if(NVCR_ENABLE_ONNXRUNTIME)
     target_sources(nvcr PRIVATE src/provider/onnxruntime/session.cpp)
     target_link_libraries(nvcr PRIVATE OnnxRuntime::OnnxRuntime)
     target_compile_definitions(nvcr PRIVATE NVCR_HAS_ONNXRUNTIME=1)
+endif()
+
+if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
+    # DCVC-UF glue kernels for its TensorRT path, generated from pinned upstream
+    # device code. Upstream's compile flags and half macros are part of the
+    # arithmetic: they select fast-math intrinsics and route Half through float.
+    # The flags mirror upstream setup.py plus torch's COMMON_NVCC_FLAGS.
+    list(GET CMAKE_CUDA_ARCHITECTURES 0 NVCR_DCVCUF_GLUE_SM)
+    string(REGEX REPLACE "[^0-9].*$" "" NVCR_DCVCUF_GLUE_SM "${NVCR_DCVCUF_GLUE_SM}")
+    add_library(nvcr_dcvcuf_glue OBJECT src/dcvcuf/backend/tensorrt/glue.cu)
+    target_compile_options(nvcr_dcvcuf_glue PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-O3;--use_fast_math;--extra-device-vectorization;--expt-relaxed-constexpr>
+        # Upstream's kernels declare a few unused locals (warning 177).
+        $<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress=177>)
+    target_compile_definitions(nvcr_dcvcuf_glue PRIVATE
+        CURRENT_DEVICE_SM=${NVCR_DCVCUF_GLUE_SM}
+        __CUDA_NO_HALF_OPERATORS__
+        __CUDA_NO_HALF_CONVERSIONS__
+        __CUDA_NO_BFLOAT16_CONVERSIONS__
+        __CUDA_NO_HALF2_OPERATORS__)
+    set_target_properties(nvcr_dcvcuf_glue PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        CUDA_STANDARD 17
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_EXTENSIONS OFF)
+endif()
+
+if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
+    # The DCVC-UF codec runs on the TensorRT provider, the native fused path, or both.
+    target_sources(nvcr PRIVATE
+        src/dcvcuf/adapter.cpp
+        src/dcvcuf/registration.cpp
+        $<TARGET_OBJECTS:nvcr_dcvcuf_entropy>
+        $<TARGET_OBJECTS:nvcr_dcvcuf_rans>)
+    target_include_directories(nvcr PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/entropy")
+    target_compile_definitions(nvcr PRIVATE NVCR_HAS_DCVC_UF=1)
+    if(NVCR_ENABLE_TENSORRT)
+        target_sources(nvcr PRIVATE
+            src/dcvcuf/tensorrt_session.cpp
+            src/dcvcuf/backend/tensorrt/frames.cu
+            $<TARGET_OBJECTS:nvcr_dcvcuf_glue>)
+    endif()
+endif()
+
+if(NVCR_ENABLE_DCVC_UF)
+    if(NOT IS_DIRECTORY "${NVCR_DCVCUF_SOURCE_ROOT}/src/layers/extensions/inference")
+        message(FATAL_ERROR
+            "NVCR_ENABLE_DCVC_UF requires NVCR_DCVCUF_SOURCE_ROOT to name the pinned DCVC-UF checkout")
+    endif()
+    if(NOT IS_DIRECTORY "${NVCR_DCVCUF_CUTLASS_ROOT}/include/cutlass")
+        message(FATAL_ERROR
+            "NVCR_ENABLE_DCVC_UF requires NVCR_DCVCUF_CUTLASS_ROOT to name a CUTLASS checkout")
+    endif()
+    list(LENGTH CMAKE_CUDA_ARCHITECTURES NVCR_DCVCUF_ARCH_COUNT)
+    if(NOT NVCR_DCVCUF_ARCH_COUNT EQUAL 1 OR
+       NOT CMAKE_CUDA_ARCHITECTURES MATCHES "^[0-9]+$")
+        message(FATAL_ERROR
+            "DCVC-UF fused kernels require one numeric CMAKE_CUDA_ARCHITECTURES target")
+    endif()
+    set(NVCR_DCVCUF_TARGET_SM "${CMAKE_CUDA_ARCHITECTURES}")
+
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    find_package(Torch REQUIRED)
+    set(NVCR_DCVCUF_GENERATED_SOURCE_DIR
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/dcvcuf_upstream")
+    execute_process(
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/backends/dcvcuf/materialize_native_sources.py"
+            --reference-root "${NVCR_DCVCUF_SOURCE_ROOT}"
+            --output "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}"
+        RESULT_VARIABLE NVCR_DCVCUF_MATERIALIZE_RESULT
+        ERROR_VARIABLE NVCR_DCVCUF_MATERIALIZE_ERROR)
+    if(NOT NVCR_DCVCUF_MATERIALIZE_RESULT EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to materialize Python-free DCVC-UF sources: ${NVCR_DCVCUF_MATERIALIZE_ERROR}")
+    endif()
+
+    file(GLOB NVCR_DCVCUF_CUDA_SOURCES CONFIGURE_DEPENDS
+        "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}/cutlass/*.cu"
+        "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}/elementwise/*.cu")
+    add_library(nvcr_dcvcuf_upstream OBJECT
+        "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}/dmc_common.cpp"
+        "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}/dmci_proxy.cpp"
+        "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}/dmc_hts_proxy.cpp"
+        "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}/layers_proxy.cpp"
+        "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}/memory_pool.cpp"
+        src/dcvcuf/backend/upstream/native_rans.cpp
+        ${NVCR_DCVCUF_CUDA_SOURCES})
+    target_include_directories(nvcr_dcvcuf_upstream PRIVATE
+        "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/backend/upstream"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/entropy"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        "${NVCR_GENERATED_INCLUDE_DIR}"
+        "${NVCR_DCVCUF_CUTLASS_ROOT}/include"
+        "${NVCR_DCVCUF_CUTLASS_ROOT}/tools/util/include"
+        ${TORCH_INCLUDE_DIRS})
+    target_compile_features(nvcr_dcvcuf_upstream PRIVATE cxx_std_20)
+    target_link_libraries(nvcr_dcvcuf_upstream PRIVATE ${TORCH_LIBRARIES} CUDA::cudart)
+    target_compile_options(nvcr_dcvcuf_upstream PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:-O3;-Wno-deprecated-declarations>
+        $<$<COMPILE_LANGUAGE:CUDA>:-O3;--use_fast_math;--extra-device-vectorization;--split-compile=2;-Wno-deprecated-declarations>)
+    target_compile_definitions(nvcr_dcvcuf_upstream PRIVATE
+        CURRENT_DEVICE_SM=${NVCR_DCVCUF_TARGET_SM}
+        $<$<COMPILE_LANGUAGE:CUDA>:__CUDA_NO_HALF_OPERATORS__>
+        $<$<COMPILE_LANGUAGE:CUDA>:__CUDA_NO_HALF_CONVERSIONS__>
+        $<$<COMPILE_LANGUAGE:CUDA>:__CUDA_NO_BFLOAT16_CONVERSIONS__>
+        $<$<COMPILE_LANGUAGE:CUDA>:__CUDA_NO_HALF2_OPERATORS__>)
+    set_target_properties(nvcr_dcvcuf_upstream PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        CUDA_STANDARD 20
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_EXTENSIONS OFF)
+
+    target_sources(nvcr PRIVATE
+        src/dcvcuf/native_session.cpp
+        $<TARGET_OBJECTS:nvcr_dcvcuf_upstream>)
+    target_include_directories(nvcr PRIVATE
+        "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/backend/upstream")
+    target_link_libraries(nvcr PRIVATE ${TORCH_LIBRARIES} CUDA::cudart)
+    target_compile_definitions(nvcr PRIVATE NVCR_HAS_DCVCUF_NATIVE=1)
+
+    # Bitwise parity of NVCR's DCVC-UF glue port with the pinned upstream kernels.
+    add_executable(nvcr_dcvcuf_glue_parity_tests
+        tests/dcvcuf_glue_parity_tests.cpp
+        $<TARGET_OBJECTS:nvcr_dcvcuf_glue>)
+    target_include_directories(nvcr_dcvcuf_glue_parity_tests PRIVATE
+        "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/backend/tensorrt")
+    target_link_libraries(nvcr_dcvcuf_glue_parity_tests PRIVATE
+        nvcr ${TORCH_LIBRARIES} CUDA::cudart)
+    target_compile_features(nvcr_dcvcuf_glue_parity_tests PRIVATE cxx_std_20)
+
+    add_executable(nvcr_dcvcuf_native_roundtrip
+        tests/dcvcuf_native_roundtrip.cpp)
+    target_include_directories(nvcr_dcvcuf_native_roundtrip PRIVATE
+        "${NVCR_DCVCUF_GENERATED_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/backend/upstream"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf/entropy")
+    target_link_libraries(nvcr_dcvcuf_native_roundtrip PRIVATE
+        nvcr ${TORCH_LIBRARIES} CUDA::cudart)
+    target_compile_features(nvcr_dcvcuf_native_roundtrip PRIVATE cxx_std_20)
 endif()
 
 if(NVCR_BUILD_EXAMPLES)
@@ -251,6 +416,12 @@ install(
         third_party/dcvc_rans/LICENSE.MIT
         third_party/dcvc_rans/NOTICE.txt
     DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr/third_party/dcvc_rans")
+install(
+    FILES
+        third_party/dcvcuf_rans/LICENSE.txt
+        third_party/dcvcuf_rans/NOTICE.txt
+        third_party/dcvcuf_rans/UPSTREAM.md
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr/third_party/dcvcuf_rans")
 install(
     DIRECTORY third_party/dcvc_rt/
     DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/nvcr/third_party/dcvc_rt")

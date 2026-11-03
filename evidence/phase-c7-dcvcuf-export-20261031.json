@@ -1,0 +1,723 @@
+{
+  "schema_version": 1,
+  "scope": "dcvcuf_hts_stage_export_probe",
+  "reference_commit": "cbdae87a5445114cdc7f48816da63ea80bdeac40",
+  "probe_sha256": "0a08e08de772145630aab1457310b3a3652908f7cc2609b6665cbc30500baeac",
+  "weights": "synthetic",
+  "checkpoint_sha256": null,
+  "real_checkpoints": {
+    "image": "b3b900de23f30e4fc437010ddffe6a5413a56d6cfd97fb6235adbcd2b6973302",
+    "video_hts": "565607d84943ee79072a5760d34a200d5724b4bb72c6bc24bfab41e8ae4f5f47"
+  },
+  "feature_source": "synthetic",
+  "feature_sha256": null,
+  "seed": 0,
+  "branch": 7,
+  "versions": {
+    "torch": "2.13.0+cu126",
+    "onnx": "1.22.0",
+    "onnxruntime": "1.28.0",
+    "tensorrt": "10.9.0",
+    "scipy": "1.18.1"
+  },
+  "acceptance": {
+    "shuffle": "exact",
+    "branch_atol": 1e-05,
+    "branch_rtol": 0.0001
+  },
+  "c7_complete": false,
+  "upstream_round_trip": {
+    "status": "passed",
+    "frames": 17,
+    "i_frames": 1,
+    "p_frames": 16,
+    "qp": 32,
+    "reset_interval": 8,
+    "aggregate_bpp": 0.027796345811051695,
+    "aggregate_psnr": 38.68018492283872,
+    "result_sha256": "f3d810286bed94fd7d6935d72ec1ed808059230aa8c95924db04d0337a5773e3",
+    "stream_sha256": "7b2ebb14719082381ea8363ff9511545d5200dfb6a543db84d6782279be3fe7a",
+    "input_sha256": "e1efee0e95c6d27aefe2294a727768334db8466e67bf4a49cf8f5b2fb8b49108"
+  },
+  "provider_stage": {
+    "status": "provider_stage_failed",
+    "comparison": "upstream_pytorch_fp16_vs_upstream_fused_fp16",
+    "nvcr_provider_tested": false,
+    "probe_sha256": "99bea7b3a062e0c5270bbb78cb763653ef94efd900223aa0bfef9f0282163097",
+    "binding_sha256": "e9d147939ecf2fe109ccd4b9195c8ac9f035fc77806f2c8492d62b0a30225430",
+    "extension_sha256": "cf2be0cc51d3766a9c1c8b19eb513a6fe6337f9b9d864ac527a3bcc9718bf805",
+    "outputs_sha256": "75b4c758137447b961d151d66acc00b799721d97c2ab049d641a4f751895d3b0",
+    "feature_sha256": "34b4bda86d6e030ca06c62d5157ca7aad407db83b5911d1cb7a8c1dc942009e9",
+    "feature_shape": [
+      1,
+      512,
+      3,
+      3
+    ],
+    "seed": 20261031,
+    "dtype": "float16",
+    "gpu": "NVIDIA GeForce RTX 4070",
+    "torch": "2.13.0+cu126",
+    "cuda": "12.6",
+    "acceptance": {
+      "atol": 0.003,
+      "rtol": 0.003
+    },
+    "max_frame_abs_error": 0.009521484375,
+    "max_reset_abs_error": 0.0047607421875,
+    "proxy_preallocation": "passed",
+    "lifecycle": {
+      "input_unchanged": true,
+      "repeat_exact": true,
+      "reset_exact": true,
+      "reset_display_exact": true
+    },
+    "first_operation": {
+      "location": "recon_head.conv1.0.0.dc.0",
+      "sm89_cutlass_accumulator": "float16",
+      "no_bias_max_abs_error": 0.01953125,
+      "no_bias_different_elements": 3680,
+      "no_bias_elements": 4608,
+      "with_bias_max_abs_error": 0.01953125,
+      "activation_max_abs_error": 0.015625,
+      "oracle": "CPU float64 computation with identical FP16-quantized inputs and weights",
+      "oracle_vs_python_conv_mean_abs_error": 0.0003286489389008946,
+      "oracle_vs_fused_conv_mean_abs_error": 0.0019426708006196553
+    }
+  },
+  "remaining_gates": [
+    "upstream README speed/RD recipe (--reset_interval 128, --skip_thres 0.15) and intra-period -1 are not yet configurable; NVCR fixes reset interval 32 and skip threshold 0",
+    "provider decision: dcvcuf-upstream-cuda is a second provider; the user directed a TensorRT-provider port on 2026-11-02",
+    "target packaging and clean release-suite gates"
+  ],
+  "stages": {
+    "shuffle_clamp": {
+      "onnx_sha256": "890b15eba2bca301564135066adcd82df024c5159dfbb32bffc2cf8c6c329bc4",
+      "input_shape": [
+        1,
+        192,
+        2,
+        3
+      ],
+      "onnx_cpu": {
+        "frame": {
+          "passed": true,
+          "exact": true,
+          "max_abs_error": 0.0,
+          "shape": [
+            1,
+            3,
+            16,
+            24
+          ]
+        }
+      },
+      "input_sha256": "00c1209b3d1252533e02f0ecf6b015781294fdc1ddf9c9b93cdb485ce995aaf9",
+      "trtexec_command": [
+        "/usr/src/tensorrt/bin/trtexec",
+        "--onnx=/home/oelghati/NVCR/build/dcvcuf-c7-current/shuffle_clamp.onnx",
+        "--loadInputs=input:/home/oelghati/NVCR/build/dcvcuf-c7-current/shuffle_clamp.input.f32",
+        "--dumpRawBindingsToFile",
+        "--noTF32",
+        "--builderOptimizationLevel=0",
+        "--memPoolSize=workspace:64",
+        "--warmUp=0",
+        "--duration=0",
+        "--iterations=1"
+      ],
+      "tensorrt": {
+        "frame": {
+          "passed": true,
+          "exact": true,
+          "max_abs_error": 0.0,
+          "shape": [
+            1,
+            3,
+            16,
+            24
+          ],
+          "output_sha256": "17110c1aa0155799f16a5f6674e0d3b9c90b841cf5c3fc8e2a2591b4f31fdadb"
+        }
+      }
+    },
+    "hts_frame_branch": {
+      "onnx_sha256": "e5b2f2778cbfaee38448581c6c3457a0ba8c1097f59d6f8b3df73b220ea56a93",
+      "input_shape": [
+        1,
+        512,
+        2,
+        3
+      ],
+      "onnx_cpu": {
+        "pre_shuffle": {
+          "passed": true,
+          "exact": false,
+          "max_abs_error": 1.430511474609375e-06,
+          "shape": [
+            1,
+            192,
+            2,
+            3
+          ]
+        },
+        "frame": {
+          "passed": true,
+          "exact": false,
+          "max_abs_error": 1.2218952178955078e-06,
+          "shape": [
+            1,
+            3,
+            16,
+            24
+          ]
+        }
+      },
+      "input_sha256": "b8f07d706aa854c7278122c3f15c9ad8ddbc7dc82542145b2639116b041ddc2c",
+      "trtexec_command": [
+        "/usr/src/tensorrt/bin/trtexec",
+        "--onnx=/home/oelghati/NVCR/build/dcvcuf-c7-current/hts_frame_branch.onnx",
+        "--loadInputs=input:/home/oelghati/NVCR/build/dcvcuf-c7-current/hts_frame_branch.input.f32",
+        "--dumpRawBindingsToFile",
+        "--noTF32",
+        "--builderOptimizationLevel=0",
+        "--memPoolSize=workspace:64",
+        "--warmUp=0",
+        "--duration=0",
+        "--iterations=1"
+      ],
+      "tensorrt": {
+        "pre_shuffle": {
+          "passed": true,
+          "exact": false,
+          "max_abs_error": 1.7881393432617188e-06,
+          "shape": [
+            1,
+            192,
+            2,
+            3
+          ],
+          "output_sha256": "ac5e0539b6073a20268efd4e04931fbe57e3e150945409c7e19d584e4fe81e84"
+        },
+        "frame": {
+          "passed": true,
+          "exact": false,
+          "max_abs_error": 1.1026859283447266e-06,
+          "shape": [
+            1,
+            3,
+            16,
+            24
+          ],
+          "output_sha256": "9928a6bc2716cbd625bf23e27265e046a5003c28efea89638840dc2671156010"
+        }
+      }
+    }
+  },
+  "fused_shuffle": {
+    "cutlass_commit": "4370102f9dacab813282e1d67722fceb0b90a019",
+    "gpu": "NVIDIA GeForce RTX 4070",
+    "torch_cuda": "12.6",
+    "checks": {
+      "contiguous": {
+        "passed": true,
+        "exact": true,
+        "max_abs_error": 0.0,
+        "shape": [
+          1,
+          3,
+          16,
+          24
+        ]
+      },
+      "channels_last": {
+        "passed": true,
+        "exact": true,
+        "max_abs_error": 0.0,
+        "shape": [
+          1,
+          3,
+          16,
+          24
+        ]
+      }
+    }
+  },
+  "status": "native_entropy_and_artifact_backed_synthesis_reconstruction_parity_passed",
+  "date": "2026-11-02",
+  "cpu_release_tests": {
+    "passed": 26,
+    "failed": 0,
+    "date": "2026-11-01"
+  },
+  "architecture_boundary": {
+    "passed": true,
+    "command": "python3 tests/dcvcuf_architecture_tests.py",
+    "checks": [
+      "shared contracts contain no UF-specific terms",
+      "core configuration has no default codec/provider/model/stream identity"
+    ]
+  },
+  "additional_branch0_probe": {
+    "status": "stage_probe_passed",
+    "feature_shape": [
+      1,
+      512,
+      1,
+      1
+    ],
+    "backend": "onnx_cpu"
+  },
+  "nvcr_provider_session": {
+    "scope": "experimental_nvcr_provider_session_hts_synthesis",
+    "reference_commit": "cbdae87a5445114cdc7f48816da63ea80bdeac40",
+    "gpu": "NVIDIA GeForce RTX 4070",
+    "torch": "2.13.0+cu126",
+    "cuda": "12.6",
+    "execution_setup": "upstream src.utils.common.set_torch_env plus deterministic empty-tensor initialization",
+    "cuda_launch_blocking": "0",
+    "deterministic_fill_uninitialized_memory": true,
+    "session_binary_sha256": "247565a98a81e2b2f4140640f09bda57b7264b3dd8e6ec9c9986a483b54c2587",
+    "generated_versions_sha256": "2690fa3472e82975921fad5df83df331dc5bdc08ee76221517f9f1573aeeb870",
+    "inputs": {
+      "image_checkpoint": {
+        "path": "/home/oelghati/dcvc-uf/cvpr2026_image.pth.tar",
+        "sha256": "b3b900de23f30e4fc437010ddffe6a5413a56d6cfd97fb6235adbcd2b6973302"
+      },
+      "checkpoint": {
+        "path": "/home/oelghati/dcvc-uf/cvpr2026_video_hts.pth.tar",
+        "sha256": "565607d84943ee79072a5760d34a200d5724b4bb72c6bc24bfab41e8ae4f5f47"
+      },
+      "extension": {
+        "path": "/home/oelghati/NVCR/build/dcvcuf-python-deps/inference_extensions_cuda.cpython-312-x86_64-linux-gnu.so",
+        "sha256": "cf2be0cc51d3766a9c1c8b19eb513a6fe6337f9b9d864ac527a3bcc9718bf805"
+      },
+      "stream": {
+        "path": "/home/oelghati/NVCR/build/dcvcuf-reference-session-20261031/QCIF/akiyo_qcif.yuv_q32.bin",
+        "sha256": "7b2ebb14719082381ea8363ff9511545d5200dfb6a543db84d6782279be3fe7a"
+      }
+    },
+    "source_sha256": {
+      "scripts/backends/dcvcuf/probe_nvcr_session.py": "78f9dd73673fc7d6a32096b2fc523ed5ccd9da1afb35ea59719f7eb072236dd5",
+      "scripts/backends/dcvcuf/session_probe.cpp": "f72b8f06da77eece1db73afacf9d055b2ae8a90637661c10186420da034a3026",
+      "src/dcvcuf/backend/upstream/recon_session.cpp": "030c3a823e44be93e329232439be3d240ef989294faa907857cc87d19f0f8183",
+      "src/dcvcuf/backend/upstream/recon_session.hpp": "b5577c0c8b32decb3da0e2933f94f39a5bf19a9651ebd32f1eb4284b50a24a18",
+      "include/nvcr/provider/experimental/session.hpp": "5124ce6a0d573664ba82d666d9ba40d1e812ed6324f8930ee643aedaf17d06b0"
+    },
+    "capture_source_sha256": {
+      "capture_hts.h": "9aa8d9d9a83c42992e0bf2c94ec70578caa6043707a3fee727e5aecef685f61e",
+      "capture_hts.cpp": "c870b1f6e36fa2c58626b1c6fe09a023d0afeb5e3f404dba07922f78f8f4d483"
+    },
+    "vectors_sha256": "c68d8a42bcd2365cb062e1739444b71aee577067cffe004e5bb0e1e185dc9c27",
+    "tensor_sha256": {
+      "intra0_frame": "04f8e7f2b4edba38f6c130a2879dc3f1eba428967a3ef43a06bf2c53a7b90b3b",
+      "chunk0_feature": "59a64d1e0e3b16b1ef592897d52d38031c8fbdd3dbce6be9c2a65e4bd03965a5",
+      "chunk0_frames": "544f3f498a656361304a6c92f261eb8ac942f48f2c431e546aea9fd873ade17a",
+      "chunk0_reset": "8125306af5f2fc0244b48465a4a4656bba20c0eaecb964d425e2fc181915819a",
+      "chunk0_nvcr_frames": "544f3f498a656361304a6c92f261eb8ac942f48f2c431e546aea9fd873ade17a",
+      "chunk0_nvcr_reset": "8125306af5f2fc0244b48465a4a4656bba20c0eaecb964d425e2fc181915819a",
+      "chunk0_latent": "10142a29d73d9fd9e52b72d8489bdd7053fb26cd9d8f644b1d4e6dd399eac989",
+      "chunk0_context": "700d5d8faab3d59a5a223bdc7fa629af1bb4b8ddfaa861a96f727648ed1781e5",
+      "chunk0_quant": "bc10491cc2408633e7798b58851dd0129be6b45aa6315b090be8555ebbe8c43a",
+      "chunk0_nvcr_feature": "59a64d1e0e3b16b1ef592897d52d38031c8fbdd3dbce6be9c2a65e4bd03965a5",
+      "chunk0_pipeline_frames": "544f3f498a656361304a6c92f261eb8ac942f48f2c431e546aea9fd873ade17a",
+      "chunk0_pipeline_reset": "8125306af5f2fc0244b48465a4a4656bba20c0eaecb964d425e2fc181915819a",
+      "chunk1_feature": "d36dde4e6e1e16d97252ee051071340f165beb9f14e5a36b9e38da3683a16834",
+      "chunk1_frames": "02759c0373a9362386a92bf1344528e4fc50fafa7aff1668120e60e24cdd35fb",
+      "chunk1_reset": "2e4e733340d69cf466092b43d77f17c21a9584d98840654340bbdb296b72c5a3",
+      "chunk1_nvcr_frames": "02759c0373a9362386a92bf1344528e4fc50fafa7aff1668120e60e24cdd35fb",
+      "chunk1_nvcr_reset": "2e4e733340d69cf466092b43d77f17c21a9584d98840654340bbdb296b72c5a3",
+      "chunk1_latent": "04b479f0d7bdb876057cb4ca17f81f1737888497096ec06ceb3fb4267841ca76",
+      "chunk1_context": "05d210bbee02a9e63b03542b2b75a987cfa67ea77e0f0e902465ec39e6e6a76d",
+      "chunk1_quant": "bc10491cc2408633e7798b58851dd0129be6b45aa6315b090be8555ebbe8c43a",
+      "chunk1_nvcr_feature": "d36dde4e6e1e16d97252ee051071340f165beb9f14e5a36b9e38da3683a16834",
+      "chunk1_pipeline_frames": "02759c0373a9362386a92bf1344528e4fc50fafa7aff1668120e60e24cdd35fb",
+      "chunk1_pipeline_reset": "2e4e733340d69cf466092b43d77f17c21a9584d98840654340bbdb296b72c5a3"
+    },
+    "chunks": [
+      {
+        "qp": 32,
+        "reset_feature_memory": 1,
+        "feature_shape_nhwc": [
+          1,
+          18,
+          22,
+          512
+        ],
+        "checks": {
+          "capture_matches_original": true,
+          "frames_exact": true,
+          "reset_exact": true,
+          "input_preserved": true,
+          "reset_reuse_exact": true,
+          "independent_session_exact": true,
+          "decoder_inputs_preserved": true,
+          "decoder_feature_exact": true,
+          "pipeline_frames_exact": true,
+          "pipeline_reset_exact": true,
+          "pipeline_reset_reuse_exact": true,
+          "pipeline_independent_session_exact": true
+        }
+      },
+      {
+        "qp": 32,
+        "reset_feature_memory": 1,
+        "feature_shape_nhwc": [
+          1,
+          18,
+          22,
+          512
+        ],
+        "checks": {
+          "capture_matches_original": true,
+          "frames_exact": true,
+          "reset_exact": true,
+          "input_preserved": true,
+          "reset_reuse_exact": true,
+          "independent_session_exact": true,
+          "decoder_inputs_preserved": true,
+          "decoder_feature_exact": true,
+          "pipeline_frames_exact": true,
+          "pipeline_reset_exact": true,
+          "pipeline_reset_reuse_exact": true,
+          "pipeline_independent_session_exact": true
+        }
+      }
+    ],
+    "contract_checks": [
+      "dcvcuf.hts.reconstruction:foreign_stage",
+      "dcvcuf.hts.reconstruction:missing_binding",
+      "dcvcuf.hts.reconstruction:foreign_buffer",
+      "dcvcuf.hts.reconstruction:shape",
+      "dcvcuf.hts.reconstruction:name",
+      "dcvcuf.hts.reconstruction:dtype",
+      "dcvcuf.hts.reconstruction:access",
+      "dcvcuf.hts.reconstruction:size",
+      "dcvcuf.hts.reconstruction:offset",
+      "dcvcuf.hts.reconstruction:null_buffer",
+      "dcvcuf.hts.reconstruction:overlap",
+      "dcvcuf.hts.reconstruction:foreign_dependency",
+      "dcvcuf.hts.reconstruction:same_session_dependency",
+      "dcvcuf.hts.reconstruction:model_identity",
+      "dcvcuf.hts.reconstruction:unverified_artifact",
+      "dcvcuf.hts.reconstruction:unsupported_memory",
+      "dcvcuf.hts.reconstruction:output_contract",
+      "dcvcuf.hts.reconstruction:unknown_stage",
+      "dcvcuf.hts.decoder:foreign_stage",
+      "dcvcuf.hts.decoder:missing_binding",
+      "dcvcuf.hts.decoder:foreign_buffer",
+      "dcvcuf.hts.decoder:shape",
+      "dcvcuf.hts.decoder:name",
+      "dcvcuf.hts.decoder:dtype",
+      "dcvcuf.hts.decoder:access",
+      "dcvcuf.hts.decoder:size",
+      "dcvcuf.hts.decoder:offset",
+      "dcvcuf.hts.decoder:null_buffer",
+      "dcvcuf.hts.decoder:overlap",
+      "dcvcuf.hts.decoder:foreign_dependency",
+      "dcvcuf.hts.decoder:same_session_dependency",
+      "dcvcuf.hts.decoder:model_identity",
+      "dcvcuf.hts.decoder:unverified_artifact",
+      "dcvcuf.hts.decoder:unsupported_memory",
+      "dcvcuf.hts.decoder:output_contract",
+      "dcvcuf.hts.decoder:unknown_stage"
+    ],
+    "intra_repeat_checks_passed": 1,
+    "acceptance": "exact equality for decoder feature, reconstructed frames, reset feature, and preserved inputs",
+    "passed": true,
+    "c7_complete": false,
+    "limitations": [
+      "decoder and reconstruction stages only; no registered codec or provider",
+      "synchronous Torch/upstream bridge, not a standalone deployment",
+      "codec lifecycle and NVCR entropy/bitstream paths still pending"
+    ],
+    "separate_process_replay": {
+      "runs": 2,
+      "all_tensor_digests_equal": true,
+      "vectors_digest_equal": true,
+      "tensor_count": 23
+    }
+  },
+  "rejected_reference_stream": {
+    "sha256": "a9bcc803acb31802de58295ca96ddd13149ed592e87ee34e68373436a847ded1",
+    "reason": "native upstream I-frame repeat decode differs with current library; producing environment not established",
+    "old_i_payload_sha256": "75e2ee5efe8d2c3ffc4a18372bc0aa9278f6952776b992b754825ac2806b38e7",
+    "old_i_payload_bytes": 597,
+    "qualification": "Repeat failures also occurred with the current stream; prior rejection does not establish stream corruption or a producing-environment mismatch."
+  },
+  "dcvcrt_regression": {
+    "build": "Release",
+    "profile": "qcif",
+    "dimensions": [
+      176,
+      144
+    ],
+    "engine_contracts_passed": true,
+    "ip_roundtrip_passed": true,
+    "payload_bytes": 202,
+    "date": "2026-11-01",
+    "cuda_launch_blocking": "unset"
+  },
+  "provider_tensor_replay": {
+    "scope": "provider_synthesis_replay_without_native_entropy",
+    "cuda_launch_blocking": "0",
+    "replay_source_sha256": "bc2a11ce9d14faa67067bfaa78de4cf7c471f1fc20aab09fe5df0c9273916b92",
+    "reference_report_sha256": "d42d1ebb57b427fda4ace43bbb265a9cf10737b63a8a7341b911bf6ea0976937",
+    "vectors_sha256": "c68d8a42bcd2365cb062e1739444b71aee577067cffe004e5bb0e1e185dc9c27",
+    "session_binary_sha256": "247565a98a81e2b2f4140640f09bda57b7264b3dd8e6ec9c9986a483b54c2587",
+    "chunks": 2,
+    "pipeline_runs": 6,
+    "passed": true,
+    "contract_checks": 36
+  },
+  "native_async_replay": {
+    "status": "passed_after_deterministic_initialization",
+    "date": "2026-11-01",
+    "stream_sha256": "7b2ebb14719082381ea8363ff9511545d5200dfb6a543db84d6782279be3fe7a",
+    "extension_sha256": "cf2be0cc51d3766a9c1c8b19eb513a6fe6337f9b9d864ac527a3bcc9718bf805",
+    "scope": "unmodified upstream image decoder; no NVCR provider execution",
+    "explicit_device_sync_between_calls": true,
+    "historical_uninitialized_normal_launch_tensor_sha256": [
+      "994b4c04b552c9ccf3312cecd8cb872c96461d460ff31643d7590f9d4c75f28e",
+      "76f4ef946d8359bbc178abf603efb7ab8a1b8ee36eeb63f5ca135d61ac650f7e",
+      "0c61da67270741e508af31eb4ec4a91c1e76a1408885fd9dfdc0bb2b02ac23d8"
+    ],
+    "deterministic_fill_uninitialized_memory": true,
+    "normal_launch_repeat_count": 3,
+    "normal_launch_tensor_sha256": "04f8e7f2b4edba38f6c130a2879dc3f1eba428967a3ef43a06bf2c53a7b90b3b",
+    "fresh_processes": 3,
+    "blocking_launch_tensor_sha256": "04f8e7f2b4edba38f6c130a2879dc3f1eba428967a3ef43a06bf2c53a7b90b3b",
+    "root_cause": "pinned upstream setup disabled deterministic initialization for empty CUDA scratch tensors",
+    "implication": "normal asynchronous native replay is stable; entropy gate may proceed"
+  },
+  "provenance_tests": {
+    "passed": 7,
+    "failed": 0,
+    "date": "2026-11-01"
+  },
+  "uf_entropy": {
+    "status": "passed_codec_local_round_trip",
+    "implementation": "src/dcvcuf/entropy/uf_rans_codec.cpp",
+    "header": "src/dcvcuf/entropy/uf_rans_codec.hpp",
+    "source_sha256": "cbd8550cf27287d39e855eab12191a50c70e4a34cd9b8487cdae99d14aa19af6",
+    "header_sha256": "ec502c262a6d9833afbcce2f0b8186b57ec3fba8eabfba1152381a71ffdbb89b",
+    "coder_parallelism": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "checks": [
+      "UF packed-y symbols",
+      "UF z channel partitioning",
+      "merged stream framing",
+      "decode round trip",
+      "encoder reset and byte-repeat"
+    ],
+    "rules_preserved": [
+      "one stream for parallelism 1",
+      "reversed paired streams with overlap for parallelism 2",
+      "offset header, paired groups, and optional tail for parallelism 3 through 8"
+    ],
+    "test_command": "cmake --build build-cpu --target nvcr_dcvcuf_rans_conformance_tests && ./build-cpu/tests/nvcr_dcvcuf_rans_conformance_tests",
+    "limitation": "self-conformance only; exact upstream model-symbol byte parity and UF adapter wiring remain open"
+  },
+  "nvcr_decoded_video_demo": {
+    "status": "passed_experimental_provider_demo",
+    "date": "2026-11-02",
+    "replay_source_sha256": "9610cf21b406000749bc524a9817b1ccc76230c2509eea595b734b54c319d646",
+    "reference_report_sha256": "d42d1ebb57b427fda4ace43bbb265a9cf10737b63a8a7341b911bf6ea0976937",
+    "vectors_sha256": "c68d8a42bcd2365cb062e1739444b71aee577067cffe004e5bb0e1e185dc9c27",
+    "session_binary_sha256": "247565a98a81e2b2f4140640f09bda57b7264b3dd8e6ec9c9986a483b54c2587",
+    "video": {
+      "path": "build/dcvcuf-nvcr-demo-final-20261102.mp4",
+      "sha256": "ea8d2a6e1c47a7d216caacb6c1af8d2d9bfac18df9714f8ebebef35f02f64efa",
+      "codec": "h264 lossless",
+      "pixel_format": "yuv420p",
+      "width": 176,
+      "height": 144,
+      "frames": 17,
+      "fps": 30
+    },
+    "composition": {
+      "native_intra_frames": 1,
+      "nvcr_provider_predicted_frames": 16
+    },
+    "validation": {
+      "exact_provider_tensors": true,
+      "contract_checks": 36,
+      "ffprobe_frame_count": 17
+    },
+    "timing": {
+      "scope": "NVCR provider synthesis and reconstruction from frozen native tensors, including host transfers",
+      "gpu": "NVIDIA GeForce RTX 4070",
+      "warmup_repetitions": 10,
+      "measured_repetitions": 200,
+      "frames_per_repetition": 16,
+      "sample_fps": [
+        1471.4202456796386,
+        1424.1894652651042,
+        1434.8291830345886
+      ],
+      "median_fps": 1434.8291830345886,
+      "median_milliseconds_per_chunk": 5.575576587507385
+    },
+    "limitations": [
+      "I-frame and entropy-decoded tensors come from the pinned native reference",
+      "timing is not full bitstream decode speed",
+      "codec is not registered for production use"
+    ]
+  },
+  "native_entropy_parity": {
+    "status": "passed",
+    "reference_commit": "cbdae87a5445114cdc7f48816da63ea80bdeac40",
+    "stream_sha256": "7b2ebb14719082381ea8363ff9511545d5200dfb6a543db84d6782279be3fe7a",
+    "video_checkpoint_sha256": "565607d84943ee79072a5760d34a200d5724b4bb72c6bc24bfab41e8ae4f5f47",
+    "report_sha256": "a5a9ead4ed8a142f4d805e14ba0e9e70eaccd8f502fff88a52d247c6045cf128",
+    "vectors_sha256": "97fc56193355ee1d96a40f573ee161fb7bca5060f46065a311f85d616f910af8",
+    "predicted_chunks": 2,
+    "checks": {
+      "z_symbols_exact": true,
+      "y_symbols_exact": true,
+      "decoder_feature_exact": true,
+      "frames_exact": true,
+      "reset_feature_exact": true,
+      "provider_contract_checks": 36
+    },
+    "cpu_conformance_parallelism": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "dcvcrt_entropy_unchanged": true
+  },
+  "artifact_backed_stage_loading": {
+    "status": "passed",
+    "format": "torchscript_named_buffer_archive",
+    "artifact_sha256": "6f2b418bee783db5daceb08ba8f1338e79cb286f0cb04ec043058ccab53ee181",
+    "report_sha256": "51f3b180ce093fd76a69ed5f498a29df1c38ad6a9082d8c4a6b8e8313f3e9546",
+    "tensor_count": 385,
+    "verification": "NVCR SHA-256 before LibTorch load",
+    "in_memory_python_weight_injection": false,
+    "exact_native_parity_preserved": true
+  },
+  "native_cli_golden_20261102": {
+    "status": "passed",
+    "build": "build-dcvcuf-native-cu126 (CUDA 12.6, SM89, Release, opt-in NVCR_ENABLE_DCVC_UF)",
+    "gpu": "NVIDIA GeForce RTX 4070, driver 580.178.04, otherwise idle",
+    "upstream": {
+      "commit": "cbdae87a5445114cdc7f48816da63ea80bdeac40",
+      "script": "test_video.py",
+      "model_structure": "hts",
+      "qp_i": 32,
+      "qp_p": 32,
+      "reset_interval": 32,
+      "skip_thres": 0
+    },
+    "fixes": [
+      "intra decision once per upstream step (I frame or eight-frame HT-S group)",
+      "HT-S feature-memory reset when (step + 8) % 32 == 1, signalled in predicted payload byte 6",
+      "input normalization uses upstream tensor ops: uint8 4:4:4 -> half -> /255 -> -0.5",
+      "CLI warm-up drives sessions through the generic send/drain driver"
+    ],
+    "vectors": [
+      {
+        "sequence": "akiyo_qcif 176x144",
+        "frames": 300,
+        "nvcr_gop": 32,
+        "upstream_intra_period": 32,
+        "i_frames": [
+          0,
+          33
+        ],
+        "upstream_units": 40,
+        "identical_units": 40,
+        "upstream_bin_sha256": "ee2ca4cf684287b5c5dfb8f7d4eeae296c2045adffed74fdcb4928d0e5f940bd",
+        "nvcr_stream_sha256": "4d50d869336003fc356bd5a53f5f81b83cbd3f0eeb4656d791314194446f6cf8",
+        "decoded_yuv_sha256": "d9a97eb96545a3e443fe2a096a8886bd4f1a9c049fa8a530bb664530ba008be9",
+        "decoded_equal_to_upstream": true
+      },
+      {
+        "sequence": "BasketballDrive 1920x1080",
+        "frames": 500,
+        "nvcr_gop": 32,
+        "upstream_intra_period": 32,
+        "i_frames": [
+          0,
+          33
+        ],
+        "upstream_units": 65,
+        "identical_units": 65,
+        "upstream_bin_sha256": "95860283e588d0b59ef2e8b776b9299e88914ca5f0e5ef08c7afc140d9171f38",
+        "nvcr_stream_sha256": "c859f8457942afbd5afc54d64f4d4217021fae775437257a13042b018b32bb6b",
+        "decoded_yuv_sha256": "71975f6c76aeed5c8ce00eab0ea237b83a19c275dee3f64915a819ff4a887288",
+        "decoded_equal_to_upstream": true,
+        "note": "upstream schedule places no intra frame or reset after frame 33; mean per-frame PSNR-Y 23.18 dB, frames 400-499 6.79 dB, identical in both runtimes"
+      },
+      {
+        "sequence": "BasketballDrive 1920x1080",
+        "frames": 500,
+        "nvcr_gop": 65536,
+        "upstream_intra_period": -1,
+        "i_frames": [
+          0
+        ],
+        "upstream_units": 64,
+        "identical_units": 64,
+        "upstream_bin_sha256": "bcf04be27a12e483d81b8aaba1ab2466a0562c84bd976aeae6c3c7eb7eaab875",
+        "nvcr_stream_sha256": "75678bff0791f406e339988036205d8dcb8ddf41030819e51ba90d1999adfce6",
+        "decoded_yuv_sha256": "3ba300b6c2c7972562ca50225a16e6de91fa2b52b67f20f6a0f126d6db1e0dc7",
+        "mean_per_frame_psnr_y_db": {
+          "nvcr_8bit": 32.747,
+          "upstream_float": 32.758
+        }
+      },
+      {
+        "sequence": "akiyo_qcif 176x144",
+        "frames": 9,
+        "nvcr_gop": 32,
+        "nvcr_stream_bytes": 1450,
+        "nvcr_stream_sha256": "39da424d492bd5dd4b7588b97d4e10e091782446736517f6b2b5d924d047f7bb",
+        "decoded_yuv_sha256": "aee8172786b4008163c902b3145b46f46d5301cfd86a256924bfefed8fff8352",
+        "note": "supersedes the earlier 9-frame hashes recorded before the input-normalization fix"
+      }
+    ],
+    "warm_reset_identity": "500-frame 1080p measured run (33 warm-up frames, reset, rewind) equals a fresh run for stream and decoded YUV",
+    "performance_1080p": {
+      "sequence": "BasketballDrive 1920x1080, QP 32, intra only at frame 0",
+      "protocol": "100 measured frames after 10 warm-up frames, 10 independent processes per operation; process FPS timed by a Python perf_counter wrapper, not scripts/measurement_campaign.py",
+      "encode": {
+        "process_fps_mean": 51.6,
+        "process_fps_sd": 0.3,
+        "codec_fps_mean": 183.8
+      },
+      "decode": {
+        "process_fps_mean": 43.8,
+        "process_fps_sd": 0.6,
+        "codec_fps_mean": 135.1
+      },
+      "initialization_seconds": 0.52,
+      "fixed_process_startup_seconds_approx": 1.3,
+      "upstream_model_timer_fps": {
+        "encode": 252.5,
+        "decode": 183.4,
+        "note": "upstream test_video.py CUDA-event timer around compress/decompress only, 97 frames, first 4 units skipped"
+      },
+      "round_trip_vs_python": {
+        "frames": 100,
+        "python_seconds": 14.81,
+        "nvcr_seconds": 3.93,
+        "ratio": 3.77,
+        "note": "Python process also computes PSNR; 5 runs each"
+      }
+    }
+  }
+}

@@ -1,0 +1,841 @@
+{
+  "schema": "nvcr.evidence.phase-c8.v1",
+  "date": "2026-11-02",
+  "phase": 3,
+  "status": "complete",
+  "upstream": {
+    "repository": "https://github.com/microsoft/DCVC",
+    "commit": "cbdae87a5445114cdc7f48816da63ea80bdeac40"
+  },
+  "checkpoints": {
+    "image": "b3b900de23f30e4fc437010ddffe6a5413a56d6cfd97fb6235adbcd2b6973302",
+    "video": "565607d84943ee79072a5760d34a200d5724b4bb72c6bc24bfab41e8ae4f5f47"
+  },
+  "environment": {
+    "torch": "2.13.0+cu126",
+    "cuda": "12.6",
+    "gpu": "NVIDIA GeForce RTX 4070",
+    "python": "3.12.3",
+    "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39"
+  },
+  "gates": {
+    "recipe": {
+      "intra_period": -1,
+      "reset_interval": 32,
+      "skip_thres": 0,
+      "qps": [
+        0,
+        21,
+        42,
+        63
+      ]
+    },
+    "G1_drift_free": "TensorRT encoder reconstruction equals TensorRT decoder output byte for byte on every frame of all reference sequences and QPs",
+    "G2_format": "UF payload syntax, UF rANS framing, entropy-parallel and reset signalling unchanged",
+    "G3_fidelity": {
+      "mean_psnr_y_db_abs_delta_max": 0.05,
+      "total_bits_relative_delta_max": 0.01,
+      "bd_rate_abs_max_percent": 0.5,
+      "bd_rate_tool": "upstream compare_bd_rate.py --compare_between class --distortion_metrics psnr"
+    },
+    "G4_interoperability": "reported only",
+    "precision": "TensorRT FP16 first; FP32 layers recorded",
+    "performance": "reported against fused provider and upstream Python; user requires not slower",
+    "approved": "user, 2026-11-02"
+  },
+  "rd_reference": {
+    "report_sha256": "fa08a0abebfd3dc9e15aa1459437ae33774fa8a8066202296bde37192ac407bd",
+    "manifest_sha256": "74a7a694a2ea01937fa8622ab50c51253c9dd60fd3ace6864a6969bd1311175f",
+    "recipe": {
+      "qps": [
+        0,
+        21,
+        42,
+        63
+      ],
+      "intra_period": -1,
+      "reset_interval": 32,
+      "skip_thres": 0.0,
+      "frames_override": null
+    },
+    "points": [
+      {
+        "sequence": "BasketballDrive_1920x1080_50",
+        "qp": 0,
+        "frames": 500,
+        "stream_sha256": "34ba70e0557db80d30f01235a7574c5185ceead97305c057e75451476a5529c9",
+        "ave_all_frame_bpp": 0.001348,
+        "ave_all_frame_psnr": 29.339476,
+        "ave_all_frame_psnr_y": 27.202977
+      },
+      {
+        "sequence": "BasketballDrive_1920x1080_50",
+        "qp": 21,
+        "frames": 500,
+        "stream_sha256": "17b45e653b161282c2b066faf497f8f5ad8b3a418cb483610850900f1d646349",
+        "ave_all_frame_bpp": 0.004991,
+        "ave_all_frame_psnr": 33.025521,
+        "ave_all_frame_psnr_y": 31.04142
+      },
+      {
+        "sequence": "BasketballDrive_1920x1080_50",
+        "qp": 42,
+        "frames": 500,
+        "stream_sha256": "cb75de96b1bf3a2bb737d2e7a2902a41feec87476e4942c64cc1708e80c79e81",
+        "ave_all_frame_bpp": 0.017097,
+        "ave_all_frame_psnr": 35.875322,
+        "ave_all_frame_psnr_y": 34.094804
+      },
+      {
+        "sequence": "BasketballDrive_1920x1080_50",
+        "qp": 63,
+        "frames": 500,
+        "stream_sha256": "1685d8e1f1e72c4b23f1b15ffd65cf6b864db54496526d13b1eecf347d131f4c",
+        "ave_all_frame_bpp": 0.054053,
+        "ave_all_frame_psnr": 37.623691,
+        "ave_all_frame_psnr_y": 35.995763
+      },
+      {
+        "sequence": "Kimono_1920x1080_24",
+        "qp": 0,
+        "frames": 240,
+        "stream_sha256": "742168a892a455fc92bfbfe4ea1bf7b5a49062ac644679ed2b5e05031779ee94",
+        "ave_all_frame_bpp": 0.000893,
+        "ave_all_frame_psnr": 31.721416,
+        "ave_all_frame_psnr_y": 29.157573
+      },
+      {
+        "sequence": "Kimono_1920x1080_24",
+        "qp": 21,
+        "frames": 240,
+        "stream_sha256": "13168454454e4cfac096f7159db331877e7d355b0bc44a8ec0a5be64355e8f9c",
+        "ave_all_frame_bpp": 0.003625,
+        "ave_all_frame_psnr": 35.06033,
+        "ave_all_frame_psnr_y": 33.045108
+      },
+      {
+        "sequence": "Kimono_1920x1080_24",
+        "qp": 42,
+        "frames": 240,
+        "stream_sha256": "e99e2e3373ef0cd5f3c6f2dbd26b37d4306acad7f1c0607760673fce48add1de",
+        "ave_all_frame_bpp": 0.013136,
+        "ave_all_frame_psnr": 38.203371,
+        "ave_all_frame_psnr_y": 36.767524
+      },
+      {
+        "sequence": "Kimono_1920x1080_24",
+        "qp": 63,
+        "frames": 240,
+        "stream_sha256": "2f15473f386a968d186afb1c83d2c114aeb2e9db8824b8084c05d940689106df",
+        "ave_all_frame_bpp": 0.042484,
+        "ave_all_frame_psnr": 40.670691,
+        "ave_all_frame_psnr_y": 39.680288
+      },
+      {
+        "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+        "qp": 0,
+        "frames": 600,
+        "stream_sha256": "35d61635055d5f1fe689acb97acd68ef8249a1dde60a02e41fa80ff578dc9f85",
+        "ave_all_frame_bpp": 0.001054,
+        "ave_all_frame_psnr": 31.173122,
+        "ave_all_frame_psnr_y": 29.212765
+      },
+      {
+        "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+        "qp": 21,
+        "frames": 600,
+        "stream_sha256": "5f665738c4d5ab5d2796ef18f208cd17bb535fc67debd989135e36a89c1d9f84",
+        "ave_all_frame_bpp": 0.003399,
+        "ave_all_frame_psnr": 35.169552,
+        "ave_all_frame_psnr_y": 33.722274
+      },
+      {
+        "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+        "qp": 42,
+        "frames": 600,
+        "stream_sha256": "818a3ba8ace6759b0e9b4af07b2f63905f427a95efd1861bdddc45581b18caf0",
+        "ave_all_frame_bpp": 0.011099,
+        "ave_all_frame_psnr": 38.677776,
+        "ave_all_frame_psnr_y": 37.700136
+      },
+      {
+        "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+        "qp": 63,
+        "frames": 600,
+        "stream_sha256": "9d38f39ae75b26d87109db0d059046861f8d1f0e56748f886814c96df3878acd",
+        "ave_all_frame_bpp": 0.035072,
+        "ave_all_frame_psnr": 41.545314,
+        "ave_all_frame_psnr_y": 40.983886
+      },
+      {
+        "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+        "qp": 0,
+        "frames": 600,
+        "stream_sha256": "1ebdced6dfa465e7a86e111cbd1e3073156dfb39573ae06cb30aaa1e6fa2c44a",
+        "ave_all_frame_bpp": 0.000704,
+        "ave_all_frame_psnr": 36.304325,
+        "ave_all_frame_psnr_y": 35.651991
+      },
+      {
+        "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+        "qp": 21,
+        "frames": 600,
+        "stream_sha256": "0ecef96225e12037e58ee09d94256e7e0b67342a922b7f1c123e6a667bb3ccb4",
+        "ave_all_frame_bpp": 0.001624,
+        "ave_all_frame_psnr": 40.605274,
+        "ave_all_frame_psnr_y": 40.160533
+      },
+      {
+        "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+        "qp": 42,
+        "frames": 600,
+        "stream_sha256": "65c510b0f341d6512ce726b913aca6c82a0bdac7c857e3ad630e586058eb41f9",
+        "ave_all_frame_bpp": 0.004026,
+        "ave_all_frame_psnr": 42.901697,
+        "ave_all_frame_psnr_y": 42.488482
+      },
+      {
+        "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+        "qp": 63,
+        "frames": 600,
+        "stream_sha256": "047d9bba9969e3a2e47d4f1b2ff76d377cddbebafc1dc0e3475b1df426611345",
+        "ave_all_frame_bpp": 0.010538,
+        "ave_all_frame_psnr": 43.859532,
+        "ave_all_frame_psnr_y": 43.432364
+      }
+    ],
+    "repeatability": {
+      "sequence": "Kimono_1920x1080_24",
+      "qps": [
+        0,
+        21,
+        42,
+        63
+      ],
+      "streams_identical": true,
+      "per_frame_psnr_identical": true
+    },
+    "readme_recipe": {
+      "reset_interval": 128,
+      "skip_thres": 0.15,
+      "status": "captured",
+      "report_sha256": "7999a4920b486fa411328ffccb3320d8cce32513a302a7046a50f43ea9436fed",
+      "points": [
+        {
+          "sequence": "BasketballDrive_1920x1080_50",
+          "qp": 0,
+          "stream_sha256": "15d81f7eeaf83b41f897dca0c45a188a5152c3f77902b3172188847068edf0d6",
+          "ave_all_frame_bpp": 0.001168,
+          "ave_all_frame_psnr_y": 27.126933,
+          "bpp_change_vs_nvcr_recipe": -0.1335,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.076
+        },
+        {
+          "sequence": "BasketballDrive_1920x1080_50",
+          "qp": 21,
+          "stream_sha256": "31c363330606991ed1ff757a8f57087f376118d9c40d94a422594e75407941fe",
+          "ave_all_frame_bpp": 0.00459,
+          "ave_all_frame_psnr_y": 30.984283,
+          "bpp_change_vs_nvcr_recipe": -0.0803,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.057
+        },
+        {
+          "sequence": "BasketballDrive_1920x1080_50",
+          "qp": 42,
+          "stream_sha256": "0821764d9fd5f17b2f66fccbb58dd8b4a8a29083ef811d3249f35f42d68eb93c",
+          "ave_all_frame_bpp": 0.016241,
+          "ave_all_frame_psnr_y": 34.108562,
+          "bpp_change_vs_nvcr_recipe": -0.0501,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.014
+        },
+        {
+          "sequence": "BasketballDrive_1920x1080_50",
+          "qp": 63,
+          "stream_sha256": "b323679564af651cde0040239343cc1636ca378e1519c42c1b6081e4f41f35fa",
+          "ave_all_frame_bpp": 0.052792,
+          "ave_all_frame_psnr_y": 36.046768,
+          "bpp_change_vs_nvcr_recipe": -0.0233,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.051
+        },
+        {
+          "sequence": "Kimono_1920x1080_24",
+          "qp": 0,
+          "stream_sha256": "a6134f945f0a1b102574cac6b028d0181aeb2b4fb5ccb58a6945c7f85dc2e045",
+          "ave_all_frame_bpp": 0.000716,
+          "ave_all_frame_psnr_y": 28.928921,
+          "bpp_change_vs_nvcr_recipe": -0.1982,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.229
+        },
+        {
+          "sequence": "Kimono_1920x1080_24",
+          "qp": 21,
+          "stream_sha256": "1b01c032b2a1d3c356a1c6e8c3e1640ded7ebd630eaf3c088ccdbd5740a1b218",
+          "ave_all_frame_bpp": 0.003203,
+          "ave_all_frame_psnr_y": 32.922358,
+          "bpp_change_vs_nvcr_recipe": -0.1164,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.123
+        },
+        {
+          "sequence": "Kimono_1920x1080_24",
+          "qp": 42,
+          "stream_sha256": "02f2f7fd98a459e9ce382efeabe278d0c145a30d463f0b2ad6ba6dbd9e0da346",
+          "ave_all_frame_bpp": 0.01225,
+          "ave_all_frame_psnr_y": 36.75577,
+          "bpp_change_vs_nvcr_recipe": -0.0674,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.012
+        },
+        {
+          "sequence": "Kimono_1920x1080_24",
+          "qp": 63,
+          "stream_sha256": "2c7505611fe81b3f2967551ccab4e930eab0a34653807d88440af93efb053a21",
+          "ave_all_frame_bpp": 0.041198,
+          "ave_all_frame_psnr_y": 39.732509,
+          "bpp_change_vs_nvcr_recipe": -0.0303,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.052
+        },
+        {
+          "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+          "qp": 0,
+          "stream_sha256": "4567d14c4fa0830c67f01bca4bac85ee51068441c0a65eb6c74d288167181111",
+          "ave_all_frame_bpp": 0.000935,
+          "ave_all_frame_psnr_y": 29.251542,
+          "bpp_change_vs_nvcr_recipe": -0.1129,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.039
+        },
+        {
+          "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+          "qp": 21,
+          "stream_sha256": "114c00ebe10cd6ca95a261aa002c235b34180c24a44353bb3869971617261fbc",
+          "ave_all_frame_bpp": 0.0032,
+          "ave_all_frame_psnr_y": 33.750441,
+          "bpp_change_vs_nvcr_recipe": -0.0585,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.028
+        },
+        {
+          "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+          "qp": 42,
+          "stream_sha256": "23ec316bbb94de6a53fd903c1355910cdbd1a2bb6128c11d42a6e79f133993ad",
+          "ave_all_frame_bpp": 0.010732,
+          "ave_all_frame_psnr_y": 37.753193,
+          "bpp_change_vs_nvcr_recipe": -0.0331,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.053
+        },
+        {
+          "sequence": "Jockey_1920x1080_120fps_420_8bit_YUV",
+          "qp": 63,
+          "stream_sha256": "c64e1624e9bf1d1786d08162f4f5c8bae7f67a00a1ea248663dc4893e501e1b0",
+          "ave_all_frame_bpp": 0.034443,
+          "ave_all_frame_psnr_y": 41.043088,
+          "bpp_change_vs_nvcr_recipe": -0.0179,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.059
+        },
+        {
+          "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+          "qp": 0,
+          "stream_sha256": "2edb94aca4902f055f0dd1c42a2ae4743927d6751c58e6fbf09137ca782bebd8",
+          "ave_all_frame_bpp": 0.000311,
+          "ave_all_frame_psnr_y": 36.018648,
+          "bpp_change_vs_nvcr_recipe": -0.5582,
+          "psnr_y_change_vs_nvcr_recipe_db": 0.367
+        },
+        {
+          "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+          "qp": 21,
+          "stream_sha256": "76b217eb2315befb6ea0a1d9d9d2e69cab1364f0e606b8a0d716b45041e7cd1e",
+          "ave_all_frame_bpp": 0.000739,
+          "ave_all_frame_psnr_y": 40.070096,
+          "bpp_change_vs_nvcr_recipe": -0.545,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.09
+        },
+        {
+          "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+          "qp": 42,
+          "stream_sha256": "34b249a04e38e1d76db21053af451ef2d23caf55e9876c4404015d1936418c88",
+          "ave_all_frame_bpp": 0.001921,
+          "ave_all_frame_psnr_y": 42.427287,
+          "bpp_change_vs_nvcr_recipe": -0.5229,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.061
+        },
+        {
+          "sequence": "HoneyBee_1920x1080_120fps_420_8bit_YUV",
+          "qp": 63,
+          "stream_sha256": "18da99e9188660dd0181f5c86f1a7e7723a20d2c4514e410bbdc0cdb360eb183",
+          "ave_all_frame_bpp": 0.005948,
+          "ave_all_frame_psnr_y": 43.407432,
+          "bpp_change_vs_nvcr_recipe": -0.4356,
+          "psnr_y_change_vs_nvcr_recipe_db": -0.025
+        }
+      ]
+    }
+  },
+  "stage_vectors": {
+    "report_sha256": "b09645c354f1f9625f16f77f2a4ea0d232a5fdbf37bcb4c3b9fc6802a3f5dbec",
+    "crop_tensors_sha256": "31fcae9a640555ea1dbb39dfaa9c8e3d841e1b822290432bca3d39feb77db9e5",
+    "group_resets": [
+      false,
+      true,
+      false
+    ],
+    "qp": 32,
+    "vectors": [
+      {
+        "name": "BasketballDrive_crop256",
+        "size": [
+          256,
+          256
+        ],
+        "crop": {
+          "x": 832,
+          "y": 412,
+          "width": 256,
+          "height": 256
+        },
+        "fused_bytes": {
+          "intra": 677,
+          "predicted": [
+            1056,
+            709,
+            286
+          ]
+        },
+        "mean_psnr_y_vs_source": {
+          "pytorch_fp32": 32.7028,
+          "pytorch_fp16": 32.7322,
+          "fused": 32.6881
+        },
+        "symbols_differing_fp16_vs_fp32": [
+          0.00493,
+          0.00694,
+          0.00685,
+          0.00307
+        ]
+      },
+      {
+        "name": "BasketballDrive_1920x1080_50",
+        "size": [
+          1920,
+          1080
+        ],
+        "crop": null,
+        "fused_bytes": {
+          "intra": 14155,
+          "predicted": [
+            18869,
+            16612,
+            18703
+          ]
+        },
+        "mean_psnr_y_vs_source": {
+          "pytorch_fp32": 33.4929,
+          "pytorch_fp16": 33.4857,
+          "fused": 33.4813
+        },
+        "symbols_differing_fp16_vs_fp32": [
+          0.00235,
+          0.00405,
+          0.0049,
+          0.00524
+        ]
+      }
+    ],
+    "note": "per-stage FP16-vs-FP32 errors are cumulative; phase 2 checks exported stages in isolation from stored inputs"
+  },
+  "phase_1_provider_split": {
+    "status": "complete",
+    "date": "2026-11-02",
+    "location": "src/provider/tensorrt/session.{hpp,cpp}",
+    "build": "build-c1-release-cuda128 (CUDA 12.8, TensorRT 10.9, Release)",
+    "parity": {
+      "b7_qcif_stream_sha256": "9896684474818032506d32ac7d065a7710d9c26197a9d374f275d2b65f83f81a",
+      "b7_qcif_yuv_sha256": "10e02e460ec4477e9a7e41f72bbb44c5222e0f6773bf581cf874f74b97363008",
+      "b7_identical_performance_mode": true,
+      "b7_identical_low_memory_mode": true,
+      "hd_100_frame_identical": true
+    },
+    "codec_fps_1080p": {
+      "before": {
+        "encode": 56.8,
+        "decode": 45.0
+      },
+      "after": {
+        "encode": 57.5,
+        "decode": 44.9
+      }
+    },
+    "tests": {
+      "tensorrt_build": "32/32",
+      "cpu_build": "27/27"
+    },
+    "provider_limits": [
+      "rank-4 FP16 tensors"
+    ]
+  },
+  "phase_2_stage_export": {
+    "status": "complete",
+    "stages": {
+      "i_encoder": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          3.081,
+          3.081
+        ],
+        "max_error_ratio": [
+          6.386,
+          6.386
+        ],
+        "onnx_worst_error_to_peak": 2.777056739048933e-06,
+        "plan_sha256": "d46e115bcf6ff2fb88f0b22ec407d38beca9b649c572c52d85fa44de8f567fbf"
+      },
+      "i_hyper_encoder": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          2.053,
+          2.053
+        ],
+        "max_error_ratio": [
+          1.862,
+          1.862
+        ],
+        "onnx_worst_error_to_peak": 1.7845919293751861e-06,
+        "plan_sha256": "d444de985ae48d4c177e51f044838d108715ffd5217984549186b74d55c3c073"
+      },
+      "i_hyper_decoder": {
+        "outputs_checked": 2,
+        "mean_error_ratio": [
+          2.199,
+          2.214
+        ],
+        "max_error_ratio": [
+          2.394,
+          2.885
+        ],
+        "onnx_worst_error_to_peak": 1.1153884627974506e-06,
+        "plan_sha256": "cc6b0a8631445982fbaa63b6386cb5885d2e89c31737ec1a78a9868aefe0db3e"
+      },
+      "i_spatial_prior_1": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          2.26,
+          2.26
+        ],
+        "max_error_ratio": [
+          1.915,
+          1.915
+        ],
+        "onnx_worst_error_to_peak": 9.092036677467368e-07,
+        "plan_sha256": "15efacd20b33be5849a9d40827f8bd126b3d0310b7b8f9e8bca32a5c4a38f446"
+      },
+      "i_spatial_prior_2": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          2.297,
+          2.297
+        ],
+        "max_error_ratio": [
+          1.875,
+          1.875
+        ],
+        "onnx_worst_error_to_peak": 5.449874911746088e-07,
+        "plan_sha256": "edeb6c4a445567a14ef62a1c4ec33c966f76500c67fc3f5097ac6a9997f8cf86"
+      },
+      "i_spatial_prior_3": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          2.356,
+          2.356
+        ],
+        "max_error_ratio": [
+          2.733,
+          2.733
+        ],
+        "onnx_worst_error_to_peak": 7.428794028079384e-07,
+        "plan_sha256": "12f77f20ae10c27e416858d4588a6ac0105c4402c58e61cd281f6950e117cb78"
+      },
+      "i_decoder": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          1.586,
+          1.586
+        ],
+        "max_error_ratio": [
+          2.289,
+          2.289
+        ],
+        "onnx_worst_error_to_peak": 1.3836639782540366e-06,
+        "plan_sha256": "556ac51397a79e3ffc9199d4b76894e194404892900d0db3bc195b633fc4c0e0"
+      },
+      "p_feature_adaptor_i": {
+        "outputs_checked": 2,
+        "mean_error_ratio": [
+          2.162,
+          2.196
+        ],
+        "max_error_ratio": [
+          1.597,
+          2.204
+        ],
+        "onnx_worst_error_to_peak": 3.5051318635614405e-07,
+        "plan_sha256": "8c285ff8e3a51eb0fc8e7176db678e309fa1a026ff6113987cbdf7ea1f781a87"
+      },
+      "p_feature_adaptor_m": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          2.717,
+          2.717
+        ],
+        "max_error_ratio": [
+          1.954,
+          1.954
+        ],
+        "onnx_worst_error_to_peak": 7.911240674325387e-07,
+        "plan_sha256": "d5dcbaae70886682f6a06657f53d6064d79682695518b9a6f59b4c5cbfc62aa8"
+      },
+      "p_feature_extractor": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          2.195,
+          2.297
+        ],
+        "max_error_ratio": [
+          1.296,
+          1.53
+        ],
+        "onnx_worst_error_to_peak": 5.159444609865156e-07,
+        "plan_sha256": "e9c467958a571a638ae1cdcca5f134d4aba3c92fb4110edf29c91074fb5c47bb"
+      },
+      "p_encoder": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          4.549,
+          4.644
+        ],
+        "max_error_ratio": [
+          9.022,
+          11.238
+        ],
+        "onnx_worst_error_to_peak": 2.0266219593862427e-06,
+        "plan_sha256": "0a27c6611cd2ab5178e818545d7cf82fd318727eaf450ad884f6555e9abffc86"
+      },
+      "p_hyper_encoder": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          2.393,
+          2.525
+        ],
+        "max_error_ratio": [
+          1.57,
+          6.438
+        ],
+        "onnx_worst_error_to_peak": 1.1805351847650896e-06,
+        "plan_sha256": "a2ee24360888a52148bf272683cfb2e1a83bfa1d63aea99001c777dfae6d57a1"
+      },
+      "p_hyper_decoder": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          1.668,
+          1.689
+        ],
+        "max_error_ratio": [
+          1.152,
+          1.707
+        ],
+        "onnx_worst_error_to_peak": 8.899871990174542e-07,
+        "plan_sha256": "da0464cd54b962859cb7d92b8acc39fe527ea0480571a497a1359dfc95c6c156"
+      },
+      "p_prior": {
+        "outputs_checked": 6,
+        "mean_error_ratio": [
+          2.527,
+          3.364
+        ],
+        "max_error_ratio": [
+          3.527,
+          6.171
+        ],
+        "onnx_worst_error_to_peak": 1.5184211184941284e-06,
+        "plan_sha256": "a4e1b60fb37e2152e26033576718a3e4db00a4df6aac2f69b61d21c5b6dac9fb"
+      },
+      "p_spatial_prior_1": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          2.551,
+          2.592
+        ],
+        "max_error_ratio": [
+          2.25,
+          3.522
+        ],
+        "onnx_worst_error_to_peak": 6.912185293963721e-07,
+        "plan_sha256": "17d70ce8beaf2966a8ee261d9f178ccf141c3bf99064822760bfd302c39f19cf"
+      },
+      "p_spatial_prior_2": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          2.556,
+          2.593
+        ],
+        "max_error_ratio": [
+          2.18,
+          3.673
+        ],
+        "onnx_worst_error_to_peak": 4.553517583226007e-07,
+        "plan_sha256": "03289d6f6dd6d19eb05231aa030f3c469662e96e2246d983901f06dc817a0cf4"
+      },
+      "p_spatial_prior_3": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          2.602,
+          2.642
+        ],
+        "max_error_ratio": [
+          2.992,
+          7.492
+        ],
+        "onnx_worst_error_to_peak": 4.6371388881596297e-07,
+        "plan_sha256": "91243b7a85e69d7de20b8b6ddb41a9cb86864ca01d7964240f9a6b15e1ce2897"
+      },
+      "p_decoder": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          2.32,
+          2.733
+        ],
+        "max_error_ratio": [
+          1.77,
+          3.341
+        ],
+        "onnx_worst_error_to_peak": 4.277783275521469e-07,
+        "plan_sha256": "0d44ccf365304d807d83ac3a4da6c268b070baa05fbb09876aabf6a04024a405"
+      },
+      "p_reconstruction": {
+        "outputs_checked": 3,
+        "mean_error_ratio": [
+          1.729,
+          1.753
+        ],
+        "max_error_ratio": [
+          1.73,
+          2.173
+        ],
+        "onnx_worst_error_to_peak": 2.4782263036957292e-06,
+        "plan_sha256": "6825482817ec970bd72369665c9714a00ef550bd779ec6b26999f0c9424c31e3"
+      },
+      "p_reset": {
+        "outputs_checked": 1,
+        "mean_error_ratio": [
+          2.02,
+          2.02
+        ],
+        "max_error_ratio": [
+          1.766,
+          1.766
+        ],
+        "onnx_worst_error_to_peak": 1.6487866814352272e-06,
+        "plan_sha256": "fd24fc90a67a27e31657517f6294618b4c13d9db4a384589d0613d80be81f2e8"
+      }
+    },
+    "bundle_manifest_sha256": "5f79c9429830d9e93d7a2ec871024b7e30f2db6b8de01a2721747c68f18fbdf8",
+    "export_report_sha256": "f79707cb99edbccc03e89ae8c2bd6b61ff17d3f5f8a1887537b2997b4086aac3",
+    "check_report_sha256": "072c0c8ba8cf4fc58dd6fff43710a7ea114c43e9fc1a92f863997a8a42102a26",
+    "build": {
+      "tensorrt": "10.9.0",
+      "flags": "--fp16 --builderOptimizationLevel=2 --memPoolSize=workspace:1024 FP16 I/O",
+      "profile": {
+        "name": "1080p",
+        "frame_min": [
+          64,
+          64
+        ],
+        "frame_opt": [
+          1088,
+          1920
+        ],
+        "frame_max": [
+          1088,
+          1920
+        ]
+      }
+    },
+    "fp32_layer_diagnostic": {
+      "stages": [
+        "i_encoder",
+        "p_encoder",
+        "p_prior"
+      ],
+      "error_ratio_vs_upstream_fp16": [
+        0.34,
+        1.06
+      ],
+      "time_1080p_ms": {
+        "i_encoder": [
+          16.98,
+          38.51
+        ],
+        "p_encoder": [
+          13.36,
+          31.21
+        ],
+        "p_prior": [
+          5.93,
+          15.36
+        ]
+      }
+    },
+    "band_note": "upstream PyTorch FP16 is stricter than upstream fused CUTLASS FP16 (C7: about 6x on the first convolution); per-stage ratios are diagnostic, sequence gates decide"
+  },
+  "phase_3_glue": {
+    "status": "complete",
+    "kernels": 25,
+    "parity_checks": 219,
+    "bit_identical": true,
+    "fault_injection": {
+      "SCALE_MAX_16_to_15_failures": 18,
+      "subtraction_round_toward_zero_failures": 82
+    },
+    "compile_flags": "-O3 --use_fast_math --extra-device-vectorization --expt-relaxed-constexpr; __CUDA_NO_HALF_OPERATORS__ __CUDA_NO_HALF_CONVERSIONS__ __CUDA_NO_BFLOAT16_CONVERSIONS__ __CUDA_NO_HALF2_OPERATORS__",
+    "glue_kernels_inc_sha256": "107ee4de250d5bac4c1b9b5a1df71d9c921b75fc555231b042daaa144b3277b5",
+    "stage_layout": "hwc8 for C % 8 == 0, chw for 3-channel frames",
+    "decoder_stage_ends": "before pixel_shuffle_8; glue clamps as the fused path",
+    "builder_optimization_level": 5,
+    "stage_error_ratio_vs_upstream_fp16": [
+      1.423,
+      4.648
+    ],
+    "bundle_manifest_sha256": "da7ebbaa5dc2bb14a0cfc7727e4f6fec036a688a43e387c3e41362c87867c7b9",
+    "timing_1080p_median_ms": {
+      "stages": {
+        "i_encoder": 11.5128,
+        "i_hyper_encoder": 0.163834,
+        "i_hyper_decoder": 1.93434,
+        "i_spatial_prior_1": 2.15347,
+        "i_spatial_prior_2": 2.15807,
+        "i_spatial_prior_3": 2.1545,
+        "i_decoder": 21.7718,
+        "p_feature_adaptor_i": 5.8665,
+        "p_feature_adaptor_m": 9.30661,
+        "p_feature_extractor": 7.20691,
+        "p_encoder": 10.1571,
+        "p_hyper_encoder": 0.278534,
+        "p_hyper_decoder": 0.439301,
+        "p_prior": 4.03404,
+        "p_spatial_prior_1": 2.13197,
+        "p_spatial_prior_2": 2.12838,
+        "p_spatial_prior_3": 2.13196,
+        "p_decoder": 10.8119,
+        "p_reconstruction": 34.3184,
+        "p_reset": 5.08621
+      },
+      "pipelines": {
+        "intra_encode": 41.849,
+        "intra_decode": 30.172,
+        "group_encode": 48.627,
+        "group_decode": 72.509
+      }
+    },
+    "upstream_fused_1080p_ms": {
+      "group_encode": 31.7,
+      "group_decode": 43.6,
+      "scope": "test_video.py CUDA-event timer: model, glue and entropy"
+    }
+  }
+}
