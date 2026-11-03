@@ -49,6 +49,7 @@ std::uint64_t read_u64(std::span<const std::byte> input, std::size_t offset) {
 // when the group ends at an index congruent to 1 modulo this interval.
 constexpr std::uint64_t group_frames = 8;
 constexpr std::uint64_t reset_interval = 32;  // upstream --reset_interval default
+constexpr std::uint32_t max_qp = 63;  // rows of the q-scale tables
 
 // Predicted payload flag byte; the upstream UF stream carries the same bit.
 constexpr std::uint8_t reset_feature_memory_flag = 0x01;
@@ -307,6 +308,8 @@ public:
                 ErrorCode::malformed_bitstream,
                 "DCVC-UF access-unit identity or frame type mismatch");
         }
+        if (access_unit.value().qp > max_qp)
+            return codec_error(ErrorCode::malformed_bitstream, "DCVC-UF QP exceeds 63");
         auto payload = parse_payload(
             access_unit.value().frame_type, access_unit.value().payload);
         if (!payload) return payload.error();

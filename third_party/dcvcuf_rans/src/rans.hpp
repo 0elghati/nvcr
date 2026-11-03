@@ -96,6 +96,22 @@ private:
     std::queue<PendingTask> m_pending;
 };
 
+// Bounded stream reader: past the end it yields zeros and flags the overrun.
+struct ByteReader {
+    const uint8_t* ptr{ nullptr };
+    const uint8_t* end{ nullptr };
+    bool overrun{ false };
+
+    uint32_t next()
+    {
+        if (ptr == end) {
+            overrun = true;
+            return 0;
+        }
+        return *ptr++;
+    }
+};
+
 class RansDecoderLib {
 public:
     RansDecoderLib();
@@ -117,12 +133,13 @@ public:
     void set_cdf(const std::shared_ptr<std::vector<std::vector<int32_t>>>& cdfs,
                  const std::shared_ptr<std::vector<int8_t>>& max_value, const int index);
     void set_stream(const std::shared_ptr<std::vector<uint8_t>> encoded);
+    // False when the stream ended before all symbols were decoded.
     bool wait_for_decoding_finish();
     void worker();
 
 private:
     RansState m_rans;
-    const uint8_t* m_ptr8{ nullptr };
+    ByteReader m_in;
     std::shared_ptr<std::vector<uint8_t>> m_stream;
 
     std::vector<std::shared_ptr<std::vector<std::vector<int32_t>>>> m_cdfs;

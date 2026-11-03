@@ -416,7 +416,10 @@ Result<std::vector<std::int8_t>> UfRansCodec::decode_y(
     const auto offset = base * static_cast<int>(impl_->parallel - 1);
     impl_->decoders.back()->decode_y(output.data(), shared,
                                      total.value() - offset, offset);
-    for (auto& decoder : impl_->decoders) decoder->wait_for_decoding_finish();
+    bool complete = true;
+    for (auto& decoder : impl_->decoders)
+        complete = decoder->wait_for_decoding_finish() && complete;
+    if (!complete) return malformed("UF entropy stream ended early");
     return output;
 }
 
@@ -452,7 +455,10 @@ Result<std::vector<std::int8_t>> UfRansCodec::decode_z(
     impl_->decoders.back()->decode_z(
         output.data(), total.value() - symbol_offset, symbol_offset,
         offset_result.value(), channels.value());
-    for (auto& decoder : impl_->decoders) decoder->wait_for_decoding_finish();
+    bool complete = true;
+    for (auto& decoder : impl_->decoders)
+        complete = decoder->wait_for_decoding_finish() && complete;
+    if (!complete) return malformed("UF entropy stream ended early");
     return output;
 }
 

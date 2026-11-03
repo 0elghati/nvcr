@@ -70,10 +70,22 @@ void round_trip(std::size_t parallel) {
     check(repeated.has_value() && repeated.value() == stream.value());
 }
 
+void rejects_truncated_stream() {
+    nvcr::dcvcuf::UfRansCodec decoder;
+    check(decoder.set_entropy_coder_parallel(1).has_value());
+    check(decoder.add_cdf(make_cdf(256)).has_value());
+    const std::vector<std::byte> stream(4, std::byte{0});
+    check(decoder.set_stream(stream).has_value());
+    auto decoded = decoder.decode_z(128, 0, 0, 1);
+    check(!decoded.has_value() &&
+          decoded.error().code() == nvcr::ErrorCode::malformed_bitstream);
+}
+
 }  // namespace
 
 int main() {
     for (std::size_t parallel = 1; parallel <= 8; ++parallel)
         round_trip(parallel);
+    rejects_truncated_stream();
     return 0;
 }

@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-// Modified for NVCR: isolated in the DCVC-UF codec namespace.
+// Modified for NVCR: isolated in the DCVC-UF codec namespace; decoder reads are bounded.
 
 #include "rans.hpp"
 
@@ -29,13 +29,13 @@ constexpr uint16_t MAX_BYPASS_VAL = (1 << BYPASS_PRECISION) - 1;
     #define FORCE_INLINE inline
 #endif
 
-FORCE_INLINE void RansDecAdvance(RansState& r, const uint8_t*& ptr, uint32_t start, uint32_t freq)
+FORCE_INLINE void RansDecAdvance(RansState& r, ByteReader& in, uint32_t start, uint32_t freq)
 {
     r = freq * (r >> SCALE_BITS) + (r & DEC_MASK) - start;
 
     // renormalize
-    while (r < RANS_BYTE_L) {
-        r = (r << 8) | *ptr++;
+    while (r < RANS_BYTE_L && !in.overrun) {
+        r = (r << 8) | in.next();
     }
 }
 
@@ -44,26 +44,25 @@ FORCE_INLINE int32_t RansDecGet(RansState& r)
     return r & DEC_MASK;
 }
 
-FORCE_INLINE uint32_t RansDecGetBits(RansState& r, const uint8_t*& ptr)
+FORCE_INLINE uint32_t RansDecGetBits(RansState& r, ByteReader& in)
 {
     uint32_t val = r & ((1u << BYPASS_PRECISION) - 1);
 
     // renormalize
     r = r >> BYPASS_PRECISION;
     if (r < RANS_BYTE_L) {
-        r = (r << 8) | *ptr++;
-        assert(r >= RANS_BYTE_L);
+        r = (r << 8) | in.next();
     }
 
     return val;
 }
 
-FORCE_INLINE void RansDecInit(RansState& r, const uint8_t*& ptr)
+FORCE_INLINE void RansDecInit(RansState& r, ByteReader& in)
 {
-    r = (*ptr++) << 0;
-    r |= (*ptr++) << 8;
-    r |= (*ptr++) << 16;
-    r |= (*ptr++) << 24;
+    r = in.next() << 0;
+    r |= in.next() << 8;
+    r |= in.next() << 16;
+    r |= in.next() << 24;
 }
 
 FORCE_INLINE void RansEncFlush(const RansState& r, uint8_t*& ptr)
@@ -108,7 +107,7 @@ FORCE_INLINE void RansEncPutBits(RansState& r, uint8_t*& ptr, uint32_t val)
     r = (r << BYPASS_PRECISION) | val;
 }
 
-FORCE_INLINE int8_t decode_one_symbol(const uint8_t*& ptr8, RansState& rans, const int32_t* cdf,
+FORCE_INLINE int8_t decode_one_symbol(ByteReader& in, RansState& rans, const int32_t* cdf,
                                       const int8_t max_value)
 {
     const int32_t cum_freq = RansDecGet(rans);
@@ -119,23 +118,23 @@ FORCE_INLINE int8_t decode_one_symbol(const uint8_t*& ptr8, RansState& rans, con
     }
     s--;
 
-    RansDecAdvance(rans, ptr8, cdf[s], cdf[s + 1] - cdf[s]);
+    RansDecAdvance(rans, in, cdf[s], cdf[s + 1] - cdf[s]);
 
     int32_t value = static_cast<int32_t>(s);
 
     if (value == max_value) {
         // Bypass decoding mode
-        int32_t val = RansDecGetBits(rans, ptr8);
+        int32_t val = RansDecGetBits(rans, in);
         int32_t n_bypass = val;
 
-        while (val == MAX_BYPASS_VAL) {
-            val = RansDecGetBits(rans, ptr8);
+        while (val == MAX_BYPASS_VAL && !in.overrun) {
+            val = RansDecGetBits(rans, in);
             n_bypass += val;
         }
 
         int32_t raw_val = 0;
-        for (int j = 0; j < n_bypass; ++j) {
-            val = RansDecGetBits(rans, ptr8);
+        for (int j = 0; j < n_bypass && j < 16; ++j) {
+            val = RansDecGetBits(rans, in);
             raw_val |= val << (j * BYPASS_PRECISION);
         }
         value = raw_val + max_value;
@@ -424,10 +423,10 @@ void RansDecoderLib::decode_y_internal(int8_t* decoded_ptr,
     const uint8_t* indexes_ptr = indexes->data();
     const int8_t* max_value_ptr = m_max_value[1]->data();
     const std::vector<int32_t>* cdfs = m_cdfs[1]->data();
-    for (int i = 0; i < symbol_size; ++i) {
+    for (int i = 0; i < symbol_size && !m_in.overrun; ++i) {
         const int32_t cdf_idx = indexes_ptr[i + symbol_offset];
         decoded_ptr[i + symbol_offset] =
-            decode_one_symbol(m_ptr8, m_rans, cdfs[cdf_idx].data(), max_value_ptr[cdf_idx]);
+            decode_one_symbol(m_in, m_rans, cdfs[cdf_idx].data(), max_value_ptr[cdf_idx]);
     }
 }
 
@@ -458,10 +457,10 @@ void RansDecoderLib::decode_z_internal(int8_t* decoded_ptr, const int symbol_siz
     const int8_t* max_value_ptr = m_max_value[0]->data();
     const std::vector<int32_t>* cdfs = m_cdfs[0]->data();
 
-    for (int i = 0; i < symbol_size; ++i) {
+    for (int i = 0; i < symbol_size && !m_in.overrun; ++i) {
         const int32_t cdf_idx = ((i + symbol_offset) % ch) + cdf_offset;
         decoded_ptr[i + symbol_offset] =
-            decode_one_symbol(m_ptr8, m_rans, cdfs[cdf_idx].data(), max_value_ptr[cdf_idx]);
+            decode_one_symbol(m_in, m_rans, cdfs[cdf_idx].data(), max_value_ptr[cdf_idx]);
     }
 }
 
@@ -476,15 +475,15 @@ void RansDecoderLib::set_cdf(const std::shared_ptr<std::vector<std::vector<int32
 void RansDecoderLib::set_stream(const std::shared_ptr<std::vector<uint8_t>> encoded)
 {
     m_stream = encoded;
-    m_ptr8 = m_stream->data();
-    RansDecInit(m_rans, m_ptr8);
+    m_in = { m_stream->data(), m_stream->data() + m_stream->size(), false };
+    RansDecInit(m_rans, m_in);
 }
 
 bool RansDecoderLib::wait_for_decoding_finish()
 {
     std::unique_lock<std::mutex> lk(m_mutex_result);
     m_cv_result.wait(lk, [this] { return m_result_ready || m_finish; });
-    return true;
+    return !m_in.overrun;
 }
 
 void RansDecoderLib::worker()
