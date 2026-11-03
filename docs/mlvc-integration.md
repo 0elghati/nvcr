@@ -108,8 +108,12 @@ Compatibility position, as validated (see the
 - **Across targets or providers** (for example, encoded on CPU and decoded on
   the Snapdragon NPU), MLVC is designed so that entropy decoding still works:
   scales are sent explicitly through `z`. Reconstructions are not expected to
-  be identical and can drift until the next I or LTR-recovery frame. NVCR has
-  not measured this yet.
+  be identical and can drift until the next I or LTR-recovery frame. On the
+  S25, decodes of one 640x360 stream on two backends fall to 34–43 dB Y PSNR
+  between each other by frame 63, then recover at the frame-64 LTR recovery.
+- **Same provider, different CPU architecture**: not identical either. ONNX
+  Runtime's arm64 CPU kernels produce different FP16 results from x86, so
+  upstream-runtime parity is established on x86 only.
 - **Not** consistent with MLVC's PyTorch reference beyond what the exported
   graph itself provides. That is an export property; see C5/C6 in the
   [roadmap](../ROADMAP.md).
@@ -124,7 +128,7 @@ it is a stream-format change outside this integration.
 | Provider | Status for MLVC |
 |---|---|
 | `onnxruntime-cpu` | Validated: upstream-runtime parity on the generic and qualcomm bundles |
-| `onnxruntime-qnn` (Snapdragon NPU) | Not run: needs the C9 arm64 Android build and a device |
+| `onnxruntime-qnn` (Snapdragon NPU) | Runs on the S25 with every node on the HTP; no upstream reference on the device, so parity is not established |
 | `onnxruntime-cuda` | Not validated for MLVC |
 | `tensorrt` | Rejected with `incompatible_target`; the TensorRT session loads DCVC-RT engine bundles only |
 
@@ -145,17 +149,31 @@ extracted bundle, and run `nvcr encode/decode --codec mlvc --provider
 onnxruntime-qnn --engine-dir <bundle>`. The provider disables CPU fallback, so a
 part the NPU cannot run fails to load instead of silently running on the CPU.
 
-Two differences from upstream remain open for the device run:
+On the S25 (2026-11-03), both parts load and run with CPU fallback disabled.
+Streams decode across the NPU, the phone CPU and x86 CPU without an entropy
+error, with the drift described above.
 
-- Upstream's QNN session uses `ORT_DISABLE_ALL` graph optimization,
-  `htp_performance_mode=burst` and `htp_graph_finalization_optimization_mode=3`.
-  NVCR's QNN provider uses `ORT_ENABLE_ALL` and sets only the backend path.
-- Upstream validated QNN with ONNX Runtime 1.24.4 on Windows on Arm, while NVCR
-  C9 uses 1.26.0 on Android.
+Upstream's QNN session uses `ORT_DISABLE_ALL` graph optimization,
+`htp_performance_mode=burst` and `htp_graph_finalization_optimization_mode=3`.
+NVCR's QNN provider uses `ORT_ENABLE_ALL` and sets only the backend path. On
+the S25, upstream's settings produced byte-identical streams and
+reconstructions while cutting the mean model time at 640x360 from 13.8 ms to
+2.4 ms (encode) and from 15.3 ms to 3.2 ms (decode). NVCR's defaults are
+unchanged. Until a default is chosen, these environment variables select the
+options for diagnosis:
 
-The proposed device gate is: both parts load with CPU fallback disabled; a
-stream encoded on the device decodes on x86 CPU without an entropy error, and
-the reverse; and the reconstruction difference is reported.
+| Variable | Effect |
+|---|---|
+| `NVCR_ONNXRUNTIME_GRAPH_OPTIMIZATION` | `disable`, `basic`, `extended` or `all` (default) |
+| `NVCR_QNN_HTP_PERFORMANCE_MODE` | Passed as QNN `htp_performance_mode`, for example `burst` |
+| `NVCR_QNN_HTP_FINALIZATION_MODE` | Passed as QNN `htp_graph_finalization_optimization_mode`, for example `3` |
+| `NVCR_ONNXRUNTIME_DISABLE_CPU_FALLBACK` | `1` disables CPU fallback for the CPU and CUDA providers too |
+| `NVCR_ONNXRUNTIME_PROFILE` | Writes an ONNX Runtime profile per part with this file prefix |
+
+With `--verbose`, the MLVC sessions log mean host, model and entropy time per
+frame when they flush. Short CLI runs on the device are dominated by session
+creation, about 4.8 s at 640x360, which is outside these phases. See the
+[C10 evidence](../evidence/phase-c10-mlvc-codec-20261102.md#snapdragon-device-run--2026-11-03).
 
 ## Reproducing the parity gate
 
