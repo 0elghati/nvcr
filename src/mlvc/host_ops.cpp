@@ -26,6 +26,8 @@ float load(std::span<const std::byte> tensor, Precision precision, std::size_t i
 
 std::byte to_u8(float value) noexcept {
     // np.round(255 * v).clip(0, 255) in float32; nearbyint rounds half to even.
+    // NaN has no defined uint8 cast, so it maps to 0.
+    if (std::isnan(value)) return std::byte{0};
     const float scaled = std::nearbyint(255.0F * value);
     const float clipped = std::clamp(scaled, 0.0F, 255.0F);
     return static_cast<std::byte>(static_cast<std::uint8_t>(clipped));

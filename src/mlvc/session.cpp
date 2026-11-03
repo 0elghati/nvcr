@@ -405,24 +405,25 @@ private:
         if (shared_.configuration.codec.gop_size != use_model_iframe_period) {
             loop.iframe_period = shared_.configuration.codec.gop_size;
         }
+        // Reused every frame; output features are not, the reference store keeps them.
+        auto& state = *shared_.state;
+        const auto& loaded = *canvas.value();
+        auto x = state.allocate(loaded.image_shape, loaded.float_type);
+        if (!x) return x.error();
+        auto q = state.allocate({1}, session_api::TensorDataType::int32);
+        if (!q) return q.error();
+        auto z = state.allocate(loaded.z_shape, loaded.float_type);
+        if (!z) return z.error();
+        auto y_0 = state.allocate(loaded.y_shape, loaded.float_type);
+        if (!y_0) return y_0.error();
+        auto y_1 = state.allocate(loaded.y_shape, loaded.float_type);
+        if (!y_1) return y_1.error();
+        scratch_ = {std::move(x.value()), std::move(q.value()), std::move(z.value()),
+                    std::move(y_0.value()), std::move(y_1.value())};
         canvas_ = std::move(canvas.value());
         placement_ = placement.value();
         scheduler_.emplace(loop);
         references_.clear();
-        // Reused every frame; output features are not, the reference store keeps them.
-        auto& state = *shared_.state;
-        auto x = state.allocate(canvas_->image_shape, canvas_->float_type);
-        if (!x) return x.error();
-        auto q = state.allocate({1}, session_api::TensorDataType::int32);
-        if (!q) return q.error();
-        auto z = state.allocate(canvas_->z_shape, canvas_->float_type);
-        if (!z) return z.error();
-        auto y_0 = state.allocate(canvas_->y_shape, canvas_->float_type);
-        if (!y_0) return y_0.error();
-        auto y_1 = state.allocate(canvas_->y_shape, canvas_->float_type);
-        if (!y_1) return y_1.error();
-        scratch_ = {std::move(x.value()), std::move(q.value()), std::move(z.value()),
-                    std::move(y_0.value()), std::move(y_1.value())};
         shared_.logger->log(LogLevel::info,
                             "MLVC encoder uses canvas " + model.value()->canvas_id);
         return {};
