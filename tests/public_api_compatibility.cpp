@@ -61,10 +61,6 @@ int main() {
     static_assert(std::is_aggregate_v<nvcr::RuntimeConfiguration>);
 
     nvcr::RuntimeConfiguration configuration;
-    configuration.codec.id = "legacy-codec";
-    configuration.provider.id = "legacy-provider";
-    configuration.artifacts.model_id = "legacy-model";
-    configuration.stream.bitstream_model_id = "legacy-stream";
     configuration.gop_size = 8;
     configuration.log_level = nvcr::LogLevel::off;
 

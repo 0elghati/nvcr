@@ -31,16 +31,6 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                     with self.subTest(path=path.relative_to(ROOT), term=term):
                         self.assertNotIn(term, content)
 
-    def test_core_configuration_has_no_implicit_codec_provider_or_model_identity(self):
-        header = (ROOT / "include/nvcr/configuration/configuration.hpp").read_text(
-            encoding="utf-8")
-        self.assertIn("struct CodecConfiguration final {", header)
-        self.assertIn("struct ProviderConfiguration final {", header)
-        self.assertEqual(header.count("std::string id{};"), 2)
-        self.assertEqual(header.count("std::string model_id{};"), 2)
-        self.assertEqual(header.count("std::string bitstream_model_id{};"), 2)
-        self.assertIn("std::string provider_id{};", header)
-
     def test_core_library_takes_uf_code_only_in_uf_builds(self):
         cmake = without_uf_build_block((ROOT / "CMakeLists.txt").read_text(encoding="utf-8"))
         for command in ("target_sources", "target_include_directories",

@@ -374,5 +374,70 @@ whose contexts do not fit beside it. QP 32, upstream recipe:
 - The native fused path is byte-identical to the branch before the rebase
   (65-frame Akiyo stream and reconstruction).
 
-Not yet run: the 1080p bundle, gates G1-G3 at 1080p on the reference set,
-upstream decoding NVCR streams (G4), and speed. They wait for a free GPU.
+### 1080p speed (RTX 4070 idle, 1080p bundle, builder level 5)
+
+BasketballDrive 1080p, 100 frames, QP 32, intra only at frame 0, three runs
+each; CLI codec time after the first output, process time from the first run.
+Every run of a path produced the same stream.
+
+| Path | Encode fps | Decode fps | Process time enc / dec | Payload | PSNR-Y |
+|---|---:|---:|---:|---:|---:|
+| Native fused | 156.7-160.0 | 122.7-124.0 | 2.30 / 2.47 s | 274,014 B | 32.6607 dB |
+| TensorRT | 112.1-113.3 | 88.6-89.3 | 3.89 / 4.68 s | 273,633 B | 32.6571 dB |
+
+TensorRT runs at about 71% of the fused path's speed in both directions, in
+line with the phase-3 per-stage timings (TensorRT FP16 kernels 1.5-1.7x slower
+than upstream's CUTLASS kernels). The fused path stays the faster default on
+NVIDIA GPUs; TensorRT removes LibTorch and is the sequencing the QNN port
+reuses.
+
+### 1080p fidelity gates (G3)
+
+`scripts/backends/dcvcuf/run_tensorrt_gates.py` encodes and decodes the full
+reference set (500, 240, 600 and 600 frames) at QPs 0/21/42/63 with both NVCR
+paths and the upstream recipe, and measures mean per-frame PSNR on the 8-bit
+output (`build/dcvcuf-c11-gates-20261103/gates.json`, SHA-256
+`ba2859d3487d0c515913ac924077354355ff57ff839e1edcfd59392495d32b91`).
+
+| Sequence | QP | Native bytes | Native PSNR-Y | Upstream PSNR-Y | TensorRT bytes | TensorRT PSNR-Y | dPSNR-Y | Bits |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| BasketballDrive | 0 | 182,125 | 27.1999 | 27.2030 | 182,475 | 27.2062 | +0.0062 | +0.19% |
+| BasketballDrive | 21 | 654,272 | 31.0341 | 31.0414 | 654,991 | 31.0379 | +0.0038 | +0.11% |
+| BasketballDrive | 42 | 2,223,145 | 34.0799 | 34.0948 | 2,223,100 | 34.0803 | +0.0004 | -0.00% |
+| BasketballDrive | 63 | 7,012,542 | 35.9724 | 35.9958 | 7,012,802 | 35.9726 | +0.0002 | +0.00% |
+| Kimono | 0 | 59,166 | 29.1529 | 29.1576 | 59,305 | 29.1416 | -0.0113 | +0.23% |
+| Kimono | 21 | 229,105 | 33.0334 | 33.0451 | 228,923 | 33.0333 | -0.0001 | -0.08% |
+| Kimono | 42 | 820,699 | 36.7401 | 36.7675 | 820,527 | 36.7402 | +0.0001 | -0.02% |
+| Kimono | 63 | 2,646,389 | 39.6271 | 39.6803 | 2,646,125 | 39.6274 | +0.0003 | -0.01% |
+| Jockey | 0 | 172,860 | 29.2077 | 29.2128 | 172,943 | 29.2083 | +0.0006 | +0.05% |
+| Jockey | 21 | 537,543 | 33.7081 | 33.7223 | 537,788 | 33.7065 | -0.0016 | +0.05% |
+| Jockey | 42 | 1,734,885 | 37.6650 | 37.7001 | 1,734,466 | 37.6655 | +0.0005 | -0.02% |
+| Jockey | 63 | 5,463,081 | 40.9107 | 40.9839 | 5,463,201 | 40.9104 | -0.0003 | +0.00% |
+| HoneyBee | 0 | 118,364 | 35.6313 | 35.6520 | 118,282 | 35.6390 | +0.0076 | -0.07% |
+| HoneyBee | 21 | 261,532 | 40.1023 | 40.1605 | 261,615 | 40.1053 | +0.0030 | +0.03% |
+| HoneyBee | 42 | 635,007 | 42.3896 | 42.4885 | 635,174 | 42.3894 | -0.0002 | +0.03% |
+| HoneyBee | 63 | 1,647,726 | 43.3099 | 43.4324 | 1,647,152 | 43.3099 | -0.0001 | -0.03% |
+
+**G3 passes.** Largest |dPSNR-Y| 0.0113 dB (limit 0.05), largest bit
+change 0.23% (limit 1%), BD-rate (6:1:1 YUV PSNR,
+TensorRT against native) HEVC-B +0.003% and UVG -0.029% (limit ±0.5%); per
+sequence: BasketballDrive -0.007%, Kimono +0.013%, Jockey +0.051%, HoneyBee -0.109%.
+
+The native path's streams are byte-identical to upstream's (C7), yet its
+8-bit-output PSNR-Y sits up to 0.12 dB below upstream's report, growing
+with quality: upstream measures its own reconstruction, not the rounded 8-bit
+frames. Both NVCR paths are measured the same way, so the gate is unaffected.
+
+Not run: G1 as an encoder-vs-decoder reconstruction comparison (the CLI does
+not expose encoder reconstructions; repeatability and stable quality through
+resets were checked instead) and G4 (upstream decoding NVCR streams).
+
+### Regression
+
+On the same build: DCVC-RT TensorRT streams and reconstructions are
+byte-identical to `main` (65-frame Akiyo QCIF GOP 8 on two QCIF bundles, in
+performance and low-memory modes, and 100-frame BasketballDrive 1080p at
+48.2/49.7 fps against main's 48.3/50.2); MLVC and DCVC-RT ONNX Runtime CPU
+streams match their recorded hashes. The feasibility branch had emptied the
+default codec, provider and model identities in `RuntimeConfiguration`; that
+public-API change is not carried, so the defaults stay as on `main`.

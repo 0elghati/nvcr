@@ -32,17 +32,14 @@ struct RuntimeOptions final {
 };
 
 struct CodecConfiguration final {
-    // Core configuration never selects a particular codec implicitly.
-    // Applications choose a registered adapter at their own integration point.
-    std::string id{};
+    std::string id{"dcvc-rt"};
     std::uint32_t intra_qp{32};
     std::uint32_t gop_size{32};
     bool verify_encoder_reconstruction{false};
 };
 
 struct ProviderConfiguration final {
-    // Core configuration never selects a particular execution provider implicitly.
-    std::string id{};
+    std::string id{"tensorrt"};
     std::int32_t device_id{0};
     std::size_t device_arena_bytes{512U * 1024U * 1024U};
     TensorRTExecutionMode tensorrt_execution_mode{TensorRTExecutionMode::automatic};
@@ -53,7 +50,7 @@ struct ArtifactSelection final {
     std::filesystem::path intra_engine_path;
     std::filesystem::path predicted_engine_path;
     std::filesystem::path entropy_model_path;
-    std::string model_id{};
+    std::string model_id{"dcvcrt-cvpr2025"};
     CodecApiVersion codec_api_version{1};
     ProviderApiVersion provider_api_version{1};
     ModelSetVersion model_set_version{1, 0};
@@ -61,7 +58,7 @@ struct ArtifactSelection final {
 };
 
 struct StreamPolicy final {
-    std::string bitstream_model_id{};
+    std::string bitstream_model_id{"dcvcrt"};
     StreamFormatVersion stream_format_version{1, 0};
     PayloadSyntaxVersion payload_syntax_version{1};
     bool allow_legacy_access_units{true};
@@ -72,9 +69,9 @@ struct RuntimeConfiguration final {
     std::filesystem::path intra_engine_path;
     std::filesystem::path predicted_engine_path;
     std::filesystem::path entropy_model_path;
-    std::string model_id{};
-    std::string bitstream_model_id{};
-    std::string provider_id{};
+    std::string model_id{"dcvcrt-cvpr2025"};
+    std::string bitstream_model_id{"dcvcrt"};
+    std::string provider_id{"tensorrt"};
     CodecApiVersion codec_api_version{1};
     ProviderApiVersion provider_api_version{1};
     StreamFormatVersion stream_format_version{1, 0};
