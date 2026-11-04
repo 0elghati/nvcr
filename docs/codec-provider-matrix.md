@@ -13,7 +13,7 @@ production-supported combination.
 | MLVC | ONNX Runtime CPU | ✅ Experimental | Upstream-runtime parity passes on x86 with the published MLVC-S bundles. See [MLVC integration](mlvc-integration.md) and [C10 evidence](../evidence/phase-c10-mlvc-codec-20261102.md). |
 | MLVC | ONNX Runtime CUDA | Planned | Not validated for MLVC; listed as open in the roadmap. |
 | MLVC | ONNX Runtime QNN (Snapdragon HTP) | ✅ Experimental | Runs on Galaxy S25 with CPU fallback disabled; arm64 parity against an upstream reference is not established. See [C10 evidence](../evidence/phase-c10-mlvc-codec-20261102.md). |
-| MLVC | TensorRT | Not integrated | The MLVC adapter rejects TensorRT, and this pairing is not currently a roadmap item. |
+| MLVC | TensorRT | Planned | C12 is active; initial adapter/session wiring is in progress, with model-bundle and runtime validation still open. See [C12 in the roadmap](../ROADMAP.md#active-v2-work). |
 | DCVC-UF | Fused CUDA (`dcvcuf-upstream-cuda`) | ✅ Experimental | Opt-in native path; see [C7 evidence](../evidence/phase-c7-dcvcuf-export-20261031.md). |
 | DCVC-UF | TensorRT | ✅ Experimental | C11's 1080p fidelity gate passes. Encoder/decoder reconstruction comparison and upstream decoding of NVCR streams remain open; measured speed is about 71% of the fused CUDA path. See [C11 evidence](../evidence/phase-c11-dcvcuf-tensorrt-20261102.md). |
 
