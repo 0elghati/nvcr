@@ -28,6 +28,31 @@ bitstreams, public APIs, packaging, performance, or FFmpeg integration:
 If requested work conflicts with the roadmap, explain the conflict and update the
 roadmap only after the user chooses the new priority.
 
+## Codec/provider separation and capability matrix
+
+NVCR is a common neural-video-codec runtime. Codec integrations and execution
+providers are independent axes; never add codec-specific provider branches or
+provider-specific assumptions to codec semantics.
+
+- The codec adapter owns codec sequencing, reference/state meaning, entropy
+  decisions, payload syntax, and the normative stages it requires.
+- The provider owns execution technology, device memory, kernels, artifacts,
+  scheduling, synchronization, and provider-specific failures.
+- A codec declares required versioned numerics profiles for normative stages.
+  A provider advertises the profiles it implements and passes their conformance
+  suites. CUTLASS, TensorRT, CUDA, CPU, and QNN are provider implementation
+  choices, never codec behavior.
+- Runtime compatibility is a codec-by-provider capability matrix. Track each
+  cell as `exact`, `native`, `unsupported`, or `untested`; do not infer support
+  from a GPU model or from another codec/provider pair.
+- A provider that lacks a required normative profile must fail before decode
+  with a structured incompatibility error. Never silently fall back to native
+  arithmetic for a normative stage.
+- GPU identity, SM version, TensorRT plan identity, and kernel selection are
+  provider/artifact concerns. Do not special-case an RTX model in codec code.
+- Do not claim cross-provider or cross-target support until the relevant matrix
+  cell has a conformance result and retained evidence.
+
 ## Verification discipline
 
 - Use release builds and the protocol in `docs/performance.md` for performance.
