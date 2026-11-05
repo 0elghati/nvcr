@@ -144,6 +144,58 @@ redistribution terms.
 **Do not.** Edit a digest, rename a plan from another target, or override a
 `license_restricted` decision.
 
+## DCVC-RT entropy decoding desynchronized
+
+**Symptom.** Decode fails with `malformed bitstream: DCVC-RT entropy decoding
+desynchronized`.
+
+**What it means.** The stream is corrupt, or this decoder computed different
+entropy parameters than the encoder did. DCVC-RT streams with native numerics
+(the default) decode only on the numerical target that encoded them: the same provider and exact plan
+set on the same GPU model. A stream encoded on one GPU and decoded on another
+(issue #216), or encoded with TensorRT and decoded with ONNX Runtime, fails
+this way.
+
+**Check.** Compare the encoder's and decoder's GPU, provider, and engine bundle
+identity:
+
+```bash
+nvidia-smi --query-gpu=name,compute_cap --format=csv
+nvcr-artifacts inspect /path/to/bundle --json
+```
+
+**Fix.** Decode on the encoding target, or re-encode on the decoding target.
+To make a stream portable, encode it with `--numerics nvcr.det-int.v1`; it
+then decodes bit-identically on every provider in the
+[capability matrix](compatibility.md#dcvc-rt-capability-matrix) that
+implements the profile.
+
+**Do not.** Retry with another bundle until a decode succeeds. A different
+target may complete some frames by chance, but it is not a supported
+configuration.
+
+## An exact-numerics stream is refused
+
+**Symptom.** Decode of a stream encoded with `--numerics nvcr.det-int.v1` stops
+before the first frame with `incompatible precision: ... requires
+nvcr.det-int.v1, which ... does not implement`, `missing artifact:
+normative program ... is unavailable`, or `incompatible target: stream's
+numerics profile or normative programs differ from this decoder's`.
+
+**What it means.** The stream names exact numerics and the digest of the
+normative programs it was encoded with. This decoder cannot reproduce them:
+its provider does not implement the profile (ONNX Runtime CUDA and QNN do
+not), its bundle has no `normative/` directory, or its programs differ.
+Nothing is decoded, so no wrong frames are written.
+
+**Check.** The bundle must contain `normative/<stage>.detprog.json` for every
+DCVC-RT normative stage, exported from the same model release as the
+encoder's bundle.
+
+**Fix.** Decode with TensorRT (SM 8.0 or newer) or ONNX Runtime CPU, using a
+bundle built from the same model release. Rebuild a bundle's programs with
+`scripts/backends/dcvcrt/export_normative_programs.sh MODEL_DIR BUNDLE/normative`.
+
 ## TensorRT or CUDA version mismatch
 
 **Symptom.** A plan fails to deserialize or execute, or runtime identity differs

@@ -23,10 +23,18 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <cstring>
 
 constexpr uint16_t bypass_precision = 2; /* number of bits in bypass mode */
 constexpr uint16_t max_bypass_val = (1 << bypass_precision) - 1;
+/* NVCR: largest bypass group count a 32-bit raw value can produce. */
+constexpr int32_t max_bypass_count = 32 / bypass_precision;
+/* NVCR: worst-case encoder output per symbol. A symbol costs at most 16 bits
+ * (frequency >= 1/65536) plus at most 22 two-bit bypass bins for a 32-bit raw
+ * value, i.e. 60 bits; rANS emits at most one byte per eight bits coded. */
+constexpr size_t max_encoded_bytes_per_symbol = 8;
+constexpr size_t encoded_stream_slack = 64;
 
 inline void RansEncPutBits(RansState& r, uint8_t*& ptr, uint32_t val)
 {
@@ -43,19 +51,8 @@ inline void RansEncPutBits(RansState& r, uint8_t*& ptr, uint32_t val)
     r = (r << bypass_precision) | val;
 }
 
-inline uint32_t RansDecGetBits(RansState& r, uint8_t*& ptr)
-{
-    uint32_t val = r & ((1u << bypass_precision) - 1);
-
-    /* Re-normalize */
-    r = r >> bypass_precision;
-    if (r < RANS_BYTE_L) {
-        r = (r << 8) | *ptr++;
-        RansAssert(r >= RANS_BYTE_L);
-    }
-
-    return val;
-}
+/* NVCR: the unbounded RansDecGetBits was replaced by
+ * RansDecoderLib::get_bypass_bits, which stops at the end of the stream. */
 
 RansEncoderLib::RansEncoderLib()
 {
@@ -218,8 +215,13 @@ void RansEncoderLib::flush()
         return;
     }
 
-    uint8_t* output = new uint8_t[total_symbol_size];  // too much space ?
-    uint8_t* ptrEnd = output + total_symbol_size;
+    // NVCR: upstream allocated one byte per symbol, which high-cost symbols
+    // can overflow. Size for the worst case instead.
+    const size_t capacity =
+        static_cast<size_t>(total_symbol_size) * max_encoded_bytes_per_symbol +
+        encoded_stream_slack;
+    uint8_t* output = new uint8_t[capacity];
+    uint8_t* ptrEnd = output + capacity;
     uint8_t* ptr = ptrEnd;
     assert(ptr != nullptr);
 
@@ -333,7 +335,48 @@ void RansDecoderLib::set_stream(const std::shared_ptr<std::vector<uint8_t>> enco
 {
     _stream = encoded;
     _ptr8 = (uint8_t*)(_stream->data());
+    _end = _ptr8 + _stream->size();
+    _corrupt = false;
+    if (_stream->size() < 4) {
+        _corrupt = true;
+        _rans = RANS_BYTE_L;
+        _ptr8 = _end;
+        return;
+    }
     RansDecInit(_rans, _ptr8);
+    // The encoder flushes a state in [L, 256 * L); anything else is not a
+    // DCVC rANS stream.
+    if (_rans < RANS_BYTE_L || _rans >= (RANS_BYTE_L << 8)) {
+        _corrupt = true;
+        _rans = RANS_BYTE_L;
+    }
+}
+
+FORCE_INLINE void RansDecoderLib::renormalize()
+{
+    while (_rans < RANS_BYTE_L) {
+        if (_ptr8 == _end) {
+            _corrupt = true;
+            _rans = RANS_BYTE_L;
+            return;
+        }
+        _rans = (_rans << 8) | *_ptr8++;
+    }
+}
+
+FORCE_INLINE uint32_t RansDecoderLib::get_bypass_bits()
+{
+    const uint32_t val = _rans & ((1u << bypass_precision) - 1);
+    _rans = _rans >> bypass_precision;
+    if (_rans < RANS_BYTE_L) {
+        if (_ptr8 == _end) {
+            _corrupt = true;
+            _rans = RANS_BYTE_L;
+        } else {
+            _rans = (_rans << 8) | *_ptr8++;
+        }
+    }
+    return val;
 }
 
 int RansDecoderLib::add_cdf(const std::shared_ptr<std::vector<std::vector<int32_t>>> cdfs,
@@ -362,26 +405,36 @@ FORCE_INLINE int8_t RansDecoderLib::decode_one_symbol(const int32_t* cdf, const 
     const auto* upper = std::upper_bound(cdf + 1, cdf + cdf_size, cum_freq);
     const int s = static_cast<int>(upper - cdf) - 1;
 
-    RansDecAdvance(_rans, _ptr8, cdf[s], cdf[s + 1] - cdf[s]);
+    // RansDecAdvance with a bounded byte source (NVCR hardening).
+    const uint32_t start = static_cast<uint32_t>(cdf[s]);
+    const uint32_t freq = static_cast<uint32_t>(cdf[s + 1] - cdf[s]);
+    _rans = freq * (_rans >> SCALE_BITS) + (_rans & DEC_MASK) - start;
+    renormalize();
 
-    int32_t value = static_cast<int32_t>(s);
+    int64_t value = static_cast<int64_t>(s);
 
     if (value == max_value) {
         /* Bypass decoding mode */
-        int32_t val = RansDecGetBits(_rans, _ptr8);
-        int32_t n_bypass = val;
+        uint32_t val = get_bypass_bits();
+        int32_t n_bypass = static_cast<int32_t>(val);
 
-        while (val == max_bypass_val) {
-            val = RansDecGetBits(_rans, _ptr8);
-            n_bypass += val;
+        // The encoder's raw value is 32 bits wide, so a valid stream never
+        // needs more than max_bypass_count two-bit groups.
+        while (val == max_bypass_val && n_bypass <= max_bypass_count) {
+            val = get_bypass_bits();
+            n_bypass += static_cast<int32_t>(val);
+        }
+        if (n_bypass > max_bypass_count) {
+            _corrupt = true;
+            return 0;
         }
 
-        int32_t raw_val = 0;
+        uint32_t raw_val = 0;
         for (int j = 0; j < n_bypass; ++j) {
-            val = RansDecGetBits(_rans, _ptr8);
+            val = get_bypass_bits();
             raw_val |= val << (j * bypass_precision);
         }
-        value = raw_val >> 1;
+        value = static_cast<int64_t>(raw_val >> 1);
         if (raw_val & 1) {
             value = -value - 1;
         } else {
@@ -389,7 +442,13 @@ FORCE_INLINE int8_t RansDecoderLib::decode_one_symbol(const int32_t* cdf, const 
         }
     }
 
-    return static_cast<int8_t>(value + offset);
+    // Every encoded symbol is int8, so anything else proves desynchronization.
+    const int64_t symbol = value + offset;
+    if (symbol < INT8_MIN || symbol > INT8_MAX) {
+        _corrupt = true;
+        return 0;
+    }
+    return static_cast<int8_t>(symbol);
 }
 
 void RansDecoderLib::decode_y(const std::shared_ptr<std::vector<uint8_t>> indexes,

@@ -14,9 +14,22 @@ namespace nvcr::dcvcrt {
 namespace {
 
 constexpr std::int32_t cdf_total = 1 << 16;
+// Two-coder streams overlap at most this many identical trailing bytes.
+constexpr std::size_t max_split_overlap = 8;
 
 Error invalid(std::string message) {
     return Error(ErrorCode::invalid_argument, std::move(message), "dcvcrt.rans");
+}
+
+Error desynchronized(std::string_view detail) {
+    return Error(
+        ErrorCode::malformed_bitstream,
+        "DCVC-RT entropy decoding desynchronized (" + std::string(detail) +
+            "): the stream is corrupt, or its entropy parameters differ from the ones "
+            "this decoder computed. A stream without an exact numerics profile decodes "
+            "only on a provider and target that reproduce the encoder's entropy "
+            "parameters exactly.",
+        "dcvcrt.rans");
 }
 
 Error failure(std::string_view operation, const std::exception& exception) {
@@ -74,6 +87,17 @@ struct RansCodec::Impl final {
     bool encoder_has_symbols{false};
     bool encoder_finished{false};
     bool stream_set{false};
+    std::size_t stream_size{0};
+
+    // Decoder corruption is sticky; once seen, the stream must be set again.
+    Result<void> check_decoders() {
+        if (decoder0->corrupt() || (use_two_coders && decoder1->corrupt())) {
+            stream_set = false;
+            return desynchronized(
+                "read past the end of the stream or decoded an impossible symbol");
+        }
+        return {};
+    }
 };
 
 RansCodec::RansCodec() : impl_(std::make_unique<Impl>()) {}
@@ -276,6 +300,14 @@ Result<void> RansCodec::set_stream(std::span<const std::byte> bitstream) {
             impl_->decoder1->set_stream(stream1);
         }
         impl_->stream_set = true;
+        impl_->stream_size = bitstream.size();
+        if (impl_->decoder0->corrupt() ||
+            (impl_->use_two_coders && impl_->decoder1->corrupt())) {
+            impl_->stream_set = false;
+            return Error(
+                ErrorCode::malformed_bitstream, "rANS stream has an invalid initial state",
+                "dcvcrt.rans");
+        }
         return {};
     } catch (const std::exception& exception) {
         return failure("setting stream", exception);
@@ -313,6 +345,7 @@ Result<std::vector<std::int8_t>> RansCodec::decode_y(
             const auto result1 = impl_->decoder1->get_decoded_tensor();
             output.insert(output.end(), result1->begin(), result1->end());
         }
+        if (auto valid = impl_->check_decoders(); !valid) return valid.error();
         return output;
     } catch (const std::exception& exception) {
         return failure("decoding y", exception);
@@ -363,12 +396,35 @@ Result<std::vector<std::int8_t>> RansCodec::decode_z(
             const auto result1 = impl_->decoder1->get_decoded_tensor();
             output.insert(output.end(), result1->begin(), result1->end());
         }
+        if (auto valid = impl_->check_decoders(); !valid) return valid.error();
         return output;
     } catch (const std::exception& exception) {
         return failure("decoding z", exception);
     } catch (...) {
         return Error(ErrorCode::internal_error, "decoding z failed", "dcvcrt.rans");
     }
+}
+
+Result<void> RansCodec::finish_decode() {
+    if (!impl_->stream_set) {
+        return Error(ErrorCode::invalid_state, "set rANS stream before finishing decode", "dcvcrt.rans");
+    }
+    if (auto valid = impl_->check_decoders(); !valid) return valid.error();
+    impl_->stream_set = false;
+    const auto& decoder0 = *impl_->decoder0;
+    if (!impl_->use_two_coders) {
+        if (!decoder0.at_initial_state() || decoder0.consumed_bytes() != impl_->stream_size) {
+            return desynchronized("the rANS stream did not end at its initial state");
+        }
+        return {};
+    }
+    const auto& decoder1 = *impl_->decoder1;
+    const auto consumed = decoder0.consumed_bytes() + decoder1.consumed_bytes();
+    if (!decoder0.at_initial_state() || !decoder1.at_initial_state() ||
+        consumed < impl_->stream_size || consumed > impl_->stream_size + max_split_overlap) {
+        return desynchronized("the split rANS streams did not end at their initial states");
+    }
+    return {};
 }
 
 }  // namespace nvcr::dcvcrt

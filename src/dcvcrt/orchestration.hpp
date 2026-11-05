@@ -61,6 +61,37 @@ enum class PredictedStage : std::uint8_t {
     count,
 };
 
+// Diagnostic digest (FNV-1a 64) of a frame's y entropy decisions and symbols
+// in coding order: (table index, symbol) per coded latent. The encoder and
+// every decoder of one stream report the same value exactly when they made the
+// same decisions. Reported to stderr only when NVCR_DCVCRT_ENTROPY_DIGEST is
+// set; it never affects coding.
+class EntropyDigest final {
+public:
+    void reset() noexcept { value_ = offset_basis; }
+    void add_encoded(std::span<const std::int16_t> indexes) noexcept {
+        for (const auto packed : indexes) {
+            const auto bits = static_cast<std::uint16_t>(packed);
+            add(static_cast<std::uint8_t>(bits & 0xffU));
+            add(static_cast<std::uint8_t>(bits >> 8U));
+        }
+    }
+    void add_decoded(std::span<const std::uint8_t> indexes, std::span<const std::int8_t> symbols) noexcept {
+        for (std::size_t index = 0; index < indexes.size() && index < symbols.size(); ++index) {
+            add(indexes[index]);
+            add(static_cast<std::uint8_t>(symbols[index]));
+        }
+    }
+    void report(std::string_view what) const;
+
+private:
+    static constexpr std::uint64_t offset_basis = 0xcbf29ce484222325ULL;
+    void add(std::uint8_t byte) noexcept {
+        value_ = (value_ ^ byte) * 0x100000001b3ULL;
+    }
+    std::uint64_t value_{offset_basis};
+};
+
 class ReferenceState final {
 public:
     [[nodiscard]] bool matches(const codec::SequenceStateView& state) const noexcept;
@@ -99,6 +130,11 @@ public:
         return q_decoder_;
     }
 
+    // dcvc-rt.exact.v1: scales map to entropy tables through the exact
+    // threshold table (scale_index.hpp) instead of the native logf mapping.
+    void set_exact_indexes(bool exact) noexcept { exact_indexes_ = exact; }
+    [[nodiscard]] bool exact_indexes() const noexcept { return exact_indexes_; }
+
     [[nodiscard]] Result<void> begin_encode(bool use_two_coders);
     [[nodiscard]] Result<void> encode_z(
         std::span<const std::int8_t> symbols,
@@ -120,12 +156,17 @@ public:
         std::size_t per_channel_size);
     [[nodiscard]] Result<std::vector<std::int8_t>> decode_y(
         std::span<const std::uint8_t> indexes);
+    // Verifies that the frame's rANS stream ended exactly where the encoder
+    // started it. Call after the last decode_y of the frame.
+    [[nodiscard]] Result<void> end_decode();
 
 private:
     static constexpr std::size_t stage_count =
         static_cast<std::size_t>(IntraStage::count);
 
     RansCodec rans_;
+    EntropyDigest digest_;
+    bool exact_indexes_{false};
     std::size_t image_z_group_{static_cast<std::size_t>(-1)};
     std::size_t gaussian_y_group_{static_cast<std::size_t>(-1)};
     std::vector<float> q_encoder_;
@@ -173,6 +214,10 @@ public:
         const codec::SequenceStateView& state,
         const ReferenceState& reference) const;
 
+    // dcvc-rt.exact.v1: see IntraOrchestration::set_exact_indexes.
+    void set_exact_indexes(bool exact) noexcept { exact_indexes_ = exact; }
+    [[nodiscard]] bool exact_indexes() const noexcept { return exact_indexes_; }
+
     [[nodiscard]] Result<void> begin_encode(bool use_two_coders);
     [[nodiscard]] Result<void> encode_z(
         std::span<const std::int8_t> symbols,
@@ -195,12 +240,16 @@ public:
         std::size_t per_channel_size);
     [[nodiscard]] Result<std::vector<std::int8_t>> decode_y(
         std::span<const std::uint8_t> indexes);
+    // Verifies that the frame's rANS stream ended exactly where the encoder
+    // started it. Call after the last decode_y of the frame.
+    [[nodiscard]] Result<void> end_decode();
 
 private:
     static constexpr std::size_t stage_count =
         static_cast<std::size_t>(PredictedStage::count);
 
     RansCodec rans_;
+    bool exact_indexes_{false};
     std::size_t video_z_group_{static_cast<std::size_t>(-1)};
     std::size_t gaussian_y_group_{static_cast<std::size_t>(-1)};
     std::vector<float> q_encoder_;

@@ -107,6 +107,7 @@ target_sources(
     nvcr
     PRIVATE
         src/bitstream/access_unit.cpp
+        src/bitstream/numerics_identity.cpp
         src/bitstream/packet_io.cpp
         src/artifacts/catalog.cpp
         src/artifacts/resolver.cpp
@@ -119,6 +120,7 @@ target_sources(
         src/dcvcrt/adapter.cpp
         src/dcvcrt/host_backend.cpp
         src/dcvcrt/host_ops.cpp
+        src/dcvcrt/numerics.cpp
         src/dcvcrt/orchestration.cpp
         src/dcvcrt/payload.cpp
         src/dcvcrt/rans_codec.cpp
@@ -137,8 +139,19 @@ target_sources(
         src/runtime/registry.cpp
         src/runtime/runtime.cpp
         src/statistics/statistics.cpp
+        src/deterministic/normative_stage.cpp
+        src/deterministic/program.cpp
         $<TARGET_OBJECTS:nvcr_dcvc_rans>
         $<TARGET_OBJECTS:nvcr_msrtc_rans>)
+
+# Exact numerics profiles (issue #216) must not be contracted or
+# reassociated: the program format fixes every rounding step so all targets
+# agree bit for bit.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set_source_files_properties(
+        src/deterministic/program.cpp src/deterministic/normative_stage.cpp
+        PROPERTIES COMPILE_OPTIONS "-ffp-contract=off;-fno-fast-math")
+endif()
 
 target_include_directories(
     nvcr
@@ -177,6 +190,21 @@ if(NVCR_ENABLE_TENSORRT)
             src/dcvcrt/backend/tensorrt/backend.cpp)
     target_link_libraries(nvcr PRIVATE CUDA::cudart TensorRT::TensorRT)
     target_compile_definitions(nvcr PRIVATE NVCR_HAS_TENSORRT=1)
+
+    # Exact executor kernels. Precise division, no flush-to-zero, and no
+    # compiler-formed FMAs: results must equal the CPU reference bit for bit.
+    add_library(nvcr_deterministic_cuda OBJECT src/deterministic/cuda_executor.cu)
+    target_include_directories(nvcr_deterministic_cuda PRIVATE
+        "${NVCR_GENERATED_INCLUDE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    target_compile_options(nvcr_deterministic_cuda PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:-ftz=false;-prec-div=true;-prec-sqrt=true;-fmad=false>)
+    target_link_libraries(nvcr_deterministic_cuda PRIVATE CUDA::cudart)
+    set_target_properties(nvcr_deterministic_cuda PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        CUDA_STANDARD 20
+        CUDA_STANDARD_REQUIRED ON
+        CUDA_EXTENSIONS OFF)
+    target_sources(nvcr PRIVATE $<TARGET_OBJECTS:nvcr_deterministic_cuda>)
     set_target_properties(
         nvcr PROPERTIES
         CUDA_STANDARD 17

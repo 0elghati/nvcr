@@ -83,6 +83,10 @@ Result<void> apply_setting(
         configuration.artifacts.predicted_engine_path = value;
     } else if (key == "entropy_model_path") {
         configuration.artifacts.entropy_model_path = value;
+    } else if (key == "normative_program_path") {
+        configuration.artifacts.normative_program_path = value;
+    } else if (key == "numerics_profile") {
+        configuration.codec.numerics_profile = value;
     } else if (key == "codec_id") {
         configuration.codec.id = value;
     } else if (key == "model_id") {

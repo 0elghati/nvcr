@@ -94,6 +94,12 @@ struct ExecutableStageDescriptor final {
     std::vector<TensorContract> tensors;
     // Codec-requested settings keyed by target, e.g. "qnn.htp_performance_mode".
     std::map<std::string, std::string, std::less<>> provider_options;
+    // Empty: the provider's native arithmetic. Otherwise an NVCR exact numerics
+    // profile id (for example "nvcr.det-int.v1"): the artifact is a portable
+    // program, artifact.expected_digest is its required SHA-256, and the
+    // provider must reproduce the profile's reference bits or refuse the stage
+    // with incompatible_precision. It never falls back to native arithmetic.
+    std::string numerics_profile;
 };
 
 class IExecutableStage {
@@ -135,6 +141,13 @@ public:
 
     [[nodiscard]] virtual Result<ExecutableStage> load_stage(
         ExecutableStageDescriptor descriptor) = 0;
+
+    // True only when this session executes the profile exactly and its
+    // implementation passes the profile's conformance suite.
+    [[nodiscard]] virtual bool supports_numerics_profile(std::string_view profile) const noexcept {
+        static_cast<void>(profile);
+        return false;
+    }
 
     // All stages, buffers, and dependencies must belong to this session.
     // Implementations validate names, shapes, access modes, and byte bounds

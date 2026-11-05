@@ -95,6 +95,7 @@ bool known_section_type(std::uint16_t type) noexcept {
     case AccessUnitSectionType::quality_rate_side_data:
     case AccessUnitSectionType::color_metadata:
     case AccessUnitSectionType::encoder_statistics:
+    case AccessUnitSectionType::numerics_identity:
     case AccessUnitSectionType::private_extension:
         return true;
     }

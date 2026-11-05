@@ -962,6 +962,13 @@ Result<std::vector<DeviceTensor>> TensorRTExecutionSession::run_stage(
     const session_api::ExecutableStage& stage,
     std::span<const DeviceTensor* const> inputs,
     EngineOutputStorage output_storage) {
+    if (const auto exact = std::dynamic_pointer_cast<const TensorRTExactStage>(stage)) {
+        if (exact->owner_id() != owner_id_) {
+            return Error(ErrorCode::invalid_argument, "TensorRT stage belongs to another provider session",
+                         std::string(subsystem));
+        }
+        return run_exact_stage(*exact, inputs, output_storage);
+    }
     const auto concrete = std::dynamic_pointer_cast<const TensorRTStage>(stage);
     if (!concrete || concrete->owner_id() != owner_id_) {
         return Error(
@@ -988,6 +995,12 @@ Result<session_api::Completion> TensorRTExecutionSession::submit(
         return Error(
             ErrorCode::invalid_argument,
             "TensorRT session received a null stage",
+            std::string(subsystem));
+    }
+    if (std::dynamic_pointer_cast<const TensorRTExactStage>(stage)) {
+        return Error(
+            ErrorCode::not_implemented,
+            "normative stages on TensorRT run through device tensors, not TensorView submission",
             std::string(subsystem));
     }
     auto concrete_stage = std::dynamic_pointer_cast<const TensorRTStage>(stage);
@@ -1330,8 +1343,87 @@ Result<session_api::BufferHandle> TensorRTExecutionSession::allocate(
     }
 }
 
+bool TensorRTExecutionSession::supports_numerics_profile(std::string_view profile) const noexcept {
+    if (profile == deterministic::profile_id(deterministic::NumericsProfile::fp32_v1)) return true;
+    return profile == deterministic::profile_id(deterministic::NumericsProfile::integer_v1) &&
+        compute_major_ >= 8;
+}
+
+Result<session_api::ExecutableStage> TensorRTExecutionSession::load_exact_stage(
+    session_api::ExecutableStageDescriptor descriptor, deterministic::NumericsProfile profile) {
+    if (!ready_) {
+        return Error(ErrorCode::invalid_state, "TensorRT runtime is not initialized",
+                     std::string(subsystem));
+    }
+    if (!supports_numerics_profile(descriptor.numerics_profile)) {
+        return Error(ErrorCode::incompatible_precision,
+                     descriptor.stage_id + " requires " + descriptor.numerics_profile +
+                         ", which this CUDA device does not implement",
+                     std::string(subsystem));
+    }
+    auto program = deterministic::load_normative_program(descriptor, profile);
+    if (!program) return program.error();
+    auto executor = deterministic::CudaExecutor::create(*program.value().program, profile, stream_);
+    if (!executor) return executor.error();
+    auto stage = std::make_shared<const TensorRTExactStage>(
+        std::move(descriptor), owner_id_, std::move(program.value()),
+        std::make_shared<deterministic::CudaExecutor>(std::move(executor.value())));
+    exact_stages_.push_back(stage);
+    return session_api::ExecutableStage(stage);
+}
+
+Result<std::vector<DeviceTensor>> TensorRTExecutionSession::run_exact_stage(
+    const TensorRTExactStage& stage,
+    std::span<const DeviceTensor* const> inputs,
+    EngineOutputStorage output_storage) {
+    const auto& program = stage.program();
+    std::vector<deterministic::HalfDeviceTensor> input_views;
+    std::vector<deterministic::Extent> extents;
+    for (const auto id : program.inputs) {
+        const auto& name = program.tensor_names[id];
+        const auto* input = find_device_tensor(inputs, name);
+        if (input == nullptr || input->shape.nbDims != 4 || input->shape.d[0] != 1) {
+            return backend_error(program.name + " missing rank-4 batch-1 device input " + name);
+        }
+        const deterministic::Extent extent{
+            static_cast<std::int32_t>(input->shape.d[1]), static_cast<std::int32_t>(input->shape.d[2]),
+            static_cast<std::int32_t>(input->shape.d[3])};
+        extents.push_back(extent);
+        input_views.push_back(deterministic::HalfDeviceTensor{name, extent, input->storage.data});
+    }
+    auto output_extents = deterministic::infer_output_extents(program, extents);
+    if (!output_extents) return output_extents.error();
+    std::vector<DeviceTensor> outputs;
+    outputs.reserve(program.outputs.size());
+    for (std::size_t slot = 0; slot < program.outputs.size(); ++slot) {
+        const auto& extent = output_extents.value()[slot];
+        nvinfer1::Dims shape{};
+        shape.nbDims = 4;
+        shape.d[0] = 1;
+        shape.d[1] = extent.channels;
+        shape.d[2] = extent.height;
+        shape.d[3] = extent.width;
+        const auto& name = program.tensor_names[program.outputs[slot]];
+        auto output = output_storage == EngineOutputStorage::scratch ?
+            allocate_device_tensor_scratch(name, shape) : allocate_device_tensor(name, shape);
+        if (!output) return output.error();
+        outputs.push_back(std::move(output.value()));
+    }
+    std::vector<deterministic::HalfDeviceTensor> output_views;
+    for (std::size_t slot = 0; slot < outputs.size(); ++slot) {
+        output_views.push_back(deterministic::HalfDeviceTensor{
+            outputs[slot].name, output_extents.value()[slot], outputs[slot].storage.data});
+    }
+    auto ran = stage.executor().run_half(input_views, output_views);
+    if (!ran) return ran.error();
+    return outputs;
+}
+
 Result<session_api::ExecutableStage> TensorRTExecutionSession::load_stage(
     session_api::ExecutableStageDescriptor descriptor) {
+    auto profile = deterministic::requested_profile(descriptor);
+    if (!profile) return profile.error();
+    if (profile.value()) return load_exact_stage(std::move(descriptor), *profile.value());
     // Generic callers describe a stage only by its contract: dynamic axes warm
     // up at the engine's optimization-profile minimum.
     TensorRTStageSpec specification;
@@ -1479,6 +1571,9 @@ Result<void> TensorRTExecutionSession::initialize(
 
     const auto device_status = cudaSetDevice(configuration.provider.device_id);
     if (device_status != cudaSuccess) return cuda_error("cudaSetDevice", device_status);
+    const auto major_status = cudaDeviceGetAttribute(
+        &compute_major_, cudaDevAttrComputeCapabilityMajor, configuration.provider.device_id);
+    if (major_status != cudaSuccess) return cuda_error("cudaDeviceGetAttribute", major_status);
     auto selected_policy = determine_context_policy(configuration);
     if (!selected_policy) return selected_policy.error();
     auto manifest = validate_engine_manifest(

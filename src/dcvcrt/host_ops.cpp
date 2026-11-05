@@ -1,5 +1,7 @@
 #include "host_ops.hpp"
 
+#include "scale_index.hpp"
+
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -520,7 +522,7 @@ bool add_and_multiply(
 
 bool build_encode_indexes(
     std::span<const Half> symbols, std::span<const Half> scales,
-    std::span<std::int16_t> output, float force_zero_threshold) noexcept {
+    std::span<std::int16_t> output, float force_zero_threshold, bool exact) noexcept {
     const auto count = output.size();
     if (count == 0 || symbols.size() < count || scales.size() < count) return false;
     for (std::size_t index = 0; index < count; ++index) {
@@ -531,21 +533,22 @@ bool build_encode_indexes(
         }
         const auto symbol = static_cast<std::int16_t>(load(symbols, index));
         output[index] = static_cast<std::int16_t>(
-            static_cast<std::uint16_t>(symbol) << 8U | scale_index(scale));
+            static_cast<std::uint16_t>(symbol) << 8U |
+            (exact ? exact_scale_index(scale) : scale_index(scale)));
     }
     return true;
 }
 
 bool build_decode_indexes(
     std::span<const Half> scales, std::span<std::uint8_t> output,
-    float force_zero_threshold) noexcept {
+    float force_zero_threshold, bool exact) noexcept {
     const auto count = output.size();
     if (count == 0 || scales.size() < count) return false;
     for (std::size_t index = 0; index < count; ++index) {
         const float scale = load(scales, index);
         output[index] = force_zero_threshold > 0.0F && scale <= force_zero_threshold
             ? 0
-            : scale_index(scale);
+            : (exact ? exact_scale_index(scale) : scale_index(scale));
     }
     return true;
 }

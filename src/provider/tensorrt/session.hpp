@@ -12,6 +12,9 @@
 #include "nvcr/provider/provider_api.hpp"
 #include "nvcr/runtime/packet.hpp"
 
+#include "../../deterministic/cuda_executor.hpp"
+#include "../../deterministic/normative_stage.hpp"
+
 #include <NvInfer.h>
 #include <cuda_runtime_api.h>
 
@@ -645,6 +648,35 @@ private:
     std::size_t engine_index_{};
 };
 
+// A normative stage: a portable program run by the exact CUDA executor on the
+// session's stream instead of a TensorRT plan.
+class TensorRTExactStage final : public session_api::IExecutableStage {
+public:
+    TensorRTExactStage(
+        session_api::ExecutableStageDescriptor descriptor,
+        std::string owner_id,
+        deterministic::NormativeProgram program,
+        std::shared_ptr<deterministic::CudaExecutor> executor)
+        : descriptor_(std::move(descriptor)),
+          owner_id_(std::move(owner_id)),
+          program_(std::move(program)),
+          executor_(std::move(executor)) {}
+
+    [[nodiscard]] const session_api::ExecutableStageDescriptor& descriptor()
+        const noexcept override {
+        return descriptor_;
+    }
+    [[nodiscard]] std::string_view owner_id() const noexcept override { return owner_id_; }
+    [[nodiscard]] const deterministic::Program& program() const noexcept { return *program_.program; }
+    [[nodiscard]] deterministic::CudaExecutor& executor() const noexcept { return *executor_; }
+
+private:
+    session_api::ExecutableStageDescriptor descriptor_;
+    std::string owner_id_;
+    deterministic::NormativeProgram program_;  // owns the program the executor reads
+    std::shared_ptr<deterministic::CudaExecutor> executor_;
+};
+
 class TensorRTCompletion final : public session_api::ICompletion {
 public:
     TensorRTCompletion(
@@ -720,6 +752,9 @@ public:
     [[nodiscard]] Result<session_api::ExecutableStage> load_stage(
         session_api::ExecutableStageDescriptor descriptor) override;
 
+    // nvcr.det-fp32.v1 on any device; nvcr.det-int.v1 on SM 8.0 and newer.
+    [[nodiscard]] bool supports_numerics_profile(std::string_view profile) const noexcept override;
+
     [[nodiscard]] Result<session_api::Completion> submit(
         const session_api::ExecutableStage& stage,
         std::span<const session_api::TensorView> tensors,
@@ -754,12 +789,20 @@ private:
         std::chrono::steady_clock::time_point setup_start = {});
     [[nodiscard]] Result<session_api::ExecutableStage> load_validated_stage(
         session_api::ExecutableStageDescriptor descriptor, TensorRTStageSpec specification);
+    [[nodiscard]] Result<session_api::ExecutableStage> load_exact_stage(
+        session_api::ExecutableStageDescriptor descriptor, deterministic::NumericsProfile profile);
+    [[nodiscard]] Result<std::vector<DeviceTensor>> run_exact_stage(
+        const TensorRTExactStage& stage,
+        std::span<const DeviceTensor* const> inputs,
+        EngineOutputStorage output_storage);
 
     TensorRTLogger logger_;
     std::unique_ptr<nvinfer1::IRuntime> runtime_;
     std::vector<EngineInstance> engines_;
     std::vector<TensorRTStageSpec> stage_specs_;
     std::vector<std::shared_ptr<const TensorRTStage>> stages_;
+    std::vector<std::shared_ptr<const TensorRTExactStage>> exact_stages_;
+    int compute_major_{0};
     std::map<std::string, std::string> bundle_files_;
     DeviceScratchArena scratch_arena_;
     BackendProfiler profiler_{false};

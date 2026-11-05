@@ -2,13 +2,23 @@
 
 #include <bit>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
+#include <iostream>
 #include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
 
 namespace nvcr::dcvcrt {
+
+void EntropyDigest::report(std::string_view what) const {
+    if (std::getenv("NVCR_DCVCRT_ENTROPY_DIGEST") == nullptr) return;
+    char text[17];
+    std::snprintf(text, sizeof(text), "%016llx", static_cast<unsigned long long>(value_));
+    std::clog << "[nvcr.dcvcrt] entropy digest " << what << ' ' << text << '\n';
+}
 namespace {
 
 Error orchestration_error(std::string message) {
@@ -264,6 +274,7 @@ const provider::experimental::ExecutableStage& IntraOrchestration::stage(
 
 Result<void> IntraOrchestration::begin_encode(bool use_two_coders) {
     rans_.reset_encoder();
+    digest_.reset();
     return rans_.set_use_two_coders(use_two_coders);
 }
 
@@ -278,6 +289,7 @@ Result<void> IntraOrchestration::encode_z(
 
 Result<void> IntraOrchestration::encode_y(
     std::span<const std::int16_t> indexes) {
+    digest_.add_encoded(indexes);
     return rans_.encode_y(indexes, gaussian_y_group_);
 }
 
@@ -286,6 +298,7 @@ Result<std::vector<std::byte>> IntraOrchestration::finish_encode(
     std::uint32_t height,
     std::uint32_t qp,
     bool use_two_coders) {
+    digest_.report("I encode");
     auto stream = rans_.finish_encode();
     if (!stream) return stream.error();
     return make_intra_payload(width, height, qp, use_two_coders, stream.value());
@@ -298,6 +311,7 @@ Result<IntraPayload> IntraOrchestration::parse_payload(
 
 Result<void> IntraOrchestration::begin_decode(const IntraPayload& payload) {
     rans_.reset_encoder();
+    digest_.reset();
     auto mode = rans_.set_use_two_coders(payload.two_coders);
     if (!mode) return mode.error();
     return rans_.set_stream(payload.rans);
@@ -314,7 +328,15 @@ Result<std::vector<std::int8_t>> IntraOrchestration::decode_z(
 
 Result<std::vector<std::int8_t>> IntraOrchestration::decode_y(
     std::span<const std::uint8_t> indexes) {
-    return rans_.decode_y(indexes, gaussian_y_group_);
+    auto symbols = rans_.decode_y(indexes, gaussian_y_group_);
+    if (symbols) digest_.add_decoded(indexes, symbols.value());
+    return symbols;
+}
+
+Result<void> IntraOrchestration::end_decode() {
+    auto finished = rans_.finish_decode();
+    if (finished) digest_.report("I decode");
+    return finished;
 }
 
 Result<void> PredictedOrchestration::initialize(
@@ -567,5 +589,7 @@ Result<std::vector<std::int8_t>> PredictedOrchestration::decode_y(
     std::span<const std::uint8_t> indexes) {
     return rans_.decode_y(indexes, gaussian_y_group_);
 }
+
+Result<void> PredictedOrchestration::end_decode() { return rans_.finish_decode(); }
 
 }  // namespace nvcr::dcvcrt

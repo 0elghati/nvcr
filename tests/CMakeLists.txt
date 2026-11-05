@@ -160,6 +160,32 @@ if(NVCR_ENABLE_ONNXRUNTIME)
     endforeach()
 endif()
 
+add_executable(nvcr_deterministic_executor_tests deterministic_executor_tests.cpp)
+target_include_directories(nvcr_deterministic_executor_tests PRIVATE "${PROJECT_SOURCE_DIR}/src")
+target_link_libraries(nvcr_deterministic_executor_tests PRIVATE NVCR::nvcr)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(nvcr_deterministic_executor_tests PRIVATE -ffp-contract=off)
+endif()
+if(NVCR_ENABLE_TENSORRT)
+    target_compile_definitions(nvcr_deterministic_executor_tests PRIVATE NVCR_TEST_HAS_CUDA=1)
+    target_link_libraries(nvcr_deterministic_executor_tests PRIVATE CUDA::cudart)
+endif()
+nvcr_set_project_warnings(nvcr_deterministic_executor_tests)
+# NVCR_DETERMINISTIC_PROGRAM_DIR: programs from
+# scripts/backends/dcvcrt/export_normative_programs.sh, for real-stage parity;
+# defaults to the ONNX Runtime bundle's normative/ directory when it has one.
+if(NOT NVCR_DETERMINISTIC_PROGRAM_DIR AND NVCR_ONNXRUNTIME_MODEL_DIR AND
+   IS_DIRECTORY "${NVCR_ONNXRUNTIME_MODEL_DIR}/normative")
+    set(NVCR_DETERMINISTIC_PROGRAM_DIR "${NVCR_ONNXRUNTIME_MODEL_DIR}/normative")
+endif()
+add_test(NAME nvcr_deterministic_executor
+    COMMAND nvcr_deterministic_executor_tests ${NVCR_DETERMINISTIC_PROGRAM_DIR})
+
+add_executable(nvcr_numerics_identity_tests numerics_identity_tests.cpp)
+target_link_libraries(nvcr_numerics_identity_tests PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_numerics_identity_tests)
+add_test(NAME nvcr_numerics_identity COMMAND nvcr_numerics_identity_tests)
+
 add_executable(nvcr_rans_conformance_tests rans_conformance_tests.cpp)
 target_link_libraries(nvcr_rans_conformance_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_rans_conformance_tests)
@@ -298,6 +324,50 @@ if(NVCR_ENABLE_TENSORRT)
             PROPERTIES
                 LABELS "gpu;conformance"
                 TIMEOUT 180)
+    endif()
+
+    # Issue #216: a stream decoded by a target that computes different entropy
+    # parameters must fail cleanly, never reconstruct garbage. TensorRT and
+    # ONNX Runtime stand in for two GPUs with different plans. Use the smallest
+    # available exact profile so the ONNX Runtime CPU side stays fast.
+    if(NVCR_ENABLE_ONNXRUNTIME
+       AND NVCR_ONNXRUNTIME_MODEL_DIR
+       AND Python3_Interpreter_FOUND
+       AND TARGET nvcr_cli)
+        set(cross_engine_dir "")
+        set(cross_engine_area 0)
+        foreach(engine_dir IN LISTS NVCR_TENSORRT_ENGINE_DIR NVCR_TENSORRT_ENGINE_DIRS)
+            if(EXISTS "${engine_dir}/engine_manifest.json")
+                file(READ "${engine_dir}/engine_manifest.json" engine_manifest)
+                string(JSON engine_width GET "${engine_manifest}" visible_dimensions optimum 0)
+                string(JSON engine_height GET "${engine_manifest}" visible_dimensions optimum 1)
+                math(EXPR engine_area "${engine_width} * ${engine_height}")
+                if(cross_engine_area EQUAL 0 OR engine_area LESS cross_engine_area)
+                    set(cross_engine_dir "${engine_dir}")
+                    set(cross_engine_area ${engine_area})
+                    set(cross_engine_width ${engine_width})
+                    set(cross_engine_height ${engine_height})
+                endif()
+            endif()
+        endforeach()
+        if(cross_engine_dir)
+            add_test(
+                NAME nvcr_dcvcrt_cross_provider_decode
+                COMMAND "${Python3_EXECUTABLE}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/dcvcrt/cross_provider_decode.py"
+                    --nvcr $<TARGET_FILE:nvcr_cli>
+                    --sample-generator "${PROJECT_SOURCE_DIR}/scripts/generate_sample_yuv.py"
+                    --tensorrt-engine-dir "${cross_engine_dir}"
+                    --onnxruntime-model-dir "${NVCR_ONNXRUNTIME_MODEL_DIR}"
+                    --width ${cross_engine_width}
+                    --height ${cross_engine_height}
+                    --work-dir "${CMAKE_CURRENT_BINARY_DIR}/cross-provider-decode")
+            set_tests_properties(
+                nvcr_dcvcrt_cross_provider_decode
+                PROPERTIES
+                    LABELS "gpu;onnxruntime;conformance"
+                    TIMEOUT 600)
+        endif()
     endif()
 endif()
 

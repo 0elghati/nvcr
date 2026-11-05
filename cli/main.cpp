@@ -3,6 +3,7 @@
 #include <nvcr/dcvcuf/backend.hpp>
 #endif
 #include <nvcr/mlvc/codec.hpp>
+#include <nvcr/bitstream/numerics_identity.hpp>
 #include <nvcr/nvcr.hpp>
 #ifdef NVCR_MEASUREMENT_CUDA
 #include <cuda_runtime_api.h>
@@ -72,6 +73,7 @@ struct Options final {
     bool help{};
     std::string codec_id;
     std::string provider_id;
+    std::string numerics_profile;
 };
 
 void usage(std::ostream& out) {
@@ -116,6 +118,9 @@ void usage(std::ostream& out) {
         << "  -r, --fps FPS             Input frame rate (default: 60)\n"
         << "      --frame-period-us N   Exact timestamp interval (alternative to --fps)\n"
         << "      --device-id N         CUDA device (default: 0)\n"
+        << "      --numerics PROFILE    Encode with exact numerics (nvcr.det-int.v1) so the\n"
+        << "                            stream decodes on every provider and target that\n"
+        << "                            implements the profile; decode reads it from the stream\n"
         << "      --profile             Print TensorRT/CUDA per-frame profiling counters\n"
         << "      --quality-metrics FILE  Report decoded Y/U/V and weighted PSNR against FILE\n"
         << "  -v, --verbose             Print per-frame CLI progress and info logs\n"
@@ -462,6 +467,9 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 return false;
             }
             options.gop_size_set = true;
+        } else if (argument == "--numerics") {
+            options.numerics_profile = value_after(argument);
+            if (options.numerics_profile.empty()) return false;
         } else if (argument == "--device-id") {
             const auto value = value_after(argument);
             if (value.empty() || !parse_number(value, options.device_id)) {
@@ -715,6 +723,7 @@ void apply_common_options(const Options& options, nvcr::RuntimeConfiguration& co
     configuration.codec.intra_qp = options.qp;
     configuration.codec.gop_size = options.gop_size;
     configuration.provider.enable_profiling = options.profile;
+    if (!options.numerics_profile.empty()) configuration.codec.numerics_profile = options.numerics_profile;
     configuration.runtime.log_level =
         options.verbose ? nvcr::LogLevel::info : nvcr::LogLevel::warning;
 }
@@ -1042,6 +1051,7 @@ int decode(const Options& options) {
     }
     std::uint32_t encoded_width = 0;
     std::uint32_t encoded_height = 0;
+    Options decode_options = options;
     if (nvcr::AccessUnitIO::has_magic(first_packet.value().data())) {
         auto access_unit = nvcr::AccessUnitIO::deserialize(first_packet.value().data());
         if (!access_unit) {
@@ -1050,9 +1060,26 @@ int decode(const Options& options) {
         }
         encoded_width = access_unit.value().width;
         encoded_height = access_unit.value().height;
+        // A stream with exact numerics names its profile; the decoder adopts it.
+        for (const auto& section : access_unit.value().sections) {
+            if (section.type != static_cast<std::uint16_t>(nvcr::AccessUnitSectionType::numerics_identity)) {
+                continue;
+            }
+            auto identity = nvcr::NumericsIdentityIO::deserialize(section.payload);
+            if (!identity) {
+                std::cerr << "nvcr: " << identity.error().describe() << '\n';
+                return 1;
+            }
+            if (!options.numerics_profile.empty() && options.numerics_profile != identity.value().profile) {
+                std::cerr << "nvcr: stream requires numerics " << identity.value().profile
+                          << ", not " << options.numerics_profile << '\n';
+                return 1;
+            }
+            decode_options.numerics_profile = identity.value().profile;
+        }
     }
     const auto initialization_started = std::chrono::steady_clock::now();
-    auto runtime = create_runtime(options, encoded_width, encoded_height);
+    auto runtime = create_runtime(decode_options, encoded_width, encoded_height);
     const double initialization_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - initialization_started).count();
     if (!runtime) {
         std::cerr << "nvcr: " << runtime.error().describe() << '\n';

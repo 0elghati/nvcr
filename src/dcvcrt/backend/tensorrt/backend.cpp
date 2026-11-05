@@ -5,6 +5,7 @@
 #include "../../../provider/tensorrt/session.hpp"
 #include "cuda_ops.hpp"
 #include "engine_specs.hpp"
+#include "../../numerics.hpp"
 #include "../../orchestration.hpp"
 #include <NvInfer.h>
 #include <NvInferVersion.h>
@@ -743,7 +744,7 @@ Result<CodecEncodeResult> encode_intra(
         status = cuda_ops::build_encode_indexes(
             encoded_symbols[stage_index]->storage.data, encoded_scales[stage_index]->storage.data,
             static_cast<std::int16_t*>(index_devices[stage_index].data), reduced_count,
-            0.0F, stream);
+            0.0F, stream, orchestration.exact_indexes());
         if (status != cudaSuccess) return cuda_error("cuda_ops::build_encode_indexes", status);
     }
 
@@ -944,7 +945,7 @@ Result<CodecDecodeResult> decode_intra(
         if (!indexes_device) return indexes_device.error();
         status = cuda_ops::build_decode_indexes(
             scales.value().storage.data, static_cast<std::uint8_t*>(indexes_device.value().data),
-            reduced_count, 0.0F, stream);
+            reduced_count, 0.0F, stream, orchestration.exact_indexes());
         if (status != cudaSuccess) return cuda_error("cuda_ops::build_decode_indexes I", status);
         const auto stage_slot = static_cast<std::size_t>(stage);
         auto& indexes = image_decode_staging.indexes[stage_slot];
@@ -1018,6 +1019,9 @@ Result<CodecDecodeResult> decode_intra(
             current_means = spatial_values + prior_count;
         }
     }
+
+    auto entropy_complete = orchestration.end_decode();
+    if (!entropy_complete) return entropy_complete.error();
 
     status = cuda_ops::multiply_broadcast_in_place(
         y_hat_device->storage.data, q_dec_values, spatial_count, 256, stream);
@@ -1292,11 +1296,13 @@ Result<CodecEncodeResult> encode_predicted(
     if (!indexes1_device) return indexes1_device.error();
     status = cuda_ops::build_encode_indexes(
         symbols0.value().storage.data, scales0.value().storage.data,
-        static_cast<std::int16_t*>(indexes0_device.value().data), reduced_count, 0.0F, stream);
+        static_cast<std::int16_t*>(indexes0_device.value().data), reduced_count, 0.0F, stream,
+        orchestration.exact_indexes());
     if (status != cudaSuccess) return cuda_error("cuda_ops::build_encode_indexes", status);
     status = cuda_ops::build_encode_indexes(
         symbols1.value().storage.data, scales1.value().storage.data,
-        static_cast<std::int16_t*>(indexes1_device.value().data), reduced_count, 0.0F, stream);
+        static_cast<std::int16_t*>(indexes1_device.value().data), reduced_count, 0.0F, stream,
+        orchestration.exact_indexes());
     if (status != cudaSuccess) return cuda_error("cuda_ops::build_encode_indexes", status);
     auto z_buffer_ready = z_symbols_buffer.ensure(z_count, "z_symbols");
     if (!z_buffer_ready) return z_buffer_ready.error();
@@ -1491,7 +1497,7 @@ Result<CodecDecodeResult> decode_predicted(
     if (!indexes0_device) return indexes0_device.error();
     status = cuda_ops::build_decode_indexes(
         scales0.value().storage.data, static_cast<std::uint8_t*>(indexes0_device.value().data),
-        reduced_count, 0.0F, stream);
+        reduced_count, 0.0F, stream, orchestration.exact_indexes());
     if (status != cudaSuccess) return cuda_error("cuda_ops::build_decode_indexes", status);
     auto& indexes0 = decode_staging.indexes[0];
     auto copied = copy_async(
@@ -1561,7 +1567,7 @@ Result<CodecDecodeResult> decode_predicted(
     if (!indexes1_device) return indexes1_device.error();
     status = cuda_ops::build_decode_indexes(
         scales1.value().storage.data, static_cast<std::uint8_t*>(indexes1_device.value().data),
-        reduced_count, 0.0F, stream);
+        reduced_count, 0.0F, stream, orchestration.exact_indexes());
     if (status != cudaSuccess) return cuda_error("cuda_ops::build_decode_indexes", status);
     auto& indexes1 = decode_staging.indexes[1];
     copied = copy_async(
@@ -1580,6 +1586,8 @@ Result<CodecDecodeResult> decode_predicted(
             std::span<const std::uint8_t>(indexes1.data, reduced_count));
     }();
     if (!decoded1) return decoded1.error();
+    auto entropy_complete = orchestration.end_decode();
+    if (!entropy_complete) return entropy_complete.error();
     auto& symbols1_host = decode_staging.symbols[1];
     std::copy(decoded1.value().begin(), decoded1.value().end(), symbols1_host.data);
     auto symbols1 = upload_int8_tensor_scratch(
@@ -1760,12 +1768,24 @@ public:
                               << session_->execution_mode() << '\n';
                 }
             }
+            // Normative stages bind ahead of the plans with the same stage id.
+            auto normative = normative_stages(configuration);
+            if (!normative) return normative.error();
+            std::vector<session_api::ExecutableStage> loaded_stages;
+            if (normative.value()) {
+                for (auto descriptor : normative.value()->descriptors) {
+                    auto loaded = session_->load_stage(std::move(descriptor));
+                    if (!loaded) return loaded.error();
+                    loaded_stages.push_back(std::move(loaded.value()));
+                }
+            }
+            for (auto& stage : session_->loaded_stages()) loaded_stages.push_back(std::move(stage));
 
             IntraOrchestration intra_orchestration;
             auto intra_ready = intra_orchestration.initialize(
                 configuration.artifacts.intra_engine_path);
             if (!intra_ready) return intra_ready.error();
-            const auto loaded_stages = session_->loaded_stages();
+            intra_orchestration.set_exact_indexes(normative.value().has_value());
             auto stages_ready = intra_orchestration.bind_stages(loaded_stages);
             if (!stages_ready) return stages_ready.error();
 
@@ -1773,6 +1793,7 @@ public:
             auto predicted_ready = predicted_orchestration.initialize(
                 configuration.artifacts.intra_engine_path);
             if (!predicted_ready) return predicted_ready.error();
+            predicted_orchestration.set_exact_indexes(normative.value().has_value());
             stages_ready = predicted_orchestration.bind_stages(loaded_stages);
             if (!stages_ready) return stages_ready.error();
 

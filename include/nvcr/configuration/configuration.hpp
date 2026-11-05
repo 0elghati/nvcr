@@ -36,6 +36,11 @@ struct CodecConfiguration final {
     std::uint32_t intra_qp{32};
     std::uint32_t gop_size{32};
     bool verify_encoder_reconstruction{false};
+    // Empty: native provider arithmetic. Otherwise an NVCR exact numerics
+    // profile (for example "nvcr.det-int.v1") for the codec's normative
+    // stages; the stream then decodes identically on every provider and
+    // target that implements the profile (issue #216).
+    std::string numerics_profile;
 };
 
 struct ProviderConfiguration final {
@@ -50,6 +55,9 @@ struct ArtifactSelection final {
     std::filesystem::path intra_engine_path;
     std::filesystem::path predicted_engine_path;
     std::filesystem::path entropy_model_path;
+    // Portable programs of the normative stages (with codec.numerics_profile).
+    // Empty: <intra_engine_path>/normative, where artifact bundles carry them.
+    std::filesystem::path normative_program_path;
     std::string model_id{"dcvcrt-cvpr2025"};
     CodecApiVersion codec_api_version{1};
     ProviderApiVersion provider_api_version{1};
