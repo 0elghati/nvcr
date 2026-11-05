@@ -783,6 +783,8 @@ nvcr::Result<nvcr::Runtime> create_runtime(
     if (mlvc && !options.gop_size_set) {
         configuration.codec.gop_size = nvcr::mlvc::use_model_iframe_period;
     }
+    // MLVC engine bundles name this model profile (scripts/backends/mlvc/build_tensorrt_bundle.py).
+    if (mlvc) configuration.artifacts.model_id = "mlvc";
     return nvcr::Runtime::create(configuration);
 }
 

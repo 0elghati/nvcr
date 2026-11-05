@@ -119,7 +119,8 @@ def validate_archive(
         fail(str(error))
     manifest_path = bundle_root / "engine_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    profile = artifacts.canonical_profile_name(str(manifest["engine_profile_id"]))
+    backend = bundle_root.name  # extract_engine_archive checked it against the model
+    profile = artifacts.canonical_profile_name(str(manifest["engine_profile_id"]), backend=backend)
     target_profile_path = target_profiles_dir / f"{manifest['target_profile_id']}.json"
     if not target_profile_path.is_file():
         fail(f"missing registered target profile: {target_profile_path}")
@@ -141,7 +142,7 @@ def validate_archive(
     if archive.name != expected_name:
         fail(f"{archive.name} does not match bundle identity; expected {expected_name}")
     return {
-        "backend": "dcvcrt",
+        "backend": backend,
         "model_profile_id": str(manifest["model_profile_id"]),
         "target_profile_id": str(manifest["target_profile_id"]),
         "profile": profile,
@@ -176,6 +177,11 @@ def merge_catalog(
         )
 
     merged = {key(entry): entry for entry in existing}
+    backends = {str(entry["backend"]) for entry in [*existing, *updates]}
+    if len(backends) > 1:
+        # Installers released before MLVC reject entries of other backends.
+        fail(f"a rolling release catalog holds one backend, not {sorted(backends)}; "
+             "use that backend's release (nvcr_artifacts.BACKEND_ASSET_RELEASES)")
     updated_targets: set[tuple[str, str, str, str]] = set()
     for entry in updates:
         merged[key(entry)] = entry
@@ -187,10 +193,11 @@ def merge_catalog(
             for item_key in merged
             if (item_key[0], item_key[1], item_key[2], item_key[4]) == target
         }
-        if profiles != set(artifacts.ENGINE_PROFILES):
+        registered = set(artifacts.BACKEND_PROFILES[target[0]])
+        if profiles != registered:
             fail(
                 f"rolling target {target} must contain all registered profiles; "
-                f"missing={sorted(set(artifacts.ENGINE_PROFILES) - profiles)}"
+                f"missing={sorted(registered - profiles)}"
             )
     return [merged[item_key] for item_key in sorted(merged)]
 

@@ -96,6 +96,13 @@ nvcr-engines-linux-amd64-ampere-plus-dcvcrt-cvpr2025-720p.tar.gz
 These are naming patterns; a class is installable only when the active catalog
 contains a compatible entry.
 
+Each backend has its own rolling release and catalog, because installers
+released before MLVC reject entries they do not know: DCVC-RT uses
+`engine-assets`, MLVC uses `engine-assets-mlvc` (for example
+`nvcr-engines-linux-amd64-sm120-mlvc-s-generic.tar.gz`). The catalog merge
+refuses a release that would mix backends. Stage MLVC bundles with
+`scripts/release_engine_assets.sh --asset-release engine-assets-mlvc`.
+
 `nvcr-engine-catalog.json` uses schema `nvcr.engine-catalog.v1`. Every entry
 records archive hash and size, codec/model/target/engine profiles, architecture,
 hardware compatibility, GPU identity, CUDA runtime, TensorRT version, and
