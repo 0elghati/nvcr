@@ -195,15 +195,12 @@ if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
     # device code. Upstream's compile flags and half macros are part of the
     # arithmetic: they select fast-math intrinsics and route Half through float.
     # The flags mirror upstream setup.py plus torch's COMMON_NVCC_FLAGS.
-    list(GET CMAKE_CUDA_ARCHITECTURES 0 NVCR_DCVCUF_GLUE_SM)
-    string(REGEX REPLACE "[^0-9].*$" "" NVCR_DCVCUF_GLUE_SM "${NVCR_DCVCUF_GLUE_SM}")
     add_library(nvcr_dcvcuf_glue OBJECT src/dcvcuf/backend/tensorrt/glue.cu)
     target_compile_options(nvcr_dcvcuf_glue PRIVATE
         $<$<COMPILE_LANGUAGE:CUDA>:-O3;--use_fast_math;--extra-device-vectorization;--expt-relaxed-constexpr>
         # Upstream's kernels declare a few unused locals (warning 177).
         $<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress=177>)
     target_compile_definitions(nvcr_dcvcuf_glue PRIVATE
-        CURRENT_DEVICE_SM=${NVCR_DCVCUF_GLUE_SM}
         __CUDA_NO_HALF_OPERATORS__
         __CUDA_NO_HALF_CONVERSIONS__
         __CUDA_NO_BFLOAT16_CONVERSIONS__
