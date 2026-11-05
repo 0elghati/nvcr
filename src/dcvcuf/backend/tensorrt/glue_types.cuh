@@ -144,7 +144,9 @@ constexpr int COND_KERNEL_THREAD_NUM2 = 1024;
 constexpr int COND_KERNEL_PER_THREAD_NUM = 8;
 
 // ---- upstream common_cutlass.h
-#if defined(CURRENT_DEVICE_SM) && (CURRENT_DEVICE_SM == 90 || CURRENT_DEVICE_SM == 100)
+// Upstream keys this on a single build-wide CURRENT_DEVICE_SM; __CUDA_ARCH__
+// selects per target, so multi-architecture builds get the right branch.
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ == 900 || __CUDA_ARCH__ == 1000)
     #define cudaGDC() cudaGridDependencySynchronize()
 #else
     #define cudaGDC() ((void)0)
