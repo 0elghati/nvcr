@@ -78,6 +78,53 @@ TensorRT decodes, then at the frame-64 LTR recovery): 57.5/58.9 dB at 176x144,
 frame is byte-identical, as expected across providers. Not yet compared with
 pinned upstream reference vectors.
 
+### TensorRT encode, Snapdragon decode (2026-11-05)
+
+The two `TensorRT` streams above (akiyo 176x144 and BasketballDrive 640x360,
+65 frames, `s-perceptual`) were decoded on the C10 Galaxy S25 (SM-S931U) with
+its existing build and libmlvc's qualcomm bundle, which has the same bundle name
+as the generic bundle and therefore the same stream identity. The script is in
+the gitignored `build-c12/trt_to_phone.sh`. Every decode completed without an
+entropy or identity error.
+
+| Stream | Phone decoder | PSNR-Y vs source | Y PSNR vs PC TensorRT decode, frame 0 / 32 / 63 / 64 |
+|---|---|---|---|
+| akiyo 176x144 | QNN HTP | 33.639 | 59.1 / 57.7 / 56.7 / 58.3 dB |
+| | ORT CPU (arm64) | 33.627 | 53.3 / 52.8 / 52.1 / 53.0 dB |
+| BasketballDrive 640x360 | QNN HTP | 30.936 | 61.5 / 50.9 / 43.7 / 58.5 dB |
+| | ORT CPU (arm64) | 30.370 | 53.2 / 43.7 / 32.2 / 52.4 dB |
+
+On the PC the same streams decode to 33.637 and 30.988 dB on TensorRT. The QNN
+decode stays within 0.05 dB of that; drift between the decoders recovers at the frame-64
+LTR recovery, as in the C10 x86-CPU-to-phone run. The arm64 CPU decode drifts
+furthest (32.2 dB at frame 63 at 640x360, 0.6 dB lower quality), consistent with
+the arm64 FP16 kernel differences recorded in C10. The codec time of these
+single runs (60 and 111 fps on QNN) includes model loading; see below.
+
+#### Phone decode speed, battery saver on and off (diagnostic)
+
+`build-c12/phone_speed.sh` decodes the same two streams with the qualcomm
+bundle: one untimed warm-up, then 5 timed QNN runs and 3 CPU runs. Phone on
+battery (49-50%), wireless adb, default QNN performance request, thermal status 0
+throughout. Saver on ran first (case 26.9-30.7 °C), saver off directly after
+(31.7-33.2 °C). The rate is NVCR's steady rate after the first output; the first
+output takes 0.35-0.54 s on QNN because it includes model loading, which is why
+the codec time above understates the rate on 65-frame clips.
+
+| Stream | Decoder | Saver on: fps (host / model / entropy ms per frame) | Saver off: fps (host / model / entropy) |
+|---|---|---|---|
+| 176x144 | QNN HTP | 854-944 (0.16 / 0.81 / 0.18) | 1113-1147 (0.07 / 0.74 / 0.09) |
+| 176x144 | ORT CPU | 44-46 (model 22) | 32 (model 31) |
+| 640x360 | QNN HTP | 229, 189, 104, 123, 128 (1.2-4.4 / 2.6-5.3 / 0.7-3.0) | 246-263 (0.8-0.9 / 2.5-2.6 / 0.5-0.6) |
+| 640x360 | ORT CPU | 8-13 (model 78-118) | 6-8 (model 117-161) |
+
+With the saver on, QNN model time is unchanged (2.6 ms at 640x360) but the CPU
+side of the decoder (host transforms and rANS) roughly doubles, and at 640x360 it
+grows run over run until the rate halves. With the saver off, the hotter phone
+holds 246-263 fps. The ONNX Runtime CPU decodes were slower with the saver off;
+they ran later on a hotter phone, so they do not isolate the saver's effect.
+One sequence per mode, not the `docs/performance.md` protocol.
+
 ## Phase 3: speed (diagnostic)
 
 Steady rate over frames 2-65 from the CLI, one run each. The CLI's codec time
