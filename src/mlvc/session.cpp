@@ -10,6 +10,10 @@
 #include "nvcr/logging/logger.hpp"
 #include "nvcr/mlvc/codec.hpp"
 
+#ifdef NVCR_HAS_TENSORRT
+#include "../provider/tensorrt/session.hpp"
+#endif
+
 #include <chrono>
 #include <array>
 #include <cmath>
@@ -91,11 +95,19 @@ public:
           provider_id_(std::move(provider_id)) {}
 
     [[nodiscard]] const Bundle& bundle() const noexcept { return bundle_; }
+    [[nodiscard]] bool tensorrt() const noexcept { return provider_id_ == "tensorrt"; }
+    [[nodiscard]] session_api::IProviderSession* provider() const noexcept {
+        return provider_.get();
+    }
 
     [[nodiscard]] Result<Tensor> allocate(
         std::vector<std::int64_t> shape, session_api::TensorDataType type) {
         const auto size = element_count(shape) * element_bytes(type);
-        auto buffer = provider_->allocate(size, session_api::MemoryDomain::host);
+        // TensorRT engines address tensors on the device; pinned memory is
+        // both host-writable here and device-addressable there.
+        auto buffer = provider_->allocate(
+            size, tensorrt() ? session_api::MemoryDomain::pinned_host
+                             : session_api::MemoryDomain::host);
         if (!buffer) return buffer.error();
         if (buffer.value()->host_bytes().size() < size) {
             return mlvc_error(ErrorCode::incompatible_target,
@@ -209,6 +221,12 @@ private:
         descriptor.artifact.provider_id = provider_id_;
         descriptor.artifact.precision = model.precision == Precision::fp16 ? "fp16" : "fp32";
         descriptor.artifact.path = bundle_.root.string();
+        if (tensorrt()) {
+            // A TensorRT stage is the plan build_tensorrt_bundle.py wrote for this part.
+            descriptor.stage_id += ".plan";
+            descriptor.artifact.component_id = descriptor.stage_id;
+            descriptor.artifact.path = (bundle_.root / descriptor.stage_id).string();
+        }
         // Same QNN settings as upstream's _model_wrapper.py.
         descriptor.provider_options = {
             {"qnn.graph_optimization", "disable"},
@@ -720,6 +738,28 @@ private:
     bool flushed_{false};
 };
 
+// The TensorRT session loads every stage before it finalizes and runs none
+// after, so the lazy per-canvas loading of the other providers cannot apply:
+// both parts of every canvas load up front, so a missing plan fails here.
+Result<void> load_tensorrt_stages(SharedState& state) {
+#ifdef NVCR_HAS_TENSORRT
+    auto* session = dynamic_cast<tensorrt::TensorRTExecutionSession*>(state.provider());
+    if (session == nullptr) {
+        return mlvc_error(ErrorCode::incompatible_target, "tensorrt provider session expected");
+    }
+    for (const auto& model : state.bundle().models) {
+        for (const auto part : {SharedState::Part::encoder, SharedState::Part::decoder}) {
+            auto loaded = state.canvas(model, part);
+            if (!loaded) return loaded.error();
+        }
+    }
+    return session->finalize_stages();
+#else
+    static_cast<void>(state);
+    return mlvc_error(ErrorCode::dependency_unavailable, "NVCR was built without TensorRT");
+#endif
+}
+
 }  // namespace
 
 Result<codec::Sessions> make_sessions(
@@ -739,6 +779,10 @@ Result<codec::Sessions> make_sessions(
         Shared shared;
         shared.state = std::make_shared<SharedState>(
             std::move(bundle.value()), std::move(provider_session), configuration.provider.id);
+        if (configuration.provider.id == "tensorrt") {
+            auto finalized = load_tensorrt_stages(*shared.state);
+            if (!finalized) return finalized.error();
+        }
         shared.statistics = std::make_shared<Statistics>();
         shared.logger = make_default_logger_factory(configuration.runtime.log_level)->create("mlvc");
         shared.configuration = configuration;

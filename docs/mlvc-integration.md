@@ -3,7 +3,8 @@
 [MLVC](https://github.com/microsoft/MLVC) (Multi-platform Learned Video Codec)
 is Microsoft's learned video codec designed for deployment across hardware. It
 is NVCR's second codec integration and the first that runs through the ONNX
-Runtime providers instead of TensorRT. Status: experimental (roadmap C10).
+Runtime providers; it also runs on TensorRT. Status: experimental (roadmap C10,
+TensorRT C12).
 
 The integration follows two rules. NVCR stays a common runtime: MLVC uses the
 same registry, provider sessions, `NVAU` access units, CLI and session contract
@@ -130,13 +131,63 @@ it is a stream-format change outside this integration.
 | `onnxruntime-cpu` | Validated: upstream-runtime parity on the generic and qualcomm bundles |
 | `onnxruntime-qnn` (Snapdragon NPU) | Runs on the S25 with every node on the HTP; no upstream reference on the device, so parity is not established |
 | `onnxruntime-cuda` | Not validated for MLVC |
-| `tensorrt` | Rejected with `incompatible_target`; the TensorRT session loads DCVC-RT engine bundles only |
+| `tensorrt` | Experimental (C12): runs from an MLVC engine bundle; streams decode across TensorRT and ONNX Runtime CPU with bounded drift, see [TensorRT](#tensorrt) |
 
 The ONNX Runtime provider now binds float16, float32 and int32 stage tensors.
 It checks each binding against the model's declared type. A stage's floating
 tensors must match its declared precision (`fp16` or `fp32`), so DCVC-RT's
 fp16-only rule is unchanged. Part names may use upper-case letters
 (`MLVCEncoder_320x192`).
+
+### TensorRT
+
+TensorRT runs MLVC from an *engine bundle*: Microsoft's ONNX bundle, unchanged,
+plus one FP16 plan per canvas and part (`mlvc_encoder_<W>x<H>.plan`,
+`mlvc_decoder_<W>x<H>.plan`) and the `engine_manifest.json` and
+`engine.sha256` that NVCR validates for every TensorRT bundle. Plans are
+target-local. Install a published bundle instead of building one:
+
+```bash
+nvcr-artifacts install --backend mlvc --profile s-generic
+nvcr encode -i input.yuv -o output.nvcr -s 640x360 -r 30 --qp 32 \
+  --codec mlvc --provider tensorrt \
+  --engine-dir "$NVCR_ENGINE_ROOT/profiles/mlvc/s-generic"
+```
+
+MLVC bundles live on their own rolling release, `engine-assets-mlvc`, so
+installers released before MLVC never see them. Profile `s-generic` is the
+MLVC-S generic bundle with all four canvases; installation never changes
+`profiles/default`, which stays DCVC-RT's.
+
+To build a bundle for another GPU, extract the generic bundle and run, inside
+the TensorRT toolchain container on that GPU:
+
+```bash
+python3 scripts/backends/mlvc/build_tensorrt_bundle.py \
+  --bundle <extracted-onnx-bundle> --output-dir build/mlvc-trt \
+  --target-profile configs/targets/<target>.json \
+  --hardware-compatibility same_compute_capability
+```
+
+The script refuses a target profile that does not describe the build GPU.
+Package and publish `build/mlvc-trt/bundle` like a DCVC-RT bundle
+(`scripts/release_engine_assets.sh --asset-release engine-assets-mlvc`).
+
+Behaviour on TensorRT:
+
+- Every canvas's plans load and warm up when the session is created. The
+  TensorRT session cannot load stages after it starts running, so MLVC's lazy
+  per-canvas loading does not apply. A bundle missing any plan fails at start.
+- MLVC's tensors are pinned host memory that the engines read and write
+  directly. This is simple but not the fastest path; see C12 in the roadmap.
+- The engine manifest names model `mlvc`. The CLI sets it; library users set
+  `artifacts.model_id = "mlvc"`, or the TensorRT session rejects the bundle as
+  another model.
+- Decoded output is not byte-identical to ONNX Runtime CPU. Streams decode in
+  both directions between the providers. On 65 frames the two decoders drift
+  apart until the frame-64 LTR recovery: to 57 dB Y PSNR of each other at
+  176x144, 44 dB at 640x360 and 39 dB at 960x540, then back to about 58 dB.
+  Quality against the source and stream size match within 0.2 dB and 0.2%.
 
 ### Snapdragon
 
@@ -213,6 +264,5 @@ upstream stream NVCR cannot encode, such as a `--bitrate` reference. Bundles, ch
   overrides beyond the bundle's own values.
 - Only MLVC-S perceptual bundles have been run. The standard MLVC model needs a
   bundle exported from its public checkpoint.
-- Codec/provider admission is still coarse: `nvcr compatibility check` reports
-  `mlvc` with `tensorrt` as compatible because both are registered; the adapter
-  rejects the pair when sessions are created.
+- TensorRT engine bundles exist only for the RTX 5060 Laptop GPU class
+  (SM 12.0, TensorRT 10.9) and the generic MLVC-S bundle.

@@ -111,6 +111,8 @@ struct TensorRTTensorSpec final {
     nvinfer1::TensorIOMode mode{};
     std::array<std::int64_t, 4> dimensions{};
     std::array<std::int64_t, 4> warmup_dimensions{};
+    session_api::TensorDataType data_type{session_api::TensorDataType::float16};
+    std::size_t rank{4};
 };
 
 struct TensorRTStageSpec final {
@@ -415,6 +417,11 @@ public:
         return host_storage_.get();
     }
 
+    [[nodiscard]] std::span<std::byte> host_bytes() noexcept override {
+        if (device_allocation_.has_value()) return {};
+        return {static_cast<std::byte*>(data()), size_bytes_};
+    }
+
 private:
     std::shared_ptr<CudaStreamOwner> stream_owner_;
     std::optional<CudaAllocation> device_allocation_;
@@ -586,6 +593,7 @@ struct DeviceTensor final {
         void* data{};
         std::size_t bytes{};
     } storage;
+    session_api::TensorDataType data_type{session_api::TensorDataType::float16};
 };
 
 enum class EngineOutputStorage {
@@ -610,13 +618,17 @@ bool valid_sha256(std::string_view value);
 [[nodiscard]] Result<void> synchronize_stream(cudaStream_t stream, std::string_view operation);
 [[nodiscard]] Result<void> record_cuda_event(cudaEvent_t event, cudaStream_t stream, std::string_view operation);
 [[nodiscard]] Result<std::pair<cudaEvent_t, cudaEvent_t>> create_profile_events(std::string_view operation);
-[[nodiscard]] Result<std::size_t> tensor_bytes(const nvinfer1::Dims& shape);
+[[nodiscard]] Result<std::size_t> tensor_bytes(
+    const nvinfer1::Dims& shape,
+    session_api::TensorDataType data_type = session_api::TensorDataType::float16);
 [[nodiscard]] const DeviceTensor* find_device_tensor(
     std::span<const DeviceTensor* const> tensors, std::string_view name);
 [[nodiscard]] Result<DeviceTensor> allocate_device_tensor(
-    std::string name, nvinfer1::Dims shape);
+    std::string name, nvinfer1::Dims shape,
+    session_api::TensorDataType data_type = session_api::TensorDataType::float16);
 [[nodiscard]] Result<DeviceTensor> allocate_device_tensor_scratch(
-    std::string name, nvinfer1::Dims shape);
+    std::string name, nvinfer1::Dims shape,
+    session_api::TensorDataType data_type = session_api::TensorDataType::float16);
 
 class TensorRTStage final : public session_api::IExecutableStage {
 public:

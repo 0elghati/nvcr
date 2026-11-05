@@ -555,6 +555,24 @@ std::string dimensions_string(const nvinfer1::Dims& dimensions) {
     return output;
 }
 
+std::optional<nvinfer1::DataType> tensorrt_data_type(session_api::TensorDataType type) {
+    switch (type) {
+    case session_api::TensorDataType::int32: return nvinfer1::DataType::kINT32;
+    case session_api::TensorDataType::float16: return nvinfer1::DataType::kHALF;
+    case session_api::TensorDataType::float32: return nvinfer1::DataType::kFLOAT;
+    default: return std::nullopt;
+    }
+}
+
+std::size_t tensor_element_bytes(session_api::TensorDataType type) {
+    switch (type) {
+    case session_api::TensorDataType::float16: return sizeof(__half);
+    case session_api::TensorDataType::int32:
+    case session_api::TensorDataType::float32: return sizeof(std::uint32_t);
+    default: return 0;
+    }
+}
+
 Result<void> validate_engine(
     const nvinfer1::ICudaEngine& engine,
     const TensorRTStageSpec& specification,
@@ -573,17 +591,20 @@ Result<void> validate_engine(
                 std::string(specification.filename) + " has missing or incorrect I/O mode for '" +
                 name + "'");
         }
-        if (engine.getTensorDataType(name.c_str()) != nvinfer1::DataType::kHALF) {
-            return backend_error(
-                std::string(specification.filename) + " tensor '" + name + "' is not FP16");
-        }
-        const auto actual = engine.getTensorShape(name.c_str());
-        if (actual.nbDims != static_cast<std::int32_t>(tensor.dimensions.size())) {
+        const auto expected_type = tensorrt_data_type(tensor.data_type);
+        if (!expected_type || engine.getTensorDataType(name.c_str()) != *expected_type) {
             return backend_error(
                 std::string(specification.filename) + " tensor '" + name +
-                "' has rank " + std::to_string(actual.nbDims) + "; expected rank 4");
+                "' has an incompatible data type");
         }
-        for (std::size_t index = 0; index < tensor.dimensions.size(); ++index) {
+        const auto actual = engine.getTensorShape(name.c_str());
+        if (actual.nbDims != static_cast<std::int32_t>(tensor.rank)) {
+            return backend_error(
+                std::string(specification.filename) + " tensor '" + name +
+                "' has rank " + std::to_string(actual.nbDims) + "; expected rank " +
+                std::to_string(tensor.rank));
+        }
+        for (std::size_t index = 0; index < tensor.rank; ++index) {
             const auto expected = tensor.dimensions[index];
             const auto observed = actual.d[index];
             // Preserve the existing dynamic contract exactly. A bundle that
@@ -708,7 +729,8 @@ Result<std::pair<cudaEvent_t, cudaEvent_t>> create_profile_events(std::string_vi
     return std::pair<cudaEvent_t, cudaEvent_t>{start, stop};
 }
 
-Result<std::size_t> tensor_bytes(const nvinfer1::Dims& shape) {
+Result<std::size_t> tensor_bytes(
+    const nvinfer1::Dims& shape, session_api::TensorDataType data_type) {
     std::size_t elements = 1;
     for (std::int32_t index = 0; index < shape.nbDims; ++index) {
         if (shape.d[index] <= 0) return backend_error("TensorRT produced an unresolved shape");
@@ -718,10 +740,12 @@ Result<std::size_t> tensor_bytes(const nvinfer1::Dims& shape) {
         }
         elements *= dimension;
     }
-    if (elements > std::numeric_limits<std::size_t>::max() / sizeof(std::uint16_t)) {
+    const auto element_bytes = tensor_element_bytes(data_type);
+    if (element_bytes == 0U) return backend_error("TensorRT tensor data type is unsupported");
+    if (elements > std::numeric_limits<std::size_t>::max() / element_bytes) {
         return backend_error("TensorRT tensor byte size overflow");
     }
-    return elements * sizeof(std::uint16_t);
+    return elements * element_bytes;
 }
 
 Result<void> warm_up_engine(
@@ -735,7 +759,7 @@ Result<void> warm_up_engine(
         auto shape = instance.engine->getTensorShape(name.c_str());
         const auto profile_minimum = instance.engine->getProfileShape(
             name.c_str(), 0, nvinfer1::OptProfileSelector::kMIN);
-        for (std::int32_t axis = 0; axis < shape.nbDims && axis < 4; ++axis) {
+        for (std::int32_t axis = 0; axis < shape.nbDims; ++axis) {
             if (shape.d[axis] != -1) continue;
             const auto chosen = tensor.warmup_dimensions[static_cast<std::size_t>(axis)];
             shape.d[axis] = chosen > 0 ? chosen : profile_minimum.d[axis];
@@ -751,7 +775,7 @@ Result<void> warm_up_engine(
     for (const auto& tensor : specification.tensors) {
         const std::string name(tensor.name);
         const auto shape = context->getTensorShape(name.c_str());
-        auto bytes = tensor_bytes(shape);
+        auto bytes = tensor_bytes(shape, tensor.data_type);
         if (!bytes) return bytes.error();
         auto allocation = allocate_cuda(bytes.value());
         if (!allocation) return allocation.error();
@@ -788,25 +812,25 @@ const DeviceTensor* find_device_tensor(
 }
 
 Result<DeviceTensor> allocate_device_tensor(
-    std::string name, nvinfer1::Dims shape) {
-    auto bytes = tensor_bytes(shape);
+    std::string name, nvinfer1::Dims shape, session_api::TensorDataType data_type) {
+    auto bytes = tensor_bytes(shape, data_type);
     if (!bytes) return bytes.error();
     auto storage = allocate_cuda(bytes.value());
     if (!storage) return storage.error();
     return DeviceTensor{
         std::move(name), shape,
-        DeviceTensor::Storage(std::move(storage.value()))};
+        DeviceTensor::Storage(std::move(storage.value())), data_type};
 }
 
 Result<DeviceTensor> allocate_device_tensor_scratch(
-    std::string name, nvinfer1::Dims shape) {
-    auto bytes = tensor_bytes(shape);
+    std::string name, nvinfer1::Dims shape, session_api::TensorDataType data_type) {
+    auto bytes = tensor_bytes(shape, data_type);
     if (!bytes) return bytes.error();
     auto storage = allocate_cuda_scratch(bytes.value());
     if (!storage) return storage.error();
     return DeviceTensor{
         std::move(name), shape,
-        DeviceTensor::Storage(std::move(storage.value()))};
+        DeviceTensor::Storage(std::move(storage.value())), data_type};
 }
 
 
@@ -910,7 +934,8 @@ Result<std::vector<DeviceTensor>> TensorRTExecutionSession::run_stage(
         }
         const auto shape = context->getTensorShape(name.c_str());
         auto output = output_storage == EngineOutputStorage::scratch ?
-            allocate_device_tensor_scratch(name, shape) : allocate_device_tensor(name, shape);
+            allocate_device_tensor_scratch(name, shape, tensor.data_type) :
+            allocate_device_tensor(name, shape, tensor.data_type);
         if (!output) return output.error();
         outputs.push_back(std::move(output.value()));
     }
@@ -943,7 +968,7 @@ Result<std::vector<DeviceTensor>> TensorRTExecutionSession::run_stage(
         }
         tensors.push_back(session_api::TensorView{
             tensor.name,
-            session_api::TensorDataType::float16,
+            device_tensor->data_type,
             std::move(shape),
             access,
             session_api::BufferSlice{
@@ -1079,20 +1104,25 @@ Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
         const auto expected_access =
             tensor_specification.mode == nvinfer1::TensorIOMode::kINPUT ?
                 session_api::TensorAccess::read : session_api::TensorAccess::write;
-        if (tensor->data_type != session_api::TensorDataType::float16 ||
-            tensor->access != expected_access || tensor->shape.size() != 4U) {
+        if (tensor->data_type != tensor_specification.data_type ||
+            tensor->access != expected_access ||
+            tensor->shape.size() != tensor_specification.rank) {
             return Error(
                 ErrorCode::invalid_argument,
                 std::string(specification.filename) + " tensor contract mismatch for " +
                     std::string(tensor_specification.name),
                 std::string(subsystem));
         }
+        // Pinned host buffers are device-addressable under unified addressing.
+        // shortcut: engines read them over the bus (zero copy); stage through
+        // device buffers if a codec's host-side tensors become the bottleneck.
         if (!tensor->storage.buffer || tensor->storage.buffer->owner_id() != owner_id_ ||
-            tensor->storage.buffer->domain() != session_api::MemoryDomain::provider_device) {
+            (tensor->storage.buffer->domain() != session_api::MemoryDomain::provider_device &&
+             tensor->storage.buffer->domain() != session_api::MemoryDomain::pinned_host)) {
             return Error(
                 ErrorCode::invalid_argument,
                 std::string(specification.filename) +
-                    " requires a device buffer owned by this session for " +
+                    " requires a device or pinned buffer owned by this session for " +
                     std::string(tensor_specification.name),
                 std::string(subsystem));
         }
@@ -1108,7 +1138,7 @@ Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
 
         std::size_t elements = 1;
         nvinfer1::Dims shape{};
-        shape.nbDims = 4;
+        shape.nbDims = static_cast<std::int32_t>(tensor->shape.size());
         for (std::size_t dimension = 0; dimension < tensor->shape.size(); ++dimension) {
             const auto value = tensor->shape[dimension];
             if (value <= 0 || value > std::numeric_limits<std::int32_t>::max() ||
@@ -1125,8 +1155,10 @@ Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
             elements *= static_cast<std::size_t>(value);
             shape.d[dimension] = static_cast<std::int32_t>(value);
         }
-        if (elements > std::numeric_limits<std::size_t>::max() / sizeof(__half) ||
-            tensor->storage.size_bytes < elements * sizeof(__half)) {
+        const auto element_bytes = tensor_element_bytes(tensor->data_type);
+        if (element_bytes == 0U ||
+            elements > std::numeric_limits<std::size_t>::max() / element_bytes ||
+            tensor->storage.size_bytes < elements * element_bytes) {
             return Error(
                 ErrorCode::invalid_argument,
                 std::string(specification.filename) + " buffer is too small for " +
@@ -1338,18 +1370,20 @@ Result<session_api::ExecutableStage> TensorRTExecutionSession::load_stage(
     specification.filename = descriptor.stage_id;
     specification.tensors.reserve(descriptor.tensors.size());
     for (const auto& contract : descriptor.tensors) {
-        if (contract.data_type != session_api::TensorDataType::float16 ||
-            contract.dimensions.size() != 4U) {
+        if (!tensorrt_data_type(contract.data_type) || contract.dimensions.empty() ||
+            contract.dimensions.size() > 4U) {
             return Error(
                 ErrorCode::invalid_argument,
-                "TensorRT stages support rank-4 FP16 tensors only",
+                "TensorRT stages support rank-1 to rank-4 INT32, FP16, and FP32 tensors",
                 std::string(subsystem));
         }
         TensorRTTensorSpec tensor;
         tensor.name = contract.name;
+        tensor.data_type = contract.data_type;
+        tensor.rank = contract.dimensions.size();
         tensor.mode = contract.access == session_api::TensorAccess::read ?
             nvinfer1::TensorIOMode::kINPUT : nvinfer1::TensorIOMode::kOUTPUT;
-        for (std::size_t axis = 0; axis < 4U; ++axis) {
+        for (std::size_t axis = 0; axis < tensor.rank; ++axis) {
             const auto& bounds = contract.dimensions[axis];
             const bool dynamic = bounds.minimum != bounds.maximum;
             tensor.dimensions[axis] = dynamic ? -1 : bounds.minimum;
@@ -1372,11 +1406,12 @@ Result<session_api::ExecutableStage> TensorRTExecutionSession::load_stage(
     for (const auto& tensor : specification.tensors) {
         session_api::TensorContract contract;
         contract.name = tensor.name;
-        contract.data_type = session_api::TensorDataType::float16;
+        contract.data_type = tensor.data_type;
         contract.access = tensor.mode == nvinfer1::TensorIOMode::kINPUT ?
             session_api::TensorAccess::read : session_api::TensorAccess::write;
-        contract.dimensions.reserve(tensor.dimensions.size());
-        for (const auto dimension : tensor.dimensions) {
+        contract.dimensions.reserve(tensor.rank);
+        for (std::size_t axis = 0; axis < tensor.rank; ++axis) {
+            const auto dimension = tensor.dimensions[axis];
             contract.dimensions.push_back(session_api::DimensionBounds{
                 dimension < 0 ? 1 : dimension,
                 dimension < 0 ? std::numeric_limits<std::int32_t>::max() : dimension});

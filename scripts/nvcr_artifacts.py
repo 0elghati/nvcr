@@ -49,10 +49,16 @@ DEFAULT_MODEL_PROFILE = REPOSITORY_ROOT / "configs/models/dcvcrt-cvpr2025.json"
 ENGINE_PROFILE_DIRECTORY = REPOSITORY_ROOT / "configs/engine-profiles"
 TARGET_PROFILE_DIRECTORY = REPOSITORY_ROOT / "configs/targets"
 ENGINE_PROFILES = ("qcif", "cif", "360p", "540p", "720p", "1080p")
+# MLVC bundles hold every canvas of one published ONNX bundle, so a profile
+# names that ONNX bundle (scripts/backends/mlvc/build_tensorrt_bundle.py).
+BACKEND_PROFILES = {"dcvcrt": ENGINE_PROFILES, "mlvc": ("s-generic",)}
+# Each backend has its own rolling release: installers released before MLVC
+# reject any catalog entry whose profile they do not know.
+BACKEND_ASSET_RELEASES = {"dcvcrt": "engine-assets", "mlvc": "engine-assets-mlvc"}
+MODEL_BACKENDS = {"dcvcrt-cvpr2025": "dcvcrt", "mlvc": "mlvc"}
 CATALOG_SCHEMA = "nvcr.engine-catalog.v1"
 CATALOG_FILENAME = "nvcr-engine-catalog.json"
 DEFAULT_REPOSITORY = "0elghati/nvcr"
-DEFAULT_ASSET_RELEASE = "engine-assets"
 SAFE_IDENTIFIER = re.compile(r"^[0-9A-Za-z._-]+$")
 PINNED_COMMIT = "1feb52a592a9ff2c4e4ba2e5122e2da49a211466"
 EXPECTED_CHECKPOINTS = {
@@ -117,7 +123,9 @@ class ValidationError(RuntimeError):
     """A bundle or profile failed the NVCR contract."""
 
 
-def canonical_profile_name(value: str, *, warn_legacy: bool = False) -> str:
+def canonical_profile_name(
+    value: str, *, warn_legacy: bool = False, backend: str = "dcvcrt"
+) -> str:
     profile = value
     if profile.endswith("-fp16"):
         profile = profile[:-5]
@@ -126,9 +134,11 @@ def canonical_profile_name(value: str, *, warn_legacy: bool = False) -> str:
                 f"nvcr-artifacts: warning: profile '{value}' is deprecated; use '{profile}'",
                 file=sys.stderr,
             )
-    if profile not in ENGINE_PROFILES:
+    profiles = BACKEND_PROFILES.get(backend, ())
+    if profile not in profiles:
         raise ValidationError(
-            f"unsupported engine profile: {value}; expected one of {', '.join(ENGINE_PROFILES)}"
+            f"unsupported {backend} engine profile: {value}; "
+            f"expected one of {', '.join(profiles)}"
         )
     return profile
 
@@ -298,16 +308,47 @@ def parse_checksum_manifest(path: Path) -> dict[str, str]:
     return checksums
 
 
+def mlvc_bundle_files(root: Path, checksums: dict[str, str]) -> set[str]:
+    """Files an MLVC engine bundle must hold: its ONNX bundle plus two plans per canvas."""
+    if "bundle_manifest.json" not in checksums:
+        raise ValidationError("MLVC engine bundle requires bundle_manifest.json")
+    bundle = load_json(root / "bundle_manifest.json")
+    canvases = bundle.get("model_manifests")
+    registry = bundle.get("model_registry")
+    if not isinstance(canvases, dict) or not canvases or not isinstance(registry, dict):
+        raise ValidationError("MLVC bundle_manifest.json has no canvases")
+    files = {"bundle_manifest.json"}
+    try:
+        for canvas, model in canvases.items():
+            files.update(f"mlvc_{stage}_{canvas}.plan" for stage in ("encoder", "decoder"))
+            for key in ("metadata_path", "gaussian_pmf_path", "bit_estimator_pmf_path"):
+                files.add(safe_bundle_name(model[key], root / "bundle_manifest.json"))
+            for part in model["model_parts"].values():
+                entry = registry[part["registry_id"]]
+                for key in ("model_path", "weights_path"):
+                    files.add(safe_bundle_name(entry[key], root / "bundle_manifest.json"))
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValidationError(f"MLVC bundle_manifest.json is incomplete: {error}") from error
+    return files
+
+
+def bundle_backend(manifest: dict[str, Any]) -> str:
+    backend = MODEL_BACKENDS.get(str(manifest.get("model_profile_id")))
+    if backend is None:
+        raise ValidationError("engine manifest model profile is invalid")
+    return backend
+
+
 def validate_engine_bundle(root: Path) -> dict[str, Any]:
-    validate_model_manifests(root, require_graphs=False)
     manifest_path = root / "engine_manifest.json"
     manifest = load_json(manifest_path)
     if manifest.get("format") != 2 or manifest.get("schema") != "nvcr.engine-bundle.v2":
         raise ValidationError("engine bundle must use nvcr.engine-bundle.v2")
     if manifest.get("kind") != "nvcr-tensorrt-engine-bundle":
         raise ValidationError("engine manifest kind is invalid")
-    if manifest.get("model_profile_id") != "dcvcrt-cvpr2025":
-        raise ValidationError("engine manifest model profile is invalid")
+    backend = bundle_backend(manifest)
+    if backend == "dcvcrt":
+        validate_model_manifests(root, require_graphs=False)
     if manifest.get("precision") != "fp16":
         raise ValidationError("only FP16 engine bundles are supported")
     for key in (
@@ -320,8 +361,7 @@ def validate_engine_bundle(root: Path) -> dict[str, Any]:
         "optimization_point",
         "checksum_manifest",
         "checksum_manifest_sha256",
-        "i_model_manifest_sha256",
-        "p_model_manifest_sha256",
+        *(("i_model_manifest_sha256", "p_model_manifest_sha256") if backend == "dcvcrt" else ()),
     ):
         require_string(manifest, key, manifest_path)
     for key in (
@@ -349,12 +389,17 @@ def validate_engine_bundle(root: Path) -> dict[str, Any]:
     if manifest["workspace_mib"] <= 0 or not 0 <= manifest["builder_optimization_level"] <= 5:
         raise ValidationError("engine workspace or builder level is invalid")
     try:
-        manifest_profile = canonical_profile_name(str(manifest["engine_profile_id"]))
+        manifest_profile = canonical_profile_name(
+            str(manifest["engine_profile_id"]), backend=backend
+        )
     except ValidationError as error:
         raise ValidationError("engine profile and optimization point do not match") from error
     if manifest_profile != manifest["optimization_point"]:
         raise ValidationError("engine profile and optimization point do not match")
-    expected_shape_profile = validate_visible_dimensions(manifest, manifest_path)
+    # MLVC canvases are fixed shapes listed by the ONNX bundle, not visible ranges.
+    expected_shape_profile = (
+        "fixed" if backend == "mlvc" else validate_visible_dimensions(manifest, manifest_path)
+    )
     shape_profile = manifest.get("shape_profile")
     if shape_profile is None:
         # Existing v2 release bundles predate this field and are all dynamic.
@@ -378,11 +423,18 @@ def validate_engine_bundle(root: Path) -> dict[str, Any]:
     if sha256(checksum_path) != manifest["checksum_manifest_sha256"]:
         raise ValidationError("engine checksum manifest hash does not match")
     checksums = parse_checksum_manifest(checksum_path)
-    required = set(REQUIRED_PLANS + RUNTIME_ASSETS)
-    if set(checksums) != required:
-        missing = sorted(required - set(checksums))
-        extra = sorted(set(checksums) - required)
-        raise ValidationError(f"checksum set mismatch; missing={missing}, extra={extra}")
+    if backend == "mlvc":
+        mlvc_files = mlvc_bundle_files(root, checksums)
+        if set(checksums) != mlvc_files:
+            missing = sorted(mlvc_files - set(checksums))
+            extra = sorted(set(checksums) - mlvc_files)
+            raise ValidationError(f"checksum set mismatch; missing={missing}, extra={extra}")
+    else:
+        required = set(REQUIRED_PLANS + RUNTIME_ASSETS)
+        if set(checksums) != required:
+            missing = sorted(required - set(checksums))
+            extra = sorted(set(checksums) - required)
+            raise ValidationError(f"checksum set mismatch; missing={missing}, extra={extra}")
     manifest_hashes = manifest.get("files")
     if not isinstance(manifest_hashes, dict) or manifest_hashes != checksums:
         raise ValidationError("engine manifest file hashes do not match engine.sha256")
@@ -390,6 +442,10 @@ def validate_engine_bundle(root: Path) -> dict[str, Any]:
         path = root / name
         if not path.is_file() or sha256(path) != expected:
             raise ValidationError(f"SHA-256 mismatch: {name}")
+    if backend == "mlvc":
+        if checksums["bundle_manifest.json"] != manifest["model_profile_sha256"]:
+            raise ValidationError("MLVC bundle manifest identity mismatch")
+        return manifest
     if sha256(root / "i_frame_manifest.json") != manifest["i_model_manifest_sha256"]:
         raise ValidationError("I-frame model manifest identity mismatch")
     if sha256(root / "p_frame_manifest.json") != manifest["p_model_manifest_sha256"]:
@@ -544,7 +600,9 @@ def validate_catalog(document: object, source: str = CATALOG_FILENAME) -> list[d
         for key in ("backend", "model_profile_id", "target_profile_id"):
             if not SAFE_IDENTIFIER.fullmatch(raw[key]):
                 raise ValidationError(f"{source} asset {index} has unsafe {key}")
-        profile = canonical_profile_name(raw["profile"])
+        if raw["backend"] not in BACKEND_PROFILES:
+            raise ValidationError(f"{source} asset {index} has an unsupported backend")
+        profile = canonical_profile_name(raw["profile"], backend=raw["backend"])
         if raw["profile"] != profile:
             raise ValidationError(f"{source} asset {index} must use canonical profile {profile}")
         if raw["precision"] != "fp16":
@@ -728,9 +786,13 @@ def extract_engine_archive(archive: Path, extract_root: Path) -> Path:
                 raise ValidationError(f"{archive.name} contains unsafe path: {member.name}")
             if not (member.isfile() or member.isdir()):
                 raise ValidationError(f"{archive.name} contains a non-regular member")
-            if Path(member.name).name.endswith((".onnx", ".pth", ".pth.tar")):
+            parts = Path(member.name).parts
+            # MLVC runs Microsoft's published (MIT) ONNX bundle unchanged and
+            # reads its parts; DCVC-RT archives never carry model sources.
+            mlvc_graph = len(parts) == 3 and parts[1] == "mlvc" and parts[2].endswith(".onnx")
+            if parts[-1].endswith((".onnx", ".pth", ".pth.tar")) and not mlvc_graph:
                 raise ValidationError(f"{archive.name} contains a model-source asset")
-            top_levels.add(Path(member.name).parts[0])
+            top_levels.add(parts[0])
         if top_levels != {archive_stem}:
             raise ValidationError(
                 f"{archive.name} must contain one top-level directory named {archive_stem}"
@@ -738,8 +800,12 @@ def extract_engine_archive(archive: Path, extract_root: Path) -> Path:
         stream.extractall(extract_root)
     asset_root = extract_root / archive_stem
     validate_asset_manifest(asset_root)
-    bundle_root = asset_root / "dcvcrt"
-    validate_engine_bundle(bundle_root)
+    backends = [name for name in BACKEND_PROFILES if (asset_root / name).is_dir()]
+    if len(backends) != 1:
+        raise ValidationError(f"{archive.name} must contain exactly one backend bundle directory")
+    bundle_root = asset_root / backends[0]
+    if bundle_backend(validate_engine_bundle(bundle_root)) != backends[0]:
+        raise ValidationError(f"{archive.name} bundle directory does not match its model")
     return bundle_root
 
 
@@ -803,9 +869,12 @@ def install_catalog_assets(
         by_profile[profile] = entry
     try:
         profiles = (
-            [canonical_profile_name(item, warn_legacy=True) for item in requested_profiles]
+            [
+                canonical_profile_name(item, warn_legacy=True, backend=backend)
+                for item in requested_profiles
+            ]
             if requested_profiles
-            else [profile for profile in ENGINE_PROFILES if profile in by_profile]
+            else [profile for profile in BACKEND_PROFILES[backend] if profile in by_profile]
         )
     except ValidationError as error:
         raise ValidationError(
@@ -851,7 +920,9 @@ def install_catalog_assets(
             if (
                 manifest.get("target_profile_id") != entry["target_profile_id"]
                 or manifest.get("model_profile_id") != entry["model_profile_id"]
-                or canonical_profile_name(str(manifest.get("engine_profile_id", ""))) != profile
+                or canonical_profile_name(
+                    str(manifest.get("engine_profile_id", "")), backend=backend
+                ) != profile
                 or any(manifest.get(field) != entry[field] for field in catalog_manifest_fields)
                 or manifest.get("cuda_runtime_version") != entry["cuda_runtime_version"]
                 or manifest_compatibility != entry.get("hardware_compatibility", "exact")
@@ -871,9 +942,12 @@ def install_catalog_assets(
             validate_engine_bundle(final)
         canonical_link = engine_root / "profiles" / backend / profile
         atomic_symlink(final, canonical_link)
-        atomic_symlink(final, engine_root / "profiles" / backend / f"{profile}-fp16")
+        if backend == "dcvcrt":
+            atomic_symlink(final, engine_root / "profiles" / backend / f"{profile}-fp16")
         installed.append(profile)
-    atomic_symlink(engine_root / "profiles" / backend, engine_root / "profiles" / "default")
+    # profiles/default is the CLI's DCVC-RT profile tree; MLVC is chosen by --engine-dir.
+    if backend == "dcvcrt":
+        atomic_symlink(engine_root / "profiles" / backend, engine_root / "profiles" / "default")
     return installed
 
 
@@ -898,16 +972,14 @@ def install_command(arguments: list[str]) -> int:
     parser.add_argument("--backend", default=os.environ.get("NVCR_BACKEND", "dcvcrt"))
     parser.add_argument("--device-id", type=int, default=0)
     parser.add_argument("--repo", default=os.environ.get("NVCR_REPO", DEFAULT_REPOSITORY))
-    parser.add_argument(
-        "--asset-release",
-        default=os.environ.get("NVCR_ENGINE_ASSET_RELEASE", DEFAULT_ASSET_RELEASE),
-    )
+    parser.add_argument("--asset-release", default=os.environ.get("NVCR_ENGINE_ASSET_RELEASE"))
     parser.add_argument("--engine-root", type=Path, default=default_engine_root())
     args = parser.parse_args(arguments)
     if args.backend in ("default", "dcvc_rt", "dcvc-rt"):
         args.backend = "dcvcrt"
-    if args.backend != "dcvcrt":
+    if args.backend not in BACKEND_PROFILES:
         raise ValidationError(f"unsupported backend: {args.backend}")
+    args.asset_release = args.asset_release or BACKEND_ASSET_RELEASES[args.backend]
     if (
         args.repo.count("/") != 1
         or args.repo.startswith("/")
