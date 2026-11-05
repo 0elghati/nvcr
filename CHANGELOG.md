@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/0elghati/nvcr/compare/v1.4.0...v1.4.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **docker:** build the amd64 image for TensorRT 10.9's GPU set ([#237](https://github.com/0elghati/nvcr/issues/237)) ([d7188ae](https://github.com/0elghati/nvcr/commit/d7188aec301ed07de1d6a9a2327df0b14488e850))
+
 ## [1.4.0](https://github.com/0elghati/nvcr/compare/v1.3.0...v1.4.0) (2026-11-05)
 
 
