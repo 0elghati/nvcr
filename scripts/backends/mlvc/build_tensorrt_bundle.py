@@ -20,8 +20,13 @@ import shutil
 import subprocess
 
 MODEL_PROFILE_ID = "mlvc"
-# One engine profile per published ONNX bundle; it covers all of its canvases.
-ENGINE_PROFILE_ID = "s-generic"
+# One engine profile per MLVC model and weights; it covers all of the bundle's
+# canvases. Keep in step with BACKEND_PROFILES["mlvc"] in nvcr_artifacts.py.
+ENGINE_PROFILES = {
+    "dmc61sbr_mini_reglu-perceptual_v1": "s-perceptual",
+    "dmc61sbr_reglu-perceptual_v1": "perceptual",
+    "dmc61sbr_reglu-psnr_v1": "psnr",
+}
 PARTS = {"MLVCEncoder": "mlvc_encoder", "MLVCDecoder": "mlvc_decoder"}
 TRTEXEC_COMPATIBILITY = {"exact": [], "same_compute_capability":
                          ["--hardwareCompatibilityLevel=sameComputeCapability"]}
@@ -105,6 +110,12 @@ def main(argv=None):
     if args.output_dir.exists():
         raise SystemExit(f"output directory must be new: {args.output_dir}")
     manifest = json.loads((args.bundle / "bundle_manifest.json").read_text(encoding="utf-8"))
+    profile = ENGINE_PROFILES.get(manifest["bundle_name"])
+    # Other targets carry NPU-specific graph rewrites; TensorRT plans start from generic.
+    if profile is None or manifest["target_device"] != "generic":
+        raise SystemExit(f"unsupported MLVC bundle {manifest['bundle_name']} "
+                         f"({manifest['target_device']}); expected a generic export of "
+                         f"{', '.join(ENGINE_PROFILES)}")
     target = json.loads(args.target_profile.read_text(encoding="utf-8"))
     canvases = sorted(manifest["model_manifests"])
 
@@ -137,7 +148,7 @@ def main(argv=None):
     files = {path.name: sha256(path) for path in sorted(bundle.iterdir())}
     (bundle / "engine.sha256").write_text(
         "".join(f"{digest}  {name}\n" for name, digest in sorted(files.items())), encoding="utf-8")
-    engine_profile = json.dumps({"id": ENGINE_PROFILE_ID, "canvases": canvases,
+    engine_profile = json.dumps({"id": profile, "canvases": canvases,
                                  "precision": "fp16", "workspace_mib": args.workspace_mib,
                                  "builder_optimization_level": args.builder_optimization_level},
                                 sort_keys=True)
@@ -150,9 +161,9 @@ def main(argv=None):
         "model_profile_sha256": sources["bundle_manifest.json"],
         "target_profile_id": target["id"],
         "target_profile_sha256": sha256(args.target_profile),
-        "engine_profile_id": ENGINE_PROFILE_ID,
+        "engine_profile_id": profile,
         "engine_profile_sha256": sha256_text(engine_profile),
-        "optimization_point": ENGINE_PROFILE_ID,
+        "optimization_point": profile,
         "precision": "fp16",
         "shape_profile": "fixed",
         "hardware_compatibility": args.hardware_compatibility,

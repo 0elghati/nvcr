@@ -268,7 +268,10 @@ def main() -> int:
     existing: list[dict[str, object]] = []
     if args.existing_catalog is not None and args.existing_catalog.is_file():
         document = json.loads(args.existing_catalog.read_text(encoding="utf-8"))
-        existing = artifacts.validate_catalog(document, str(args.existing_catalog))
+        # Entries of retired profiles (for example MLVC's former s-generic) drop out here.
+        existing = artifacts.validate_catalog(
+            document, str(args.existing_catalog), skip_unknown=True
+        )
     merged = merge_catalog(existing, updates)
     catalog = {"schema": artifacts.CATALOG_SCHEMA, "assets": merged}
     artifacts.validate_catalog(catalog)

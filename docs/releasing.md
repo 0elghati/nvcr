@@ -99,7 +99,7 @@ contains a compatible entry.
 Each backend has its own rolling release and catalog, because installers
 released before MLVC reject entries they do not know: DCVC-RT uses
 `engine-assets`, MLVC uses `engine-assets-mlvc` (for example
-`nvcr-engines-linux-amd64-sm120-mlvc-s-generic.tar.gz`). The catalog merge
+`nvcr-engines-linux-amd64-sm120-mlvc-perceptual.tar.gz`). The catalog merge
 refuses a release that would mix backends. Stage MLVC bundles with
 `scripts/release_engine_assets.sh --asset-release engine-assets-mlvc`.
 

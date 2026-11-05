@@ -49,9 +49,13 @@ DEFAULT_MODEL_PROFILE = REPOSITORY_ROOT / "configs/models/dcvcrt-cvpr2025.json"
 ENGINE_PROFILE_DIRECTORY = REPOSITORY_ROOT / "configs/engine-profiles"
 TARGET_PROFILE_DIRECTORY = REPOSITORY_ROOT / "configs/targets"
 ENGINE_PROFILES = ("qcif", "cif", "360p", "540p", "720p", "1080p")
-# MLVC bundles hold every canvas of one published ONNX bundle, so a profile
-# names that ONNX bundle (scripts/backends/mlvc/build_tensorrt_bundle.py).
-BACKEND_PROFILES = {"dcvcrt": ENGINE_PROFILES, "mlvc": ("s-generic",)}
+# An MLVC bundle holds every canvas of one model's generic ONNX export, so a
+# profile names the model and weights (scripts/backends/mlvc/build_tensorrt_bundle.py).
+# The catalog merge requires every profile listed here for an updated target.
+BACKEND_PROFILES = {
+    "dcvcrt": ENGINE_PROFILES,
+    "mlvc": ("s-perceptual", "perceptual", "psnr"),
+}
 # Each backend has its own rolling release: installers released before MLVC
 # reject any catalog entry whose profile they do not know.
 BACKEND_ASSET_RELEASES = {"dcvcrt": "engine-assets", "mlvc": "engine-assets-mlvc"}
@@ -546,7 +550,12 @@ def expected_asset_filename(
     return f"nvcr-engines-{target}-{model}-{profile}.tar.gz"
 
 
-def validate_catalog(document: object, source: str = CATALOG_FILENAME) -> list[dict[str, Any]]:
+def validate_catalog(
+    document: object, source: str = CATALOG_FILENAME, *, skip_unknown: bool = False
+) -> list[dict[str, Any]]:
+    """Validate a catalog. skip_unknown drops entries of backends or profiles this
+    version does not register (newer or retired), so a catalog that gains a
+    profile later still installs; writers validate their output strictly."""
     if not isinstance(document, dict) or document.get("schema") != CATALOG_SCHEMA:
         raise ValidationError(f"{source} must use schema {CATALOG_SCHEMA}")
     raw_assets = document.get("assets")
@@ -600,6 +609,9 @@ def validate_catalog(document: object, source: str = CATALOG_FILENAME) -> list[d
         for key in ("backend", "model_profile_id", "target_profile_id"):
             if not SAFE_IDENTIFIER.fullmatch(raw[key]):
                 raise ValidationError(f"{source} asset {index} has unsafe {key}")
+        known = raw["profile"].removesuffix("-fp16") in BACKEND_PROFILES.get(raw["backend"], ())
+        if not known and skip_unknown:
+            continue
         if raw["backend"] not in BACKEND_PROFILES:
             raise ValidationError(f"{source} asset {index} has an unsupported backend")
         profile = canonical_profile_name(raw["profile"], backend=raw["backend"])
@@ -1008,7 +1020,7 @@ def install_command(arguments: list[str]) -> int:
         catalog_path = Path(temporary) / CATALOG_FILENAME
         download_file(catalog_url, catalog_path)
         catalog = load_json(catalog_path)
-    entries = validate_catalog(catalog)
+    entries = validate_catalog(catalog, skip_unknown=True)
     try:
         identity = detect_device_identity(args.device_id)
     except DeviceDetectionError as error:
