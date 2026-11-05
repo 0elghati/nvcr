@@ -13,11 +13,15 @@
 set -euo pipefail
 mlvc_root=$1 py=$2 model=$3 checkpoint=$4 version=$5 out=$6
 datasets=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../datasets" && pwd)
+# Resolve caller-relative paths before changing into the temporary checkout.
+mkdir -p "$out"
+out=$(cd "$out" && pwd)
+checkpoint=$(cd "$(dirname "$checkpoint")" && pwd)/$(basename "$checkpoint")
 work=$(mktemp -d)
 cp -r "$mlvc_root/." "$work"
 cd "$work/video"
 cp conversion/_full_model/model_configs_example.yaml conversion/_full_model/model_configs.yaml
-mkdir -p "$out" job/pretrained
+mkdir -p job/pretrained
 ln -s "$checkpoint" "job/pretrained/$(basename "$checkpoint")"
 common=(--model-version "$model" --weights-path "pretrained/$(basename "$checkpoint")"
         --weights-version "$version" --model-type onnx --target-device generic)
@@ -25,12 +29,12 @@ dirs=(--job-outputs-dir "$work/video/job" --test-data-dir "$datasets")
 for canvas in "320x192 akiyo_qcif.yuv 176 144" "432x240 akiyo_qcif.yuv 176 144" \
               "640x368 360p/BasketballDrive_640x360_50.yuv 640 360" \
               "960x544 540p/BasketballDrive_960x540_50.yuv 960 540"; do
-    set -- $canvas
-    log="$out/export-$model-$version-$1.log"
-    echo "[export] $model $version $1"
+    read -r size clip width height <<<"$canvas"
+    log="$out/export-$model-$version-$size.log"
+    echo "[export] $model $version $size"
     "$py" -W ignore convert.py "${dirs[@]}" export "${common[@]}" \
-        --model-width "${1%x*}" --model-height "${1#*x}" \
-        --exporter-params-json "{\"test_video_path\": \"$datasets/$2\", \"image_width\": $3, \"image_height\": $4}" \
+        --model-width "${size%x*}" --model-height "${size#*x}" \
+        --exporter-params-json "{\"test_video_path\": \"$datasets/$clip\", \"image_width\": $width, \"image_height\": $height}" \
         >"$log" 2>&1 || { tail -30 "$log"; exit 1; }
 done
 echo "[bundle] $model $version"
