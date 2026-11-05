@@ -94,9 +94,56 @@ Known costs still inside these numbers: per-frame pinned allocation of the
 feature tensor (`cudaMallocHost`/`cudaFreeHost`) and zero-copy engine I/O over
 PCIe.
 
+Publication (2026-11-05): `upload-engine-assets.yml` run 41997497504 from
+`feat/mlvc-tensorrt` published the archive to `engine-assets-mlvc`; an
+anonymous `nvcr-artifacts install --backend mlvc` from GitHub then encoded and
+decoded 640x360 on TensorRT (275/349 fps, PSNR-Y 30.988 dB). The
+`engine-assets` DCVC-RT catalog was unchanged (42 entries).
+
+## Variants (2026-11-05)
+
+Profiles are now one per MLVC model and weights: `s-perceptual` (the profile
+above, renamed from `s-generic`), `perceptual` and `psnr`. Installers and the
+catalog merge skip catalog entries of profiles they do not register, so the
+published `s-generic` entry drops out when the three are published and later
+profiles do not break older installers.
+
+The standard MLVC models have no published ONNX bundle.
+`scripts/backends/mlvc/export_onnx_bundle.sh` exports them with MLVC's
+`convert.py` at the pinned checkout `1425880`, from the published checkpoints
+`mlvc-perceptual-v1.ckpt` (SHA-256 `0ba78176…4723e`) and `mlvc-psnr-v1.ckpt`
+(`834adaab…5cca1`), 73,428,306 bytes each. Exporter environment: CPU PyTorch
+2.10.0 and MLVC's `uv.lock` versions (onnx 1.22.0, onnxscript 0.7.1, onnx-ir
+0.2.1, torchao 0.17.0, numpy 2.3.2), with ONNX Runtime 1.26.0 and
+`packages/msrtc_rans`. Upstream validates each canvas on VCD clips (15.8 and
+35.6 GB, with no 240p/180p sets published); the export used akiyo (320x192,
+432x240) and BasketballDrive (640x368, 960x544) instead, so the metrics in the
+bundles' metadata describe those clips.
+
+The exporter's PyTorch-against-ONNX check on those clips (Q index 21 and 63):
+
+| Canvas | `perceptual` PSNR-Y ONNX − PyTorch | bpp difference |
+|---|---|---|
+| 320x192 | +0.03 / +0.05 dB | −0.0004 |
+| 432x240 | −0.07 / +0.04 dB | −0.0005 |
+| 640x368 | +0.04 / 0.00 dB | 0.0000 |
+| 960x544 | −0.01 / −0.01 dB | 0.0000 |
+
+NVCR runs the standard model unchanged on ONNX Runtime CPU (first run of that
+model in NVCR) and on TensorRT from the `perceptual` engine bundle. 65 akiyo
+frames, QP 32; the standard model's I period is 64, so frame 64 is an I frame:
+
+| Stream | Decoded on ORT CPU | Decoded on TensorRT | Bytes | Decoder drift (min Y) |
+|---|---|---|---|---|
+| ORT CPU | 34.565 | 34.549 | 12,655 | 54.63 dB |
+| TensorRT | 34.624 | 34.612 | 12,565 | 55.02 dB |
+
+Steady rates: 267 fps encode and 287-312 fps decode on TensorRT against 11-14
+fps on ONNX Runtime CPU (measured while another plan build used the GPU).
+
 ## Open
 
-- Publication: dispatch `upload-engine-assets.yml` with
-  `asset_release=engine-assets-mlvc` from a ref that has this tooling.
-- Phase 2 against pinned upstream vectors; Phase 3 under the protocol.
+- Phase 2 against pinned upstream vectors (none exist for the standard
+  models); Phase 3 under the protocol.
+- MLVC-S psnr is not exported.
 - Other GPUs and TensorRT versions need their own bundles.

@@ -629,8 +629,8 @@ def write_mlvc_bundle(bundle: Path) -> None:
         "format": 2, "schema": "nvcr.engine-bundle.v2", "kind": "nvcr-tensorrt-engine-bundle",
         "model_profile_id": "mlvc", "model_profile_sha256": digests["bundle_manifest.json"],
         "target_profile_id": "rtx4070-ubuntu2404", "target_profile_sha256": "b" * 64,
-        "engine_profile_id": "s-generic", "engine_profile_sha256": "c" * 64,
-        "optimization_point": "s-generic", "shape_profile": "fixed",
+        "engine_profile_id": "s-perceptual", "engine_profile_sha256": "c" * 64,
+        "optimization_point": "s-perceptual", "shape_profile": "fixed",
         "hardware_compatibility": "exact", "workspace_mib": 1024,
         "builder_optimization_level": 3, "checksum_manifest": "engine.sha256",
         "checksum_manifest_sha256": sha256_bytes(checksums), "files": digests,
@@ -642,7 +642,7 @@ def write_mlvc_bundle(bundle: Path) -> None:
 
 
 def mlvc_archive(root: Path, *, backend: str = "mlvc") -> Path:
-    stem = "nvcr-engines-rtx4070-ubuntu2404-mlvc-s-generic"
+    stem = "nvcr-engines-rtx4070-ubuntu2404-mlvc-s-perceptual"
     write_mlvc_bundle(root / "stage" / stem / backend)
     asset = root / "stage" / stem
     rows = "".join(f"{sha256_bytes(path.read_bytes())}  ./{path.relative_to(asset).as_posix()}\n"
@@ -683,17 +683,34 @@ class MlvcArtifactTests(unittest.TestCase):
                     mlvc_archive(root, backend="dcvcrt"), root / "extract")
 
     def test_catalog_and_install_keep_dcvcrt_default(self) -> None:
-        candidate = entry("s-generic")
-        candidate.update(backend="mlvc", model_profile_id="mlvc",
-                         filename=artifacts.expected_asset_filename(
-                             "rtx4070-ubuntu2404", "mlvc", "s-generic"))
+        def mlvc_entry(profile: str) -> dict[str, object]:
+            item = entry(profile)
+            item.update(backend="mlvc", model_profile_id="mlvc",
+                        filename=artifacts.expected_asset_filename(
+                            "rtx4070-ubuntu2404", "mlvc", profile))
+            return item
+
+        candidate = mlvc_entry("s-perceptual")
         self.assertEqual(artifacts.validate_catalog(
             {"schema": artifacts.CATALOG_SCHEMA, "assets": [candidate]})[0]["profile"],
-            "s-generic")
-        self.assertEqual(len(catalog_helper.merge_catalog([], [candidate])), 1)
+            "s-perceptual")
+        with self.assertRaisesRegex(SystemExit, "all registered profiles"):
+            catalog_helper.merge_catalog([], [candidate])
+        complete = [mlvc_entry(profile) for profile in artifacts.BACKEND_PROFILES["mlvc"]]
+        self.assertEqual(len(catalog_helper.merge_catalog([], complete)), len(complete))
         dcvcrt = [entry(profile) for profile in artifacts.ENGINE_PROFILES]
         with self.assertRaisesRegex(SystemExit, "one backend"):
-            catalog_helper.merge_catalog(dcvcrt, [candidate])
+            catalog_helper.merge_catalog(dcvcrt, complete)
+        # Readers skip profiles they do not register (retired or newer); writers do not.
+        retired = mlvc_entry("s-perceptual")
+        retired.update(profile="s-generic", filename=artifacts.expected_asset_filename(
+            "rtx4070-ubuntu2404", "mlvc", "s-generic"))
+        catalog = {"schema": artifacts.CATALOG_SCHEMA, "assets": [retired, candidate]}
+        self.assertEqual(
+            [item["profile"] for item in artifacts.validate_catalog(catalog, skip_unknown=True)],
+            ["s-perceptual"])
+        with self.assertRaises(artifacts.ValidationError):
+            artifacts.validate_catalog(catalog)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             archive = mlvc_archive(root)
@@ -706,10 +723,10 @@ class MlvcArtifactTests(unittest.TestCase):
                     [candidate], {candidate["filename"]: "https://example.invalid/mlvc"},
                     identity(), backend="mlvc", requested_profiles=[],
                     engine_root=root / "engines")
-        self.assertEqual(installed, ["s-generic"])
+        self.assertEqual(installed, ["s-perceptual"])
         links = [call.args[1].relative_to(call.args[1].parents[2]).as_posix()
                  for call in link.call_args_list]
-        self.assertEqual(links, ["profiles/mlvc/s-generic"])
+        self.assertEqual(links, ["profiles/mlvc/s-perceptual"])
 
 
 if __name__ == "__main__":

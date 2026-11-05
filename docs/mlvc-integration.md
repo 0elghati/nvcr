@@ -148,18 +148,38 @@ plus one FP16 plan per canvas and part (`mlvc_encoder_<W>x<H>.plan`,
 target-local. Install a published bundle instead of building one:
 
 ```bash
-nvcr-artifacts install --backend mlvc --profile s-generic
+nvcr-artifacts install --backend mlvc --profile perceptual
 nvcr encode -i input.yuv -o output.nvcr -s 640x360 -r 30 --qp 32 \
   --codec mlvc --provider tensorrt \
-  --engine-dir "$NVCR_ENGINE_ROOT/profiles/mlvc/s-generic"
+  --engine-dir "$NVCR_ENGINE_ROOT/profiles/mlvc/perceptual"
 ```
 
-MLVC bundles live on their own rolling release, `engine-assets-mlvc`, so
-installers released before MLVC never see them. Profile `s-generic` is the
-MLVC-S generic bundle with all four canvases; installation never changes
-`profiles/default`, which stays DCVC-RT's.
+A profile is one MLVC model and its weights, each a generic ONNX export with
+all four canvases:
 
-To build a bundle for another GPU, extract the generic bundle and run, inside
+| Profile | Model | Weights | Source of the ONNX bundle |
+|---|---|---|---|
+| `s-perceptual` | MLVC-S (5.4M parameters) | perceptual | libmlvc's published `onnx-generic-v0.1` bundle |
+| `perceptual` | MLVC (18.3M parameters) | perceptual | exported from `mlvc-perceptual-v1.ckpt` |
+| `psnr` | MLVC (18.3M parameters) | psnr | exported from `mlvc-psnr-v1.ckpt` |
+
+Without `--profile`, the installer installs all three. A stream records its
+model in every access unit, so it decodes only with the profile that encoded
+it. MLVC bundles live on their own rolling release, `engine-assets-mlvc`, so
+installers released before MLVC never see them; installation never changes
+`profiles/default`, which stays DCVC-RT's. The first published profile was
+named `s-generic`; it is now `s-perceptual`, and installers skip catalog
+profiles they do not know.
+
+Only MLVC-S perceptual has a published bundle.
+`scripts/backends/mlvc/export_onnx_bundle.sh` exports the others with MLVC's own
+`convert.py` from the pinned checkout (`1425880`) and a published checkpoint,
+using an interpreter with MLVC's `uv.lock` exporter versions, CPU PyTorch 2.10.0
+and `packages/msrtc_rans` installed. Upstream validates each canvas on VCD clips;
+the script uses NVCR's datasets instead, so the metrics recorded in the bundle's
+metadata describe those clips.
+
+To build a bundle for another GPU, extract a generic bundle and run, inside
 the TensorRT toolchain container on that GPU:
 
 ```bash
@@ -262,7 +282,9 @@ upstream stream NVCR cannot encode, such as a `--bitrate` reference. Bundles, ch
   rejected with `not_implemented` until a real one has been validated.
 - No encoder rate control, no Q-index overrides, no LTR or feature-reset
   overrides beyond the bundle's own values.
-- Only MLVC-S perceptual bundles have been run. The standard MLVC model needs a
-  bundle exported from its public checkpoint.
+- Upstream-runtime parity (C10) covers MLVC-S perceptual only. The other three
+  bundles are NVCR's own exports from the public checkpoints; they run on
+  ONNX Runtime CPU and TensorRT, but no upstream reference vectors exist for
+  them.
 - TensorRT engine bundles exist only for the RTX 5060 Laptop GPU class
-  (SM 12.0, TensorRT 10.9) and the generic MLVC-S bundle.
+  (SM 12.0, TensorRT 10.9).
