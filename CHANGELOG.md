@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.0](https://github.com/0elghati/nvcr/compare/v1.3.0...v1.4.0) (2026-11-05)
+
+
+### Features
+
+* **dcvcuf:** DCVC-UF codec with native fused and TensorRT execution ([#214](https://github.com/0elghati/nvcr/issues/214)) ([163441e](https://github.com/0elghati/nvcr/commit/163441e92b3415474ae6aabd4bc47820fc55aa8b))
+* **mlvc:** run MLVC on TensorRT and publish its engine bundles ([#219](https://github.com/0elghati/nvcr/issues/219)) ([f5065ad](https://github.com/0elghati/nvcr/commit/f5065adb1d8c88c45d2fef77a10d4852699d1de5))
+* **mlvc:** TensorRT engine bundles for the standard MLVC models ([#220](https://github.com/0elghati/nvcr/issues/220)) ([6783604](https://github.com/0elghati/nvcr/commit/67836041e3c1a3c720a6f8ec8052662c88c2d097))
+
 ## [1.3.0](https://github.com/0elghati/nvcr/compare/v1.2.0...v1.3.0) (2026-11-03)
 
 
