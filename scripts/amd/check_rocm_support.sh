@@ -28,6 +28,7 @@ nvcr_amd_check() {
     NVCR_AMD_HSA_OVERRIDE="${HSA_OVERRIDE_GFX_VERSION:-}"
 
     if [[ -r /etc/os-release ]]; then
+        # shellcheck source=/dev/null
         NVCR_AMD_OS="$(. /etc/os-release && printf '%s %s' "${NAME:-unknown}" "${VERSION:-unknown}")"
     fi
     NVCR_AMD_KERNEL="$(uname -r 2>/dev/null)"
