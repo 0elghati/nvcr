@@ -1,5 +1,6 @@
 #include "native_session.hpp"
 
+#include "diagnostics.hpp"
 #include "dmci_proxy.h"
 #include "dmc_hts_proxy.h"
 
@@ -8,6 +9,7 @@
 #include <c10/cuda/CUDAGuard.h>
 #include <torch/script.h>
 
+#include <array>
 #include <atomic>
 #include <filesystem>
 #include <limits>
@@ -20,6 +22,7 @@ namespace nvcr::dcvcuf {
 namespace {
 
 using Weights = std::map<std::string, at::Tensor>;
+namespace diag = diagnostics;
 constexpr std::string_view weight_escape = "__nvcr_dot__";
 
 Error failure(ErrorCode code, std::string message) {
@@ -201,10 +204,23 @@ public:
         return protect<Encoded>([&] {
             const auto padding_r = (16 - static_cast<int>(frame.width()) % 16) % 16;
             const auto padding_b = (16 - static_cast<int>(frame.height()) % 16) % 16;
+            observe_step(diag::Direction::encoder, diag::StepKind::intra, false);
             auto result = image_encoder_->compress(
                 frames_to_tensor(std::span(&frame, 1), device_), static_cast<int>(qp),
                 padding_b, padding_r);
             video_encoder_->add_ref_feature_from_frame(result.reconstruction, true);
+            if (auto* sink = diag::observer()) {
+                const std::array timestamps{frame.timestamp()};
+                sink->frames(diag::Direction::encoder,
+                             tensors_to_frames(std::span(&result.reconstruction, 1), frame.width(),
+                                               frame.height(), timestamps));
+                // Sizes the head used for encoder-side group reconstructions.
+                if (!probe_) {
+                    probe_ = std::make_unique<DMCHTSProxy>();
+                    probe_->set_param(video_weights_, 0.0F);
+                }
+                probe_->add_ref_feature_from_frame(result.reconstruction, false);
+            }
             return Encoded{
                 bytes(result.bit_stream), static_cast<std::uint8_t>(result.entropy_coder_parallel)};
         });
@@ -215,13 +231,17 @@ public:
         std::uint32_t qp, std::uint32_t width, std::uint32_t height,
         Timestamp timestamp) override {
         return protect<Frame>([&] {
+            observe_step(diag::Direction::decoder, diag::StepKind::intra, false);
             auto reconstruction = image_decoder_->decompress(
                 reinterpret_cast<const std::uint8_t*>(bitstream.data()),
                 static_cast<int>(bitstream.size()), static_cast<int>(qp),
                 static_cast<int>(height), static_cast<int>(width), entropy_parallel);
             video_decoder_->add_ref_feature_from_frame(reconstruction, false);
-            return std::move(tensors_to_frames(
+            auto output = std::move(tensors_to_frames(
                 std::span(&reconstruction, 1), width, height, std::span(&timestamp, 1)).front());
+            if (auto* sink = diag::observer())
+                sink->frames(diag::Direction::decoder, std::span(&output, 1));
+            return output;
         });
     }
 
@@ -234,8 +254,27 @@ public:
             auto group = frames_to_tensor(frames, device_);
             const auto padding_r = (16 - static_cast<int>(frames.front().width()) % 16) % 16;
             const auto padding_b = (16 - static_cast<int>(frames.front().height()) % 16) % 16;
+            auto* sink = diag::observer();
+            if (sink != nullptr) {
+                sink->step(diag::Direction::encoder, diag::StepKind::predicted, reset_feature_memory);
+                observe(diag::Direction::encoder, "memory", video_encoder_->nvcr_memory());
+                observe(diag::Direction::encoder, "context", video_encoder_->nvcr_context());
+            }
             auto result = video_encoder_->compress(
                 group, static_cast<int>(qp), reset_feature_memory, padding_b, padding_r);
+            if (sink != nullptr) {
+                observe(diag::Direction::encoder, "y_hat", video_encoder_->nvcr_y_hat());
+                const auto feature = video_encoder_->nvcr_feature().clone();
+                observe(diag::Direction::encoder, "feature", feature);
+                // The encoder never runs the head for a group; a separate
+                // instance runs it on a copy, leaving encoder state untouched.
+                TORCH_CHECK(probe_ != nullptr, "DCVC-UF diagnostics need an intra frame first");
+                const auto reconstructed = probe_->nvcr_reconstruct(feature);
+                const std::vector<Timestamp> timestamps(frames.size());
+                sink->frames(diag::Direction::encoder,
+                             tensors_to_frames(reconstructed, frames.front().width(),
+                                               frames.front().height(), timestamps));
+            }
             return Encoded{
                 bytes(result.bit_stream), static_cast<std::uint8_t>(result.entropy_coder_parallel)};
         });
@@ -249,6 +288,9 @@ public:
             return failure(ErrorCode::invalid_argument,
                            "DCVC-UF predicted timestamp count must be in [1, 8]");
         return protect<std::vector<Frame>>([&] {
+            // decompress is one upstream call, so a failed group records only
+            // its step here; its tensors are reported after it returns.
+            observe_step(diag::Direction::decoder, diag::StepKind::predicted, reset_feature_memory);
             auto decoded = video_decoder_->decompress(
                 reinterpret_cast<const std::uint8_t*>(bitstream.data()),
                 static_cast<int>(bitstream.size()), static_cast<int>(qp),
@@ -256,7 +298,15 @@ public:
                 reset_feature_memory);
             if (decoded.size() != 8)
                 throw std::runtime_error("DCVC-UF HT-S decoder did not return eight frames");
-            return tensors_to_frames(decoded, width, height, timestamps);
+            auto output = tensors_to_frames(decoded, width, height, timestamps);
+            if (auto* sink = diag::observer()) {
+                observe(diag::Direction::decoder, "memory", video_decoder_->nvcr_memory());
+                observe(diag::Direction::decoder, "context", video_decoder_->nvcr_context());
+                observe(diag::Direction::decoder, "y_hat", video_decoder_->nvcr_y_hat());
+                observe(diag::Direction::decoder, "feature", video_decoder_->nvcr_feature());
+                sink->frames(diag::Direction::decoder, output);
+            }
+            return output;
         });
     }
 
@@ -303,6 +353,20 @@ private:
         }
     }
 
+    // C13 G1 diagnostics (diagnostics.hpp); called only with an observer installed.
+    static void observe_step(diag::Direction direction, diag::StepKind kind, bool reset) {
+        if (auto* sink = diag::observer()) sink->step(direction, kind, reset);
+    }
+    static void observe(diag::Direction direction, const char* name, const at::Tensor& value) {
+        auto* sink = diag::observer();
+        if (sink == nullptr) return;
+        const auto host = value.cpu().contiguous();
+        const auto sizes = host.sizes();
+        sink->tensor(direction, name, std::span<const std::int64_t>(sizes.data(), sizes.size()),
+                     std::span(reinterpret_cast<const std::byte*>(host.const_data_ptr()),
+                               host.nbytes()));
+    }
+
     void rebuild_encoder() {
         image_encoder_ = std::make_unique<DMCIProxy>();
         image_encoder_->set_param(image_weights_, 0.0F);
@@ -325,6 +389,7 @@ private:
     std::unique_ptr<DMCIProxy> image_decoder_;
     std::unique_ptr<DMCHTSProxy> video_encoder_;
     std::unique_ptr<DMCHTSProxy> video_decoder_;
+    std::unique_ptr<DMCHTSProxy> probe_;  // diagnostics only
     static std::atomic<std::uint64_t> next_owner_;
 };
 

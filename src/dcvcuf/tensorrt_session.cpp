@@ -5,6 +5,7 @@
 // ported upstream glue kernels run between them, and UF rANS runs on the host.
 #include "tensorrt_session.hpp"
 
+#include "diagnostics.hpp"
 #include "backend/tensorrt/glue.hpp"
 #include "entropy/uf_rans_codec.hpp"
 #include "../provider/tensorrt/session.hpp"
@@ -26,6 +27,7 @@ namespace nvcr::dcvcuf {
 namespace {
 
 namespace trt = nvcr::tensorrt;
+namespace diag = diagnostics;
 namespace session_api = provider::experimental;
 using Half = std::uint16_t;
 using trt::DeviceTensor;
@@ -402,6 +404,65 @@ private:
                                 PixelFormat::yuv420p8, host, timestamp);
     }
 
+    // C13 G1 diagnostics (diagnostics.hpp). No-ops unless a test installed an observer.
+    Result<void> observe(diag::Direction direction, const char* name, const DeviceTensor& value) {
+        auto* sink = diag::observer();
+        if (sink == nullptr) return {};
+        std::array<std::int64_t, nvinfer1::Dims::MAX_DIMS> shape{};
+        std::size_t elements = 1;
+        for (int axis = 0; axis < value.shape.nbDims; ++axis) {
+            shape[static_cast<std::size_t>(axis)] = value.shape.d[axis];
+            elements *= static_cast<std::size_t>(value.shape.d[axis]);
+        }
+        const auto bytes = std::min(elements * sizeof(Half), value.storage.bytes);
+        std::vector<std::byte> host(bytes);
+        auto copied = trt::copy_async(host.data(), value.storage.data, bytes, cudaMemcpyDeviceToHost,
+                                      stream(), "DCVC-UF diagnostic download");
+        if (!copied) return copied.error();
+        auto synchronized = trt::synchronize_stream(stream(), "DCVC-UF diagnostic download");
+        if (!synchronized) return synchronized.error();
+        sink->tensor(direction, name,
+                     std::span<const std::int64_t>(shape.data(),
+                                                   static_cast<std::size_t>(value.shape.nbDims)),
+                     host);
+        return {};
+    }
+
+    // The encoder never runs the reconstruction head for an HT-S group; this
+    // runs the decoder's head on the encoder's feature without touching
+    // encoder state, so the stream is unchanged.
+    Result<void> observe_encoder_group(const DeviceTensor& feature) {
+        auto* sink = diag::observer();
+        if (sink == nullptr) return {};
+        auto heads = run("p_reconstruction", {{"feature", &feature}});
+        if (!heads) return heads.error();
+        std::vector<Frame> frames;
+        for (std::size_t index = 0; index < 8; ++index) {
+            auto frame = shuffle(heads.value().at("frame_" + std::to_string(index) + "_pre_shuffle"));
+            if (!frame) return frame.error();
+            auto downloaded = download_frame(frame.value(), Timestamp{});
+            if (!downloaded) return downloaded.error();
+            frames.push_back(std::move(downloaded.value()));
+        }
+        sink->frames(diag::Direction::encoder, frames);
+        return {};
+    }
+
+    Result<void> observe_all(
+        diag::Direction direction,
+        std::initializer_list<std::pair<const char*, const DeviceTensor*>> values) {
+        if (diag::observer() == nullptr) return {};
+        for (const auto& [name, value] : values) {
+            auto observed = observe(direction, name, *value);
+            if (!observed) return observed;
+        }
+        return {};
+    }
+
+    static void observe_step(diag::Direction direction, diag::StepKind kind, bool reset) {
+        if (auto* sink = diag::observer()) sink->step(direction, kind, reset);
+    }
+
     // pre-shuffle 192 channels at 1/8 -> clamped 3-channel frame (upstream pixel_shuffle_8).
     Result<DeviceTensor> shuffle(const DeviceTensor& pre) {
         auto frame = tensor("frame", 3, h16_ * 16, w16_ * 16);
@@ -645,6 +706,7 @@ private:
 
     // dmci_proxy.cpp compress
     Result<Encoded> encode_i(const Frame& frame, std::uint32_t qp) {
+        observe_step(diag::Direction::encoder, diag::StepKind::intra, false);
         auto prepared = prepare(static_cast<int>(frame.width()), static_cast<int>(frame.height()));
         if (!prepared) return prepared.error();
         auto x = upload_frames(std::span(&frame, 1), glue::Layout::nchw);
@@ -670,6 +732,10 @@ private:
         auto params = hyper_params_i(z_hat.value());
         if (!params) return params.error();
         auto& [cparams, common] = params.value();
+        auto observed = observe_all(diag::Direction::encoder,
+                                    {{"z_hat", &z_hat.value()}, {"hyper_params", &cparams},
+                                     {"common", &common}});
+        if (!observed) return observed.error();
 
         auto q_y_enc = q_row(image_, "q_scale_y_enc", qp, "q");
         auto q_y_dec = q_row(image_, "q_scale_y_dec", qp, "q");
@@ -701,6 +767,12 @@ private:
                 const auto& sm = prior->at("scales_means");
                 scales = view(sm, 0, ch_y);
                 means = view(sm, ch_y, ch_y);
+                const auto suffix = std::to_string(step);
+                auto seen = observe_all(
+                    diag::Direction::encoder,
+                    {{("spatial_prior_" + suffix + "_input").c_str(), &so_far.value()},
+                     {("spatial_prior_" + suffix + "_output").c_str(), &sm}});
+                if (!seen) return seen.error();
             }
             auto processed = check(
                 glue::process_with_mask(view(y_q.value()), view(y_hat.value()), view(s_hat.value()),
@@ -734,6 +806,8 @@ private:
             auto accumulated = check(status, "y_hat accumulation");
             if (!accumulated) return accumulated.error();
         }
+        auto observed_y = observe_all(diag::Direction::encoder, {{"y_hat", &y_hat.value()}});
+        if (!observed_y) return observed_y.error();
         Encoded output;
         auto bitstream = entropy_encode(true, steps, z_int8.value(), qp, output.entropy_parallel);
         if (!bitstream) return bitstream.error();
@@ -743,6 +817,11 @@ private:
         if (!reconstructed) return reconstructed.error();
         auto referenced = reference_from_frame(encoder_, reconstructed.value(), true);
         if (!referenced) return referenced.error();
+        if (auto* sink = diag::observer()) {
+            auto encoder_frame = download_frame(reconstructed.value(), frame.timestamp());
+            if (!encoder_frame) return encoder_frame.error();
+            sink->frames(diag::Direction::encoder, std::span(&encoder_frame.value(), 1));
+        }
         return output;
     }
 
@@ -769,6 +848,7 @@ private:
     Result<Frame> decode_i(std::span<const std::byte> bitstream, std::uint8_t parallel,
                            std::uint32_t qp, std::uint32_t frame_width, std::uint32_t frame_height,
                            Timestamp timestamp) {
+        observe_step(diag::Direction::decoder, diag::StepKind::intra, false);
         if (parallel == 0 || parallel > max_entropy_parallel)
             return failure(ErrorCode::malformed_bitstream, "invalid DCVC-UF entropy parallelism");
         auto prepared = prepare(static_cast<int>(frame_width), static_cast<int>(frame_height));
@@ -779,6 +859,10 @@ private:
         auto params = hyper_params_i(z_hat.value());
         if (!params) return params.error();
         auto& [cparams, common] = params.value();
+        auto observed = observe_all(diag::Direction::decoder,
+                                    {{"z_hat", &z_hat.value()}, {"hyper_params", &cparams},
+                                     {"common", &common}});
+        if (!observed) return observed.error();
         auto q_y_dec = q_row(image_, "q_scale_y_dec", qp, "q");
         auto so_far = tensor("y_hat", ch_y, h16_, w16_);
         auto y_hat = tensor("y_hat", ch_y, h16_, w16_);
@@ -798,6 +882,12 @@ private:
                 const auto& sm = prior->at("scales_means");
                 scales = view(sm, 0, ch_y);
                 means = view(sm, ch_y, ch_y);
+                const auto suffix = std::to_string(step);
+                auto seen = observe_all(
+                    diag::Direction::decoder,
+                    {{("spatial_prior_" + suffix + "_input").c_str(), &so_far.value()},
+                     {("spatial_prior_" + suffix + "_output").c_str(), &sm}});
+                if (!seen) return seen.error();
             }
             auto read = check(glue::single_part_for_reading_4x(view(scales_r.value()), in(scales),
                                                                mask_view(step), stream()),
@@ -820,11 +910,18 @@ private:
             auto restored = check(status, "restore_y_4x");
             if (!restored) return restored.error();
         }
+        auto observed_y = observe_all(diag::Direction::decoder, {{"y_hat", &y_hat.value()}});
+        if (!observed_y) return observed_y.error();
         auto frame = decode_i_frame(y_hat.value(), qp);
         if (!frame) return frame.error();
         auto referenced = reference_from_frame(decoder_, frame.value(), false);
         if (!referenced) return referenced.error();
-        return download_frame(frame.value(), timestamp);
+        auto output = download_frame(frame.value(), timestamp);
+        if (output) {
+            if (auto* sink = diag::observer())
+                sink->frames(diag::Direction::decoder, std::span(&output.value(), 1));
+        }
+        return output;
     }
 
     // p_hyper_decoder + crop + p_prior: (params [q_dec | scales | means], common).
@@ -847,6 +944,12 @@ private:
         auto& reference = encoder_;
         if (!reference.context)
             return failure(ErrorCode::invalid_state, "HT-S group before an intra frame");
+        observe_step(diag::Direction::encoder, diag::StepKind::predicted, reset_memory);
+        for (const auto& [name, value] : {std::pair{"memory", &*reference.memory},
+                                          std::pair{"context", &*reference.context}}) {
+            auto observed = observe(diag::Direction::encoder, name, *value);
+            if (!observed) return observed.error();
+        }
         auto x = upload_frames(frames, glue::Layout::nhwc);
         auto q_encoder = q_row(video_, "q_encoder", qp, "q_encoder");
         auto q_feature = q_row(video_, "q_feature", qp, "q_feature");
@@ -941,6 +1044,15 @@ private:
         if (!adapted) return adapted.error();
         auto extracted = extract(reference);
         if (!extracted) return extracted.error();
+        if (diag::observer() != nullptr) {
+            for (const auto& [name, value] : {std::pair{"y_hat", &y_hat.value()},
+                                              std::pair{"feature", &*reference.feature_p}}) {
+                auto observed = observe(diag::Direction::encoder, name, *value);
+                if (!observed) return observed.error();
+            }
+            auto observed = observe_encoder_group(*reference.feature_p);
+            if (!observed) return observed.error();
+        }
         return output;
     }
 
@@ -952,12 +1064,16 @@ private:
         auto& reference = decoder_;
         if (!reference.feature_i)
             return failure(ErrorCode::malformed_bitstream, "HT-S group before an intra frame");
+        observe_step(diag::Direction::decoder, diag::StepKind::predicted, reset_memory);
         if (parallel == 0 || parallel > max_entropy_parallel)
             return failure(ErrorCode::malformed_bitstream, "invalid DCVC-UF entropy parallelism");
         if (static_cast<int>(frame_width) != width_ || static_cast<int>(frame_height) != height_)
             return failure(ErrorCode::malformed_bitstream, "HT-S group changes the frame size");
         auto adapted = adapt(reference);
         if (!adapted) return adapted.error();
+        // Recorded as computed, so a failed group still localizes (diagnostics).
+        auto observed = observe_all(diag::Direction::decoder, {{"memory", &*reference.memory}});
+        if (!observed) return observed.error();
         auto q_feature = q_row(video_, "q_feature", qp, "q_feature");
         auto q_decoder = q_row(video_, "q_decoder", qp, "q_decoder");
         if (!q_feature || !q_decoder) return failure(ErrorCode::resource_exhausted, "DCVC-UF q rows");
@@ -974,6 +1090,8 @@ private:
         if (!y_q) return y_q.error();
         auto extracted = extract(reference);
         if (!extracted) return extracted.error();
+        observed = observe_all(diag::Direction::decoder, {{"context", &*reference.context}});
+        if (!observed) return observed.error();
 
         auto y_hat = tensor("y_hat", ch_y, h16_, w16_);
         if (!y_hat) return y_hat.error();
@@ -997,11 +1115,15 @@ private:
             auto restored = check(status, "restore_y");
             if (!restored) return restored.error();
         }
+        observed = observe_all(diag::Direction::decoder, {{"y_hat", &y_hat.value()}});
+        if (!observed) return observed.error();
         auto decoded = run("p_decoder", {{"y_hat", &y_hat.value()},
                                          {"context", &*reference.context},
                                          {"q_decoder", &q_decoder.value()}});
         if (!decoded) return decoded.error();
         reference.feature_p = decoded.value().at("feature");
+        observed = observe_all(diag::Direction::decoder, {{"feature", &*reference.feature_p}});
+        if (!observed) return observed.error();
         auto heads = run("p_reconstruction", {{"feature", &*reference.feature_p}});
         if (!heads) return heads.error();
         auto reset = run("p_reset", {{"feature", &*reference.feature_p}});
@@ -1017,6 +1139,7 @@ private:
             if (!downloaded) return downloaded.error();
             output.push_back(std::move(downloaded.value()));
         }
+        if (auto* sink = diag::observer()) sink->frames(diag::Direction::decoder, output);
         return output;
     }
 

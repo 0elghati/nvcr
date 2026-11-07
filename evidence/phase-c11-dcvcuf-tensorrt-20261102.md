@@ -428,9 +428,9 @@ The native path's streams are byte-identical to upstream's (C7), yet its
 with quality: upstream measures its own reconstruction, not the rounded 8-bit
 frames. Both NVCR paths are measured the same way, so the gate is unaffected.
 
-Not run: G1 as an encoder-vs-decoder reconstruction comparison (the CLI does
-not expose encoder reconstructions; repeatability and stable quality through
-resets were checked instead) and G4 (upstream decoding NVCR streams).
+G1 was run on 2026-11-07 under roadmap C13; see
+[G1 below](#g1-encoder-internal-reconstruction-equals-decoder-output--2026-11-07).
+G4 (upstream decoding NVCR streams) remains open in C13.
 
 ### Regression
 
@@ -441,3 +441,225 @@ performance and low-memory modes, and 100-frame BasketballDrive 1080p at
 streams match their recorded hashes. The feasibility branch had emptied the
 default codec, provider and model identities in `RuntimeConfiguration`; that
 public-API change is not carried, so the defaults stay as on `main`.
+
+## G1: encoder-internal reconstruction equals decoder output — 2026-11-07
+
+Run under roadmap C13 (DCVC-UF qualification), on branch
+`test/dcvcuf-encoder-recon-identity` based on `main` `676efac4`. **G1 passes
+on both paths**: 32/32 cases (2 paths × 4 sequences × 4 QPs, full lengths),
+15,520 frames and 7,936 state tensors compared byte for byte, no difference.
+
+### What is compared
+
+Neither upstream's fused HT-S encoder nor NVCR's TensorRT port runs the
+reconstruction head for a predicted group: the encoder rebuilds only the
+decoder's state (`y_hat`, the decoder feature, and the memory and context used
+for the next group). Only intra frames give the encoder a reconstructed
+picture. The approved G1 definition (user, 2026-11-07) therefore compares,
+per coding step and byte for byte:
+
+| Step | Encoder | Decoder |
+|---|---|---|
+| Intra frame | reconstructed frame (YUV420P8, decoder's conversion) | decoded frame |
+| HT-S group, state | memory and context used for the group, `y_hat`, decoder feature | the same four tensors |
+| HT-S group, pixels | the decoder's reconstruction head run on a **copy** of the encoder's feature, converted to YUV420P8 | decoded frames; for a padded tail only the real frames |
+
+The TensorRT path also records the intra step's `z_hat`, hyper-decoder outputs,
+each spatial-prior step's input and output and the final `y_hat` (ten more
+tensors per sequence), used to localize failures.
+
+Mechanism, with no production CLI or public API change:
+
+- `src/dcvcuf/diagnostics.{hpp,cpp}`: a test-only, process-wide observer. With
+  no observer installed the sessions do no extra work.
+- TensorRT session: device bytes of the tensors above; encoder-side group
+  pixels from an extra `p_reconstruction` run on the encoder's feature.
+- Fused session: `materialize_native_sources.py` adds read-only accessors and a
+  reconstruction-head call to NVCR's generated copy of `DMCHTSProxy` (the
+  pinned upstream checkout is untouched). Upstream's head also updates the
+  instance's reset feature, so the encoder-side pixels come from a separate,
+  diagnostic-only `DMCHTSProxy` instance fed a clone of the encoder's feature.
+- `tests/dcvcuf_reconstruction_identity.cpp`: drives the registered `dcvc-uf`
+  codec through `nvcr::Runtime`, decodes each access unit as soon as it is
+  emitted, and compares the decoder step with the encoder step that produced
+  it. A decode error is recorded with its step and the first differing tensor
+  among those computed before the failure: the TensorRT path records each
+  tensor as it is computed; the fused path decodes a group in one upstream call,
+  so a failed fused group reports its step without tensors.
+- `scripts/backends/dcvcuf/run_reconstruction_identity.py`: runs the matrix and
+  then encodes and decodes the same input with the production CLI; the
+  harness's `.nvcr` and decoded YUV must equal the CLI's byte for byte, so the
+  hook is shown not to change coding.
+
+Two comparisons are classed separately rather than as failures. The TensorRT
+encoder's `round_z` writes −0 where the decoder rebuilds +0 from integers, so
+`z_hat` differs only in the sign of zero (one tensor per TensorRT case, 16 in
+total; values equal). Frames and HT-S state tensors have no such allowance.
+
+Negative controls (Akiyo QCIF, 17 frames, both paths): flipping one byte of the
+first encoder HT-S feature is reported at step 1, tensor `feature`; flipping
+one byte of an encoder group frame is reported at step 1, frame 2. Both runs
+exit as failures.
+
+### Environment
+
+- NVIDIA GeForce RTX 4070 (SM 8.9, 12,282 MiB, 33 MiB in use before and after
+  the run, no other workload), driver 580.178.04, Linux 7.0.0-42-generic,
+  GCC 13.3.0, CMake 3.28.3.
+- Fused: CUDA 12.6.85, PyTorch/LibTorch 2.13.0+cu126, bundle
+  `build-dcvcuf-native-cu126/artifacts/dcvcuf-cvpr2026-hts.pt`
+  (`81fe0a7d…37ab`), pinned DCVC `cbdae87a`, CUTLASS v4.4.1.
+- TensorRT: CUDA 12.8.93, TensorRT 10.9.0.34, the C11 1080p bundle
+  `build/dcvcuf-trt-bundle` (builder level 5, `engine.sha256` `ec3ae9d1…6536`).
+- Release builds `build-g1-native` and `build-g1-trt` of this branch.
+- Recipe as in G3: intra frame only at frame 0 (`--gop-size 65528`), reset
+  interval 32, skip threshold 0, CLI default timestamps (16,667 µs).
+
+### Results
+
+Every sequence ends in a partly filled group (tail of 3 or 7 frames) and passes
+through 7-18 HT-S feature-memory resets. Inputs match the hashes in
+`c8_reference_sequences.json`. ✓ means the harness file equals the CLI's.
+
+| Path | Sequence | QP | Frames | Steps (I + groups) | Memory resets | Tail | Frames compared | Tensors compared | Stream `.nvcr` (= CLI) | Decoded YUV (= CLI) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| fused | BasketballDrive | 0 | 500 | 1 + 63 | 15 | 3 | 500 | 252 | `9acb11c2…f6fd` ✓ | `d65685ad…8d5e` ✓ |
+| fused | BasketballDrive | 21 | 500 | 1 + 63 | 15 | 3 | 500 | 252 | `0d45dc7c…ae6d` ✓ | `58c6e483…468c` ✓ |
+| fused | BasketballDrive | 42 | 500 | 1 + 63 | 15 | 3 | 500 | 252 | `cf9d65e9…0b25` ✓ | `922507ca…3a5b` ✓ |
+| fused | BasketballDrive | 63 | 500 | 1 + 63 | 15 | 3 | 500 | 252 | `f4bf20a5…f1b5` ✓ | `dd4c6d9c…5fb4` ✓ |
+| fused | Kimono | 0 | 240 | 1 + 30 | 7 | 7 | 240 | 120 | `a2c244b6…f91b` ✓ | `de610d50…c1f3` ✓ |
+| fused | Kimono | 21 | 240 | 1 + 30 | 7 | 7 | 240 | 120 | `ba3f4521…7353` ✓ | `d1f07d9d…6447` ✓ |
+| fused | Kimono | 42 | 240 | 1 + 30 | 7 | 7 | 240 | 120 | `f396f9e1…44ec` ✓ | `7553d656…09d3` ✓ |
+| fused | Kimono | 63 | 240 | 1 + 30 | 7 | 7 | 240 | 120 | `f4b7dd9d…8e55` ✓ | `a469e3b5…fb38` ✓ |
+| fused | Jockey | 0 | 600 | 1 + 75 | 18 | 7 | 600 | 300 | `17d49950…4df9` ✓ | `332d877c…c2ca` ✓ |
+| fused | Jockey | 21 | 600 | 1 + 75 | 18 | 7 | 600 | 300 | `c2221ae3…eb3f` ✓ | `9f1d9b75…2339` ✓ |
+| fused | Jockey | 42 | 600 | 1 + 75 | 18 | 7 | 600 | 300 | `00e258bd…5859` ✓ | `e1e937f5…3e66` ✓ |
+| fused | Jockey | 63 | 600 | 1 + 75 | 18 | 7 | 600 | 300 | `07d656b6…a909` ✓ | `84d611e2…7fb0` ✓ |
+| fused | HoneyBee | 0 | 600 | 1 + 75 | 18 | 7 | 600 | 300 | `3420c1e9…9802` ✓ | `c571ca99…494d` ✓ |
+| fused | HoneyBee | 21 | 600 | 1 + 75 | 18 | 7 | 600 | 300 | `404b33db…4da3` ✓ | `33125649…3c73` ✓ |
+| fused | HoneyBee | 42 | 600 | 1 + 75 | 18 | 7 | 600 | 300 | `5d750fa9…3ad0` ✓ | `63323120…2322` ✓ |
+| fused | HoneyBee | 63 | 600 | 1 + 75 | 18 | 7 | 600 | 300 | `1ef93157…6453` ✓ | `1edda239…5d69` ✓ |
+| TensorRT | BasketballDrive | 0 | 500 | 1 + 63 | 15 | 3 | 500 | 262 | `599cae26…3fb0` ✓ | `3c8f3595…ec88` ✓ |
+| TensorRT | BasketballDrive | 21 | 500 | 1 + 63 | 15 | 3 | 500 | 262 | `df34aec7…f58c` ✓ | `5102470a…260b` ✓ |
+| TensorRT | BasketballDrive | 42 | 500 | 1 + 63 | 15 | 3 | 500 | 262 | `49b84b4f…a689` ✓ | `fd111051…3890` ✓ |
+| TensorRT | BasketballDrive | 63 | 500 | 1 + 63 | 15 | 3 | 500 | 262 | `90d67790…e5aa` ✓ | `33c21d14…637b` ✓ |
+| TensorRT | Kimono | 0 | 240 | 1 + 30 | 7 | 7 | 240 | 130 | `f16e3bd4…d339` ✓ | `a743bdf8…6be5` ✓ |
+| TensorRT | Kimono | 21 | 240 | 1 + 30 | 7 | 7 | 240 | 130 | `8f2d4080…d1f6` ✓ | `72516e3b…2a72` ✓ |
+| TensorRT | Kimono | 42 | 240 | 1 + 30 | 7 | 7 | 240 | 130 | `925fe984…79f2` ✓ | `dfdb8d58…14bf` ✓ |
+| TensorRT | Kimono | 63 | 240 | 1 + 30 | 7 | 7 | 240 | 130 | `558cb6df…c613` ✓ | `b94f08a6…669d` ✓ |
+| TensorRT | Jockey | 0 | 600 | 1 + 75 | 18 | 7 | 600 | 310 | `5802424c…622c` ✓ | `be281a79…3848` ✓ |
+| TensorRT | Jockey | 21 | 600 | 1 + 75 | 18 | 7 | 600 | 310 | `01e870ca…3ede` ✓ | `a07f5f36…b688` ✓ |
+| TensorRT | Jockey | 42 | 600 | 1 + 75 | 18 | 7 | 600 | 310 | `f5165325…ba81` ✓ | `fe6b7367…26f5` ✓ |
+| TensorRT | Jockey | 63 | 600 | 1 + 75 | 18 | 7 | 600 | 310 | `cf501f71…0114` ✓ | `6ab28600…96e8` ✓ |
+| TensorRT | HoneyBee | 0 | 600 | 1 + 75 | 18 | 7 | 600 | 310 | `ff09449e…0fb6` ✓ | `feeab6b5…f1f0` ✓ |
+| TensorRT | HoneyBee | 21 | 600 | 1 + 75 | 18 | 7 | 600 | 310 | `ba66c89a…512c` ✓ | `4a26e723…855a` ✓ |
+| TensorRT | HoneyBee | 42 | 600 | 1 + 75 | 18 | 7 | 600 | 310 | `ab64ba83…07e8` ✓ | `a08d7a6a…bb97` ✓ |
+| TensorRT | HoneyBee | 63 | 600 | 1 + 75 | 18 | 7 | 600 | 310 | `6bc029bd…d744` ✓ | `deaf12c6…c50a` ✓ |
+
+The HoneyBee QP 63 streams of both paths are also byte-identical to the
+retained G3 streams of 2026-11-03 (`build/dcvcuf-c11-gates-20261103/`).
+
+### Reset and drain with a partly filled group (#194)
+
+`nvcr_dcvcuf_reconstruction_identity partial-group` on Akiyo QCIF
+(`e1efee0e…9108`), QP 32. Pass on both paths; the TensorRT path uses the
+`build/dcvcuf-trt-bundle-256` bundle (`engine.sha256` `8009e965…17b3`) because
+of the QCIF finding below. It is also the `nvcr_dcvcuf_partial_group_lifecycle`
+CTest case when `NVCR_DCVCUF_TEST_BUNDLE` and `NVCR_DCVCUF_TEST_QCIF` are set.
+
+| Check | Fused | TensorRT |
+|---|---|---|
+| Drain: intra frame + 5 frames, flush. Two access units; exactly the 5 real frames with their timestamps; G1 identity on both steps | Pass | Pass |
+| Encoder reset with 5 frames pending (different content), then 17 frames: no output after reset; stream equals a fresh session's | Pass | Pass |
+| Decoder reset with 9 decoded frames queued: no output after reset; the next stream decodes to the fresh decoder's 17 frames | Pass | Pass |
+| Encoder reset after a flushed partial group, then reuse: stream equals a fresh session's | Pass | Pass |
+
+### Finding outside the G1 matrix: TensorRT 1080p bundle at QCIF
+
+The G1 matrix is 1080p. On smoke runs, Akiyo QCIF with the 1080p bundle does
+not decode: `dcvcuf.rans: malformed bitstream: UF entropy stream ended early`
+at step 0 (the intra frame), with the production CLI as well as the harness,
+and with a build of the branch before this change. The decoder fails cleanly
+with an error (no frames are returned for the unit); whether any wrong frames
+reach a file in other cases is a C13 cross-decode item.
+
+- Localization (harness): `z_hat` (sign of zero only), hyper-decoder `hyper_params`
+  and `common`, and the accumulated `y_hat` input of spatial-prior step 1 are
+  identical between encoder and decoder; the output of `i_spatial_prior_1`
+  differs in 3,688 of 50,688 elements (max 0.0156) in one run and 6,656 in
+  another. The scales then select different entropy tables.
+- Run-to-run: encoding one intra frame three times gives three different
+  streams. `compute-sanitizer --tool initcheck` (CUDA 12.6) reports 0 errors.
+- Stage level (`nvcr_tensorrt_stage_runner`, fixed random FP16 inputs
+  `4d08d9fa…981d`/`dfae1837…0c3a`, 5 runs in each of 2 processes):
+  `i_spatial_prior_1.plan` of the 1080p bundle (`5dd49524…4773`) gives 9
+  distinct outputs out of 10 at latent 9x11 (max 0.047), and one output at
+  16x16 and 68x120 (1080p). The 256 bundle's plan (`451afe18…7227`) gives one
+  output at 9x11 and 16x16.
+- Both bundles were built at builder optimization level 5; they differ in the
+  profile (`frame_max` 1088x1920 against 256x256). The TensorRT tactic chosen
+  for that stage in the 1080p profile is nondeterministic at that shape; the
+  tactic itself was not identified.
+
+Not fixed here. It bears on C13's cross-decode item (Akiyo QCIF on TensorRT)
+and on the configurable profile in C13's 4K item. Remedies to choose between:
+per-resolution profiles, a determinism gate per stage and shape at bundle
+build, or restricting tactics for the affected stages.
+
+### Regression
+
+Origin/main `676efac4` against this branch, both Release with TensorRT and
+ONNX Runtime 1.26.0 (`build-reg-main`, `build-reg-branch`), same inputs and
+bundles; stream and decoded-YUV SHA-256:
+
+| Case | `main` = branch |
+|---|---|
+| DCVC-RT TensorRT, Akiyo QCIF, 65 frames, GOP 8, QP 32, installed profile | `.nvcr` `74fc3cc5…3b56`, YUV `10e02e46…3008` (= B7 reconstruction) |
+| DCVC-RT TensorRT, BasketballDrive 1080p, 100 frames, QP 32, `engines-rtx4070-exact-20260805/1080p` | `.nvcr` `6dc0dfbb…87ab`, YUV `c82a6734…22fa` |
+| DCVC-RT ONNX Runtime CPU, Akiyo QCIF, 17 frames, GOP 8, `build/models/dcvcrt-qcif` | `.nvcr` `4b9442e2…b4bb`, YUV `c15808e9…c7e9` |
+| MLVC ONNX Runtime CPU, Akiyo QCIF, 17 frames, `mlvc-bundles/generic` | `.nvcr` `296ecede…280d`, YUV `6577badf…5d57` |
+| MLVC TensorRT, Akiyo QCIF, 17 frames, SM 8.9 MLVC bundle | `.nvcr` `1b3bfd0a…bf01`, YUV `9239b960…fb10` |
+| DCVC-UF TensorRT, BasketballDrive 1080p, 33 frames, QP 32 | `.nvcr` `f548f2be…7e3e`, YUV `01a6bba0…541c` |
+| DCVC-UF fused, Akiyo QCIF, 9 frames, QP 32, GOP 32 (C7 CLI vector) | `.nvcr` `39da424d…f7bb` (1,450 bytes), YUV `aee81727…8352`: equal to the C7 record |
+
+CTest: `build-g1-trt` 31/31 and `build-g1-native` 30/30, including
+`nvcr_dcvcuf_architecture_boundary` and the new lifecycle case.
+
+The regression cases and CTest were repeated on the final build after the
+final matrix run; all hashes above are unchanged. No timing is reported.
+
+### Retained local outputs
+
+`build-g1-runs/g1-20261107-final/` in the worktree (ignored), run
+20:53-21:15 UTC on the committed code with the GPU otherwise idle:
+`cases.jsonl` (`a1a0c524…df46`), `lifecycle.jsonl` (`1cdf678f…80f9`),
+`summary.json` (`ea21a42e…8314`), per-case reports, both `.nvcr` streams per
+case, and `commands.log`. Decoded YUV files were hashed and deleted. An earlier
+run (`build-g1-runs/g1-20261107/`, before review fixes that only change when
+decoder tensors are recorded and how the driver handles an empty selection)
+gave the same 32 stream and YUV hashes and the same counts.
+
+### Reproduction
+
+```sh
+python3 scripts/backends/dcvcuf/run_reconstruction_identity.py \
+  --harness-native build-g1-native/tests/nvcr_dcvcuf_reconstruction_identity \
+  --cli-native build-g1-native/cli/nvcr \
+  --native-bundle <dcvcuf-cvpr2026-hts.pt> \
+  --harness-tensorrt build-g1-trt/tests/nvcr_dcvcuf_reconstruction_identity \
+  --cli-tensorrt build-g1-trt/cli/nvcr \
+  --tensorrt-bundle <1080p stage bundle> \
+  --dataset-root <datasets> \
+  --lifecycle-qcif <akiyo_qcif.yuv> --lifecycle-tensorrt-bundle <256 stage bundle> \
+  --output-dir <new directory>
+```
+
+### Not verified
+
+- G1 on any GPU other than the RTX 4070, and on resolutions other than 1080p
+  and QCIF.
+- G1 at QCIF with the 1080p TensorRT bundle (fails to decode; finding above).
+- The upstream README recipe (reset 128, skip 0.15); NVCR cannot express it yet.
+- G2 (format) and G4 (upstream decoding NVCR TensorRT streams): open in C13.
+- Run-to-run determinism of every TensorRT stage at every shape; only
+  `i_spatial_prior_1` was swept, at three shapes.

@@ -216,6 +216,7 @@ if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
     # The DCVC-UF codec runs on the TensorRT provider, the native fused path, or both.
     target_sources(nvcr PRIVATE
         src/dcvcuf/adapter.cpp
+        src/dcvcuf/diagnostics.cpp
         src/dcvcuf/registration.cpp
         $<TARGET_OBJECTS:nvcr_dcvcuf_entropy>
         $<TARGET_OBJECTS:nvcr_dcvcuf_rans>)

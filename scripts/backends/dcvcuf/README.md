@@ -57,3 +57,9 @@ verifies the committed file).
   sequences in `c8_reference_sequences.json`.
 - `capture_stage_vectors.py` and `check_tensorrt_stages.py`: per-stage tensors
   from upstream and the comparison of each TensorRT plan against them.
+- `run_reconstruction_identity.py`: C13 G1, encoder-internal reconstruction
+  against decoder output on both paths, via the test-only
+  `nvcr_dcvcuf_reconstruction_identity` harness and the observer in
+  `src/dcvcuf/diagnostics.hpp`; also checks that the harness streams equal the
+  CLI's. The harness's `partial-group` mode checks reset and drain with a
+  partly filled eight-frame group.
