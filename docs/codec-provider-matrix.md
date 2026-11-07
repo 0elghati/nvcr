@@ -1,6 +1,6 @@
 # Codec/provider integration status
 
-Reviewed 2026-11-04. This table describes implementation status in the current
+Reviewed 2026-11-07. This table describes implementation status in the current
 repository; a check means the path has been exercised, not that it is a
 production-supported combination.
 
@@ -14,8 +14,8 @@ production-supported combination.
 | MLVC | ONNX Runtime CUDA | Planned | Not validated for MLVC; listed as open in the roadmap. |
 | MLVC | ONNX Runtime QNN (Snapdragon HTP) | ✅ Experimental | Runs on Galaxy S25 with CPU fallback disabled; arm64 parity against an upstream reference is not established. See [C10 evidence](../evidence/phase-c10-mlvc-codec-20261102.md). |
 | MLVC | TensorRT | Planned | C12 is active; initial adapter/session wiring is in progress, with model-bundle and runtime validation still open. See [C12 in the roadmap](../ROADMAP.md#active-v2-work). |
-| DCVC-UF | Fused CUDA (`dcvcuf-upstream-cuda`) | ✅ Experimental | Opt-in native path; see [C7 evidence](../evidence/phase-c7-dcvcuf-export-20261031.md). |
-| DCVC-UF | TensorRT | ✅ Experimental | C11's 1080p fidelity gate passes. Encoder/decoder reconstruction comparison and upstream decoding of NVCR streams remain open; measured speed is about 71% of the fused CUDA path. See [C11 evidence](../evidence/phase-c11-dcvcuf-tensorrt-20261102.md). |
+| DCVC-UF | Fused CUDA (`dcvcuf-upstream-cuda`) | ✅ Experimental | Opt-in native path; encoder-internal reconstruction equals decoder output (C13 G1). See [C7 evidence](../evidence/phase-c7-dcvcuf-export-20261031.md). |
+| DCVC-UF | TensorRT | ✅ Experimental | C11's 1080p fidelity gate passes, and encoder-internal reconstruction equals decoder output byte for byte at 1080p (C13 G1). At QCIF the 1080p engine bundle has a nondeterministic stage and its streams fail to decode; a bundle with a 256x256 profile works. Upstream decoding of NVCR streams remains open; measured speed is about 71% of the fused CUDA path. See [C11 evidence](../evidence/phase-c11-dcvcuf-tensorrt-20261102.md). |
 
 ## Status key
 

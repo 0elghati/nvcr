@@ -135,6 +135,21 @@ def materialize(reference_root, output):
         "                                          int entropy_coder_parallel,\n"
         "                                          bool reset_feature_memory);",
         video_h)
+    # Read-only views and a side-effect-free reconstruction-head call for NVCR's
+    # test-only G1 diagnostics (src/dcvcuf/diagnostics.hpp). Coding is unchanged.
+    text = replace_once(
+        text,
+        "                                          bool reset_feature_memory);\n",
+        "                                          bool reset_feature_memory);\n"
+        "    at::Tensor nvcr_y_hat() const { return m_y_hat; }\n"
+        "    at::Tensor nvcr_feature() const { return m_feature_p; }\n"
+        "    at::Tensor nvcr_memory() const { return m_memory; }\n"
+        "    at::Tensor nvcr_context() const { return m_ctx; }\n"
+        "    std::vector<at::Tensor> nvcr_reconstruct(const at::Tensor& feature)\n"
+        "    {\n"
+        "        return std::get<0>(m_recon_head.forward(feature));\n"
+        "    }\n",
+        video_h)
     video_h.write_text(text)
 
     video_cpp = output / "dmc_hts_proxy.cpp"
