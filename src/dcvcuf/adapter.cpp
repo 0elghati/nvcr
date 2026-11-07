@@ -316,6 +316,7 @@ public:
 
         const auto started = std::chrono::steady_clock::now();
         if (access_unit.value().frame_type == FrameType::intra) {
+            reference_valid_ = false;
             auto reset = provider_->reset_decoder_state();
             if (!reset) return reset.error();
             auto decoded = provider_->decode_intra(
@@ -324,7 +325,16 @@ public:
                 access_unit.value().height, payload.value().timestamps.front());
             if (!decoded) return decoded.error();
             outputs_.push_back(std::move(decoded.value()));
+            reference_valid_ = true;
         } else {
+            // A failed unit leaves the reference state undefined; decoding a
+            // later group from it could emit wrong frames.
+            if (!reference_valid_)
+                return codec_error(
+                    ErrorCode::malformed_bitstream,
+                    "DCVC-UF HT-S group without a valid reference: no intra unit "
+                    "decoded since the start, a reset or a failed unit");
+            reference_valid_ = false;
             auto decoded = provider_->decode_predicted(
                 payload.value().bitstream, payload.value().entropy_parallel,
                 access_unit.value().qp, access_unit.value().width,
@@ -333,6 +343,7 @@ public:
             if (!decoded) return decoded.error();
             for (auto& frame : decoded.value())
                 outputs_.push_back(std::move(frame));
+            reference_valid_ = true;
         }
         for (std::size_t index = 0; index < payload.value().timestamps.size(); ++index)
             statistics_->record_decode(
@@ -361,6 +372,7 @@ public:
     Result<void> reset() override {
         outputs_.clear();
         flushed_ = false;
+        reference_valid_ = false;
         return provider_->reset_decoder_state();
     }
 
@@ -370,6 +382,7 @@ private:
     std::shared_ptr<Statistics> statistics_;
     std::deque<Frame> outputs_;
     bool flushed_{};
+    bool reference_valid_{};
 };
 
 class Adapter final : public codec::ICodecAdapter {

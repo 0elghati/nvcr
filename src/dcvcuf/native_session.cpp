@@ -15,6 +15,7 @@
 #include <limits>
 #include <map>
 #include <new>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -27,6 +28,19 @@ constexpr std::string_view weight_escape = "__nvcr_dot__";
 
 Error failure(ErrorCode code, std::string message) {
     return Error(code, std::move(message), "dcvcuf-upstream-cuda");
+}
+
+// Carries the codec's entropy error out of protect() unchanged, so a malformed
+// or desynchronized stream stays malformed_bitstream instead of backend_error.
+struct EntropyFailure final : std::runtime_error {
+    explicit EntropyFailure(Error value)
+        : std::runtime_error(value.describe()), error(std::move(value)) {}
+    Error error;
+};
+
+// Upstream's decompress has returned, so its entropy worker is idle.
+void finish_entropy(RansDecoder& decoder) {
+    if (auto finished = decoder.finish(); !finished) throw EntropyFailure(finished.error());
 }
 
 std::string decode_name(std::string name) {
@@ -236,6 +250,7 @@ public:
                 reinterpret_cast<const std::uint8_t*>(bitstream.data()),
                 static_cast<int>(bitstream.size()), static_cast<int>(qp),
                 static_cast<int>(height), static_cast<int>(width), entropy_parallel);
+            finish_entropy(image_decoder_->nvcr_entropy_decoder());
             video_decoder_->add_ref_feature_from_frame(reconstruction, false);
             auto output = std::move(tensors_to_frames(
                 std::span(&reconstruction, 1), width, height, std::span(&timestamp, 1)).front());
@@ -296,6 +311,7 @@ public:
                 static_cast<int>(bitstream.size()), static_cast<int>(qp),
                 static_cast<int>(height), static_cast<int>(width), entropy_parallel,
                 reset_feature_memory);
+            finish_entropy(video_decoder_->nvcr_entropy_decoder());
             if (decoded.size() != 8)
                 throw std::runtime_error("DCVC-UF HT-S decoder did not return eight frames");
             auto output = tensors_to_frames(decoded, width, height, timestamps);
@@ -345,6 +361,8 @@ private:
                 C10_CUDA_CHECK(cudaStreamSynchronize(stream_));
                 return output;
             }
+        } catch (const EntropyFailure& entropy) {
+            return entropy.error;
         } catch (const std::bad_alloc&) {
             return failure(ErrorCode::resource_exhausted,
                            "DCVC-UF native provider allocation failed");

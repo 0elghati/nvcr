@@ -23,6 +23,15 @@
 //
 // Tensor bytes are the provider's device bytes in its own layout. Each path
 // compares only with itself, so layouts match between encoder and decoder.
+//
+// Entropy records (C13 cross-decode) come from the codec's UF rANS coder, which
+// both execution paths share, on every decode call: the CDF row chosen for each
+// coded y symbol (the entropy index, in the decoder's coded order after the
+// skip condition) and the decoded symbols; z rows are fixed by QP and channel,
+// so z reports symbols only. entropy_end reports the end-of-stream state check.
+// Comparing two decoders' records on the same bytes locates the first entropy
+// index that differs. On the fused path these calls arrive on upstream's
+// entropy worker thread while the calling thread waits for it.
 
 #include "nvcr/runtime/frame.hpp"
 
@@ -34,6 +43,7 @@ namespace nvcr::dcvcuf::diagnostics {
 
 enum class Direction : std::uint8_t { encoder, decoder };
 enum class StepKind : std::uint8_t { intra, predicted };
+enum class EntropyCall : std::uint8_t { z, y };
 
 class Observer {
 public:
@@ -44,6 +54,10 @@ public:
                         std::span<const std::int64_t> shape,
                         std::span<const std::byte> bytes) = 0;
     virtual void frames(Direction direction, std::span<const Frame> frames) = 0;
+    // Decoder entropy calls; `complete` is false when the call failed.
+    virtual void entropy(EntropyCall /*call*/, std::span<const std::uint8_t> /*indexes*/,
+                         std::span<const std::int8_t> /*symbols*/, bool /*complete*/) {}
+    virtual void entropy_end(bool /*valid*/) {}
 };
 
 // Process-wide; set by a test before creating sessions and cleared after.

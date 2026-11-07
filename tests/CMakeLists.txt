@@ -191,6 +191,13 @@ if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
         nvcr_dcvcuf_reconstruction_identity PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcuf")
     target_link_libraries(nvcr_dcvcuf_reconstruction_identity PRIVATE NVCR::nvcr)
     nvcr_set_project_warnings(nvcr_dcvcuf_reconstruction_identity)
+    # C13 cross-decode: decodes a .nvcr file like the CLI and records every UF
+    # entropy call (scripts/backends/dcvcuf/run_cross_decode.py).
+    add_executable(nvcr_dcvcuf_entropy_trace dcvcuf_entropy_trace.cpp)
+    target_include_directories(
+        nvcr_dcvcuf_entropy_trace PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcuf")
+    target_link_libraries(nvcr_dcvcuf_entropy_trace PRIVATE NVCR::nvcr)
+    nvcr_set_project_warnings(nvcr_dcvcuf_entropy_trace)
     set(NVCR_DCVCUF_TEST_BUNDLE "" CACHE FILEPATH
         "DCVC-UF native .pt bundle or TensorRT stage bundle for the GPU lifecycle check")
     set(NVCR_DCVCUF_TEST_QCIF "" CACHE FILEPATH

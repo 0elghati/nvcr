@@ -48,6 +48,11 @@ public:
     [[nodiscard]] Result<std::vector<std::int8_t>> decode_z(
         std::size_t symbol_count, std::size_t cdf_group,
         std::size_t cdf_offset, std::size_t channel_count);
+    // Ends the stream set by set_stream. A stream decoded with the encoder's
+    // entropy parameters leaves every coder at the encoder's initial state with
+    // all of its bytes consumed; anything else is malformed_bitstream (corrupt
+    // bytes, or entropy parameters this decoder computed differently).
+    [[nodiscard]] Result<void> finish_decode();
 
 private:
     struct Impl;
