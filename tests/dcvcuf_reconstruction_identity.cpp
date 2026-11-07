@@ -220,7 +220,7 @@ std::optional<Mismatch> compare_tensor(const std::string& name, const Tensor& en
         ++mismatch.differing;
         const float x = half_to_float(a);
         const float y = half_to_float(b);
-        if (x != y && !(std::isnan(x) && std::isnan(y))) {
+        if (!(x == 0.0F && y == 0.0F)) {  // anything but +0 against -0, NaN payloads included
             if (mismatch.value_differing++ == 0) mismatch.first_index = index;
             mismatch.max_abs = std::max(mismatch.max_abs, static_cast<double>(std::fabs(x - y)));
         } else if (!seen && mismatch.value_differing == 0) {
@@ -228,10 +228,10 @@ std::optional<Mismatch> compare_tensor(const std::string& name, const Tensor& en
         }
         seen = true;
     }
-    // Equal values that differ only in the sign of zero (an encoder rounding a
-    // small negative value versus a decoder rebuilding it from an integer) are
-    // reported separately; they are not value differences.
-    if (mismatch.value_differing == 0) mismatch.kind = "tensor-signed-zero";
+    // Only z_hat may differ in the sign of zero (the encoder rounds a small
+    // negative value to -0, the decoder rebuilds +0 from an integer); it is
+    // reported separately. Every other tensor must match byte for byte.
+    if (mismatch.value_differing == 0 && name == "z_hat") mismatch.kind = "tensor-signed-zero";
     return mismatch;
 }
 

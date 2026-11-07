@@ -494,7 +494,8 @@ Mechanism, with no production CLI or public API change:
 Two comparisons are classed separately rather than as failures. The TensorRT
 encoder's `round_z` writes −0 where the decoder rebuilds +0 from integers, so
 `z_hat` differs only in the sign of zero (one tensor per TensorRT case, 16 in
-total; values equal). Frames and HT-S state tensors have no such allowance.
+total; values equal). The allowance applies to `z_hat` and to ±0 only; every
+other tensor and every frame must match byte for byte, NaN payloads included.
 
 Negative controls (Akiyo QCIF, 17 frames, both paths): flipping one byte of the
 first encoder HT-S feature is reported at step 1, tensor `feature`; flipping
