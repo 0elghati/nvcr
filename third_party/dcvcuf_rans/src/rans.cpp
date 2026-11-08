@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-// Modified for NVCR: isolated in the DCVC-UF codec namespace; decoder reads are bounded.
+// Modified for NVCR: isolated in the DCVC-UF codec namespace; decoder reads are
+// bounded and a desynchronized stream is detected (see UPSTREAM.md).
 
 #include "rans.hpp"
 
@@ -20,6 +21,11 @@ constexpr int ENC_RENORM_SHIFT_BITS = RANS_SHIFT_BITS - SCALE_BITS + 8;
 constexpr uint32_t DEC_MASK = (1u << SCALE_BITS) - 1;
 constexpr uint16_t BYPASS_PRECISION = 2;  // number of bits in bypass mode
 constexpr uint16_t MAX_BYPASS_VAL = (1 << BYPASS_PRECISION) - 1;
+// NVCR: largest bypass group count a 32-bit raw value can need. A valid stream
+// codes int8 symbols, whose raw values need at most five groups.
+constexpr int32_t MAX_BYPASS_COUNT = 32 / BYPASS_PRECISION;
+// NVCR: the encoder maps an int8 symbol s to |s| * 2 - (s > 0), so 0..256.
+constexpr int64_t MAX_SYMBOL_VALUE = 256;
 
 #if defined(__GNUC__) || defined(__clang__)
     #define FORCE_INLINE inline __attribute__((always_inline))
@@ -108,7 +114,7 @@ FORCE_INLINE void RansEncPutBits(RansState& r, uint8_t*& ptr, uint32_t val)
 }
 
 FORCE_INLINE int8_t decode_one_symbol(ByteReader& in, RansState& rans, const int32_t* cdf,
-                                      const int8_t max_value)
+                                      const int8_t max_value, bool& corrupt)
 {
     const int32_t cum_freq = RansDecGet(rans);
 
@@ -120,27 +126,42 @@ FORCE_INLINE int8_t decode_one_symbol(ByteReader& in, RansState& rans, const int
 
     RansDecAdvance(rans, in, cdf[s], cdf[s + 1] - cdf[s]);
 
-    int32_t value = static_cast<int32_t>(s);
+    int64_t value = static_cast<int64_t>(s);
 
     if (value == max_value) {
         // Bypass decoding mode
-        int32_t val = RansDecGetBits(rans, in);
-        int32_t n_bypass = val;
+        uint32_t val = RansDecGetBits(rans, in);
+        int32_t n_bypass = static_cast<int32_t>(val);
 
-        while (val == MAX_BYPASS_VAL && !in.overrun) {
+        // NVCR: a count beyond MAX_BYPASS_COUNT cannot come from the encoder.
+        while (val == MAX_BYPASS_VAL && !in.overrun && n_bypass <= MAX_BYPASS_COUNT) {
             val = RansDecGetBits(rans, in);
-            n_bypass += val;
+            n_bypass += static_cast<int32_t>(val);
+        }
+        if (n_bypass > MAX_BYPASS_COUNT) {
+            corrupt = true;
+            return 0;
         }
 
-        int32_t raw_val = 0;
-        for (int j = 0; j < n_bypass && j < 16; ++j) {
+        uint32_t raw_val = 0;
+        for (int j = 0; j < n_bypass; ++j) {
             val = RansDecGetBits(rans, in);
             raw_val |= val << (j * BYPASS_PRECISION);
         }
-        value = raw_val + max_value;
+        value = static_cast<int64_t>(raw_val) + max_value;
     }
 
-    return static_cast<int8_t>((value % 2 == 1) ? (value + 1) / 2 : -(value + 1) / 2);
+    // NVCR: every encoded symbol is int8; anything else proves desynchronization.
+    if (value > MAX_SYMBOL_VALUE) {
+        corrupt = true;
+        return 0;
+    }
+    const int64_t symbol = (value % 2 == 1) ? (value + 1) / 2 : -(value + 1) / 2;
+    if (symbol < INT8_MIN || symbol > INT8_MAX) {
+        corrupt = true;
+        return 0;
+    }
+    return static_cast<int8_t>(symbol);
 }
 
 FORCE_INLINE void encode_one_symbol(uint8_t*& ptr, RansState& rans, const int32_t symbol,
@@ -423,10 +444,10 @@ void RansDecoderLib::decode_y_internal(int8_t* decoded_ptr,
     const uint8_t* indexes_ptr = indexes->data();
     const int8_t* max_value_ptr = m_max_value[1]->data();
     const std::vector<int32_t>* cdfs = m_cdfs[1]->data();
-    for (int i = 0; i < symbol_size && !m_in.overrun; ++i) {
+    for (int i = 0; i < symbol_size && !m_in.overrun && !m_corrupt; ++i) {
         const int32_t cdf_idx = indexes_ptr[i + symbol_offset];
-        decoded_ptr[i + symbol_offset] =
-            decode_one_symbol(m_in, m_rans, cdfs[cdf_idx].data(), max_value_ptr[cdf_idx]);
+        decoded_ptr[i + symbol_offset] = decode_one_symbol(
+            m_in, m_rans, cdfs[cdf_idx].data(), max_value_ptr[cdf_idx], m_corrupt);
     }
 }
 
@@ -457,10 +478,10 @@ void RansDecoderLib::decode_z_internal(int8_t* decoded_ptr, const int symbol_siz
     const int8_t* max_value_ptr = m_max_value[0]->data();
     const std::vector<int32_t>* cdfs = m_cdfs[0]->data();
 
-    for (int i = 0; i < symbol_size && !m_in.overrun; ++i) {
+    for (int i = 0; i < symbol_size && !m_in.overrun && !m_corrupt; ++i) {
         const int32_t cdf_idx = ((i + symbol_offset) % ch) + cdf_offset;
-        decoded_ptr[i + symbol_offset] =
-            decode_one_symbol(m_in, m_rans, cdfs[cdf_idx].data(), max_value_ptr[cdf_idx]);
+        decoded_ptr[i + symbol_offset] = decode_one_symbol(
+            m_in, m_rans, cdfs[cdf_idx].data(), max_value_ptr[cdf_idx], m_corrupt);
     }
 }
 
@@ -476,14 +497,30 @@ void RansDecoderLib::set_stream(const std::shared_ptr<std::vector<uint8_t>> enco
 {
     m_stream = encoded;
     m_in = { m_stream->data(), m_stream->data() + m_stream->size(), false };
+    m_corrupt = false;
     RansDecInit(m_rans, m_in);
+    // NVCR: the encoder flushes a state in [RANS_BYTE_L, 256 * RANS_BYTE_L);
+    // anything else is not a UF rANS stream.
+    if (m_in.overrun || m_rans < RANS_BYTE_L || m_rans >= (RANS_BYTE_L << 8)) {
+        m_corrupt = true;
+    }
 }
 
 bool RansDecoderLib::wait_for_decoding_finish()
 {
     std::unique_lock<std::mutex> lk(m_mutex_result);
     m_cv_result.wait(lk, [this] { return m_result_ready || m_finish; });
-    return !m_in.overrun;
+    return !m_in.overrun && !m_corrupt;
+}
+
+bool RansDecoderLib::at_initial_state() const
+{
+    return m_rans == RANS_BYTE_L;
+}
+
+size_t RansDecoderLib::consumed_bytes() const
+{
+    return m_stream ? static_cast<size_t>(m_in.ptr - m_stream->data()) : 0;
 }
 
 void RansDecoderLib::worker()

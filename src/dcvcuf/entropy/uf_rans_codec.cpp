@@ -1,5 +1,6 @@
 #include "uf_rans_codec.hpp"
 
+#include "diagnostics.hpp"
 #include "rans.hpp"
 
 #include <algorithm>
@@ -7,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace nvcr::dcvcuf {
@@ -18,6 +20,10 @@ constexpr std::size_t max_parallel = 8;
 constexpr std::size_t z_cdf_group = 0;
 constexpr std::size_t y_cdf_group = 1;
 constexpr std::int32_t cdf_total = 1 << 16;
+// identical_tail merges at most this many trailing bytes of a coder pair.
+constexpr std::size_t max_pair_overlap = 8;
+
+namespace diag = diagnostics;
 
 Error invalid(std::string message) {
     return Error(ErrorCode::invalid_argument, std::move(message), "dcvcuf.rans");
@@ -25,6 +31,14 @@ Error invalid(std::string message) {
 
 Error malformed(std::string message) {
     return Error(ErrorCode::malformed_bitstream, std::move(message), "dcvcuf.rans");
+}
+
+Error desynchronized(std::string_view detail) {
+    return malformed(
+        "UF entropy decoding desynchronized (" + std::string(detail) +
+        "): the stream is corrupt, or its entropy parameters differ from the ones "
+        "this decoder computed. DCVC-UF streams decode only on a provider and target "
+        "that reproduce the encoder's entropy parameters exactly.");
 }
 
 Result<void> validate_cdf(const UfRansCdfTable& table) {
@@ -116,6 +130,17 @@ struct UfRansCodec::Impl final {
     bool encoder_has_symbols{false};
     bool encoder_finished{false};
     bool stream_set{false};
+    // Byte count of each decoded unit set by set_stream: one per coder pair
+    // (both coders read the same bytes from opposite ends), then the tail
+    // coder's when the coder count is odd. A single coder is one unpaired unit.
+    std::vector<std::size_t> unit_bytes;
+    bool paired_units{false};
+
+    void report(diag::EntropyCall call, std::span<const std::uint8_t> indexes,
+                std::span<const std::int8_t> symbols, bool complete) const {
+        if (auto* sink = diag::observer())
+            sink->entropy(call, indexes, symbols, complete);
+    }
 
     void make_coders() {
         encoders.clear();
@@ -330,6 +355,8 @@ Result<void> UfRansCodec::set_stream(std::span<const std::byte> stream) {
     const auto* bytes =
         reinterpret_cast<const std::uint8_t*>(stream.data());
 
+    impl_->stream_set = false;
+    impl_->unit_bytes.clear();
     if (impl_->parallel == 1 || impl_->parallel == 2) {
         auto shared =
             copy_bytes(std::span<const std::uint8_t>(bytes, stream.size()));
@@ -339,6 +366,8 @@ Result<void> UfRansCodec::set_stream(std::span<const std::byte> stream) {
                 shared->rbegin(), shared->rend());
             impl_->decoders[1]->set_stream(reverse);
         }
+        impl_->unit_bytes.push_back(stream.size());
+        impl_->paired_units = impl_->parallel == 2;
         impl_->stream_set = true;
         return {};
     }
@@ -378,6 +407,7 @@ Result<void> UfRansCodec::set_stream(std::span<const std::byte> stream) {
         auto reverse = std::make_shared<std::vector<std::uint8_t>>(
             group->rbegin(), group->rend());
         impl_->decoders[2 * pair + 1]->set_stream(reverse);
+        impl_->unit_bytes.push_back(end - begin);
     }
     if (has_tail) {
         const auto begin = offsets.back();
@@ -386,7 +416,9 @@ Result<void> UfRansCodec::set_stream(std::span<const std::byte> stream) {
         impl_->decoders.back()->set_stream(copy_bytes(
             std::span<const std::uint8_t>(payload + begin,
                                           payload_size - begin)));
+        impl_->unit_bytes.push_back(payload_size - begin);
     }
+    impl_->paired_units = true;
     impl_->stream_set = true;
     return {};
 }
@@ -419,7 +451,11 @@ Result<std::vector<std::int8_t>> UfRansCodec::decode_y(
     bool complete = true;
     for (auto& decoder : impl_->decoders)
         complete = decoder->wait_for_decoding_finish() && complete;
-    if (!complete) return malformed("UF entropy stream ended early");
+    impl_->report(diag::EntropyCall::y, indexes, output, complete);
+    if (!complete) {
+        impl_->stream_set = false;
+        return malformed("UF entropy stream ended early or decoded an impossible symbol");
+    }
     return output;
 }
 
@@ -458,8 +494,42 @@ Result<std::vector<std::int8_t>> UfRansCodec::decode_z(
     bool complete = true;
     for (auto& decoder : impl_->decoders)
         complete = decoder->wait_for_decoding_finish() && complete;
-    if (!complete) return malformed("UF entropy stream ended early");
+    impl_->report(diag::EntropyCall::z, {}, output, complete);
+    if (!complete) {
+        impl_->stream_set = false;
+        return malformed("UF entropy stream ended early or decoded an impossible symbol");
+    }
     return output;
+}
+
+Result<void> UfRansCodec::finish_decode() {
+    if (!impl_->stream_set)
+        return Error(ErrorCode::invalid_state,
+                     "set UF stream before finishing decode", "dcvcuf.rans");
+    impl_->stream_set = false;
+    bool at_initial = true;
+    for (const auto& decoder : impl_->decoders)
+        at_initial = decoder->at_initial_state() && at_initial;
+    bool consumed = true;
+    std::size_t coder = 0;
+    for (std::size_t unit = 0; unit < impl_->unit_bytes.size(); ++unit) {
+        const auto size = impl_->unit_bytes[unit];
+        const bool pair = impl_->paired_units && coder + 1 < impl_->parallel;
+        if (pair) {
+            const auto total = impl_->decoders[coder]->consumed_bytes() +
+                               impl_->decoders[coder + 1]->consumed_bytes();
+            consumed = consumed && total >= size && total <= size + max_pair_overlap;
+            coder += 2;
+        } else {
+            consumed = consumed && impl_->decoders[coder]->consumed_bytes() == size;
+            coder += 1;
+        }
+    }
+    consumed = consumed && coder == impl_->parallel;
+    const bool valid = at_initial && consumed;
+    if (auto* sink = diag::observer()) sink->entropy_end(valid);
+    if (!valid) return desynchronized("the stream did not end at the encoder's initial state");
+    return {};
 }
 
 }  // namespace nvcr::dcvcuf

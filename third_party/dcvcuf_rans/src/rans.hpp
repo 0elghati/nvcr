@@ -1,10 +1,12 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-// Modified for NVCR: isolated in the DCVC-UF codec namespace.
+// Modified for NVCR: isolated in the DCVC-UF codec namespace; bounded decoding
+// with end-of-stream state queries (see UPSTREAM.md).
 
 #pragma once
 
 #include <condition_variable>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -133,13 +135,21 @@ public:
     void set_cdf(const std::shared_ptr<std::vector<std::vector<int32_t>>>& cdfs,
                  const std::shared_ptr<std::vector<int8_t>>& max_value, const int index);
     void set_stream(const std::shared_ptr<std::vector<uint8_t>> encoded);
-    // False when the stream ended before all symbols were decoded.
+    // False when the stream ended before all symbols were decoded, its
+    // initial state was invalid, or a decoded symbol was impossible (sticky
+    // until the next set_stream).
     bool wait_for_decoding_finish();
+    // NVCR: a stream decoded with the encoder's exact parameters ends at the
+    // encoder's initial state with all of its bytes consumed. Call only after
+    // wait_for_decoding_finish().
+    bool at_initial_state() const;
+    size_t consumed_bytes() const;
     void worker();
 
 private:
-    RansState m_rans;
+    RansState m_rans{ 0 };
     ByteReader m_in;
+    bool m_corrupt{ false };
     std::shared_ptr<std::vector<uint8_t>> m_stream;
 
     std::vector<std::shared_ptr<std::vector<std::vector<int32_t>>>> m_cdfs;

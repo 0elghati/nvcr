@@ -910,6 +910,9 @@ private:
             auto restored = check(status, "restore_y_4x");
             if (!restored) return restored.error();
         }
+        // All four steps' symbols are decoded; the stream must end exactly here.
+        auto finished = codec.finish_decode();
+        if (!finished) return finished.error();
         auto observed_y = observe_all(diag::Direction::decoder, {{"y_hat", &y_hat.value()}});
         if (!observed_y) return observed_y.error();
         auto frame = decode_i_frame(y_hat.value(), qp);
@@ -1088,6 +1091,8 @@ private:
         const auto means = view(cparams, 2 * ch_y, ch_y);
         auto y_q = decode_y(codec, scales, ch_y * h16_ * w16_);
         if (!y_q) return y_q.error();
+        auto finished = codec.finish_decode();
+        if (!finished) return finished.error();
         auto extracted = extract(reference);
         if (!extracted) return extracted.error();
         observed = observe_all(diag::Direction::decoder, {{"context", &*reference.context}});

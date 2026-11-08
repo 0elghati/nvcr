@@ -43,6 +43,11 @@ tree at configure time; CMake runs it.
      --weights dcvcuf-cvpr2026-hts.pt --bundle <out>/bundle
    ```
 
+   To build plans on another GPU from byte-identical ONNX graphs (same model
+   profile), pass `--from-export <existing export dir>` instead of the
+   reference and checkpoint arguments, and copy the tables with
+   `add_tensorrt_tables.py --tables <tables.bin> --tables-sha256 <sha>`.
+
 3. Run: `nvcr encode --codec dcvc-uf --engine-dir <out>/bundle ...`. Each plan's
    execution context is sized for the 1080p profile; on a GPU shared with other
    work, `NVCR_TENSORRT_LOW_MEMORY_MODE=1` creates contexts per call instead.
@@ -63,3 +68,11 @@ verifies the committed file).
   `src/dcvcuf/diagnostics.hpp`; also checks that the harness streams equal the
   CLI's. The harness's `partial-group` mode checks reset and drain with a
   partly filled eight-frame group.
+- `run_cross_decode.py`: C13 cross-decode. `encode` keeps the exact `.nvcr`
+  bytes per execution path with a SHA-256 manifest; `decode` decodes a manifest
+  on one path with the CLI and the test-only `nvcr_dcvcuf_entropy_trace`
+  harness (every UF entropy call); `compare` reports the first divergent entropy
+  index, symbol divergence, completion or clean failure, PSNR and drift against
+  the reference decode.
+- `check_uf_cdf_aliasing.py`: the UF y CDF slots on which a wrong entropy index
+  keeps the rANS state in sync, so the end-of-stream check cannot detect it.

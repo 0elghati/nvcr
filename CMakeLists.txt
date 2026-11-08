@@ -52,11 +52,16 @@ add_subdirectory(third_party/dcvcuf_rans)
 
 # DCVC-UF entropy is codec-local. It always builds so its CPU conformance test
 # runs without CUDA, but it enters libnvcr only with NVCR_ENABLE_DCVC_UF.
-add_library(nvcr_dcvcuf_entropy OBJECT src/dcvcuf/entropy/uf_rans_codec.cpp)
+# The test-only diagnostics observer travels with it: the coder reports entropy
+# indexes to it on both execution paths.
+add_library(nvcr_dcvcuf_entropy OBJECT
+    src/dcvcuf/entropy/uf_rans_codec.cpp
+    src/dcvcuf/diagnostics.cpp)
 target_include_directories(
     nvcr_dcvcuf_entropy PRIVATE
         "${NVCR_GENERATED_INCLUDE_DIR}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include")
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf")
 target_include_directories(
     nvcr_dcvcuf_entropy SYSTEM PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dcvcuf_rans/src")
@@ -216,7 +221,6 @@ if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
     # The DCVC-UF codec runs on the TensorRT provider, the native fused path, or both.
     target_sources(nvcr PRIVATE
         src/dcvcuf/adapter.cpp
-        src/dcvcuf/diagnostics.cpp
         src/dcvcuf/registration.cpp
         $<TARGET_OBJECTS:nvcr_dcvcuf_entropy>
         $<TARGET_OBJECTS:nvcr_dcvcuf_rans>)

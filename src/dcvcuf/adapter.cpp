@@ -53,6 +53,8 @@ constexpr std::uint32_t max_qp = 63;  // rows of the q-scale tables
 
 // Predicted payload flag byte; the upstream UF stream carries the same bit.
 constexpr std::uint8_t reset_feature_memory_flag = 0x01;
+// UF splits a frame's entropy stream over 1-8 coders (upstream MAX_EC_PARALLEL).
+constexpr std::uint8_t max_entropy_parallel = 8;
 
 struct CodecPayload final {
     std::uint8_t entropy_parallel{};
@@ -93,7 +95,8 @@ Result<CodecPayload> parse_payload(
     const auto allowed_flags =
         type == FrameType::intra ? std::uint8_t{0} : reset_feature_memory_flag;
     if ((flags & ~allowed_flags) != 0 || payload[7] != std::byte{0} ||
-        entropy_parallel == 0 || count == 0 || count > 8 ||
+        entropy_parallel == 0 || entropy_parallel > max_entropy_parallel ||
+        count == 0 || count > 8 ||
         (type == FrameType::intra && count != 1)) {
         return codec_error(
             ErrorCode::malformed_bitstream, "invalid DCVC-UF payload fields");
@@ -316,6 +319,7 @@ public:
 
         const auto started = std::chrono::steady_clock::now();
         if (access_unit.value().frame_type == FrameType::intra) {
+            reference_valid_ = false;
             auto reset = provider_->reset_decoder_state();
             if (!reset) return reset.error();
             auto decoded = provider_->decode_intra(
@@ -324,7 +328,16 @@ public:
                 access_unit.value().height, payload.value().timestamps.front());
             if (!decoded) return decoded.error();
             outputs_.push_back(std::move(decoded.value()));
+            reference_valid_ = true;
         } else {
+            // A failed unit leaves the reference state undefined; decoding a
+            // later group from it could emit wrong frames.
+            if (!reference_valid_)
+                return codec_error(
+                    ErrorCode::malformed_bitstream,
+                    "DCVC-UF HT-S group without a valid reference: no intra unit "
+                    "decoded since the start, a reset or a failed unit");
+            reference_valid_ = false;
             auto decoded = provider_->decode_predicted(
                 payload.value().bitstream, payload.value().entropy_parallel,
                 access_unit.value().qp, access_unit.value().width,
@@ -333,6 +346,7 @@ public:
             if (!decoded) return decoded.error();
             for (auto& frame : decoded.value())
                 outputs_.push_back(std::move(frame));
+            reference_valid_ = true;
         }
         for (std::size_t index = 0; index < payload.value().timestamps.size(); ++index)
             statistics_->record_decode(
@@ -361,6 +375,7 @@ public:
     Result<void> reset() override {
         outputs_.clear();
         flushed_ = false;
+        reference_valid_ = false;
         return provider_->reset_decoder_state();
     }
 
@@ -370,6 +385,7 @@ private:
     std::shared_ptr<Statistics> statistics_;
     std::deque<Frame> outputs_;
     bool flushed_{};
+    bool reference_valid_{};
 };
 
 class Adapter final : public codec::ICodecAdapter {

@@ -69,7 +69,9 @@ def materialize(reference_root, output):
         "    at::Tensor decompress(const py::array_t<uint8_t>& bit_stream, const int qp, const int height,\n"
         "                          const int width, const int entropy_coder_parallel);",
         "    at::Tensor decompress(const std::uint8_t* bit_stream, int bit_stream_size, int qp,\n"
-        "                          int height, int width, int entropy_coder_parallel);",
+        "                          int height, int width, int entropy_coder_parallel);\n"
+        "    // NVCR: entropy status after decompress (native_rans.hpp).\n"
+        "    RansDecoder& nvcr_entropy_decoder() { return m_entropy_decoder; }",
         image_h)
     image_h.write_text(text)
 
@@ -141,6 +143,7 @@ def materialize(reference_root, output):
         text,
         "                                          bool reset_feature_memory);\n",
         "                                          bool reset_feature_memory);\n"
+        "    RansDecoder& nvcr_entropy_decoder() { return m_entropy_decoder; }\n"
         "    at::Tensor nvcr_y_hat() const { return m_y_hat; }\n"
         "    at::Tensor nvcr_feature() const { return m_feature_p; }\n"
         "    at::Tensor nvcr_memory() const { return m_memory; }\n"
