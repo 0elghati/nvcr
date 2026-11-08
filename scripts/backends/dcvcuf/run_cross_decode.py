@@ -454,6 +454,56 @@ def compare(args):
     return 0 if all(not str(e.get("verdict", "")).startswith("FAIL") for e in results) else 1
 
 
+def compare_upstream(args):
+    """G4: pinned upstream decodes (decode_with_upstream.py) against NVCR's reference."""
+    references = {}
+    for path in args.decodes:
+        for line in Path(path).read_text().splitlines():
+            row = json.loads(line) if line else None
+            if row and row["decoder"] == row["encoder_path"] and \
+                    row["decoder_gpu"] == row["encoder_gpu"]:
+                references[row["stream_sha256"]] = (row, Path(path).parent)
+    upstream_root = args.upstream.parent
+    results = []
+    for line in args.upstream.read_text().splitlines():
+        row = json.loads(line)
+        entry = {key: row[key] for key in ("stream", "stream_sha256", "sequence", "qp",
+                                           "encoder_path", "encoder_gpu", "exit", "signal",
+                                           "timed_out", "frames_written", "yuv_sha256")}
+        entry["decoder"] = "upstream"
+        sequence = next(s for s in SEQUENCES if s["name"] == row["sequence"])
+        size = (row["width"], row["height"], row["frames_written"])
+        decoded = upstream_root / row["yuv"] if row["yuv"] else None
+        reference = references.get(row["stream_sha256"])
+        entry["nvcr_reference"] = None
+        if reference and decoded:
+            ref_row, ref_root = reference
+            entry["nvcr_reference"] = f"{ref_row['decoder']}@{ref_row['decoder_gpu']}"
+            entry["nvcr_reference_completed"] = ref_row["cli"]["exit"] == 0
+            entry["bit_exact_with_nvcr"] = (ref_row["cli"]["exit"] == 0 and
+                                            row["yuv_sha256"] == ref_row["cli"]["yuv_sha256"])
+            if ref_row["cli"]["yuv"] and ref_row["cli"]["frames_written"]:
+                psnr = frame_psnr_y(ref_root / ref_row["cli"]["yuv"], decoded, *size)
+                finite = [v for v in psnr if math.isfinite(v)]
+                entry["psnr_y_vs_nvcr"] = {
+                    "frames_compared": len(psnr),
+                    "identical_frames": len(psnr) - len(finite),
+                    "min": min(finite) if finite else None,
+                    "by_frame": [None if not math.isfinite(v) else round(v, 3) for v in psnr]}
+        if args.dataset_root is not None and decoded:
+            values = source_psnr_y(args.dataset_root / sequence["path"], decoded, *size)
+            entry["psnr_y_vs_source"] = {
+                "mean": sum(values) / len(values) if values else None,
+                "first_8": [round(v, 2) for v in values[:8]],
+                "last": round(values[-1], 2) if values else None}
+        results.append(entry)
+        print(f"upstream <- {row['stream']}: exit={row['exit']} frames={row['frames_written']} "
+              f"bit_exact_with_nvcr={entry.get('bit_exact_with_nvcr')} "
+              f"vs_source_mean={(entry.get('psnr_y_vs_source') or {}).get('mean')}")
+    args.output.write_text("".join(json.dumps(entry) + "\n" for entry in results))
+    return 0
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -485,12 +535,18 @@ def parse_args(argv=None):
     c.add_argument("--decodes", type=Path, nargs="+", required=True)
     c.add_argument("--dataset-root", type=Path)
     c.add_argument("--output", type=Path, required=True)
+    u = sub.add_parser("compare-upstream")
+    u.add_argument("--upstream", type=Path, required=True, help="upstream.jsonl")
+    u.add_argument("--decodes", type=Path, nargs="+", required=True)
+    u.add_argument("--dataset-root", type=Path)
+    u.add_argument("--output", type=Path, required=True)
     return parser.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
-    return {"encode": encode, "decode": decode, "compare": compare}[args.command](args)
+    return {"encode": encode, "decode": decode, "compare": compare,
+            "compare-upstream": compare_upstream}[args.command](args)
 
 
 if __name__ == "__main__":
