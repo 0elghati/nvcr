@@ -405,7 +405,9 @@ def compare(args):
             # log line may precede it) and exits 1; a crash or abort does not.
             entry["defined_error"] = (row["cli"]["exit"] == 1 and any(
                 line.startswith("nvcr: ") for line in row["cli"]["stderr"].splitlines()))
-            if args.dataset_root is not None and row["cli"]["yuv"]:
+            # A package may carry YUV digests only; PSNR then needs the file.
+            if args.dataset_root is not None and row["cli"]["yuv"] and \
+                    (root / row["cli"]["yuv"]).exists():
                 sequence = next(s for s in SEQUENCES if s["name"] == row["sequence"])
                 values = source_psnr_y(args.dataset_root / sequence["path"], root / row["cli"]["yuv"],
                                        row["width"], row["height"], row["cli"]["frames_written"])
@@ -419,7 +421,9 @@ def compare(args):
             ref_units, _ = read_trace(ref_root / reference["harness"]["trace"])
             entry["entropy"] = compare_traces(ref_units, units)
             psnr = []
-            if row["cli"]["yuv"] and reference["cli"]["yuv"]:
+            if row["cli"]["yuv"] and reference["cli"]["yuv"] and \
+                    (root / row["cli"]["yuv"]).exists() and \
+                    (ref_root / reference["cli"]["yuv"]).exists():
                 psnr = frame_psnr_y(ref_root / reference["cli"]["yuv"], root / row["cli"]["yuv"],
                                     row["width"], row["height"], row["cli"]["frames_written"])
             finite = [value for value in psnr if math.isfinite(value)]
@@ -482,7 +486,8 @@ def compare_upstream(args):
             entry["nvcr_reference_completed"] = ref_row["cli"]["exit"] == 0
             entry["bit_exact_with_nvcr"] = (ref_row["cli"]["exit"] == 0 and
                                             row["yuv_sha256"] == ref_row["cli"]["yuv_sha256"])
-            if ref_row["cli"]["yuv"] and ref_row["cli"]["frames_written"]:
+            if ref_row["cli"]["yuv"] and ref_row["cli"]["frames_written"] and \
+                    (ref_root / ref_row["cli"]["yuv"]).exists():
                 psnr = frame_psnr_y(ref_root / ref_row["cli"]["yuv"], decoded, *size)
                 finite = [v for v in psnr if math.isfinite(v)]
                 entry["psnr_y_vs_nvcr"] = {

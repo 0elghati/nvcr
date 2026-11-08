@@ -664,3 +664,362 @@ python3 scripts/backends/dcvcuf/run_reconstruction_identity.py \
 - G2 (format) and G4 (upstream decoding NVCR TensorRT streams): open in C13.
 - Run-to-run determinism of every TensorRT stage at every shape; only
   `i_spatial_prior_1` was swept, at three shapes.
+
+## Cross-decode of identical bytes (C13, C11 G4) — 2026-11-08
+
+Run under roadmap C13 (DCVC-UF qualification) on branch
+`test/dcvcuf-cross-decode`, based on `main` `07424a6c`: code `388c45e5`
+(hardening and instrumentation), `7ef5f8c8` (G4, malformed-stream and
+determinism tools) and `3defed53` (entropy-parallel validation, found by the
+malformed-stream runs). Every result below was produced by `3defed53` builds
+unless it says otherwise. DCVC-UF exact numerics (#217) are not started here.
+
+**Pass rule (fixed):** every pair decodes bit-exactly or fails cleanly
+(defined NVCR error, no out-of-bounds read, no wrong frames written).
+Bit-exactness is reported, not required.
+
+**Result on the RTX 4070:** every NVCR decoder pair passes. Same-path decodes
+are bit-exact (the TensorRT 1080p bundle at QCIF excepted, which fails
+cleanly); every cross-path pair fails cleanly at the intra frame with zero
+frames written. Before this change the same pairs wrote 17 and 25 wrong
+frames silently. **G4 does not meet the pass rule:** pinned upstream decodes
+NVCR fused streams bit-exactly, but completes NVCR TensorRT streams with wrong
+frames (18-21 dB against the source), because upstream has no entropy
+desynchronization check. **Across GPUs (RTX 4070 ↔ RTX 5060), both directions:** every pair fails
+cleanly at the intra frame with zero frames written; none is bit-exact.
+
+### Changes
+
+- `third_party/dcvcuf_rans`: reads were already bounded (`ByteReader`). Added,
+  as #221 did for `dcvc_rans`: initial-state validation (`[2^23, 2^31)`), a
+  bypass group cap of 16, rejection of decoded values outside `int8` (the
+  `int32` arithmetic that could overflow on such values is now
+  `uint32`/`int64`), and `at_initial_state()`/`consumed_bytes()`
+  (`UPSTREAM.md`).
+- `UfRansCodec::finish_decode`: a frame's stream must end at the encoder's
+  initial state with all bytes consumed (coder pairs: consumed bytes within the
+  8-byte overlap the encoder merges). Called after the last y decode of every
+  intra frame and HT-S group, on both paths. Missing before this change.
+- Fused path: upstream calls the rANS decoder on its entropy worker thread, so
+  a stream error threw there and **terminated the process** (`std::terminate`,
+  observed). The native rANS shim now records the error, returns zero symbols
+  of the requested count, and the session returns it as `malformed_bitstream`
+  after `decompress` returns (accessor added by `materialize_native_sources.py`;
+  the pinned checkout is untouched).
+- Adapter: after a failed unit, HT-S groups are rejected until an intra unit
+  decodes, so continuing past an error cannot emit frames from a broken
+  reference. The payload parser rejects an entropy-parallel field above 8; on
+  the fused path such a unit had reached the rANS shim's
+  `set_entropy_coder_parallel`, which threw on upstream's worker thread and
+  terminated the process (6 variants per sequence; the TensorRT session already
+  rejected it).
+- Test-only instrumentation: the UF coder reports every decode call (entropy
+  indexes and symbols) and the end check to the diagnostics observer;
+  `nvcr_dcvcuf_entropy_trace` decodes a `.nvcr` file like the CLI and writes
+  the trace; `run_cross_decode.py` encodes, decodes and compares (first
+  divergent index, first divergent symbol, completion, PSNR, drift).
+- `export_tensorrt_stages.py --from-export` and `add_tensorrt_tables.py
+  --tables`: another GPU builds plans from byte-identical ONNX graphs.
+
+Codec/provider separation (`AGENTS.md`): the check lives in the codec-owned UF
+coder and is called by both execution sessions; no provider branch was added to
+codec semantics and no GPU identity enters codec code.
+
+### Environment
+
+- NVIDIA GeForce RTX 4070 (SM 8.9, 12,282 MiB, no other GPU workload), driver
+  580.178.04, Linux 7.0.0-42-generic, GCC 13.3.0.
+- Fused: `build-g1-native` rebuilt at this branch, CUDA 12.6.85, LibTorch
+  2.13.0+cu126, bundle `dcvcuf-cvpr2026-hts.pt` (`81fe0a7d…37ab`).
+- TensorRT: `build-g1-trt` rebuilt at this branch, CUDA 12.8.93, TensorRT
+  10.9.0.34, bundle `build/dcvcuf-trt-bundle` (1080p profile; manifest
+  `74597106…0a82`, model profile `77f06cf2…f675`), built from the ONNX export
+  `build/dcvcuf-c8-tensorrt-20261102/onnx` (all 20 plan digests match its
+  report; `build/dcvcuf-onnx-1080p` is a different re-export and does not
+  reproduce the model profile). Supplementary: `build/dcvcuf-trt-bundle-256`,
+  same export, 256x256 maximum profile.
+- Upstream (G4): pinned DCVC `cbdae87a` (clean before and after), Python
+  3.12.3, PyTorch 2.13.0+cu126, its built `inference_extensions_cuda`.
+
+### Streams
+
+Encoded once on the RTX 4070 and kept byte for byte: 100 frames, intra only at
+frame 0 (`--gop-size 65528`), feature-memory reset every 32 frames (3 resets),
+1 intra unit + 12 groups + a 3-frame tail. Inputs match
+`c8_reference_sequences.json`. Encoded with the `388c45e5` builds (no
+encoder change since `main`; `3defed53` touches only payload parsing on
+decode).
+
+| Encoder | Sequence | QP | Bytes | `.nvcr` SHA-256 |
+|---|---|---:|---:|---|
+| fused | BasketballDrive 1080p | 21 | 146,931 | `6bed076d…ea23` |
+| fused | BasketballDrive 1080p | 42 | 480,898 | `ee195b6f…6153` |
+| TensorRT 1080p | BasketballDrive 1080p | 21 | 146,683 | `8abb46ae…f82a` |
+| TensorRT 1080p | BasketballDrive 1080p | 42 | 480,936 | `97b959ce…5888` |
+| fused | Akiyo QCIF | 21 | 4,323 | `5defb573…0646` |
+| fused | Akiyo QCIF | 42 | 7,744 | `ec11e44f…90b0` |
+| TensorRT 1080p | Akiyo QCIF | 21 | 4,362 | `4d782bdf…4305` |
+| TensorRT 1080p | Akiyo QCIF | 42 | 7,781 | `389fb937…efb5` |
+| TensorRT 256 (supplementary) | Akiyo QCIF | 21 | 4,371 | `a2605b4e…a884` |
+| TensorRT 256 (supplementary) | Akiyo QCIF | 42 | 7,781 | `bec5f0d3…64d4` |
+
+### Same-GPU matrix (RTX 4070)
+
+Each stream decoded with the production CLI and the trace harness on each path;
+harness and CLI YUV are equal in all 30 decodes. Reference = the encoder's own
+path. "Entropy" = first divergent entropy index as (unit, call, position):
+call `y0`-`y3` are the intra frame's four spatial steps; the share of differing
+indexes in that call and their largest difference follow.
+
+| Encoder → decoder | Sequence, QP | Outcome | Frames written | First divergent index | Differing in that call |
+|---|---|---|---:|---|---|
+| fused → fused | BD 21 / 42 | bit-exact (YUV `b1fd4fe4…70a5` / `bd6f8cae…819b`) | 100 / 100 | — | — |
+| TensorRT → TensorRT | BD 21 / 42 | bit-exact (`12d5e45c…4d25` / `2795f20d…1c73`) | 100 / 100 | — | — |
+| fused → fused | Akiyo 21 / 42 | bit-exact (`8eb053a7…3391` / `76df8193…9a8c`) | 100 / 100 | — | — |
+| TensorRT 256 → TensorRT 256 | Akiyo 21 / 42 | bit-exact (`6331e3a9…ce06` / `196f08ca…417b`) | 100 / 100 | — | — |
+| TensorRT 1080p → TensorRT 1080p | Akiyo 21 / 42 | clean failure, unit 0: end check (QP 21), stream ended early (QP 42) | 0 / 0 | not comparable (the reference itself fails) | — |
+| fused → TensorRT | BD 21 | clean failure, unit 0 | 0 | (0, y0, 1) | 1,557 of 522,240, ±1 |
+| fused → TensorRT | BD 42 | clean failure, unit 0 | 0 | (0, y0, 129) | 3,101 of 522,240, ±1 |
+| TensorRT → fused | BD 21 | clean failure, unit 0 | 0 | (0, y0, 3,680) | 1,566 of 522,240, ±1 |
+| TensorRT → fused | BD 42 | clean failure, unit 0 | 0 | (0, y0, 78) | 3,117 of 522,240, ±1 |
+| fused → TensorRT 1080p / 256 | Akiyo 21 | clean failure, unit 0 | 0 | (0, y0, 61) | 65 / 51 of 6,336, ±1 |
+| fused → TensorRT 1080p / 256 | Akiyo 42 | clean failure, unit 0 | 0 | (0, y0, 3) | 114 / 109 of 6,336, ±1 |
+| TensorRT 1080p → fused / 256 | Akiyo 21 | clean failure, unit 0 | 0 | (0, y0, 8) | 52 / 49 of 6,336, ±1 |
+| TensorRT 1080p → fused / 256 | Akiyo 42 | clean failure, unit 0 | 0 | (0, y0, 100) | 117 / 114 of 6,336, ±1 |
+| TensorRT 256 → fused / 1080p | Akiyo 21 | clean failure, unit 0 | 0 | (0, y0, 9) / (0, y0, 27) | 71 / 57 of 6,336, ±1 |
+| TensorRT 256 → fused / 1080p | Akiyo 42 | clean failure, unit 0 | 0 | (0, y0, 8) | 104 / 96 of 6,336, ±1 |
+
+Every failure is `malformed_bitstream` (`UF entropy stream ended early`, or
+`UF entropy decoding desynchronized` from the end check), CLI exit 1, an empty
+output file. The first symbol divergence follows the first index divergence
+within the same call (positions 35-4,552). No cross-path pair completes, so
+there is no PSNR or drift to report for NVCR decoders on this GPU. (The 256
+bundle decoding a 1080p stream fails before entropy decoding with a TensorRT
+profile error, `backend_error`; not a planned pair.)
+
+**Before this change** (merged G1 code, `5dd5c934`, equal to `main`
+`07424a6c` for decoding; G1 BasketballDrive QP 21, 500-frame streams): the
+TensorRT stream on the fused decoder wrote 17 frames at 20.8-26.0 dB PSNR-Y
+against the TensorRT path's own decode of it (20.6-25.5 dB against the source,
+where the correct decode gives 30.9-35.4 dB), then terminated the process
+(`std::terminate`, exit 134). The fused stream on the TensorRT decoder wrote 25
+frames at 19.9-25.8 dB against the fused path's own decode, then failed with
+`UF entropy stream ended early`. Those were silent wrong frames; the end check now
+rejects unit 0.
+
+### Entropy-deciding stages (for #217)
+
+z is coded with fixed CDF rows (QP × channel); no network output selects them.
+y entropy indexes come from predicted scales through `build_index_dec` (scale
+table, skip threshold 0), the step mask (`single_part_for_reading_4x`) and the
+skip-condition compaction (`conditional_index_part1`), so the scales decide
+both each symbol's CDF row and which symbols are coded.
+
+| Unit | Index source (TensorRT stage / fused module) | Upstream inputs that reach it |
+|---|---|---|
+| Intra, step 0 | `i_hyper_decoder` (hyper decoder, prior fusion, spatial-prior reduction) + crop | z_hat |
+| Intra, steps 1-3 | `i_spatial_prior_1..3` (adaptor k + spatial prior) | y_hat so far (decoded symbols + means of earlier steps) and `common` from `i_hyper_decoder` |
+| HT-S group | `p_hyper_decoder` + crop + `p_prior` (scales; one y call) | z_hat, `memory`, `q_feature` |
+| HT-S `memory` | `p_feature_adaptor_i` (after the intra frame or a reset group) or `p_feature_adaptor_m` | intra: `i_decoder` output (pixel unshuffle); later: the previous group's `p_decoder` feature (and `p_reset` after a reset) |
+
+So every intra-frame decoder stage except `i_decoder` decides intra indexes,
+and an HT-S group's indexes depend on nearly the whole decoder of every earlier
+unit: `i_decoder`, `p_feature_adaptor_i/m`, `p_feature_extractor` (context into
+`p_decoder`), `p_spatial_prior_1..3` (means into `y_hat`), `p_decoder` and
+`p_reset`. Only the encoder stages and `p_reconstruction` (pixels) never reach
+an entropy index. On this GPU every cross-path divergence starts at intra
+step 0, i.e. in `i_hyper_decoder`'s scales.
+
+### What the end check cannot detect
+
+A wrong CDF row goes unnoticed when it holds the coded slot with the same start
+and frequency as the right row: the rANS state then evolves identically and at
+most that symbol's value changes. `check_uf_cdf_aliasing.py` on the bundle's
+`tables.bin` (image and video y tables are identical): 424 such
+(row, wrong row, slot) cases over all row pairs, symbol probability at most
+48/65,536; for wrong rows within ±4: pairs 26-29↔30, 42↔46, 76↔79; within ±1
+(every divergence observed here): 2 cases, rows 29↔30, probability 1/65,536.
+Corruption of the bytes themselves is also undetectable where it lands in raw
+bypass bits; the UF format has no integrity field.
+
+### Bounded decoding and sanitizers
+
+- CPU conformance test (`nvcr_dcvcuf_rans_conformance`), Debug, ASan + UBSan on
+  every target including `third_party/dcvcuf_rans`
+  (`-fsanitize=address,undefined -fno-sanitize-recover=all`), coder counts
+  1-8: every truncation length rejected; trailing bytes and under-read
+  rejected by the end check; 50/50 random streams rejected per count; a
+  single-index divergence every 37 positions rejected (81-82 per count; 3
+  skipped as aliased slots); one-bit flips at every third byte: 82-89%
+  rejected, the rest undetectable by construction (bypass-heavy fixture). No
+  sanitizer report.
+- End-to-end, TensorRT path, RelWithDebInfo ASan + UBSan build
+  (`build-t3-asan-trt`), `make_malformed_streams.py` variants (file
+  truncation, UF stream cut with consistent framing, bit flips at the initial
+  state/middle/end, random and zeroed UF streams, entropy-parallel and flag
+  fields, dropped and swapped units) of the intra unit and groups 1 and 6:
+  - Akiyo QCIF on the 256 bundle: 71/71 rejected by the CLI with a defined
+    error, no sanitizer report, every written frame equal to the clean
+    decode's (only frames before the damaged unit; at most 97).
+  - BasketballDrive 1080p QP 42 on the 1080p bundle: 68/68 rejected, no
+    sanitizer report, every written frame equal to the clean decode's.
+- Fused path, Release (LibTorch is not sanitizer-instrumented), same variants
+  of fused Akiyo QP 42 and BasketballDrive QP 21: 71/71 and 68/68 rejected,
+  no crash, every written frame equal to the clean decode's. The first run
+  (`388c45e5`) crashed on the 6 entropy-parallel 9/255 variants per sequence;
+  fixed in `3defed53`, and all four sets were rerun on it.
+- The trace harness agrees except where its own minimal file reader is
+  involved (truncated records end the harness with a container error; an
+  8-byte header-only file decodes zero frames); those cases are the CLI's.
+- Every error is `malformed_bitstream` (entropy stream ended early, end check,
+  invalid payload fields or entropy offsets, truncated unit) or the CLI's
+  record/sequence errors.
+
+### G4: pinned upstream decoding NVCR streams
+
+`decode_with_upstream.py` passes each unit's UF payload, QP, entropy-parallel
+count and reset bit to upstream's `DMCI.decompress` / `DMC.decompress` in
+test_video.py's order and writes test_video.py's YUV conversion (the fused
+image proxy is created with the lines upstream runs inside `compress`).
+
+| NVCR encoder | Sequence, QP | Upstream outcome | Against NVCR reference decode | PSNR-Y against source (mean) |
+|---|---|---|---|---|
+| fused | BD 21 / 42, Akiyo 21 / 42 | completes, 100 frames | bit-exact (4/4) | 31.04 / 34.13 / 34.75 / 39.26 dB |
+| TensorRT 1080p | BD 21 | completes silently | min 17.8 dB | 19.00 dB (25.5 at frame 0 → 18.0 at frame 99) |
+| TensorRT 1080p | BD 42 | completes silently | min 16.2 dB | 18.22 dB (25.9 → 16.5) |
+| TensorRT 1080p | Akiyo 21 / 42 | completes silently | NVCR reference fails | 20.13 / 20.43 dB |
+| TensorRT 256 | Akiyo 21 / 42 | completes silently | min 17.1 / 20.7 dB | 17.59 / 21.25 dB |
+
+Upstream decodes NVCR fused streams exactly (C7 already showed the payloads are
+upstream's). On NVCR TensorRT streams upstream's rANS desynchronizes at the
+intra frame like NVCR's fused decoder, but it has no end check, so it emits
+wrong frames, drifting further down over the 100 frames. This is a G4 result
+(reported only) and a pass-rule failure on the upstream side; NVCR cannot
+change it. NVCR TensorRT streams are not decodable by upstream, and neither
+are streams encoded on another GPU (see Cross-GPU).
+
+### Stage determinism at the QCIF latent
+
+`check_stage_determinism.py`, fixed random FP16 inputs (seed 217), 10 runs in
+each of 2 processes (distinct outputs of 20):
+
+| Bundle (RTX 4070) | Latent | `i_spatial_prior_1` | `_2` | `_3` | `p_spatial_prior_1` | `_2` | `_3` |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 1080p | 9x11 (QCIF) | 9 | 16 | 17 | 14 | 18 | 20 |
+| 1080p | 16x16 and 68x120 | 1 | 1 | 1 | 1 | 1 | 1 |
+| 256 | 9x11 and 16x16 | 1 | 1 | 1 | 1 | not run | not run |
+
+RTX 5060 (relayed from its session, same stage list except `p_spatial_prior_2/3`):
+1080p bundle at 9x11: 6 / 13 / 9 / 4 of 20; one output at 16x16, 68x120 and on
+its 256 bundle. The 1080p plans' tactic at the QCIF shape is nondeterministic on
+both GPUs and in all spatial-prior stages, not only `i_spatial_prior_1`. Not
+fixed in T3.
+
+### Regression
+
+- `main` `07424a6c` (`build-reg-main`) against this branch (`build-reg-branch`),
+  TensorRT and ONNX Runtime 1.26.0, same inputs; stream and YUV identical, and
+  equal to the G1 record: DCVC-RT TensorRT Akiyo QCIF 65 frames
+  (`74fc3cc5…3b56` / `10e02e46…3008`), DCVC-RT TensorRT BasketballDrive 100
+  frames (`6dc0dfbb…87ab` / `c82a6734…22fa`), DCVC-RT ONNX Runtime CPU
+  (`4b9442e2…b4bb` / `c15808e9…c7e9`), MLVC ONNX Runtime CPU
+  (`296ecede…280d` / `6577badf…5d57`), MLVC TensorRT (`1b3bfd0a…bf01` /
+  `9239b960…fb10`), DCVC-UF TensorRT 33 frames (`f548f2be…7e3e` /
+  `01a6bba0…541c`).
+- Valid DCVC-UF streams on both paths equal the G1/C7 records: fused
+  BasketballDrive QP 21 500 frames `0d45dc7c…ae6d` / `58c6e483…468c`, fused
+  C7 vector `39da424d…f7bb` / `aee81727…8352`, TensorRT BasketballDrive QP 21
+  500 frames `df34aec7…f58c` / `5102470a…260b`.
+- CTest: `build-g1-trt` 31/31, `build-g1-native` 30/30 (on `3defed53`).
+- The regression table above was repeated on the `3defed53` branch build; all
+  hashes unchanged.
+
+### Cross-GPU (RTX 4070 ↔ RTX 5060)
+
+The RTX 5060 Laptop side was run by a separate session on that machine; its
+package `/home/oelghati/nvcr-t3-exchange/from-rtx5060/` (156 files,
+`SHA256SUMS` `7dac1044…1e6f`) verified here with `sha256sum -c`. The rows from
+the 5060 are relayed from its `compare.jsonl` and `run-metadata.json` in that
+package, not re-run here.
+
+5060 environment (from its metadata): RTX 5060 Laptop (SM 12.0, 26 SMs,
+8,151 MiB), driver 591.86 (Windows 11 host, Ubuntu 24.04 container under WSL2),
+built from `git archive` of `388c45e5`, Release, SM 120. TensorRT path: CUDA
+12.8.93, TensorRT 10.9.0.34 (the same versions as here); its 1080p bundle
+(manifest `96d364a3…1021`) and 256 bundle (`40bf28d2…2657`) built with
+`--from-export` from the 4070's export, model profile `77f06cf2…f675`; every
+plan digest differs from the 4070's, and two 1080p builds on the 5060 differ
+from each other. Fused path: the same `.pt` bundle (`81fe0a7d…37ab`) but
+LibTorch 2.11.0+cu128 with CUDA 12.8.93 (LibTorch 2.13.0+cu126 has no SM 12.0
+code), so a fused cross-GPU result is not a GPU-only comparison.
+
+| Direction | Pairs | Outcome | First divergent index |
+|---|---:|---|---|
+| 4070 → 5060 (relayed) | 30 (fused, TensorRT 1080p, TensorRT 256 decoders × 10 streams) | 24 clean failures at the intra unit, zero frames written; 6 clean failures of the 256-bundle decoder on 1080p streams (TensorRT profile error, not a planned pair); none bit-exact | intra `y0`, ±1, in every entropy failure |
+| 5060 → 4070 (here, `3defed53` builds) | 30 (same layout) | 24 clean failures at the intra unit (`malformed_bitstream`: stream ended early, or the end check), zero frames written; 6 clean failures of the 256-bundle decoder on 1080p streams; none bit-exact | intra `y0`, ±1, in every entropy failure (positions 1-3,168) |
+| 5060 → 5060 (relayed) | 30 | bit-exact on the encoder's own path for fused 4/4, TensorRT 1080p on BasketballDrive 2/2, TensorRT 256 on Akiyo 2/2; every cross-path pair fails cleanly at the intra unit | intra `y0`, ±1 |
+
+Repeats on the 5060 (4 runs each): BasketballDrive and fused decodes gave
+identical traces each time; Akiyo on the 1080p-bundle decoder always failed
+at the intra unit, but in a different call from run to run (the QCIF
+nondeterminism below).
+
+One 5060 same-path row needs attention: its own Akiyo QCIF QP 21 stream on its
+1080p bundle wrote 25 frames before failing cleanly at a later unit. Those
+units passed the end-of-stream check, so their entropy symbols were in sync
+(apart from aliased slots), but with nondeterministic spatial priors the means,
+and so the pixels, need not equal the encoder's; they were not compared with
+the encoder's reconstruction. It is the known QCIF finding below, kept in the
+matrix as required; on this GPU the same case fails at unit 0.
+
+**Pass rule across GPUs:** every NVCR decoder pair in both directions decodes
+bit-exactly (same GPU, same path) or fails cleanly; no pair wrote a frame
+after its first divergence. No cross-GPU pair is bit-exact: cross-GPU decode of
+DCVC-UF streams is not supported on either path, and fails cleanly.
+
+G4 across GPUs: pinned upstream on the 4070 decoding the ten 5060 streams
+completes all of them with wrong frames (17.9-20.5 dB mean PSNR-Y against the
+source), fused streams included (LibTorch and GPU both differ).
+
+### Retained local outputs
+
+- `/home/oelghati/nvcr-t3-exchange/from-rtx4070/` (`SHA256SUMS`
+  `00f3a684…7aa6`): streams, manifest, run metadata, the ONNX export, 4070
+  reference traces and YUV.
+- `build-t3-runs/rtx4070-final/` in the worktree (ignored): `decodes.jsonl`,
+  `compare.jsonl`, traces, reference YUV of the final run (`3defed53`). Its 26
+  planned pairs equal the earlier run `build-t3-runs/rtx4070-20261107/`
+  (`388c45e5` builds; verdicts, frames written, YUV digests and first
+  divergent indexes), which also holds `upstream/` (G4).
+- `build-t3-runs/rtx5060-to-4070/`: decodes of the 5060 streams here,
+  `compare.jsonl`, upstream decodes of them.
+- `build-t3-runs/malformed/final/` (final malformed-stream results),
+  `build-t3-runs/determinism-*`, `build-t3-runs/regression/`.
+- `/home/oelghati/nvcr-t3-exchange/from-rtx5060/` (5060 package).
+
+### Reproduction
+
+```sh
+python3 scripts/backends/dcvcuf/run_cross_decode.py encode --cli-native <fused cli> \
+  --cli-tensorrt <tensorrt cli> --native-bundle <.pt> --tensorrt-bundle <1080p bundle> \
+  --dataset-root <datasets> --gpu-label rtx4070 --output-dir <new dir>
+python3 scripts/backends/dcvcuf/run_cross_decode.py decode --streams <dir> --label tensorrt \
+  --cli <cli> --harness <build>/tests/nvcr_dcvcuf_entropy_trace --bundle <bundle> \
+  --gpu-label rtx4070 --output-dir <run>          # and --label native
+python3 scripts/backends/dcvcuf/run_cross_decode.py compare --decodes <run>/decodes.jsonl \
+  --dataset-root <datasets> --output <run>/compare.jsonl
+python3 scripts/backends/dcvcuf/decode_with_upstream.py --reference-root <dcvc-uf> \
+  --image-checkpoint <image> --video-checkpoint <video> --streams <dir> --output-dir <run>/upstream
+```
+
+### Not verified
+
+- G2 (format and malformed-unit rejection as a recorded gate); the malformed
+  runs above cover rejection on two sequences only.
+- Fused path under a sanitizer (LibTorch); only its Release behaviour was run.
+- Cross-path decode of the README recipe, at 4K, or on GPUs other than the
+  RTX 4070 and RTX 5060; the 5060 rows are relayed, not re-run here.
+- Whether the frames a nondeterministic QCIF decode on the 1080p bundle writes
+  before failing equal the encoder's reconstruction (5060, 25 frames).
+- That no cross-path pair ever completes with wrong frames: the end check
+  misses the aliased slots listed above.
