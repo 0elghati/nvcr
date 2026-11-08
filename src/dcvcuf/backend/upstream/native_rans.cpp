@@ -120,8 +120,15 @@ void RansDecoder::set_cdf(
 }
 
 void RansDecoder::set_entropy_coder_parallel(int count) {
-    parallel_ = count;
-    rebuild();
+    // Runs on upstream's entropy worker thread: record, never throw.
+    try {
+        parallel_ = count;
+        rebuild();
+    } catch (const std::exception& exception) {
+        codec_.reset();
+        fail(nvcr::Error(nvcr::ErrorCode::malformed_bitstream, exception.what(), "dcvcuf.rans"),
+             0);
+    }
 }
 
 void RansDecoder::fail(nvcr::Error error, std::size_t symbols) {
@@ -130,6 +137,12 @@ void RansDecoder::fail(nvcr::Error error, std::size_t symbols) {
 }
 
 void RansDecoder::set_stream(const std::uint8_t* data, int size) {
+    // set_entropy_coder_parallel runs just before this call for every frame;
+    // keep its error for this frame.
+    if (!codec_) return fail(error_.value_or(nvcr::Error(
+                                 nvcr::ErrorCode::malformed_bitstream,
+                                 "DCVC-UF entropy decoder is not configured", "dcvcuf.rans")),
+                             0);
     error_.reset();
     decoded_->clear();
     if (!codec_ || !data || size <= 0) {

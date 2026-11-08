@@ -53,6 +53,8 @@ constexpr std::uint32_t max_qp = 63;  // rows of the q-scale tables
 
 // Predicted payload flag byte; the upstream UF stream carries the same bit.
 constexpr std::uint8_t reset_feature_memory_flag = 0x01;
+// UF splits a frame's entropy stream over 1-8 coders (upstream MAX_EC_PARALLEL).
+constexpr std::uint8_t max_entropy_parallel = 8;
 
 struct CodecPayload final {
     std::uint8_t entropy_parallel{};
@@ -93,7 +95,8 @@ Result<CodecPayload> parse_payload(
     const auto allowed_flags =
         type == FrameType::intra ? std::uint8_t{0} : reset_feature_memory_flag;
     if ((flags & ~allowed_flags) != 0 || payload[7] != std::byte{0} ||
-        entropy_parallel == 0 || count == 0 || count > 8 ||
+        entropy_parallel == 0 || entropy_parallel > max_entropy_parallel ||
+        count == 0 || count > 8 ||
         (type == FrameType::intra && count != 1)) {
         return codec_error(
             ErrorCode::malformed_bitstream, "invalid DCVC-UF payload fields");
