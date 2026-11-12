@@ -2,7 +2,10 @@
 
 #include "nvcr/common/error.hpp"
 
+#include <array>
+#include <cstddef>
 #include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -19,5 +22,8 @@ namespace nvcr::detail {
     std::string_view subsystem);
 
 [[nodiscard]] std::string sha256_text(std::string_view text);
+
+// The 32 bytes of a digest written as 64 lowercase hex digits.
+[[nodiscard]] std::optional<std::array<std::byte, 32>> sha256_bytes(std::string_view hex);
 
 }  // namespace nvcr::detail

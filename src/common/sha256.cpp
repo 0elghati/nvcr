@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
+#include <optional>
 #include <span>
 #include <sstream>
 #include <utility>
@@ -176,6 +177,23 @@ std::string sha256_text(std::string_view text) {
     Sha256 sha256;
     sha256.update(std::as_bytes(std::span(text.data(), text.size())));
     return to_hex(sha256.finish());
+}
+
+std::optional<std::array<std::byte, 32>> sha256_bytes(std::string_view hex) {
+    if (hex.size() != 64) return std::nullopt;
+    std::array<std::byte, 32> digest{};
+    const auto nibble = [](char character) -> int {
+        if (character >= '0' && character <= '9') return character - '0';
+        if (character >= 'a' && character <= 'f') return character - 'a' + 10;
+        return -1;
+    };
+    for (std::size_t index = 0; index < digest.size(); ++index) {
+        const int high = nibble(hex[2 * index]);
+        const int low = nibble(hex[2 * index + 1]);
+        if (high < 0 || low < 0) return std::nullopt;
+        digest[index] = static_cast<std::byte>((high << 4) | low);
+    }
+    return digest;
 }
 
 }  // namespace nvcr::detail

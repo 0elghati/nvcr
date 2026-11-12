@@ -14,64 +14,6 @@ Error numerics_error(ErrorCode code, std::string message) {
     return Error(code, std::move(message), "dcvcrt.numerics");
 }
 
-std::optional<std::array<std::byte, 32>> parse_digest(std::string_view hex) {
-    if (hex.size() != 64) return std::nullopt;
-    std::array<std::byte, 32> digest{};
-    const auto nibble = [](char character) -> int {
-        if (character >= '0' && character <= '9') return character - '0';
-        if (character >= 'a' && character <= 'f') return character - 'a' + 10;
-        return -1;
-    };
-    for (std::size_t index = 0; index < digest.size(); ++index) {
-        const int high = nibble(hex[2 * index]);
-        const int low = nibble(hex[2 * index + 1]);
-        if (high < 0 || low < 0) return std::nullopt;
-        digest[index] = static_cast<std::byte>((high << 4) | low);
-    }
-    return digest;
-}
-
-// nvcr.fx.v1: the eleven stage programs plus the entropy rules (index edges,
-// skip threshold), whose digest joins the stream's numerics identity.
-Result<std::optional<NormativeStages>> fx_stages(const RuntimeConfiguration& configuration,
-                                                 const std::filesystem::path& directory) {
-    NormativeStages stages;
-    std::vector<NormativeStageIdentity> identities;
-    for (const auto& [component, inputs, outputs] : fx_stage_tensors) {
-        auto digest = deterministic::fx::program_digest(directory, component);
-        if (!digest) return digest.error();
-        auto bytes = parse_digest(digest.value());
-        if (!bytes) return numerics_error(ErrorCode::internal_error, "program digest is not SHA-256");
-        identities.push_back(NormativeStageIdentity{std::string(component), *bytes});
-        provider::experimental::ExecutableStageDescriptor descriptor;
-        descriptor.stage_id = std::string(component);
-        descriptor.artifact.codec_id = "dcvc-rt";
-        descriptor.artifact.model_set_id = configuration.artifacts.model_id;
-        descriptor.artifact.component_id = std::string(component);
-        descriptor.artifact.provider_id = configuration.provider.id;
-        descriptor.artifact.precision = "int32";
-        descriptor.artifact.path = directory.string();
-        descriptor.artifact.expected_digest.assign(bytes->begin(), bytes->end());
-        descriptor.numerics_profile = std::string(nvcr::numerics::fx_v1);
-        const auto add = [&](std::string_view name, provider::experimental::TensorAccess access) {
-            if (name.empty()) return;
-            descriptor.tensors.push_back(provider::experimental::TensorContract{
-                std::string(name), provider::experimental::TensorDataType::int32, access,
-                {{1, 1}, {1, 65535}, {1, 65535}, {1, 65535}}});
-        };
-        for (const auto name : inputs) add(name, provider::experimental::TensorAccess::read);
-        for (const auto name : outputs) add(name, provider::experimental::TensorAccess::write);
-        stages.descriptors.push_back(std::move(descriptor));
-    }
-    auto entropy = detail::sha256_file(directory / fx_entropy_file, "dcvcrt.numerics");
-    if (!entropy) return entropy.error();
-    identities.push_back(NormativeStageIdentity{"fx_entropy", *parse_digest(entropy.value())});
-    auto identity = NumericsIdentityIO::make(std::string(nvcr::numerics::fx_v1), identities);
-    if (!identity) return identity.error();
-    stages.identity = std::move(identity.value());
-    return std::optional<NormativeStages>(std::move(stages));
-}
-
 }  // namespace
 
 Result<std::optional<NormativeStages>> normative_stages(const RuntimeConfiguration& configuration) {
@@ -87,7 +29,11 @@ Result<std::optional<NormativeStages>> normative_stages(const RuntimeConfigurati
         return numerics_error(ErrorCode::missing_artifact,
                               profile + " requires the artifact bundle's normative programs");
     }
-    if (profile == nvcr::numerics::fx_v1) return fx_stages(configuration, directory);
+    if (profile == nvcr::numerics::fx_v1) {
+        auto stages = codec::fx::normative_stages(configuration, "dcvc-rt", directory, fx_stage_tensors, fx_entropy_file);
+        if (!stages) return stages.error();
+        return std::optional<NormativeStages>(std::move(stages.value()));
+    }
     NormativeStages stages;
     std::vector<NormativeStageIdentity> identities;
     for (const auto component : normative_components) {
@@ -97,7 +43,7 @@ Result<std::optional<NormativeStages>> normative_stages(const RuntimeConfigurati
                                   "normative program " + std::string(component) + " is unavailable in " +
                                       directory.string() + ": " + std::string(digest.error().message()));
         }
-        auto bytes = parse_digest(digest.value());
+        auto bytes = detail::sha256_bytes(digest.value());
         if (!bytes) return numerics_error(ErrorCode::internal_error, "program digest is not SHA-256");
         identities.push_back(NormativeStageIdentity{std::string(component), *bytes});
 

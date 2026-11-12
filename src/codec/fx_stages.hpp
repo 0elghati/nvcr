@@ -4,12 +4,16 @@
 // a pool that reuses them across frames, and one call per stage. Shared by the
 // codecs that run under nvcr.fx.v1, whatever provider implements it.
 
+#include "stream_numerics.hpp"
+
 #include "nvcr/common/error.hpp"
+#include "nvcr/configuration/configuration.hpp"
 #include "nvcr/provider/experimental/session.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -54,6 +58,22 @@ struct Bind final {
     std::string_view name;
     const Buffer* buffer;
 };
+
+// A codec's nvcr.fx.v1 stage: its program and the program's tensors (empty names pad).
+struct StageTensors final {
+    std::string_view component;
+    std::array<std::string_view, 7> inputs;
+    std::array<std::string_view, 5> outputs;
+};
+
+// The codec's fx stages from the programs in directory, bound by component,
+// and the stream identity over their digests and the entropy rules the codec
+// keeps next to them (entropy_file).
+[[nodiscard]] Result<NormativeStages> normative_stages(const RuntimeConfiguration& configuration,
+                                                       std::string_view codec_id,
+                                                       const std::filesystem::path& directory,
+                                                       std::span<const StageTensors> stages,
+                                                       std::string_view entropy_file);
 
 // Runs a stage and waits for it.
 [[nodiscard]] Result<void> run(api::IProviderSession& session, const api::ExecutableStage& stage,

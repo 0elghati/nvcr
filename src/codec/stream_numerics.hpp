@@ -12,6 +12,7 @@
 #include "nvcr/bitstream/access_unit.hpp"
 #include "nvcr/bitstream/numerics_identity.hpp"
 #include "nvcr/common/error.hpp"
+#include "nvcr/provider/experimental/session.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -20,6 +21,13 @@
 #include <vector>
 
 namespace nvcr::codec {
+
+// The stages a codec declares normative under an exact profile, and the
+// identity they give its streams (the profile and their program digests).
+struct NormativeStages final {
+    NumericsIdentity identity;
+    std::vector<provider::experimental::ExecutableStageDescriptor> descriptors;
+};
 
 class StreamNumerics final {
 public:
