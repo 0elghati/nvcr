@@ -117,6 +117,9 @@ MODEL_GRAPHS = {
         "p_synthesis.onnx",
     ),
 }
+# nvcr.fx.v1's P-frame encoder input and display picture; bundles published
+# before them stay valid.
+OPTIONAL_MODEL_GRAPHS = {"p_frame_manifest.json": ("p_encode.onnx", "p_display.onnx")}
 MODEL_ASSETS = {
     "i_frame_manifest.json": ("i_entropy.bin", "i_quant.bin"),
     "p_frame_manifest.json": ("p_entropy.bin", "p_quant.bin"),
@@ -223,6 +226,7 @@ def validate_hashed_entries(
     *,
     require_files: bool,
     expected_names: tuple[str, ...] | None = None,
+    optional_names: tuple[str, ...] = (),
 ) -> None:
     if not isinstance(entries, list):
         raise ValidationError(f"{source} requires a list of hashed entries")
@@ -243,9 +247,9 @@ def validate_hashed_entries(
                 raise ValidationError(f"bundle is missing {name}")
             if sha256(path) != expected:
                 raise ValidationError(f"SHA-256 mismatch: {name}")
-    if expected_names is not None and set(names) != set(expected_names):
+    if expected_names is not None and set(names) - set(optional_names) != set(expected_names):
         missing = sorted(set(expected_names) - set(names))
-        extra = sorted(set(names) - set(expected_names))
+        extra = sorted(set(names) - set(expected_names) - set(optional_names))
         raise ValidationError(
             f"{source} entries do not match the pinned model contract; "
             f"missing={missing}, extra={extra}"
@@ -281,6 +285,7 @@ def validate_model_manifests(root: Path, *, require_graphs: bool) -> list[dict[s
             path,
             require_files=require_graphs,
             expected_names=MODEL_GRAPHS[filename],
+            optional_names=OPTIONAL_MODEL_GRAPHS.get(filename, ()),
         )
         validate_hashed_entries(
             root,
