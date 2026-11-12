@@ -23,6 +23,17 @@ jobs:
       release_surface: ${{ steps.filter.outputs.release_surface }}
     steps:
       - uses: actions/checkout@v4
+      # docker/publish.sh refuses to push from a dirty worktree, so a file whose
+      # committed bytes disagree with .gitattributes blocks every release.
+      - name: Check fresh checkout is clean
+        run: |
+          set -euo pipefail
+          dirty="$(git status --porcelain)"
+          if [[ -n "$dirty" ]]; then
+            echo "Fresh checkout is dirty; renormalize with 'git add --renormalize .':" >&2
+            echo "$dirty" >&2
+            exit 1
+          fi
       - uses: dorny/paths-filter@v3
         id: filter
         with:
