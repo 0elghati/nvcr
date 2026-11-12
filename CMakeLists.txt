@@ -145,6 +145,7 @@ target_sources(
         src/runtime/runtime.cpp
         src/statistics/statistics.cpp
         src/deterministic/fx.cpp
+        src/deterministic/fx_program.cpp
         src/deterministic/normative_stage.cpp
         src/deterministic/program.cpp
         $<TARGET_OBJECTS:nvcr_dcvc_rans>

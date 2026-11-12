@@ -187,6 +187,12 @@ target_link_libraries(nvcr_fx_reference_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_fx_reference_tests)
 add_test(NAME nvcr_fx_reference COMMAND nvcr_fx_reference_tests)
 
+add_executable(nvcr_fx_program_tests fx_program_tests.cpp)
+target_include_directories(nvcr_fx_program_tests PRIVATE "${PROJECT_SOURCE_DIR}/src")
+target_link_libraries(nvcr_fx_program_tests PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_fx_program_tests)
+add_test(NAME nvcr_fx_program COMMAND nvcr_fx_program_tests)
+
 add_executable(nvcr_numerics_identity_tests numerics_identity_tests.cpp)
 target_link_libraries(nvcr_numerics_identity_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_numerics_identity_tests)

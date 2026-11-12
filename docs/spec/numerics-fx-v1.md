@@ -83,15 +83,21 @@ Stride 1 and zero padding 1. Per channel `c`, integer weights `w[c][i][j]`, bias
 `Y[c][y][x] = rsr( b[c] + Σ_{i,j ∈ {0,1,2}} w[c][i][j] · X[c][y+i−1][x+j−1],  s[c] )`, where taps outside the image
 contribute 0. Then the stored bound applies.
 
-### 4.3 `mul_param`: per-channel fixed-point product
+### 4.3 `mul`: fixed-point product
 
-Per-channel integer `q[c]` and a shift `t` (the research uses `t = fw = 18`):
-`Y[c][p] = rsr( X[c][p] · q[c], t )`.
+`Y[c][p] = rsr( A[c][p] · B[c'][p'], t )`, with an integer shift `t` from the program.
+- `B` has either `A`'s channel count (`c' = c`) or one channel (`c' = 0`).
+- `B` has either `A`'s size (`p' = p`) or is 1×1 (`p' = 0`).
 
-### 4.4 `mul_act`: product of two activations
+The research uses `t = fw = 18` for per-channel model scales, and `t = fa` for a product of two activations.
 
-`Y[c][p] = rsr( A[c][p] · B[c'][p], fa )`. Here `B` has either the same channel count as `A` (`c' = c`) or one
-channel (`c' = 0`, broadcast).
+### 4.4 `param_row`: per-QP parameter rows
+
+A table `rows[q][c]` of integers with `|rows| ≤ 2^24` is program data. The input is a 1×1 one-channel tensor
+holding `q`. The output is the `C`-channel 1×1 tensor `rows[q][·]`. A `q` outside the table fails the stage.
+
+This keeps a codec's per-quality model scales (for example DCVC-RT's `q_scale_dec`, `q_feature`, `q_decoder`,
+`q_recon`, quantized at 2^-fw) inside the program, and so inside the digest.
 
 ### 4.5 `table` activations
 
@@ -122,6 +128,7 @@ Example: DCVC-RT's decoder quant step `floor(1.5 · sigmoid + 0.5 · 2^fa + 0.5)
 None of these changes a value.
 
 - `add`: `Y = A + B`, elementwise, same shape; then the stored bound.
+- `crop_like`: `X` cropped from the origin to the height and width of a second input, which must not be larger.
 - `clamp`: `Y = clamp(X, lo, hi)` with integer `lo`, `hi` (for example `[0, 2^fa]` for a picture).
 - `concat`: channels of the first input, then the second.
 - `slice`: channels `[begin, end)`.
@@ -154,30 +161,64 @@ None of these changes a value.
 
 ---
 
-## 6. Program format `nvcr.fx-program.v1` (sketch)
+## 6. Program format `nvcr.fx-program.v1`
 
-Each normative stage is two files in the bundle's `normative/` directory:
-- `<stage>.fxprog.json`: format id, profile id, `fa`, the input and output tensor names and shapes, and the node list
-  (op, tensor indices, parameters, offsets into the data file);
-- `<stage>.fxw`: little-endian binary:
-  - `int8` digit planes of the `gemm` weights (the reference recombines them as `w = Σ_j d_j · 256^j`);
-  - `int32` depthwise weights;
-  - `int64` biases;
-  - `int16` delta tables;
-  - `int32` saturating tables.
+Each normative stage is two files in the bundle's `normative/` directory.
 
-The program digest used by the stream's numerics identity is the SHA-256 of the two files, combined as for
-`nvcr.intconv.v1`. Weights, policies (`k_in` per layer, digit counts) and tables are all inside it, so a decoder
-with different settings refuses the stream.
+**`<stage>.fxw`:** a little-endian blob of typed arrays, referenced by `[byte offset, element count]`.
 
-The research's per-layer choices map like this:
+**`<stage>.fxprog.json`:**
+
+```json
+{
+  "format": "nvcr.fx-program.v1", "profile": "nvcr.fx.v1", "fa": 14,
+  "data": {"file": "<stage>.fxw", "sha256": "<hex SHA-256 of the .fxw file>"},
+  "tensors": [{"name": "y_hat", "channels": 128}, ...],
+  "inputs": [0, 1], "outputs": [9],
+  "delta_tables": [{"h": 108544, "shift": 3, "dc": [offset, count]}],
+  "nodes": [{"op": "gemm", "inputs": [x, residual...], "output": y, ...}, ...]
+}
+```
+
+- Spatial sizes are not stored. They follow from the inputs a codec passes.
+- Nodes run in order. A tensor is written once and read only after it is written.
+- The program digest a stream carries is the SHA-256 of `<stage>.fxprog.json`. That file pins the `.fxw` SHA-256,
+  so weights, input shifts and tables are all covered.
+
+**Node fields** (arrays in the data file; the element type is fixed per field):
+
+| `op` | inputs | fields |
+|---|---|---|
+| `gemm` | x, then 0–2 residuals | `in_channels`, `out_channels`, `group` (1, 2, 4), `input_shift`, `delta_table` (index or −1), `weights` int16 `[out][in]`, `bias` int64, `shift` int32 |
+| `depthwise3x3` | x | `weights` int32 `[c][3][3]`, `bias` int64, `shift` int32 |
+| `mul` | a, b (b: same or one channel, same size or 1×1) | `shift` |
+| `param_row` | q (1 channel, 1×1) | `rows` int64 `[q][c]` |
+| `crop_like` | x, ref | — |
+| `affine` | x | `alpha`, `beta`, `shift` |
+| `add` | a, b | — |
+| `sat_table` | x | `table` int32 `[2n]`, `top` |
+| `delta` | x | `delta_table` |
+| `clamp` | x | `lo`, `hi` |
+| `concat` | a, b | — |
+| `slice` | x | `begin`, `end` (channels) |
+| `pixel_shuffle`, `pixel_unshuffle` | x | `factor` |
+| `im2col` | x | `kernel` (3 or 2), `stride` (1 or 2; 2×2 needs 2) |
+
+`delta_tables[i].dc` is int16 with `((2h) >> shift) + 1` entries.
+
+**Load-time refusals:**
+- any failed check in Section 5;
+- a data file whose SHA-256 differs from the one in the JSON (`digest_mismatch`);
+- a field out of range, or a reference outside the data file or the tensor list.
+
+**How the research settings map to program fields:**
 
 | Research setting | Program field |
 |---|---|
-| `EXACTRT_APOLICY` (`rt_hybrid_k1.json`, `uf_hybrid_k1.json`) | `gemm.k_in` |
-| `EXACTRT_WLIMBS=2`, per-channel weight exponents | the integer weights and `s[o]` |
+| `EXACTRT_APOLICY` (`rt_hybrid_k1.json`, `uf_hybrid_k1.json`) | `gemm.input_shift` |
+| `EXACTRT_WLIMBS=2`, per-channel weight exponents | the integer weights and `shift` |
 | `EXACTRT_LIMBS=2` | always: inputs saturate to `D2` |
-| `EXACTRT_WSILU_SHIFT=3` | `delta.c` and the coarse `dc` table |
+| `EXACTRT_WSILU_SHIFT=3` | `delta_tables[].shift` and its `dc` |
 | sigmoid LUT (`build_sigmoid_lut`, range 16) | `sat_table` with `n = 16 · 2^fa`, `top = 2^fa` |
 
 ---
