@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/0elghati/nvcr/compare/v1.5.0...v1.5.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* **release:** normalize target profile line endings so release checkouts stay clean ([#249](https://github.com/0elghati/nvcr/issues/249)) ([ccb2e83](https://github.com/0elghati/nvcr/commit/ccb2e83308510d77a27691a5ea8810ec4425e203))
+
 ## [1.5.0](https://github.com/0elghati/nvcr/compare/v1.4.1...v1.5.0) (2026-11-12)
 
 
