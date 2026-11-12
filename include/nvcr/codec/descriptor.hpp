@@ -5,6 +5,7 @@
 // their implementation details.  ICodecAdapter is in codec/adapter.hpp.
 
 #include "nvcr/common/error.hpp"
+#include "nvcr/numerics/profiles.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -29,6 +30,8 @@ struct CodecCapabilities {
     bool supports_delayed_output{false}; // codec may buffer frames before emitting AUs
     std::uint32_t min_qp{0};
     std::uint32_t max_qp{71};
+    // Numerics profiles (nvcr/numerics/profiles.hpp) the codec runs under; the first is its default.
+    std::vector<std::string_view> numerics_profiles{nvcr::numerics::native};
 };
 
 // A single namespaced option declaration.  The namespace prefix identifies the

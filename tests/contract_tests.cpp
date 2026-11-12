@@ -5,6 +5,7 @@
 #include <nvcr/dcvcrt/backend.hpp>
 #if defined(NVCR_TEST_HAS_TENSORRT)
 #include <nvcr/dcvcrt/tensorrt_backend.hpp>
+#include <nvcr/dcvcuf/backend.hpp>
 #endif
 #include <nvcr/nvcr.hpp>
 
@@ -433,6 +434,42 @@ void runtime_construction_contract() {
     }
 }
 
+void numerics_profile_contract() {
+    const auto& registry = nvcr::runtime::Registry::instance();
+    if (auto dcvcrt = registry.find_codec("dcvc-rt")) {
+        expect(dcvcrt->capabilities.numerics_profiles ==
+                   std::vector<std::string_view>{nvcr::numerics::native, nvcr::numerics::intconv_v1},
+               "dcvc-rt declares native (its default) and nvcr.intconv.v1");
+    }
+
+    nvcr::RuntimeConfiguration configuration;
+    configuration.codec.id = "test-codec";
+    configuration.provider.id = "test-cpu";
+    configuration.runtime.log_level = nvcr::LogLevel::off;
+
+    configuration.codec.numerics_profile = std::string(nvcr::numerics::native);
+    expect(nvcr::Runtime::create(configuration).has_value(), "a declared native profile is accepted");
+
+    configuration.codec.numerics_profile = "nvcr.undeclared.v1";
+    auto undeclared = nvcr::Runtime::create(configuration);
+    expect(!undeclared && undeclared.error().code() == nvcr::ErrorCode::incompatible_precision,
+           "a profile the codec does not declare is refused");
+
+    configuration.codec.numerics_profile = std::string(nvcr::numerics::intconv_v1);
+    auto unclaimed = nvcr::Runtime::create(configuration);
+    expect(!unclaimed && unclaimed.error().code() == nvcr::ErrorCode::incompatible_precision,
+           "an exact profile the provider does not implement is refused");
+
+#if defined(NVCR_TEST_HAS_TENSORRT)
+    nvcr::dcvcuf::register_codec();
+    configuration.codec.id = "dcvc-uf";
+    configuration.provider.id = "tensorrt";
+    auto uf = nvcr::Runtime::create(configuration);
+    expect(!uf && uf.error().code() == nvcr::ErrorCode::incompatible_precision,
+           "dcvc-uf refuses an exact profile instead of ignoring it");
+#endif
+}
+
 void registered_grouped_session_contract() {
     nvcr::RuntimeConfiguration configuration;
     configuration.codec.id = "test-codec";
@@ -834,6 +871,7 @@ int main() {
     provider_session_contract();
     runtime_services_contract();
     runtime_construction_contract();
+    numerics_profile_contract();
     registered_grouped_session_contract();
     cli_session_driver_contract();
     codec_adapter_contract();

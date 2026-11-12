@@ -1,6 +1,7 @@
 #include "numerics.hpp"
 
 #include "../deterministic/normative_stage.hpp"
+#include "nvcr/numerics/profiles.hpp"
 
 #include <string>
 
@@ -32,12 +33,7 @@ std::optional<std::array<std::byte, 32>> parse_digest(std::string_view hex) {
 
 Result<std::optional<NormativeStages>> normative_stages(const RuntimeConfiguration& configuration) {
     const auto& profile = configuration.codec.numerics_profile;
-    if (profile.empty()) return std::optional<NormativeStages>{};
-    if (profile != deterministic::intconv_profile) {
-        return numerics_error(ErrorCode::incompatible_precision,
-                              "DCVC-RT declares its normative stages for " +
-                                  std::string(deterministic::intconv_profile) + " only, not " + profile);
-    }
+    if (profile.empty() || profile == nvcr::numerics::native) return std::optional<NormativeStages>{};
     // The programs ship in the artifact bundle (<bundle>/normative) unless the
     // configuration names another directory.
     auto directory = configuration.artifacts.normative_program_path;
@@ -46,8 +42,7 @@ Result<std::optional<NormativeStages>> normative_stages(const RuntimeConfigurati
     }
     if (directory.empty()) {
         return numerics_error(ErrorCode::missing_artifact,
-                              std::string(deterministic::intconv_profile) +
-                                  " requires the artifact bundle's normative programs");
+                              profile + " requires the artifact bundle's normative programs");
     }
     NormativeStages stages;
     std::vector<NormativeStageIdentity> identities;
