@@ -1019,6 +1019,9 @@ Result<CodecDecodeResult> decode_intra(
         }
     }
 
+    auto entropy_complete = orchestration.end_decode();
+    if (!entropy_complete) return entropy_complete.error();
+
     status = cuda_ops::multiply_broadcast_in_place(
         y_hat_device->storage.data, q_dec_values, spatial_count, 256, stream);
     if (status != cudaSuccess) return cuda_error("cuda_ops::multiply_broadcast_in_place I decode", status);
@@ -1580,6 +1583,8 @@ Result<CodecDecodeResult> decode_predicted(
             std::span<const std::uint8_t>(indexes1.data, reduced_count));
     }();
     if (!decoded1) return decoded1.error();
+    auto entropy_complete = orchestration.end_decode();
+    if (!entropy_complete) return entropy_complete.error();
     auto& symbols1_host = decode_staging.symbols[1];
     std::copy(decoded1.value().begin(), decoded1.value().end(), symbols1_host.data);
     auto symbols1 = upload_int8_tensor_scratch(

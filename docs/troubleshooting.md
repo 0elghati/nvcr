@@ -188,6 +188,20 @@ TensorRT sections above.
 **Do not.** Interpret registry compatibility as GPU, runtime, or target
 compatibility.
 
+## DCVC-RT entropy decoding desynchronized
+
+**Symptom.** Decode fails with `malformed bitstream: DCVC-RT entropy decoding
+desynchronized`.
+
+**What it means.** The stream is corrupt, or this decoder computed different
+entropy parameters than the encoder. A DCVC-RT stream decodes only on the
+target that encoded it: the same provider and plan set on the same GPU model.
+A stream encoded on one GPU and decoded on another (issue #216), or encoded
+with TensorRT and decoded with ONNX Runtime, fails this way instead of writing
+wrong frames.
+
+**Fix.** Decode on the encoding target, or re-encode on the decoding target.
+
 ## Input is rejected or output has the wrong size
 
 **Symptom.** Encode rejects the raw input, or decoded output has an unexpected

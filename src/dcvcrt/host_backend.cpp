@@ -519,6 +519,9 @@ Result<CodecDecodeResult> decode_intra(
         }
     }
 
+    auto entropy_complete = orchestration.end_decode();
+    if (!entropy_complete) return entropy_complete.error();
+
     if (!host_ops::multiply_broadcast_in_place(
             y_hat.value().values, q_dec_values, spatial_count, 256)) {
         return op_error("multiply_broadcast_in_place");
@@ -851,6 +854,8 @@ Result<CodecDecodeResult> decode_predicted(
     }
     auto decoded1 = orchestration.decode_y(indexes);
     if (!decoded1) return decoded1.error();
+    auto entropy_complete = orchestration.end_decode();
+    if (!entropy_complete) return entropy_complete.error();
     if (decoded1.value().size() != reduced_count ||
         !host_ops::int8_to_half(decoded1.value(), symbols) ||
         !host_ops::restore_two_way(
