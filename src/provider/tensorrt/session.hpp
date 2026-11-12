@@ -805,6 +805,7 @@ private:
         session_api::ExecutableStageDescriptor descriptor);
     [[nodiscard]] Result<session_api::ExecutableStage> load_fx_stage(
         session_api::ExecutableStageDescriptor descriptor);
+    [[nodiscard]] Result<std::uint32_t*> fx_failure_word();
     [[nodiscard]] Result<void> check_fx_failure(const std::string& stage_id);
     [[nodiscard]] Result<std::vector<DeviceTensor>> run_exact_stage(
         const TensorRTExactStage& stage,
@@ -824,6 +825,7 @@ private:
     BackendProfiler profiler_{false};
     std::shared_ptr<CudaStreamOwner> stream_owner_;
     cudaStream_t stream_{};
+    std::uint32_t* fx_word_{};  // this session's nvcr.fx.v1 failure word
     ContextPolicy context_policy_{ContextPolicy::per_engine};
     bool ready_{};
     bool initialized_{};

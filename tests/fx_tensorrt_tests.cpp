@@ -76,11 +76,14 @@ std::optional<std::vector<det::Tensor>> run_plan(const std::vector<std::byte>& p
     }
     std::uint32_t* word = nullptr;
     std::uint32_t failed = 0;
-    trt::failure_word(&word);
+    cudaMalloc(&word, 4);
     cudaMemset(word, 0, 4);
+    const auto previous = trt::install_failure_word(word);
     expect(context->enqueueV3(nullptr), program.name + ": enqueue");
+    trt::install_failure_word(previous);
     cudaDeviceSynchronize();
     cudaMemcpy(&failed, word, 4, cudaMemcpyDeviceToHost);
+    cudaFree(word);
     for (std::size_t i = 0; i < outputs.size(); ++i) {
         cudaMemcpy(outputs[i].values.data(), buffers[inputs.size() + i], outputs[i].values.size() * 4,
                    cudaMemcpyDeviceToHost);

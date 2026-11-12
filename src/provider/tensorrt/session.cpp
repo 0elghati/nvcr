@@ -1007,18 +1007,38 @@ Result<std::vector<DeviceTensor>> TensorRTExecutionSession::run_stage(
             "TensorRT stage belongs to another provider session",
             std::string(subsystem));
     }
+    if (concrete->descriptor().numerics_profile != numerics::fx_v1) {
+        return run_stage(concrete->engine_index(), inputs, output_storage);
+    }
+    auto word = fx_failure_word();
+    if (!word) return word.error();
+    const auto previous = fx::install_failure_word(word.value());
     auto outputs = run_stage(concrete->engine_index(), inputs, output_storage);
-    if (!outputs || concrete->descriptor().numerics_profile != numerics::fx_v1) return outputs;
+    fx::install_failure_word(previous);
+    if (!outputs) return outputs;
     auto checked = check_fx_failure(concrete->descriptor().stage_id);
     if (!checked) return checked.error();
     return outputs;
 }
 
-// A kernel that met one of nvcr.fx.v1's failure conditions set the word: the stage fails.
-Result<void> TensorRTExecutionSession::check_fx_failure(const std::string& stage_id) {
+Result<std::uint32_t*> TensorRTExecutionSession::fx_failure_word() {
+    if (fx_word_ != nullptr) return fx_word_;
     std::uint32_t* word = nullptr;
+    if (const auto status = cudaMalloc(&word, sizeof(*word)); status != cudaSuccess) {
+        return cuda_error("fx failure word", status);
+    }
+    if (const auto status = cudaMemset(word, 0, sizeof(*word)); status != cudaSuccess) {
+        cudaFree(word);
+        return cuda_error("fx failure word", status);
+    }
+    fx_word_ = word;
+    return fx_word_;
+}
+
+// A kernel that met one of nvcr.fx.v1's failure conditions set this session's word: the stage fails.
+Result<void> TensorRTExecutionSession::check_fx_failure(const std::string& stage_id) {
+    std::uint32_t* word = fx_word_;
     std::uint32_t failed = 0;
-    if (const auto status = fx::failure_word(&word); status != cudaSuccess) return cuda_error("fx failure word", status);
     auto copied = copy_async(&failed, word, sizeof(failed), cudaMemcpyDeviceToHost, stream_, "fx failure word");
     if (!copied) return copied.error();
     auto synchronized = synchronize_stream(stream_, "fx failure word");
@@ -1065,8 +1085,15 @@ Result<session_api::Completion> TensorRTExecutionSession::submit(
         auto finalized = finalize_stages();
         if (!finalized) return finalized.error();
     }
+    if (concrete_stage->descriptor().numerics_profile != numerics::fx_v1) {
+        return submit_impl(concrete_stage, tensors, dependencies);
+    }
+    auto word = fx_failure_word();
+    if (!word) return word.error();
+    const auto previous = fx::install_failure_word(word.value());
     auto completion = submit_impl(concrete_stage, tensors, dependencies);
-    if (!completion || concrete_stage->descriptor().numerics_profile != numerics::fx_v1) return completion;
+    fx::install_failure_word(previous);
+    if (!completion) return completion;
     auto checked = check_fx_failure(concrete_stage->descriptor().stage_id);
     if (!checked) return checked.error();
     return completion;
@@ -1365,6 +1392,7 @@ TensorRTExecutionSession::~TensorRTExecutionSession() {
     if (stream_ != nullptr) {
         static_cast<void>(cudaStreamSynchronize(stream_));
     }
+    if (fx_word_ != nullptr) static_cast<void>(cudaFree(fx_word_));
     std::size_t graph_captures = 0;
     std::size_t graph_hits = 0;
     std::size_t graph_entries = 0;
@@ -1690,12 +1718,9 @@ Result<session_api::ExecutableStage> TensorRTExecutionSession::load_validated_st
 }
 
 Result<void> TensorRTExecutionSession::reset() {
-    if (!initialized_) {
-        return Error(
-            ErrorCode::invalid_state,
-            "TensorRT session is not initialized",
-            std::string(subsystem));
-    }
+    // Codecs that use only the generic contract finalize on their first
+    // submission; before it the session has run nothing.
+    if (!initialized_) return {};
     auto synchronized = synchronize_stream(stream_, "cudaStreamSynchronize session reset");
     if (!synchronized) return synchronized.error();
     scratch_arena_.reset();

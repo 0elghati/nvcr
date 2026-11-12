@@ -2,6 +2,7 @@
 
 #include <map>
 #include <mutex>
+#include <utility>
 
 namespace nvcr::tensorrt::fx {
 namespace {
@@ -135,10 +136,17 @@ __global__ void im2col_kernel(const std::int32_t* x, std::int32_t* out, Shape in
 
 std::mutex word_mutex;
 std::map<int, std::uint32_t*> words;
+thread_local std::uint32_t* installed = nullptr;
 
 }  // namespace
 
+std::uint32_t* install_failure_word(std::uint32_t* word) noexcept { return std::exchange(installed, word); }
+
 cudaError_t failure_word(std::uint32_t** word) {
+    if (installed != nullptr) {
+        *word = installed;
+        return cudaSuccess;
+    }
     int device = 0;
     if (const auto status = cudaGetDevice(&device); status != cudaSuccess) return status;
     std::lock_guard<std::mutex> lock(word_mutex);

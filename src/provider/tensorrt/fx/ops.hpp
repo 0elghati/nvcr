@@ -1,10 +1,10 @@
 #pragma once
 
 // nvcr.fx.v1 elementwise and data-movement kernels (CUDA) for the TensorRT
-// provider, and the per-device failure word. Integer arithmetic only; results
-// equal src/deterministic/fx.cpp. A kernel that meets one of the profile's
-// failure conditions (docs/spec/numerics-fx-v1.md section 5) sets the word;
-// the session reads and clears it after each stage.
+// provider, and the failure word. Integer arithmetic only; results equal
+// src/deterministic/fx.cpp. A kernel that meets one of the profile's failure
+// conditions (docs/spec/numerics-fx-v1.md section 5) sets the word; the
+// session reads and clears it after each stage.
 
 #include <cuda_runtime.h>
 
@@ -12,7 +12,14 @@
 
 namespace nvcr::tensorrt::fx {
 
-// Device address of this device's failure word (allocated on first use).
+// Each session owns a failure word and installs it on its thread around the
+// enqueues of its stages (TensorRT calls plugin enqueue on the thread that
+// calls enqueueV3), so sessions never see each other's failures. Returns the
+// word installed before.
+std::uint32_t* install_failure_word(std::uint32_t* word) noexcept;
+
+// The installed word, or with none installed (plan building) a per-device
+// scratch word that nobody reads.
 cudaError_t failure_word(std::uint32_t** word);
 
 // Sets the word when amax[index] (a kernel's reported maximum) exceeds limit.
