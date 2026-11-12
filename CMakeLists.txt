@@ -294,6 +294,7 @@ if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
     target_sources(nvcr PRIVATE
         src/dcvcuf/adapter.cpp
         src/dcvcuf/registration.cpp
+        src/dcvcuf/tables.cpp
         $<TARGET_OBJECTS:nvcr_dcvcuf_entropy>
         $<TARGET_OBJECTS:nvcr_dcvcuf_rans>)
     target_include_directories(nvcr PRIVATE
