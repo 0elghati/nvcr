@@ -19,7 +19,8 @@
 
 // DCVC-RT under nvcr.fx.v1. Every stage that decides an entropy table or the
 // reference runs as an fx program on the provider (any provider that claims the
-// profile); the encoder's analysis transforms stay FP16. Between stages the
+// profile); the encoder's analysis transforms and the P-frame display picture,
+// which nothing reads back, stay FP16. Between stages the
 // codec applies its own rules on the host: the spatial masks, integer scale
 // indexes from fx_entropy.json, and y_hat = sum of masked (symbol 2^fa + mean).
 // Entropy coding, payloads, QP schedule and reference decisions are DCVC-RT's
@@ -47,6 +48,7 @@ struct Buffer final {
     api::BufferHandle handle;
     std::array<std::int64_t, 4> shape{};
     api::TensorDataType type{api::TensorDataType::int32};
+    bool host{false};
 
     [[nodiscard]] std::size_t count() const {
         return static_cast<std::size_t>(shape[0] * shape[1] * shape[2] * shape[3]);
@@ -63,7 +65,7 @@ struct Buffer final {
 // host: the codec reads or writes the values; otherwise device memory is preferred.
 Result<Buffer> allocate(api::IProviderSession& session, std::array<std::int64_t, 4> shape, bool host,
                         api::TensorDataType type = api::TensorDataType::int32) {
-    Buffer buffer{nullptr, shape, type};
+    Buffer buffer{nullptr, shape, type, host};
     const std::array<api::MemoryDomain, 3> domains{api::MemoryDomain::provider_device, api::MemoryDomain::pinned_host,
                                                    api::MemoryDomain::host};
     for (std::size_t i = host ? 1 : 0; i < domains.size(); ++i) {
@@ -99,9 +101,18 @@ Result<void> run(api::IProviderSession& session, const api::ExecutableStage& sta
 // ---- codec rules ---------------------------------------------------------------------------------------------------
 struct EntropyRules final {
     std::vector<std::int64_t> edges;  // index k <=> scale >= edges[k - 1]
+    std::vector<std::uint8_t> table;  // the index of every scale in [0, edges.back()]
 
-    [[nodiscard]] std::uint8_t index(std::int64_t scale) const {
+    void build() {
+        table.resize(edges.empty() || edges.back() < 0 ? 0 : static_cast<std::size_t>(edges.back()) + 1);
+        for (std::size_t s = 0; s < table.size(); ++s) table[s] = search(static_cast<std::int64_t>(s));
+    }
+    [[nodiscard]] std::uint8_t search(std::int64_t scale) const {
         return static_cast<std::uint8_t>(std::upper_bound(edges.begin(), edges.end(), scale) - edges.begin());
+    }
+    [[nodiscard]] std::uint8_t index(std::int64_t scale) const {
+        return scale >= 0 && static_cast<std::size_t>(scale) < table.size() ? table[static_cast<std::size_t>(scale)]
+                                                                              : search(scale);
     }
 };
 
@@ -163,6 +174,7 @@ struct Geometry final {
 struct Reference final {
     std::optional<Buffer> frame;    // exact picture (int32, 2^-fa)
     std::optional<Buffer> feature;  // exact reference feature
+    std::uint32_t qp{};             // the feature's QP
     ReferenceState semantics;
 
     void clear() {
@@ -204,7 +216,10 @@ public:
                                 {"q_encoder", half, read, Dims{{1, 1}, {256, 256}, {1, 1}, {1, 1}}},
                                 {"y", half, write, Dims{{1, 1}, {128, 128}, any, any}}}},
                 {"p_hyper_analysis", {{"y_padded", half, read, Dims{{1, 1}, {128, 128}, any, any}},
-                                      {"z", half, write, Dims{{1, 1}, {128, 128}, any, any}}}}};
+                                      {"z", half, write, Dims{{1, 1}, {128, 128}, any, any}}}},
+                {"p_display", {{"feature", api::TensorDataType::int32, read, Dims{{1, 1}, {256, 256}, any, any}},
+                               {"q_recon", half, read, Dims{{1, 1}, {320, 320}, {1, 1}, {1, 1}}},
+                               {"frame", api::TensorDataType::int32, write, Dims{{1, 1}, {3, 3}, any, any}}}}};
             for (const auto& [component, tensors] : analysis) {
                 api::ExecutableStageDescriptor descriptor;
                 descriptor.stage_id = component + ".plan";
@@ -229,6 +244,7 @@ public:
                 return fail("fx_entropy.json needs index_edges and no skip threshold");
             }
             for (const auto& edge : edges->array_value) rules_.edges.push_back(edge.integer_value.value_or(0));
+            rules_.build();
             auto intra = intra_.initialize(root);
             if (!intra) return intra.error();
             auto predicted = predicted_.initialize(root);
@@ -269,11 +285,38 @@ public:
 private:
     const api::ExecutableStage& stage(const std::string& id) const { return stages_.at(id); }
 
+    // Storage is reused across frames: a pooled buffer is free when only the pool holds it.
+    Result<Buffer> take(std::array<std::int64_t, 4> shape, bool host,
+                        api::TensorDataType type = api::TensorDataType::int32) {
+        Buffer wanted{nullptr, shape, type, host};
+        for (const auto& pooled : pool_) {
+            if (pooled.handle.use_count() == 1 && pooled.host == host && pooled.bytes() == wanted.bytes()) {
+                wanted.handle = pooled.handle;
+                return wanted;
+            }
+        }
+        auto made = allocate(*session_, shape, host, type);
+        if (made) pool_.push_back(made.value());
+        return made;
+    }
+
+    // Full-tensor offsets of a spatial step's active elements, in the entropy coder's order.
+    const std::vector<std::uint32_t>& active(const Step& step, int channels, const Geometry& g) {
+        auto& offsets = active_[{step.groups, step.k, g.yh, g.yw}];
+        if (offsets.empty()) {
+            offsets.resize(static_cast<std::size_t>(channels / step.groups) * static_cast<std::size_t>(g.yh) *
+                           static_cast<std::size_t>(g.yw));
+            each_active(step, channels, g.yh, g.yw,
+                        [&](std::size_t r, std::size_t i) { offsets[r] = static_cast<std::uint32_t>(i); });
+        }
+        return offsets;
+    }
+
     // Encoder: FP16 picture, then y (scaled by the caller) and z symbols from the analysis stages.
     Result<std::pair<Buffer, std::vector<std::int8_t>>> analyse(const Frame& frame, const Geometry& g, bool intra,
                                                                  std::uint32_t qp, const Buffer* context) {
         auto& s = *session_;
-        auto picture = allocate(s, {1, 3, g.padded_height, g.padded_width}, true, api::TensorDataType::float16);
+        auto picture = take({1, 3, g.padded_height, g.padded_width}, true, api::TensorDataType::float16);
         if (!picture) return picture.error();
         const auto bytes = frame.data();
         if (!host_ops::yuv420p8_to_ycbcr_padded(
@@ -283,20 +326,20 @@ private:
         }
         const std::int64_t channels = intra ? 256 : 128;
         const std::int64_t quant = intra ? 368 : 256;
-        auto q = allocate(s, {1, quant, 1, 1}, true, api::TensorDataType::float16);
+        auto q = take({1, quant, 1, 1}, true, api::TensorDataType::float16);
         if (!q) return q.error();
         const auto table = intra ? intra_.encoder_quantization() : predicted_.encoder_quantization();
         for (std::int64_t c = 0; c < quant; ++c) {
             q.value().halves()[static_cast<std::size_t>(c)] =
                 host_ops::to_half(table[static_cast<std::size_t>(static_cast<std::int64_t>(qp) * quant + c)]);
         }
-        auto y = allocate(s, {1, channels, g.yh, g.yw}, true, api::TensorDataType::float16);
+        auto y = take({1, channels, g.yh, g.yw}, true, api::TensorDataType::float16);
         if (!y) return y.error();
         Result<void> ran = intra ? run(s, stage("i_analysis"), {{"frame", &picture.value()}, {"q_enc", &q.value()}},
                                        {{"y", &y.value()}})
                                  : Result<void>{};
         if (!intra) {
-            auto ctx = allocate(s, {1, 256, g.padded_height / 8, g.padded_width / 8}, true, api::TensorDataType::float16);
+            auto ctx = take({1, 256, g.padded_height / 8, g.padded_width / 8}, true, api::TensorDataType::float16);
             if (!ctx) return ctx.error();
             const auto ints = context->ints();
             auto halves = ctx.value().halves();
@@ -308,8 +351,8 @@ private:
                       {{"y", &y.value()}});
         }
         if (!ran) return ran.error();
-        auto padded = allocate(s, {1, channels, g.yh4, g.yw4}, true, api::TensorDataType::float16);
-        auto z = allocate(s, {1, 128, g.yh4 / 4, g.yw4 / 4}, true, api::TensorDataType::float16);
+        auto padded = take({1, channels, g.yh4, g.yw4}, true, api::TensorDataType::float16);
+        auto z = take({1, 128, g.yh4 / 4, g.yw4 / 4}, true, api::TensorDataType::float16);
         if (!padded) return padded.error();
         if (!z) return z.error();
         if (!host_ops::replicate_pad(y.value().halves(), padded.value().halves(),
@@ -325,7 +368,7 @@ private:
     }
 
     Result<Buffer> z_fixed(std::span<const std::int8_t> symbols, const Geometry& g) {
-        auto z = allocate(*session_, {1, 128, g.yh4 / 4, g.yw4 / 4}, true);
+        auto z = take({1, 128, g.yh4 / 4, g.yw4 / 4}, true);
         if (!z) return z.error();
         for (std::size_t i = 0; i < symbols.size(); ++i) z.value().ints()[i] = symbols[i] * static_cast<std::int32_t>(one);
         return z;
@@ -342,10 +385,10 @@ private:
         const int channels = intra ? 256 : 128;
         const int groups = intra ? 4 : 2;
         const auto plane = static_cast<std::size_t>(g.yh) * static_cast<std::size_t>(g.yw);
-        auto y_hat = allocate(s, {1, channels, g.yh, g.yw}, true);
+        auto y_hat = take({1, channels, g.yh, g.yw}, true);
         if (!y_hat) return y_hat.error();
         std::fill(y_hat.value().ints().begin(), y_hat.value().ints().end(), 0);
-        auto scales_means = allocate(s, {1, 2 * channels, g.yh, g.yw}, true);
+        auto scales_means = take({1, 2 * channels, g.yh, g.yw}, true);
         if (!scales_means) return scales_means.error();
         // Step 0 reads the prior's scales and means; params = [q.. | scales | means].
         const std::size_t first = (intra ? 2 : 128) * plane;
@@ -364,16 +407,17 @@ private:
                 scales = scales_means.value().ints().first(static_cast<std::size_t>(channels) * plane);
                 means = scales_means.value().ints().subspan(static_cast<std::size_t>(channels) * plane);
             }
-            const Step step{groups, k};
+            const auto& offsets = active(Step{groups, k}, channels, g);
             std::vector<std::uint8_t> indexes(reduced);
             std::vector<std::int8_t> symbols(reduced);
-            each_active(step, channels, g.yh, g.yw, [&](std::size_t r, std::size_t i) {
+            for (std::size_t r = 0; r < reduced; ++r) {
+                const auto i = offsets[r];
                 indexes[r] = rules_.index(scales[i]);
                 if (y_scaled != nullptr) {
                     const double v = std::nearbyint((*y_scaled)[i] - static_cast<double>(means[i]) / static_cast<double>(one));
                     symbols[r] = static_cast<std::int8_t>(std::clamp(v, -128.0, 127.0));
                 }
-            });
+            }
             if (y_scaled == nullptr) {
                 auto decoded = decode(indexes);
                 if (!decoded) return decoded.error();
@@ -387,24 +431,36 @@ private:
                 rows->push_back(std::move(row));
             }
             auto hat = y_hat.value().ints();
-            each_active(step, channels, g.yh, g.yw, [&](std::size_t r, std::size_t i) {
-                hat[i] += static_cast<std::int32_t>(symbols[r] * one + means[i]);
-            });
+            for (std::size_t r = 0; r < reduced; ++r) {
+                hat[offsets[r]] += static_cast<std::int32_t>(symbols[r] * one + means[offsets[r]]);
+            }
         }
         return y_hat;
     }
 
+    // YUV 4:2:0 8-bit from the exact picture: luma round(255 v), chroma floor(255 mean of 2x2), clamped to [0, 255].
     Result<Frame> display(const Buffer& picture, const Geometry& g, Timestamp timestamp) {
-        std::vector<Half> halves(picture.count());
-        const auto ints = picture.ints();
-        for (std::size_t i = 0; i < halves.size(); ++i) {
-            halves[i] = host_ops::to_half(static_cast<float>(static_cast<double>(ints[i]) / static_cast<double>(one)));
+        const auto v = picture.ints();
+        const auto stride = static_cast<std::size_t>(g.padded_width);
+        const auto plane = static_cast<std::size_t>(g.padded_height) * stride;
+        const auto width = static_cast<std::size_t>(g.width);
+        const auto height = static_cast<std::size_t>(g.height);
+        std::vector<std::byte> bytes(width * height * 3 / 2);
+        auto* out = reinterpret_cast<std::uint8_t*>(bytes.data());
+        for (std::size_t y = 0; y < height; ++y) {
+            for (std::size_t x = 0; x < width; ++x) {
+                const std::int64_t p = std::clamp<std::int64_t>(v[y * stride + x], 0, one);
+                *out++ = static_cast<std::uint8_t>((p * 255 + one / 2) >> fa);
+            }
         }
-        const auto size = static_cast<std::size_t>(g.width) * static_cast<std::size_t>(g.height);
-        std::vector<std::byte> bytes(size + size / 2U);
-        if (!host_ops::ycbcr_padded_to_yuv420p8(halves, {1, 3, g.padded_height, g.padded_width}, g.width, g.height,
-                                                {reinterpret_cast<std::uint8_t*>(bytes.data()), bytes.size()})) {
-            return fail("YUV420P8 reconstruction");
+        for (std::size_t c = 1; c < 3; ++c) {
+            for (std::size_t y = 0; y < height; y += 2) {
+                for (std::size_t x = 0; x < width; x += 2) {
+                    const auto* q = &v[c * plane + y * stride + x];
+                    const std::int64_t sum = std::int64_t{q[0]} + q[1] + q[stride] + q[stride + 1];
+                    *out++ = static_cast<std::uint8_t>(std::clamp<std::int64_t>((sum * 255) >> (fa + 2), 0, 255));
+                }
+            }
         }
         return Frame::copy_from(static_cast<std::uint32_t>(g.width), static_cast<std::uint32_t>(g.height),
                                 PixelFormat::yuv420p8, bytes, timestamp);
@@ -412,13 +468,13 @@ private:
 
     // Only its size matters (stages crop to it); zeros keep it inside the profile's range.
     Result<Buffer> latent_ref(const Geometry& g) {
-        auto t = allocate(*session_, {1, 1, g.yh, g.yw}, true);
+        auto t = take({1, 1, g.yh, g.yw}, true);
         if (t) std::fill(t.value().ints().begin(), t.value().ints().end(), 0);
         return t;
     }
 
     Result<Buffer> qp_tensor(std::uint32_t qp) {
-        auto t = allocate(*session_, {1, 1, 1, 1}, true);
+        auto t = take({1, 1, 1, 1}, true);
         if (t) t.value().ints()[0] = static_cast<std::int32_t>(qp);
         return t;
     }
@@ -435,8 +491,8 @@ private:
         auto& s = *session_;
         auto z = z_fixed(z_symbols, g);
         auto ref = latent_ref(g);
-        auto params = allocate(s, {1, 514, g.yh, g.yw}, true);
-        auto common = allocate(s, {1, 256, g.yh, g.yw}, false);
+        auto params = take({1, 514, g.yh, g.yw}, true);
+        auto common = take({1, 256, g.yh, g.yw}, false);
         if (!z || !ref || !params || !common) return fail("cannot allocate I-frame tensors");
         auto ran = run(s, stage("i_prior"), {{"z_fixed", &z.value()}, {"latent_ref", &ref.value()}},
                        {{"params", &params.value()}, {"common", &common.value()}});
@@ -455,7 +511,7 @@ private:
         auto y_hat = spatial_steps(true, g, params.value(), &common.value(), y_scaled ? &*y_scaled : nullptr,
                                    &result.rows, decode);
         if (!y_hat) return y_hat.error();
-        auto picture = allocate(s, {1, 3, g.padded_height, g.padded_width}, true);
+        auto picture = take({1, 3, g.padded_height, g.padded_width}, true);
         auto qp_t = qp_tensor(qp);
         if (!picture || !qp_t) return fail("cannot allocate the I-frame picture");
         ran = run(s, stage("i_synthesis"),
@@ -523,10 +579,19 @@ private:
 
     Result<Context> context(Reference& reference, bool use_frame, std::uint32_t qp, const Geometry& g, bool host) {
         auto& s = *session_;
-        auto temporal = allocate(s, {1, 256, g.padded_height / 8, g.padded_width / 8}, false);
-        auto context = allocate(s, {1, 256, g.padded_height / 8, g.padded_width / 8}, host);
+        auto temporal = take({1, 256, g.padded_height / 8, g.padded_width / 8}, false);
+        auto context = take({1, 256, g.padded_height / 8, g.padded_width / 8}, host);
         auto qp_t = qp_tensor(qp);
         if (!temporal || !context || !qp_t) return fail("cannot allocate the P-frame context");
+        if (use_frame && !reference.frame && reference.feature) {  // a reset: the exact picture of the feature
+            auto frame = take({1, 3, g.padded_height, g.padded_width}, false);
+            auto last_qp = qp_tensor(reference.qp);
+            if (!frame || !last_qp) return fail("cannot allocate the reset picture");
+            auto reset = run(s, stage("p_reset_frame"), {{"feature", &*reference.feature}, {"qp", &last_qp.value()}},
+                             {{"frame", &frame.value()}});
+            if (!reset) return reset.error();
+            reference.frame = std::move(frame.value());
+        }
         if (use_frame && !reference.frame) return fail("no reference picture");
         if (!use_frame && !reference.feature) return fail("no reference feature");
         auto ran = use_frame ? run(s, stage("p_reference_frame"), {{"frame", &*reference.frame}, {"qp", &qp_t.value()}},
@@ -549,7 +614,7 @@ private:
         auto& s = *session_;
         auto z = z_fixed(z_symbols, g);
         auto ref = latent_ref(g);
-        auto params = allocate(s, {1, 384, g.yh, g.yw}, true);
+        auto params = take({1, 384, g.yh, g.yw}, true);
         if (!z || !ref || !params) return fail("cannot allocate P-frame tensors");
         auto ran = run(s, stage("p_prior"),
                        {{"z_fixed", &z.value()}, {"temporal_context", &ctx.temporal}, {"latent_ref", &ref.value()}},
@@ -568,16 +633,19 @@ private:
         auto y_hat = spatial_steps(false, g, params.value(), nullptr, y_scaled ? &*y_scaled : nullptr, &result.rows,
                                    decode);
         if (!y_hat) return y_hat.error();
-        auto feature = allocate(s, {1, 256, g.padded_height / 8, g.padded_width / 8}, false);
-        auto picture = allocate(s, {1, 3, g.padded_height, g.padded_width}, true);
+        auto feature = take({1, 256, g.padded_height / 8, g.padded_width / 8}, false);
+        auto picture = take({1, 3, g.padded_height, g.padded_width}, true);
         auto qp_t = qp_tensor(qp);
         if (!feature || !picture || !qp_t) return fail("cannot allocate the P-frame outputs");
         ran = run(s, stage("p_synthesis"),
                   {{"y_hat", &y_hat.value()}, {"params", &params.value()}, {"context", &ctx.context}, {"qp", &qp_t.value()}},
                   {{"feature", &feature.value()}});
         if (!ran) return ran.error();
-        // The displayed picture is the exact reconstruction, which also serves a reference reset.
-        ran = run(s, stage("p_reset_frame"), {{"feature", &feature.value()}, {"qp", &qp_t.value()}},
+        auto q = take({1, 320, 1, 1}, true, api::TensorDataType::float16);
+        if (!q) return q.error();
+        const auto table = predicted_.reconstruction_quantization();
+        for (std::size_t c = 0; c < 320; ++c) q.value().halves()[c] = host_ops::to_half(table[qp * 320 + c]);
+        ran = run(s, stage("p_display"), {{"feature", &feature.value()}, {"q_recon", &q.value()}},
                   {{"frame", &picture.value()}});
         if (!ran) return ran.error();
         result.picture = std::move(picture.value());
@@ -612,8 +680,9 @@ private:
         if (!payload) return payload.error();
         auto shown = display(coded.value().picture, g, frame.timestamp());
         if (!shown) return shown.error();
-        encoder_.frame = std::move(coded.value().picture);
+        encoder_.frame.reset();
         encoder_.feature = std::move(coded.value().feature);
+        encoder_.qp = qp;
         encoder_.semantics.commit(state, true);
         return CodecEncodeResult{std::move(payload.value()), std::move(shown.value()), {}, qp};
     }
@@ -639,14 +708,17 @@ private:
         if (!ended) return ended.error();
         auto shown = display(decoded.value().picture, g, timestamp);
         if (!shown) return shown.error();
-        decoder_.frame = std::move(decoded.value().picture);
+        decoder_.frame.reset();
         decoder_.feature = std::move(decoded.value().feature);
+        decoder_.qp = info.qp;
         decoder_.semantics.commit(state, true);
         return CodecDecodeResult{std::move(shown.value()), {}};
     }
 
     std::shared_ptr<api::IProviderSession> session_;
     std::map<std::string, api::ExecutableStage, std::less<>> stages_;
+    std::vector<Buffer> pool_;
+    std::map<std::array<int, 4>, std::vector<std::uint32_t>> active_;
     EntropyRules rules_;
     IntraOrchestration intra_;
     PredictedOrchestration predicted_;
