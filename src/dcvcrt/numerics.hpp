@@ -53,6 +53,28 @@ inline constexpr std::array<std::string_view, 10> normative_components{
     "p_synthesis",
 };
 
+// The nvcr.fx.v1 stages, with their input and output tensors (empty names pad).
+struct FxStageTensors final {
+    std::string_view component;
+    std::array<std::string_view, 4> inputs;
+    std::array<std::string_view, 2> outputs;
+};
+inline constexpr std::array<FxStageTensors, 11> fx_stage_tensors{{
+    {"i_prior", {"z_fixed", "latent_ref"}, {"params", "common"}},
+    {"i_spatial_prior_1", {"y_hat", "common"}, {"scales_means"}},
+    {"i_spatial_prior_2", {"y_hat", "common"}, {"scales_means"}},
+    {"i_spatial_prior_3", {"y_hat", "common"}, {"scales_means"}},
+    {"i_synthesis", {"y_hat", "params", "qp"}, {"frame"}},
+    {"p_reference_frame", {"frame", "qp"}, {"temporal_context", "context"}},
+    {"p_reference_feature", {"feature", "qp"}, {"temporal_context", "context"}},
+    {"p_prior", {"z_fixed", "temporal_context", "latent_ref"}, {"params"}},
+    {"p_spatial_prior", {"y_hat", "params"}, {"scales_means"}},
+    {"p_synthesis", {"y_hat", "params", "context", "qp"}, {"feature"}},
+    {"p_reset_frame", {"feature", "qp"}, {"frame"}},
+}};
+// Index edges and skip threshold of the nvcr.fx.v1 stages, next to the programs.
+inline constexpr std::string_view fx_entropy_file = "fx_entropy.json";
+
 struct NormativeStages final {
     NumericsIdentity identity;  // over the components above, in order
     // One descriptor per normative stage, bound by stage id like any other

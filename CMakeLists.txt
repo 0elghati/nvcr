@@ -123,6 +123,7 @@ target_sources(
         src/common/sha256.cpp
         src/configuration/configuration.cpp
         src/dcvcrt/adapter.cpp
+        src/dcvcrt/fx_backend.cpp
         src/dcvcrt/host_backend.cpp
         src/dcvcrt/host_ops.cpp
         src/dcvcrt/numerics.cpp

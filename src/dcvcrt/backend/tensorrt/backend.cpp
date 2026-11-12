@@ -1634,7 +1634,8 @@ Result<CodecDecodeResult> decode_predicted(
     return CodecDecodeResult{std::move(frame.value()), std::move(latent_state)};
 }
 
-// DCVC-RT's runtime bundle: exactly these files, digest-verified by the session.
+// DCVC-RT's runtime bundle: exactly these files, plus the provider's nvcr.fx.v1
+// plans when the bundle carries them, all digest-verified by the session.
 constexpr std::array<std::string_view, 20> dcvcrt_bundle_files{
     "i_analysis.plan", "i_hyper_analysis.plan", "i_hyper_synthesis.plan",
     "i_spatial_prior_1.plan", "i_spatial_prior_2.plan", "i_spatial_prior_3.plan",
@@ -1646,7 +1647,10 @@ constexpr std::array<std::string_view, 20> dcvcrt_bundle_files{
 
 Result<void> validate_dcvcrt_bundle(const TensorRTExecutionSession& session) {
     const auto& files = session.bundle_files();
-    if (files.size() != dcvcrt_bundle_files.size()) {
+    const auto fx_files = std::ranges::count_if(files, [](const auto& entry) {
+        return entry.first.ends_with(".fx.plan") || entry.first.ends_with(".fx.plan.json");
+    });
+    if (files.size() - static_cast<std::size_t>(fx_files) != dcvcrt_bundle_files.size()) {
         return backend_error("engine.sha256 does not describe the exact runtime bundle");
     }
     for (const auto required : dcvcrt_bundle_files) {
