@@ -454,6 +454,7 @@ if ((stamp_only == 0)); then
         "y_hat:$p_y_min,context:$p_feature_min" \
         "y_hat:$p_y_opt,context:$p_feature_opt" \
         "y_hat:$p_y_max,context:$p_feature_max"
+    build_engine p_display "feature:$p_feature_min" "feature:$p_feature_opt" "feature:$p_feature_max"
 fi
 
 if ((run_smoke && stamp_only == 0)); then
@@ -485,13 +486,14 @@ if ((run_smoke && stamp_only == 0)); then
     smoke_engine p_prior "z_hat:$p_z_opt,temporal_context:$p_feature_opt"
     smoke_engine p_spatial_prior "context:$p_spatial_opt"
     smoke_engine p_synthesis "y_hat:$p_y_opt,context:$p_feature_opt"
+    smoke_engine p_display "feature:$p_feature_opt"
 fi
 
 for plan in i_analysis.plan i_hyper_analysis.plan i_hyper_synthesis.plan \
     i_spatial_prior_1.plan i_spatial_prior_2.plan i_spatial_prior_3.plan \
     i_synthesis.plan p_reference_frame.plan p_reference_feature.plan \
     p_analysis.plan p_hyper_analysis.plan p_prior.plan p_spatial_prior.plan \
-    p_synthesis.plan; do
+    p_synthesis.plan p_display.plan; do
     if [[ ! -f "$engine_dir/$plan" ]]; then
         echo "missing TensorRT plan: $engine_dir/$plan" >&2
         exit 1

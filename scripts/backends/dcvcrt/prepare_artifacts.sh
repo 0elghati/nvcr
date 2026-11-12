@@ -352,6 +352,7 @@ required_assets=(
     p_prior.onnx
     p_spatial_prior.onnx
     p_synthesis.onnx
+    p_display.onnx
     p_entropy.bin
     p_quant.bin
     p_frame_manifest.json

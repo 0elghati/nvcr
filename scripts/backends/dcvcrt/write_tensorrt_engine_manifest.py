@@ -197,6 +197,7 @@ def main() -> None:
         "p_prior.plan",
         "p_spatial_prior.plan",
         "p_synthesis.plan",
+        "p_display.plan",
         "i_entropy.bin",
         "i_quant.bin",
         "i_frame_manifest.json",

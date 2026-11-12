@@ -246,6 +246,18 @@ def main() -> int:
             frame_hat = self.reconstruction(feature, q_recon)
             return frame_hat, feature
 
+    class Display(nn.Module):
+        """The P-frame picture under nvcr.fx.v1: the reconstruction network on the exact feature (int32 at 2^-14),
+        returned as int32 at 2^-14 in [0, 1]. Nothing reads it back, so it may run in FP16."""
+
+        def __init__(self, source: DMC):
+            super().__init__()
+            self.reconstruction = source.recon_generation_net
+
+        def forward(self, feature: torch.Tensor, q_recon: torch.Tensor):
+            frame = self.reconstruction((feature.float() * 2.0 ** -14).to(q_recon.dtype), q_recon)
+            return torch.round(frame.float().clamp(0, 1) * 2.0 ** 14).to(torch.int32)
+
     padded_height = (args.height + 63) // 64 * 64
     padded_width = (args.width + 63) // 64 * 64
     frame = torch.zeros((1, 3, padded_height, padded_width), device=device, dtype=dtype)
@@ -387,6 +399,10 @@ def main() -> int:
         ["y_hat", "context", "q_decoder", "q_recon"],
         ["frame_hat", "feature"],
         ({2: latent_h, 3: latent_w}, {2: feature_h, 3: feature_w}, None, None),
+    )
+    export(
+        "p_display", Display(model), (torch.zeros(feature.shape, dtype=torch.int32, device=device), q_recon),
+        ["feature", "q_recon"], ["frame"], ({2: feature_h, 3: feature_w}, None),
     )
 
     manifest = {
