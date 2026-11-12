@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.0](https://github.com/0elghati/nvcr/compare/v1.4.1...v1.5.0) (2026-11-12)
+
+
+### Features
+
+* **amd:** environment prep runbook and probes for task [#224](https://github.com/0elghati/nvcr/issues/224) ([#239](https://github.com/0elghati/nvcr/issues/239)) ([af7958d](https://github.com/0elghati/nvcr/commit/af7958da00c2a7d6ed65d0d3b4f8aeeadd231d96))
+* **dcvcrt:** exact numerics profile nvcr.intconv.v1 ([#246](https://github.com/0elghati/nvcr/issues/246)) ([0ffc362](https://github.com/0elghati/nvcr/commit/0ffc362880abf34c078a61c90d85845a0add9924))
+
+
+### Bug Fixes
+
+* **dcvcrt:** fail cleanly when entropy decoding desynchronizes ([#244](https://github.com/0elghati/nvcr/issues/244)) ([21162a7](https://github.com/0elghati/nvcr/commit/21162a79dcc5996819735fed6f5b66d9cf1aa202))
+
 ## [1.4.1](https://github.com/0elghati/nvcr/compare/v1.4.0...v1.4.1) (2026-11-05)
 
 
