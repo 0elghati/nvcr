@@ -564,6 +564,7 @@ std::optional<nvinfer1::DataType> tensorrt_data_type(session_api::TensorDataType
     case session_api::TensorDataType::int32: return nvinfer1::DataType::kINT32;
     case session_api::TensorDataType::float16: return nvinfer1::DataType::kHALF;
     case session_api::TensorDataType::float32: return nvinfer1::DataType::kFLOAT;
+    case session_api::TensorDataType::uint8: return nvinfer1::DataType::kUINT8;
     default: return std::nullopt;
     }
 }
@@ -573,6 +574,7 @@ std::size_t tensor_element_bytes(session_api::TensorDataType type) {
     case session_api::TensorDataType::float16: return sizeof(__half);
     case session_api::TensorDataType::int32:
     case session_api::TensorDataType::float32: return sizeof(std::uint32_t);
+    case session_api::TensorDataType::uint8: return 1;
     default: return 0;
     }
 }
