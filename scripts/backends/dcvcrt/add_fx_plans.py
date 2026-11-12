@@ -26,16 +26,18 @@ def shapes(width: int, height: int) -> dict:
     yh, yw = h // 16, w // 16
     zh, zw = -(-yh // 4), -(-yw // 4)
     feature, latent, z = [256, h // 8, w // 8], [1, yh, yw], [128, zh, zw]
-    qp = [1, 1, 1]
+    qp, parity = [1, 1, 1], [4, yh, yw]
+    step = {"symbols": [64, yh, yw], "symbol_means": [64, yh, yw], "parity": parity}
     return {
-        "i_prior": {"z_fixed": z, "latent_ref": latent},
-        **{f"i_spatial_prior_{k}": {"y_hat": [256, yh, yw], "common": [256, yh, yw]} for k in (1, 2, 3)},
-        "i_synthesis": {"y_hat": [256, yh, yw], "params": [514, yh, yw], "qp": qp},
+        "i_prior": {"z_fixed": z, "latent_ref": latent, "parity": parity},
+        "i_spatial_prior_1": {**step, "common": [256, yh, yw]},
+        **{f"i_spatial_prior_{k}": {**step, "y_hat": [256, yh, yw], "common": [256, yh, yw]} for k in (2, 3)},
+        "i_synthesis": {**step, "y_hat": [256, yh, yw], "params": [514, yh, yw], "qp": qp},
         "p_reference_frame": {"frame": [3, h, w], "qp": qp},
         "p_reference_feature": {"feature": feature, "qp": qp},
-        "p_prior": {"z_fixed": z, "temporal_context": feature, "latent_ref": latent},
-        "p_spatial_prior": {"y_hat": [128, yh, yw], "params": [384, yh, yw]},
-        "p_synthesis": {"y_hat": [128, yh, yw], "params": [384, yh, yw], "context": feature, "qp": qp},
+        "p_prior": {"z_fixed": z, "temporal_context": feature, "latent_ref": latent, "parity": parity},
+        "p_spatial_prior": {**step, "params": [384, yh, yw]},
+        "p_synthesis": {**step, "y_hat": [128, yh, yw], "params": [384, yh, yw], "context": feature, "qp": qp},
         "p_reset_frame": {"feature": feature, "qp": qp},
     }
 

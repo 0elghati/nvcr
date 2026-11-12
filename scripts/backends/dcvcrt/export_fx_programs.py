@@ -4,6 +4,11 @@
 Reads the pinned cvpr2025 checkpoints with the pinned DCVC-RT model code and writes, for every stage,
 <stage>.fxprog.json and <stage>.fxw, plus fx_entropy.json (integer index edges and skip threshold).
 
+The programs also carry DCVC-RT's spatial coding steps, so a provider runs them next to the networks: per step the
+active element of each channel group is gathered (upstream's two- and four-way masks, from a `parity` input), its
+scale gives the entropy index through the index edges, and after entropy coding symbol 2^fa + mean goes back into
+y_hat. The coder exchanges only indexes, means and symbols with the provider.
+
 The quantization rules (per-channel two-digit weights, per-layer GEMM input shifts, the coarse WSiLU table and the
 sigmoid table) follow the exact DCVC-RT design they come from, so the programs compute the same integers. All
 numbers are derived on the CPU in float64 with exact operations, so every machine writes identical files.
@@ -246,31 +251,97 @@ class Emitter:
         return self.p.node("slice", [x], end - begin, label, begin=begin, end=end)
 
 
+# ---- spatial coding steps --------------------------------------------------------------------------------------------
+FOUR_WAY = ((0, 1, 2, 3), (3, 2, 1, 0), (2, 3, 0, 1), (1, 0, 3, 2))  # [step][group] -> parity 2 (row % 2) + col % 2
+TWO_WAY = ((0, 1), (1, 0))  # [step][group] -> 0: row % 2 == col % 2, 1: they differ
+
+
+class Steps:
+    """DCVC-RT's spatial steps over `groups` channel groups of `channels` latent channels. The reduced tensors
+    (indexes, means, symbols) hold, for each channel of a group and each position, the group's active element."""
+
+    def __init__(self, e, channels, groups, edges):
+        p = e.p
+        self.e, self.per_group, self.edges = e, channels // groups, edges
+        parity = p.input("parity", 4)
+        one = [e.slice(parity, i, i + 1, "parity") for i in range(4)]
+        if groups == 4:
+            self.masks = [[one[FOUR_WAY[k][g]] for g in range(4)] for k in range(4)]
+        else:
+            same = p.node("add", [one[0], one[3]], 1, "parity")
+            differ = p.node("add", [one[1], one[2]], 1, "parity")
+            self.masks = [[(same, differ)[TWO_WAY[k][g]] for g in range(2)] for k in range(2)]
+
+    def gather(self, k, x, begin):
+        e, n = self.e, self.per_group
+        parts = [e.mul(e.slice(x, begin + g * n, begin + (g + 1) * n, "group"), m, 0, "mask")
+                 for g, m in enumerate(self.masks[k])]
+        out = parts[0]
+        for part in parts[1:]:
+            out = self.e.p.node("add", [out, part], n, "gather")
+        return out
+
+    def emit(self, k, x, scales, means):
+        """Outputs step k's indexes (scales of x from channel `scales`) and means (from channel `means`)."""
+        p, edges = self.e.p, self.edges
+        n = edges[-1]
+        table = np.searchsorted(np.asarray(edges), np.arange(-n, n), side="right")
+        p.output(p.node("sat_table", [self.gather(k, x, scales)], self.per_group, "index",
+                        table=p.blob(table, np.int32), top=len(edges)), "indexes")
+        p.output(self.gather(k, x, means), "means")
+
+    def update(self, k, y_hat, symbols, means):
+        """y_hat + step k's symbol 2^fa + mean at the active elements (y_hat None: zeros)."""
+        e, p = self.e, self.e.p
+        v = p.node("add", [p.node("affine", [symbols], self.per_group, "symbol", alpha=2 ** e.fa, beta=0, shift=0),
+                           means], self.per_group, "value")
+        out = None
+        for m in self.masks[k]:
+            part = e.mul(v, m, 0, "scatter")
+            out = part if out is None else e.concat(out, part, "scatter")
+        return out if y_hat is None else p.node("add", [y_hat, out], p.channels(y_hat), "y_hat")
+
+
+def step_inputs(p, per_group):
+    return p.input("symbols", per_group), p.input("symbol_means", per_group)
+
+
 # ---- stages ----------------------------------------------------------------------------------------------------------
 # I-frame: z_fixed = z_int 2^fa; latent_ref only gives the latent size; params = [q_enc | q_dec | scales | means].
-def i_prior(e, net):
+def i_prior(e, net, edges):
     p = e.p
     z, ref = p.input("z_fixed", 128), p.input("latent_ref", 1)
+    steps = Steps(e, 256, 4, edges)
     params = e.run(net.y_prior_fusion, e.run(net.hyper_dec, z))
     params = p.node("crop_like", [params, ref], p.channels(params), "crop")
     common = e.conv(net.y_spatial_prior_reduction, params)
     p.output(params, "params")
     p.output(common, "common")
+    steps.emit(0, params, 2, 258)
+    p.output(e.slice(params, 0, 1, "q"), "q")  # q_enc before its sigmoid, for the encoder
 
 
 def i_spatial_prior(k):
-    def build(e, net):
+    def build(e, net, edges):
         p = e.p
-        y_hat, common = p.input("y_hat", 256), p.input("common", 256)
+        y_hat = p.input("y_hat", 256) if k > 1 else None
+        symbols, means = step_inputs(p, 64)
+        common = p.input("common", 256)
+        steps = Steps(e, 256, 4, edges)
+        y_hat = steps.update(k - 1, y_hat, symbols, means)
+        p.output(y_hat, "y_hat_next")
         adaptor = getattr(net, f"y_spatial_prior_adaptor_{k}")
         q = e.run(adaptor, e.concat(y_hat, common, "cat"))
-        p.output(e.run(net.y_spatial_prior, q), "scales_means")
+        steps.emit(k, e.run(net.y_spatial_prior, q), 0, 256)
     return build
 
 
-def i_synthesis(e, net):
+def i_synthesis(e, net, edges):
     p, fa = e.p, e.fa
-    y_hat, params, qp = p.input("y_hat", 256), p.input("params", 514), p.input("qp", 1)
+    y_hat = p.input("y_hat", 256)
+    symbols, means = step_inputs(p, 64)
+    params, qp = p.input("params", 514), p.input("qp", 1)
+    y_hat = Steps(e, 256, 4, edges).update(3, y_hat, symbols, means)
     sig = sigmoid_table(fa, e.cfg["sigmoid_range"])
     s = p.node("sat_table", [e.slice(params, 1, 2, "q_dec_raw")], 1, "sigmoid",
                table=p.blob(sig.numpy(), np.int32), top=2 ** fa)
@@ -289,33 +360,45 @@ def _extract(e, net, f, qp):
     e.p.output(e.run(net.feature_extractor.conv2, x1), "context")
 
 
-def p_reference_frame(e, net):
+def p_reference_frame(e, net, edges):
     frame, qp = e.p.input("frame", 3), e.p.input("qp", 1)
     _extract(e, net, e.run(net.feature_adaptor_i, e.shuffle(frame, 8, "unshuffle", inverse=True)), qp)
 
 
-def p_reference_feature(e, net):
+def p_reference_feature(e, net, edges):
     feature, qp = e.p.input("feature", 256), e.p.input("qp", 1)
     _extract(e, net, e.conv(net.feature_adaptor_p, feature), qp)
 
 
-def p_prior(e, net):
+def p_prior(e, net, edges):
     p = e.p
     z, ctx_t, ref = p.input("z_fixed", 128), p.input("temporal_context", 256), p.input("latent_ref", 1)
+    steps = Steps(e, 128, 2, edges)
     hier = e.run(net.hyper_decoder.conv, z)
     hier = p.node("crop_like", [hier, ref], p.channels(hier), "crop")
     temporal = e.run(net.temporal_prior_encoder, ctx_t)
-    p.output(e.run(net.y_prior_fusion.conv, e.concat(hier, temporal, "cat")), "params")
+    params = e.run(net.y_prior_fusion.conv, e.concat(hier, temporal, "cat"))
+    p.output(params, "params")
+    steps.emit(0, params, 128, 256)
+    p.output(e.slice(params, 0, 128, "q"), "q")  # the quantization step, for the encoder
 
 
-def p_spatial_prior(e, net):
-    y_hat, params = e.p.input("y_hat", 128), e.p.input("params", 384)
-    e.p.output(e.run(net.y_spatial_prior.conv, e.concat(y_hat, params, "cat")), "scales_means")
+def p_spatial_prior(e, net, edges):
+    p = e.p
+    symbols, means = step_inputs(p, 64)
+    params = p.input("params", 384)
+    steps = Steps(e, 128, 2, edges)
+    y_hat = steps.update(0, None, symbols, means)
+    p.output(y_hat, "y_hat_next")
+    steps.emit(1, e.run(net.y_spatial_prior.conv, e.concat(y_hat, params, "cat")), 0, 128)
 
 
-def p_synthesis(e, net):
+def p_synthesis(e, net, edges):
     p, fa = e.p, e.fa
-    y_hat, params, ctx, qp = p.input("y_hat", 128), p.input("params", 384), p.input("context", 256), p.input("qp", 1)
+    y_hat = p.input("y_hat", 128)
+    symbols, means = step_inputs(p, 64)
+    params, ctx, qp = p.input("params", 384), p.input("context", 256), p.input("qp", 1)
+    y_hat = Steps(e, 128, 2, edges).update(1, y_hat, symbols, means)
     q_dec = e.clamp(e.slice(params, 0, 128, "q_dec"), 2 ** (fa - 1), 2 ** 31 - 1, "q_dec_min")  # max(q, 0.5)
     d = net.decoder
     feat = e.run(d.up, e.mul(y_hat, q_dec, fa, "mul_q_dec"))
@@ -324,7 +407,7 @@ def p_synthesis(e, net):
     p.output(feat, "feature")
 
 
-def p_reset_frame(e, net):
+def p_reset_frame(e, net, edges):
     p, fa = e.p, e.fa
     feature, qp = p.input("feature", 256), p.input("qp", 1)
     r = net.recon_generation_net
@@ -387,15 +470,15 @@ def main():
             "p": load(args.dcvcrt_root, "cvpr2025_video.pth.tar", VIDEO_SHA256, DMC)}
     names = {id(m): f"{tag}.{n}" for tag, net in nets.items() for n, m in net.named_modules()}
     delta = wsilu_delta_table(cfg["fa"], cfg["wsilu_range"], cfg["wsilu_shift"])
+    entropy = entropy_assets(nets["p"], cfg)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     with torch.no_grad():
         for stage in args.stages:
             tag, build = STAGES[stage]
             program = Program(stage, cfg["fa"])
-            build(Emitter(program, cfg, names, cfg["input_shifts"], delta), nets[tag])
+            build(Emitter(program, cfg, names, cfg["input_shifts"], delta), nets[tag], entropy["index_edges"])
             program.write(args.output_dir)
             print(f"{stage}: {len(program.nodes)} nodes, {len(program.data)} bytes")
-    entropy = entropy_assets(nets["p"], cfg)
     (args.output_dir / "fx_entropy.json").write_text(json.dumps(entropy, indent=1) + "\n")
 
 

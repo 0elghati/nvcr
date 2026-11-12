@@ -1649,7 +1649,7 @@ Result<void> validate_dcvcrt_bundle(const TensorRTExecutionSession& session) {
     const auto& files = session.bundle_files();
     const auto fx_files = std::ranges::count_if(files, [](const auto& entry) {
         return entry.first.ends_with(".fx.plan") || entry.first.ends_with(".fx.plan.json") ||
-               entry.first == "p_display.plan";
+               entry.first == "p_encode.plan" || entry.first == "p_display.plan";
     });
     if (files.size() - static_cast<std::size_t>(fx_files) != dcvcrt_bundle_files.size()) {
         return backend_error("engine.sha256 does not describe the exact runtime bundle");

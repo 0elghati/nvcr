@@ -103,13 +103,19 @@ void compare(const det::Program& program, const std::vector<det::Tensor>& inputs
     std::cout << program.name << ": identical\n";
 }
 
-// Seeded inputs at the scale the codec feeds: small integers at 2^-14, pictures in [0, 2^14], QP 37.
+// Seeded inputs at the scale the codec feeds: small integers at 2^-14, pictures in [0, 2^14], QP 37,
+// the spatial steps' parity masks and entropy symbols.
 det::Tensor input(const std::string& name, int channels, int height, int width, std::mt19937& rng) {
     det::Tensor t{channels, height, width, {}};
     std::normal_distribution<double> normal(0.0, name == "feature" || name.find("context") != std::string::npos ? 4.0 : 2.0);
     std::uniform_int_distribution<std::int32_t> pixel(0, 1 << 14);
     for (std::size_t i = 0; i < static_cast<std::size_t>(channels) * t.plane(); ++i) {
-        if (name == "qp") {
+        const auto at = static_cast<int>(i % t.plane());
+        if (name == "parity") {
+            t.values.push_back(static_cast<std::size_t>(2 * (at / width % 2) + at % width % 2) == i / t.plane() ? 1 : 0);
+        } else if (name == "symbols") {
+            t.values.push_back(static_cast<std::int32_t>(std::lround(normal(rng))));
+        } else if (name == "qp") {
             t.values.push_back(37);
         } else if (name == "frame") {
             t.values.push_back(pixel(rng));

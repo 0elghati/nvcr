@@ -420,6 +420,26 @@ build_engine() {
         "${common_build[@]}"
 }
 
+# nvcr.fx.v1's p_encode and p_display scale int32 fixed point in FP32 before their FP16 networks: build them strongly
+# typed, so TensorRT keeps the graph's types instead of casting the integers to FP16.
+build_typed_engine() {
+    local args=() arg
+    for arg in "${common_build[@]}"; do
+        [[ $arg == --fp16 || $arg == --int8 ]] || args+=("$arg")
+    done
+    "$trtexec_bin" \
+        "--onnx=$model_dir/$1.onnx" \
+        "--saveEngine=$engine_dir/$1.plan" \
+        "--minShapes=$2" \
+        "--optShapes=$3" \
+        "--maxShapes=$4" \
+        "${args[@]}" \
+        --stronglyTyped
+}
+
+# The 4:2:0 chroma shape (two channels at half size) of a 1x3xHxW picture shape.
+half() { local d=(${1//x/ }); echo "${d[0]}x2x$((d[2] / 2))x$((d[3] / 2))"; }
+
 if ((stamp_only == 0)); then
     build_engine i_analysis \
         "frame:$i_frame_min" "frame:$i_frame_opt" "frame:$i_frame_max"
@@ -454,7 +474,11 @@ if ((stamp_only == 0)); then
         "y_hat:$p_y_min,context:$p_feature_min" \
         "y_hat:$p_y_opt,context:$p_feature_opt" \
         "y_hat:$p_y_max,context:$p_feature_max"
-    build_engine p_display "feature:$p_feature_min" "feature:$p_feature_opt" "feature:$p_feature_max"
+    build_typed_engine p_encode \
+        "luma:${p_frame_min/x3x/x1x},chroma:$(half "$p_frame_min"),context:$p_feature_min" \
+        "luma:${p_frame_opt/x3x/x1x},chroma:$(half "$p_frame_opt"),context:$p_feature_opt" \
+        "luma:${p_frame_max/x3x/x1x},chroma:$(half "$p_frame_max"),context:$p_feature_max"
+    build_typed_engine p_display "feature:$p_feature_min" "feature:$p_feature_opt" "feature:$p_feature_max"
 fi
 
 if ((run_smoke && stamp_only == 0)); then
@@ -486,6 +510,7 @@ if ((run_smoke && stamp_only == 0)); then
     smoke_engine p_prior "z_hat:$p_z_opt,temporal_context:$p_feature_opt"
     smoke_engine p_spatial_prior "context:$p_spatial_opt"
     smoke_engine p_synthesis "y_hat:$p_y_opt,context:$p_feature_opt"
+    smoke_engine p_encode "luma:${p_frame_opt/x3x/x1x},chroma:$(half "$p_frame_opt"),context:$p_feature_opt"
     smoke_engine p_display "feature:$p_feature_opt"
 fi
 
@@ -493,7 +518,7 @@ for plan in i_analysis.plan i_hyper_analysis.plan i_hyper_synthesis.plan \
     i_spatial_prior_1.plan i_spatial_prior_2.plan i_spatial_prior_3.plan \
     i_synthesis.plan p_reference_frame.plan p_reference_feature.plan \
     p_analysis.plan p_hyper_analysis.plan p_prior.plan p_spatial_prior.plan \
-    p_synthesis.plan p_display.plan; do
+    p_synthesis.plan p_encode.plan p_display.plan; do
     if [[ ! -f "$engine_dir/$plan" ]]; then
         echo "missing TensorRT plan: $engine_dir/$plan" >&2
         exit 1
