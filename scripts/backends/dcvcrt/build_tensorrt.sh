@@ -438,7 +438,7 @@ build_typed_engine() {
 }
 
 # The 4:2:0 chroma shape (two channels at half size) of a 1x3xHxW picture shape.
-half() { local d=(${1//x/ }); echo "${d[0]}x2x$((d[2] / 2))x$((d[3] / 2))"; }
+half() { local d; IFS=x read -r -a d <<< "$1"; echo "${d[0]}x2x$((d[2] / 2))x$((d[3] / 2))"; }
 
 if ((stamp_only == 0)); then
     build_engine i_analysis \
