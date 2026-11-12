@@ -9,5 +9,6 @@ namespace nvcr::numerics {
 
 inline constexpr std::string_view native = "native";
 inline constexpr std::string_view intconv_v1 = "nvcr.intconv.v1";
+inline constexpr std::string_view fx_v1 = "nvcr.fx.v1";
 
 }  // namespace nvcr::numerics
