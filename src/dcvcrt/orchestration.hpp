@@ -120,6 +120,8 @@ public:
         std::size_t per_channel_size);
     [[nodiscard]] Result<std::vector<std::int8_t>> decode_y(
         std::span<const std::uint8_t> indexes);
+    // Fails unless the frame's rANS stream ended where the encoder started it.
+    [[nodiscard]] Result<void> end_decode() { return rans_.finish_decode(); }
 
 private:
     static constexpr std::size_t stage_count =
@@ -195,6 +197,8 @@ public:
         std::size_t per_channel_size);
     [[nodiscard]] Result<std::vector<std::int8_t>> decode_y(
         std::span<const std::uint8_t> indexes);
+    // Fails unless the frame's rANS stream ended where the encoder started it.
+    [[nodiscard]] Result<void> end_decode() { return rans_.finish_decode(); }
 
 private:
     static constexpr std::size_t stage_count =

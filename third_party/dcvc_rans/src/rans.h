@@ -163,9 +163,26 @@ public:
                         const std::shared_ptr<std::vector<int32_t>> offsets);
     virtual void empty_cdf_buffer();
 
+    // NVCR hardening (see UPSTREAM.md). A valid stream never trips these:
+    // corrupt() is sticky and reports an invalid initial state, a read past
+    // the end of the stream, an impossible bypass length, or a symbol outside
+    // int8. A complete, correctly decoded stream ends at the encoder's initial
+    // state with every byte consumed.
+    bool corrupt() const { return _corrupt; }
+    bool at_initial_state() const { return _rans == RANS_BYTE_L; }
+    size_t consumed_bytes() const
+    {
+        return _stream ? static_cast<size_t>(_ptr8 - _stream->data()) : 0;
+    }
+
 private:
-    RansState _rans;
-    uint8_t* _ptr8;
+    FORCE_INLINE void renormalize();
+    FORCE_INLINE uint32_t get_bypass_bits();
+
+    RansState _rans{0};
+    uint8_t* _ptr8{nullptr};
+    uint8_t* _end{nullptr};
+    bool _corrupt{false};
     std::shared_ptr<std::vector<uint8_t>> _stream;
     std::shared_ptr<std::vector<int8_t>> m_decoded;
 

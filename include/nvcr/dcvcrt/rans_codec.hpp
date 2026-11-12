@@ -56,6 +56,12 @@ public:
         std::size_t cdf_group,
         std::size_t start_offset,
         std::size_t per_channel_size);
+    // Call after the last symbol of a stream. A correctly decoded stream ends
+    // at the encoder's initial rANS state with every byte consumed; anything
+    // else means the stream is corrupt or was decoded with different entropy
+    // parameters (indexes) than it was encoded with, and returns
+    // malformed_bitstream. The stream must be set again before more decoding.
+    [[nodiscard]] Result<void> finish_decode();
 
 private:
     struct Impl;
