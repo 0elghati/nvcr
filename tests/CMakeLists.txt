@@ -307,6 +307,10 @@ if(NVCR_ENABLE_TENSORRT)
     target_link_libraries(nvcr_fx_tensorrt_tests PRIVATE NVCR::nvcr CUDA::cudart TensorRT::TensorRT)
     nvcr_set_project_warnings(nvcr_fx_tensorrt_tests)
     add_test(NAME nvcr_fx_tensorrt COMMAND nvcr_fx_tensorrt_tests ${NVCR_FX_PROGRAM_DIR})
+    # NVCR_FX_DCVCUF_PROGRAM_DIR: DCVC-UF fx programs (scripts/backends/dcvcuf/export_fx_programs.py), checked the same way.
+    if(NVCR_FX_DCVCUF_PROGRAM_DIR)
+        add_test(NAME nvcr_fx_tensorrt_dcvcuf COMMAND nvcr_fx_tensorrt_tests ${NVCR_FX_DCVCUF_PROGRAM_DIR})
+    endif()
 
     add_executable(nvcr_tensorrt_roundtrip_tests tensorrt_roundtrip_tests.cpp)
     target_link_libraries(nvcr_tensorrt_roundtrip_tests PRIVATE NVCR::nvcr)

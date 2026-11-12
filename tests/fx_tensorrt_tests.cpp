@@ -15,12 +15,14 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <map>
 #include <memory>
 #include <random>
+#include <string>
 
 namespace {
 
@@ -131,14 +133,14 @@ det::Tensor input(const std::string& name, int channels, int height, int width, 
     return t;
 }
 
-// Input shapes of a DCVC-RT stage at a frame size (padded to 16).
+// Input shapes of a stage at a frame size (padded to 16); channels come from the program.
 std::vector<std::array<int, 3>> stage_shapes(const det::Program& program, int width, int height) {
     const int h = (height + 15) / 16 * 16, w = (width + 15) / 16 * 16, yh = h / 16, yw = w / 16;
     const int zh = (yh + 3) / 4, zw = (yw + 3) / 4;
     const std::map<std::string, std::array<int, 3>> sizes{
         {"z_fixed", {128, zh, zw}}, {"latent_ref", {1, yh, yw}}, {"common", {256, yh, yw}},
         {"frame", {3, h, w}},       {"qp", {1, 1, 1}},           {"feature", {256, h / 8, w / 8}},
-        {"context", {256, h / 8, w / 8}}, {"temporal_context", {256, h / 8, w / 8}}};
+        {"context", {256, h / 8, w / 8}}, {"temporal_context", {256, h / 8, w / 8}}, {"memory", {512, h / 8, w / 8}}};
     std::vector<std::array<int, 3>> shapes;
     for (const auto id : program.inputs) {
         const auto found = sizes.find(program.tensor_names[id]);
@@ -148,14 +150,21 @@ std::vector<std::array<int, 3>> stage_shapes(const det::Program& program, int wi
     return shapes;
 }
 
-// Without a bundle, plans are built for 64x64 to 240x240 and run at two sizes.
-void dcvcrt_stages(const std::filesystem::path& directory, const std::filesystem::path& bundle,
-                   std::vector<std::pair<int, int>> frames) {
+// Every fx program in the directory (any codec's). Without a bundle, plans are built for 64x64 to 240x240 and run
+// at two sizes.
+void fx_stages(const std::filesystem::path& directory, const std::filesystem::path& bundle,
+               std::vector<std::pair<int, int>> frames) {
     if (bundle.empty()) frames = {{240, 240}, {176, 144}};
     std::mt19937 rng(7);
-    for (const auto* stage : {"i_prior", "i_spatial_prior_1", "i_spatial_prior_2", "i_spatial_prior_3",
-                              "i_synthesis", "p_reference_frame", "p_reference_feature", "p_prior",
-                              "p_spatial_prior", "p_synthesis", "p_reset_frame"}) {
+    std::vector<std::string> stages;
+    for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+        const auto name = entry.path().filename().string();
+        const std::string suffix = ".fxprog.json";
+        if (name.size() > suffix.size() && name.ends_with(suffix)) stages.push_back(name.substr(0, name.size() - suffix.size()));
+    }
+    std::sort(stages.begin(), stages.end());
+    expect(!stages.empty(), directory.string() + ": has fx programs");
+    for (const auto& stage : stages) {
         auto program = det::load_program(directory, stage);
         expect(program.has_value(), std::string(stage) + ": program loads");
         if (!program) continue;
@@ -211,7 +220,7 @@ int main(int argc, char** argv) {
         if (std::sscanf(argv[a], "%dx%d", &width, &height) != 2) return 2;
         frames.emplace_back(width, height);
     }
-    if (argc > 1) dcvcrt_stages(argv[1], argc > 2 ? argv[2] : "", frames);
+    if (argc > 1) fx_stages(argv[1], argc > 2 ? argv[2] : "", frames);
     if (failures == 0) std::cout << "nvcr.fx.v1 TensorRT tests passed\n";
     return failures == 0 ? 0 : 1;
 }
