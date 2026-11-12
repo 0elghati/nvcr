@@ -41,22 +41,44 @@ def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def count(shape):
+    total = 1
+    for size in shape:
+        total *= size
+    return total
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--weights", type=Path, required=True, help="dcvcuf-cvpr2026-hts.pt")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--weights", type=Path, help="dcvcuf-cvpr2026-hts.pt")
+    source.add_argument("--tables", type=Path,
+                        help="an existing tables.bin (for example another target's bundle)")
+    parser.add_argument("--tables-sha256", help="required digest of --tables")
     parser.add_argument("--bundle", type=Path, required=True)
     args = parser.parse_args()
 
-    import torch
+    if args.tables is not None:
+        data = args.tables.read_bytes()
+        expected = sum(count(shape) * (2 if dtype == "float16" else 4)
+                       for _name, shape, dtype in TABLES)
+        if len(data) != expected:
+            raise SystemExit(f"{args.tables}: {len(data)} bytes, expected {expected}")
+        if args.tables_sha256 and hashlib.sha256(data).hexdigest() != args.tables_sha256:
+            raise SystemExit(f"{args.tables}: SHA-256 does not match --tables-sha256")
+    else:
+        import torch
 
-    module = torch.jit.load(str(args.weights), map_location="cpu")
-    buffers = {name.replace("__nvcr_dot__", "."): value for name, value in module.named_buffers()}
-    data = bytearray()
-    for name, shape, dtype in TABLES:
-        value = buffers[name].contiguous()
-        if tuple(value.shape) != shape or str(value.dtype) != f"torch.{dtype}":
-            raise SystemExit(f"{name}: expected {shape} {dtype}, found {tuple(value.shape)} {value.dtype}")
-        data += value.numpy().tobytes()
+        module = torch.jit.load(str(args.weights), map_location="cpu")
+        buffers = {name.replace("__nvcr_dot__", "."): value
+                   for name, value in module.named_buffers()}
+        data = bytearray()
+        for name, shape, dtype in TABLES:
+            value = buffers[name].contiguous()
+            if tuple(value.shape) != shape or str(value.dtype) != f"torch.{dtype}":
+                raise SystemExit(
+                    f"{name}: expected {shape} {dtype}, found {tuple(value.shape)} {value.dtype}")
+            data += value.numpy().tobytes()
     (args.bundle / "tables.bin").write_bytes(bytes(data))
 
     manifest_path = args.bundle / "engine_manifest.json"

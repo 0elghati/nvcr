@@ -5,7 +5,7 @@
 - Branch: `fix/cross-gpu-entropy-determinism`, on `ef4dcfd8` (`main` `163441e9`
   plus the `AGENTS.md` codec/provider capability rules). Uncommitted at the
   time of these measurements.
-- Roadmap: C12, cross-hardware encode/decode mismatch.
+- Roadmap: C14, cross-hardware encode/decode mismatch.
 - Two parts: mismatched decodes fail cleanly (N0), and the exact-numerics
   profile `dcvc-rt.exact.v1` makes a stream decode bit-identically on every
   provider that implements `nvcr.det-int.v1`, I- and P-frames included.

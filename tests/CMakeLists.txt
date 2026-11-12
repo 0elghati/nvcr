@@ -206,6 +206,37 @@ endif()
 nvcr_set_project_warnings(nvcr_dcvcuf_rans_conformance_tests)
 add_test(NAME nvcr_dcvcuf_rans_conformance COMMAND nvcr_dcvcuf_rans_conformance_tests)
 
+# C13 G1 (encoder-internal reconstruction equals decoder output) and the #194
+# partly-filled-group lifecycle checks. Needs a GPU, a DCVC-UF bundle and an
+# input sequence; scripts/backends/dcvcuf/run_reconstruction_identity.py runs
+# the full matrix. The bounded lifecycle check joins CTest when both cache
+# variables name local files.
+if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
+    add_executable(nvcr_dcvcuf_reconstruction_identity dcvcuf_reconstruction_identity.cpp)
+    target_include_directories(
+        nvcr_dcvcuf_reconstruction_identity PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcuf")
+    target_link_libraries(nvcr_dcvcuf_reconstruction_identity PRIVATE NVCR::nvcr)
+    nvcr_set_project_warnings(nvcr_dcvcuf_reconstruction_identity)
+    # C13 cross-decode: decodes a .nvcr file like the CLI and records every UF
+    # entropy call (scripts/backends/dcvcuf/run_cross_decode.py).
+    add_executable(nvcr_dcvcuf_entropy_trace dcvcuf_entropy_trace.cpp)
+    target_include_directories(
+        nvcr_dcvcuf_entropy_trace PRIVATE "${PROJECT_SOURCE_DIR}/src/dcvcuf")
+    target_link_libraries(nvcr_dcvcuf_entropy_trace PRIVATE NVCR::nvcr)
+    nvcr_set_project_warnings(nvcr_dcvcuf_entropy_trace)
+    set(NVCR_DCVCUF_TEST_BUNDLE "" CACHE FILEPATH
+        "DCVC-UF native .pt bundle or TensorRT stage bundle for the GPU lifecycle check")
+    set(NVCR_DCVCUF_TEST_QCIF "" CACHE FILEPATH
+        "176x144 YUV420P8 sequence of at least 57 frames for the GPU lifecycle check")
+    if(EXISTS "${NVCR_DCVCUF_TEST_BUNDLE}" AND EXISTS "${NVCR_DCVCUF_TEST_QCIF}")
+        add_test(
+            NAME nvcr_dcvcuf_partial_group_lifecycle
+            COMMAND nvcr_dcvcuf_reconstruction_identity partial-group
+                "${NVCR_DCVCUF_TEST_BUNDLE}" "${NVCR_DCVCUF_TEST_QCIF}" 176 144 32
+                "${CMAKE_CURRENT_BINARY_DIR}/dcvcuf_partial_group_lifecycle.json")
+    endif()
+endif()
+
 if(TARGET nvcr_cli)
     add_test(
         NAME nvcr_cli_version

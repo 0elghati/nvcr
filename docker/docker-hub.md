@@ -66,9 +66,9 @@ They do not contain checkpoints, ONNX exports, entropy/model assets, TensorRT
 plans, datasets, input video, or result files. Engine bundles remain in the
 separate rolling catalog and are selected for the active target.
 
-The Linux/amd64 image compiles CUDA helper kernels for the supported
-compiler architecture set. This host-binary property does not make TensorRT
-plans portable.
+The Linux/amd64 image compiles CUDA helper kernels for the GPU architectures
+TensorRT 10.9 ships for x86_64: SM 7.5, 8.0, 8.6, 8.9, 9.0, 10.0 and 12.0.
+This host-binary property does not make TensorRT plans portable.
 
 ## Publication behavior
 

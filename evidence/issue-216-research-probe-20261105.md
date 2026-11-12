@@ -3,7 +3,7 @@
 ## Scope
 
 - Branch: `fix/cross-gpu-entropy-determinism` on `ef4dcfd8` (`main` `163441e9`),
-  uncommitted. Roadmap: C12 (research input; no roadmap change proposed here
+  uncommitted. Roadmap: C14 (research input; no roadmap change proposed here
   without the user's priority decision).
 - Question: the exact profile (`dcvc-rt.exact.v1`) decodes 1080p at 18.4 fps
   against 48.7 fps native on an RTX 4070 (see the

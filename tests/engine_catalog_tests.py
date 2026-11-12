@@ -591,5 +591,143 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(command[index + 1], "same_compute_capability")
 
 
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def write_mlvc_bundle(bundle: Path) -> None:
+    """A two-file-per-canvas MLVC engine bundle shaped like build_tensorrt_bundle.py's."""
+    bundle.mkdir(parents=True)
+    part = {"registry_id": "", "function_name": None}
+    source = {
+        "bundle_name": "tiny",
+        "model_registry": {
+            f"tiny-{name}": {"model_path": f"{name}_32x32.onnx", "weights_path": "weights.bin"}
+            for name in ("MLVCEncoder", "MLVCDecoder")
+        },
+        "model_manifests": {"32x32": {
+            "metadata_path": "metadata_32x32.json",
+            "gaussian_pmf_path": "gaussian_pmf.json",
+            "bit_estimator_pmf_path": "bit_estimator_pmf.json",
+            "model_parts": {name: {**part, "registry_id": f"tiny-{name}"}
+                            for name in ("MLVCEncoder", "MLVCDecoder")},
+        }},
+    }
+    files = {"bundle_manifest.json": json.dumps(source).encode()}
+    for name in ("metadata_32x32.json", "gaussian_pmf.json", "bit_estimator_pmf.json",
+                 "MLVCEncoder_32x32.onnx", "MLVCDecoder_32x32.onnx", "weights.bin",
+                 "mlvc_encoder_32x32.plan", "mlvc_decoder_32x32.plan"):
+        files[name] = name.encode()
+    for name, data in files.items():
+        (bundle / name).write_bytes(data)
+    digests = {name: sha256_bytes(data) for name, data in files.items()}
+    checksums = "".join(f"{digests[name]}  {name}\n" for name in sorted(digests)).encode()
+    (bundle / "engine.sha256").write_bytes(checksums)
+    values = identity()
+    values.pop("device_id")
+    manifest = {
+        "format": 2, "schema": "nvcr.engine-bundle.v2", "kind": "nvcr-tensorrt-engine-bundle",
+        "model_profile_id": "mlvc", "model_profile_sha256": digests["bundle_manifest.json"],
+        "target_profile_id": "rtx4070-ubuntu2404", "target_profile_sha256": "b" * 64,
+        "engine_profile_id": "s-perceptual", "engine_profile_sha256": "c" * 64,
+        "optimization_point": "s-perceptual", "shape_profile": "fixed",
+        "hardware_compatibility": "exact", "workspace_mib": 1024,
+        "builder_optimization_level": 3, "checksum_manifest": "engine.sha256",
+        "checksum_manifest_sha256": sha256_bytes(checksums), "files": digests,
+        "precision": "fp16",
+        **{key: values[key] for key in values
+           if key not in ("operating_system", "architecture")},
+    }
+    (bundle / "engine_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def mlvc_archive(root: Path, *, backend: str = "mlvc") -> Path:
+    stem = "nvcr-engines-rtx4070-ubuntu2404-mlvc-s-perceptual"
+    write_mlvc_bundle(root / "stage" / stem / backend)
+    asset = root / "stage" / stem
+    rows = "".join(f"{sha256_bytes(path.read_bytes())}  ./{path.relative_to(asset).as_posix()}\n"
+                   for path in sorted(asset.rglob("*")) if path.is_file())
+    (asset / "ENGINE-ASSET-MANIFEST.sha256").write_text(rows, encoding="utf-8")
+    archive = root / f"{stem}.tar.gz"
+    with tarfile.open(archive, "w:gz") as stream:
+        stream.add(asset, arcname=stem)
+    return archive
+
+
+class MlvcArtifactTests(unittest.TestCase):
+    def test_bundle_requires_both_plans_of_every_canvas(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            bundle = Path(temporary) / "bundle"
+            write_mlvc_bundle(bundle)
+            self.assertEqual(artifacts.validate_engine_bundle(bundle)["model_profile_id"], "mlvc")
+            checksum = bundle / "engine.sha256"
+            lines = [line for line in checksum.read_text().splitlines()
+                     if "mlvc_decoder" not in line]
+            checksum.write_text("\n".join(lines) + "\n")
+            manifest = json.loads((bundle / "engine_manifest.json").read_text())
+            manifest["checksum_manifest_sha256"] = sha256_bytes(checksum.read_bytes())
+            manifest["files"].pop("mlvc_decoder_32x32.plan")
+            (bundle / "engine_manifest.json").write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(artifacts.ValidationError, "mlvc_decoder_32x32.plan"):
+                artifacts.validate_engine_bundle(bundle)
+
+    def test_archive_admits_onnx_only_for_mlvc(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            extracted = artifacts.extract_engine_archive(mlvc_archive(root), root / "extract")
+            self.assertEqual(extracted.name, "mlvc")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with self.assertRaisesRegex(artifacts.ValidationError, "model-source asset"):
+                artifacts.extract_engine_archive(
+                    mlvc_archive(root, backend="dcvcrt"), root / "extract")
+
+    def test_catalog_and_install_keep_dcvcrt_default(self) -> None:
+        def mlvc_entry(profile: str) -> dict[str, object]:
+            item = entry(profile)
+            item.update(backend="mlvc", model_profile_id="mlvc",
+                        filename=artifacts.expected_asset_filename(
+                            "rtx4070-ubuntu2404", "mlvc", profile))
+            return item
+
+        candidate = mlvc_entry("s-perceptual")
+        self.assertEqual(artifacts.validate_catalog(
+            {"schema": artifacts.CATALOG_SCHEMA, "assets": [candidate]})[0]["profile"],
+            "s-perceptual")
+        with self.assertRaisesRegex(SystemExit, "all registered profiles"):
+            catalog_helper.merge_catalog([], [candidate])
+        complete = [mlvc_entry(profile) for profile in artifacts.BACKEND_PROFILES["mlvc"]]
+        self.assertEqual(len(catalog_helper.merge_catalog([], complete)), len(complete))
+        dcvcrt = [entry(profile) for profile in artifacts.ENGINE_PROFILES]
+        with self.assertRaisesRegex(SystemExit, "one backend"):
+            catalog_helper.merge_catalog(dcvcrt, complete)
+        # Readers skip profiles they do not register (retired or newer); writers do not.
+        retired = mlvc_entry("s-perceptual")
+        retired.update(profile="s-generic", filename=artifacts.expected_asset_filename(
+            "rtx4070-ubuntu2404", "mlvc", "s-generic"))
+        catalog = {"schema": artifacts.CATALOG_SCHEMA, "assets": [retired, candidate]}
+        self.assertEqual(
+            [item["profile"] for item in artifacts.validate_catalog(catalog, skip_unknown=True)],
+            ["s-perceptual"])
+        with self.assertRaises(artifacts.ValidationError):
+            artifacts.validate_catalog(catalog)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = mlvc_archive(root)
+            payload = archive.read_bytes()
+            candidate.update(size_bytes=len(payload), sha256=sha256_bytes(payload))
+            with mock.patch.object(artifacts, "download_file",
+                                   side_effect=lambda _url, path: path.write_bytes(payload)), \
+                    mock.patch.object(artifacts, "atomic_symlink") as link:
+                installed = artifacts.install_catalog_assets(
+                    [candidate], {candidate["filename"]: "https://example.invalid/mlvc"},
+                    identity(), backend="mlvc", requested_profiles=[],
+                    engine_root=root / "engines")
+        self.assertEqual(installed, ["s-perceptual"])
+        links = [call.args[1].relative_to(call.args[1].parents[2]).as_posix()
+                 for call in link.call_args_list]
+        self.assertEqual(links, ["profiles/mlvc/s-perceptual"])
+
+
 if __name__ == "__main__":
     unittest.main()

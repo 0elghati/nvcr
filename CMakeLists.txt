@@ -52,11 +52,16 @@ add_subdirectory(third_party/dcvcuf_rans)
 
 # DCVC-UF entropy is codec-local. It always builds so its CPU conformance test
 # runs without CUDA, but it enters libnvcr only with NVCR_ENABLE_DCVC_UF.
-add_library(nvcr_dcvcuf_entropy OBJECT src/dcvcuf/entropy/uf_rans_codec.cpp)
+# The test-only diagnostics observer travels with it: the coder reports entropy
+# indexes to it on both execution paths.
+add_library(nvcr_dcvcuf_entropy OBJECT
+    src/dcvcuf/entropy/uf_rans_codec.cpp
+    src/dcvcuf/diagnostics.cpp)
 target_include_directories(
     nvcr_dcvcuf_entropy PRIVATE
         "${NVCR_GENERATED_INCLUDE_DIR}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include")
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/dcvcuf")
 target_include_directories(
     nvcr_dcvcuf_entropy SYSTEM PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/dcvcuf_rans/src")
@@ -223,15 +228,12 @@ if(NVCR_ENABLE_TENSORRT OR NVCR_ENABLE_DCVC_UF)
     # device code. Upstream's compile flags and half macros are part of the
     # arithmetic: they select fast-math intrinsics and route Half through float.
     # The flags mirror upstream setup.py plus torch's COMMON_NVCC_FLAGS.
-    list(GET CMAKE_CUDA_ARCHITECTURES 0 NVCR_DCVCUF_GLUE_SM)
-    string(REGEX REPLACE "[^0-9].*$" "" NVCR_DCVCUF_GLUE_SM "${NVCR_DCVCUF_GLUE_SM}")
     add_library(nvcr_dcvcuf_glue OBJECT src/dcvcuf/backend/tensorrt/glue.cu)
     target_compile_options(nvcr_dcvcuf_glue PRIVATE
         $<$<COMPILE_LANGUAGE:CUDA>:-O3;--use_fast_math;--extra-device-vectorization;--expt-relaxed-constexpr>
         # Upstream's kernels declare a few unused locals (warning 177).
         $<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress=177>)
     target_compile_definitions(nvcr_dcvcuf_glue PRIVATE
-        CURRENT_DEVICE_SM=${NVCR_DCVCUF_GLUE_SM}
         __CUDA_NO_HALF_OPERATORS__
         __CUDA_NO_HALF_CONVERSIONS__
         __CUDA_NO_BFLOAT16_CONVERSIONS__

@@ -1,6 +1,6 @@
 # Cross-target decode
 
-Status: C12 (issue #216). A DCVC-RT stream encoded with exact numerics decodes
+Status: C14 (issue #216). A DCVC-RT stream encoded with exact numerics decodes
 bit-identically on every provider and target that implements the numerics
 profile. Native streams (the default) still decode only on the target that
 encoded them, and fail cleanly anywhere else.

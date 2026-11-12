@@ -120,32 +120,78 @@ void RansDecoder::set_cdf(
 }
 
 void RansDecoder::set_entropy_coder_parallel(int count) {
-    parallel_ = count;
-    rebuild();
+    // Runs on upstream's entropy worker thread: record, never throw.
+    try {
+        parallel_ = count;
+        rebuild();
+    } catch (const std::exception& exception) {
+        codec_.reset();
+        fail(nvcr::Error(nvcr::ErrorCode::malformed_bitstream, exception.what(), "dcvcuf.rans"),
+             0);
+    }
+}
+
+void RansDecoder::fail(nvcr::Error error, std::size_t symbols) {
+    if (!error_) error_ = std::move(error);
+    decoded_->assign(symbols, 0);
 }
 
 void RansDecoder::set_stream(const std::uint8_t* data, int size) {
-    if (!codec_ || !data || size <= 0)
-        throw std::invalid_argument("invalid DCVC-UF entropy stream");
-    checked(codec_->set_stream(std::span<const std::byte>(
-        reinterpret_cast<const std::byte*>(data), static_cast<std::size_t>(size))));
+    // set_entropy_coder_parallel runs just before this call for every frame;
+    // keep its error for this frame.
+    if (!codec_) return fail(error_.value_or(nvcr::Error(
+                                 nvcr::ErrorCode::malformed_bitstream,
+                                 "DCVC-UF entropy decoder is not configured", "dcvcuf.rans")),
+                             0);
+    error_.reset();
+    decoded_->clear();
+    if (!codec_ || !data || size <= 0) {
+        fail(nvcr::Error(nvcr::ErrorCode::malformed_bitstream,
+                         "DCVC-UF entropy stream is empty", "dcvcuf.rans"),
+             0);
+        return;
+    }
+    auto set = codec_->set_stream(std::span<const std::byte>(
+        reinterpret_cast<const std::byte*>(data), static_cast<std::size_t>(size)));
+    if (!set) fail(set.error(), 0);
 }
 
 void RansDecoder::decode_z(int total_size, int cdf_offset, int channels) {
+    const auto count = static_cast<std::size_t>(std::max(total_size, 0));
+    if (error_) return fail(*error_, count);
     if (!codec_ || total_size < 0 || cdf_offset < 0 || channels <= 0)
-        throw std::invalid_argument("invalid DCVC-UF z decode request");
-    *decoded_ = checked(codec_->decode_z(
-        static_cast<std::size_t>(total_size), 0,
-        static_cast<std::size_t>(cdf_offset), static_cast<std::size_t>(channels)));
+        return fail(nvcr::Error(nvcr::ErrorCode::invalid_argument,
+                                "invalid DCVC-UF z decode request", "dcvcuf.rans"),
+                    count);
+    auto decoded = codec_->decode_z(
+        count, 0, static_cast<std::size_t>(cdf_offset), static_cast<std::size_t>(channels));
+    if (!decoded) return fail(decoded.error(), count);
+    *decoded_ = std::move(decoded.value());
 }
 
 void RansDecoder::decode_y(
     const std::shared_ptr<std::vector<std::uint8_t>>& indexes, int size) {
-    if (!codec_ || !indexes || size < 0 ||
-        static_cast<std::size_t>(size) > indexes->size())
-        throw std::invalid_argument("invalid DCVC-UF y decode request");
-    *decoded_ = checked(codec_->decode_y(
-        std::span<const std::uint8_t>(indexes->data(), static_cast<std::size_t>(size)), 1));
+    const auto count = static_cast<std::size_t>(std::max(size, 0));
+    if (error_) return fail(*error_, count);
+    if (!codec_ || !indexes || size < 0 || count > indexes->size())
+        return fail(nvcr::Error(nvcr::ErrorCode::invalid_argument,
+                                "invalid DCVC-UF y decode request", "dcvcuf.rans"),
+                    count);
+    auto decoded = codec_->decode_y(std::span<const std::uint8_t>(indexes->data(), count), 1);
+    if (!decoded) return fail(decoded.error(), count);
+    *decoded_ = std::move(decoded.value());
+}
+
+nvcr::Result<void> RansDecoder::finish() {
+    if (error_) {
+        auto error = std::move(*error_);
+        error_.reset();
+        return error;
+    }
+    if (!codec_)
+        return nvcr::Error(nvcr::ErrorCode::invalid_state,
+                           "DCVC-UF entropy decoder is not configured", "dcvcuf.rans");
+    return codec_->finish_decode();
 }
 
 std::shared_ptr<std::vector<std::int8_t>>

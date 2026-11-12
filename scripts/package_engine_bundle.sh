@@ -63,13 +63,24 @@ PY_NAME
 
 staging_root="$(mktemp -d "${TMPDIR:-/tmp}/nvcr-engine-package.XXXXXX")"
 trap 'rm -rf -- "$staging_root"' EXIT
-bundle_root="$staging_root/$asset_name/dcvcrt"
+# The archive directory names the backend; MLVC bundles carry Microsoft's
+# libmlvc model bundle, DCVC-RT bundles derive from microsoft/DCVC.
+if [[ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["model_profile_id"])' \
+        "$engine_dir/engine_manifest.json")" == "mlvc" ]]; then
+    backend="mlvc"
+    notices=("$script_dir/../third_party/mlvc_model/LICENSE.MIT"
+             "$script_dir/../third_party/mlvc_model/UPSTREAM.md")
+else
+    backend="dcvcrt"
+    notices=("$script_dir/../third_party/dcvc_rt/LICENSE.MIT"
+             "$script_dir/../third_party/dcvc_rt/NOTICE.txt")
+fi
+bundle_root="$staging_root/$asset_name/$backend"
 mkdir -p "$bundle_root"
 cp -p "$script_dir/../LICENSE" "$bundle_root/LICENSE"
-notice_dir="$bundle_root/third_party/dcvc_rt"
+notice_dir="$bundle_root/third_party/$(basename "$(dirname "${notices[0]}")")"
 mkdir -p "$notice_dir"
-cp -p "$script_dir/../third_party/dcvc_rt/LICENSE.MIT" \
-    "$script_dir/../third_party/dcvc_rt/NOTICE.txt" "$notice_dir/"
+cp -p "${notices[@]}" "$notice_dir/"
 cp -p "$engine_dir/engine_manifest.json" "$bundle_root/engine_manifest.json"
 cp -p "$engine_dir/engine.sha256" "$bundle_root/engine.sha256"
 

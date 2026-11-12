@@ -3,7 +3,8 @@
 [MLVC](https://github.com/microsoft/MLVC) (Multi-platform Learned Video Codec)
 is Microsoft's learned video codec designed for deployment across hardware. It
 is NVCR's second codec integration and the first that runs through the ONNX
-Runtime providers instead of TensorRT. Status: experimental (roadmap C10).
+Runtime providers; it also runs on TensorRT. Status: experimental (roadmap C10,
+TensorRT C12).
 
 The integration follows two rules. NVCR stays a common runtime: MLVC uses the
 same registry, provider sessions, `NVAU` access units, CLI and session contract
@@ -130,13 +131,83 @@ it is a stream-format change outside this integration.
 | `onnxruntime-cpu` | Validated: upstream-runtime parity on the generic and qualcomm bundles |
 | `onnxruntime-qnn` (Snapdragon NPU) | Runs on the S25 with every node on the HTP; no upstream reference on the device, so parity is not established |
 | `onnxruntime-cuda` | Not validated for MLVC |
-| `tensorrt` | Rejected with `incompatible_target`; the TensorRT session loads DCVC-RT engine bundles only |
+| `tensorrt` | Experimental (C12): runs from an MLVC engine bundle; streams decode across TensorRT and ONNX Runtime CPU with bounded drift, see [TensorRT](#tensorrt) |
 
 The ONNX Runtime provider now binds float16, float32 and int32 stage tensors.
 It checks each binding against the model's declared type. A stage's floating
 tensors must match its declared precision (`fp16` or `fp32`), so DCVC-RT's
 fp16-only rule is unchanged. Part names may use upper-case letters
 (`MLVCEncoder_320x192`).
+
+### TensorRT
+
+TensorRT runs MLVC from an *engine bundle*: Microsoft's ONNX bundle, unchanged,
+plus one FP16 plan per canvas and part (`mlvc_encoder_<W>x<H>.plan`,
+`mlvc_decoder_<W>x<H>.plan`) and the `engine_manifest.json` and
+`engine.sha256` that NVCR validates for every TensorRT bundle. Plans are
+target-local. Install a published bundle instead of building one:
+
+```bash
+nvcr-artifacts install --backend mlvc --profile perceptual
+nvcr encode -i input.yuv -o output.nvcr -s 640x360 -r 30 --qp 32 \
+  --codec mlvc --provider tensorrt \
+  --engine-dir "$NVCR_ENGINE_ROOT/profiles/mlvc/perceptual"
+```
+
+A profile is one MLVC model and its weights, each a generic ONNX export with
+all four canvases:
+
+| Profile | Model | Weights | Source of the ONNX bundle |
+|---|---|---|---|
+| `s-perceptual` | MLVC-S (5.4M parameters) | perceptual | libmlvc's published `onnx-generic-v0.1` bundle |
+| `perceptual` | MLVC (18.3M parameters) | perceptual | exported from `mlvc-perceptual-v1.ckpt` |
+| `psnr` | MLVC (18.3M parameters) | psnr | exported from `mlvc-psnr-v1.ckpt` |
+
+Without `--profile`, the installer installs all three. A stream records its
+model in every access unit, so it decodes only with the profile that encoded
+it. MLVC bundles live on their own rolling release, `engine-assets-mlvc`, so
+installers released before MLVC never see them; installation never changes
+`profiles/default`, which stays DCVC-RT's. The first published profile was
+named `s-generic`; it is now `s-perceptual`, and installers skip catalog
+profiles they do not know.
+
+Only MLVC-S perceptual has a published bundle.
+`scripts/backends/mlvc/export_onnx_bundle.sh` exports the others with MLVC's own
+`convert.py` from the pinned checkout (`1425880`) and a published checkpoint,
+using an interpreter with MLVC's `uv.lock` exporter versions, CPU PyTorch 2.10.0
+and `packages/msrtc_rans` installed. Upstream validates each canvas on VCD clips;
+the script uses NVCR's datasets instead, so the metrics recorded in the bundle's
+metadata describe those clips.
+
+To build a bundle for another GPU, extract a generic bundle and run, inside
+the TensorRT toolchain container on that GPU:
+
+```bash
+python3 scripts/backends/mlvc/build_tensorrt_bundle.py \
+  --bundle <extracted-onnx-bundle> --output-dir build/mlvc-trt \
+  --target-profile configs/targets/<target>.json \
+  --hardware-compatibility same_compute_capability
+```
+
+The script refuses a target profile that does not describe the build GPU.
+Package and publish `build/mlvc-trt/bundle` like a DCVC-RT bundle
+(`scripts/release_engine_assets.sh --asset-release engine-assets-mlvc`).
+
+Behaviour on TensorRT:
+
+- Every canvas's plans load and warm up when the session is created. The
+  TensorRT session cannot load stages after it starts running, so MLVC's lazy
+  per-canvas loading does not apply. A bundle missing any plan fails at start.
+- MLVC's tensors are pinned host memory that the engines read and write
+  directly. This is simple but not the fastest path; see C12 in the roadmap.
+- The engine manifest names model `mlvc`. The CLI sets it; library users set
+  `artifacts.model_id = "mlvc"`, or the TensorRT session rejects the bundle as
+  another model.
+- Decoded output is not byte-identical to ONNX Runtime CPU. Streams decode in
+  both directions between the providers. On 65 frames the two decoders drift
+  apart until the frame-64 LTR recovery: to 57 dB Y PSNR of each other at
+  176x144, 44 dB at 640x360 and 39 dB at 960x540, then back to about 58 dB.
+  Quality against the source and stream size match within 0.2 dB and 0.2%.
 
 ### Snapdragon
 
@@ -211,8 +282,9 @@ upstream stream NVCR cannot encode, such as a `--bitrate` reference. Bundles, ch
   rejected with `not_implemented` until a real one has been validated.
 - No encoder rate control, no Q-index overrides, no LTR or feature-reset
   overrides beyond the bundle's own values.
-- Only MLVC-S perceptual bundles have been run. The standard MLVC model needs a
-  bundle exported from its public checkpoint.
-- Codec/provider admission is still coarse: `nvcr compatibility check` reports
-  `mlvc` with `tensorrt` as compatible because both are registered; the adapter
-  rejects the pair when sessions are created.
+- Upstream-runtime parity (C10) covers MLVC-S perceptual only. The other three
+  bundles are NVCR's own exports from the public checkpoints; they run on
+  ONNX Runtime CPU and TensorRT, but no upstream reference vectors exist for
+  them.
+- TensorRT engine bundles exist only for the RTX 5060 Laptop GPU class
+  (SM 12.0, TensorRT 10.9).

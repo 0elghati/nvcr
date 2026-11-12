@@ -39,13 +39,6 @@ public:
     [[nodiscard]] Result<codec::Sessions> create_sessions(
         const RuntimeConfiguration& configuration,
         std::shared_ptr<provider::experimental::IProviderSession> provider_session) override {
-        // MLVC parts are ONNX graphs with host-side glue; the TensorRT session
-        // loads DCVC-RT engine bundles only.
-        if (configuration.provider.id == "tensorrt") {
-            return Error(ErrorCode::incompatible_target,
-                         "MLVC runs through the ONNX Runtime providers, not tensorrt",
-                         "mlvc");
-        }
         return make_sessions(configuration, std::move(provider_session));
     }
 };

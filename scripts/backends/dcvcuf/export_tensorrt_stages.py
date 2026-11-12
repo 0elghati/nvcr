@@ -57,11 +57,16 @@ def verify_reference(root, expected=PINNED_REFERENCE_COMMIT):
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--reference-root", type=Path, required=True)
-    parser.add_argument("--image-checkpoint", type=Path, required=True)
-    parser.add_argument("--image-checkpoint-sha256", required=True)
-    parser.add_argument("--video-checkpoint", type=Path, required=True)
-    parser.add_argument("--video-checkpoint-sha256", required=True)
+    parser.add_argument("--reference-root", type=Path)
+    parser.add_argument("--image-checkpoint", type=Path)
+    parser.add_argument("--image-checkpoint-sha256")
+    parser.add_argument("--video-checkpoint", type=Path)
+    parser.add_argument("--video-checkpoint-sha256")
+    parser.add_argument("--from-export", type=Path,
+                        help="Build plans from an existing export directory (its report.json "
+                             "and onnx/) instead of exporting: the ONNX files are verified "
+                             "against the report and copied, so another GPU builds its plans "
+                             "from byte-identical graphs and gets the same model profile")
     parser.add_argument("--trtexec", type=Path, default=Path("/usr/src/tensorrt/bin/trtexec"))
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--workspace-mib", type=int, default=1024)
@@ -74,7 +79,41 @@ def parse_args(argv=None):
     parser.add_argument("--stage", action="append", help="Restrict to these stages")
     parser.add_argument("--skip-build", action="store_true", help="Export and check ONNX only")
     parser.add_argument("--output-dir", type=Path, required=True)
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.from_export is None:
+        missing = [name for name in ("reference_root", "image_checkpoint", "image_checkpoint_sha256",
+                                     "video_checkpoint", "video_checkpoint_sha256")
+                   if getattr(args, name) is None]
+        if missing:
+            parser.error("exporting needs --" + ", --".join(n.replace("_", "-") for n in missing))
+    elif args.skip_build:
+        parser.error("--from-export only builds plans; --skip-build would do nothing")
+    return args
+
+
+def reuse_export(args, stages, onnx_dir):
+    """Copies a previous export's verified ONNX files; returns its report header."""
+    import shutil
+
+    source = json.loads((args.from_export / "report.json").read_text(encoding="utf-8"))
+    if source.get("schema") != "nvcr.dcvcuf.tensorrt_export.v1":
+        raise ValueError(f"{args.from_export}/report.json is not a DCVC-UF TensorRT export report")
+    if source["upstream"]["commit"] != PINNED_REFERENCE_COMMIT:
+        raise ValueError("export was made from a different upstream commit")
+    if source["profile"] != json.loads(json.dumps(tensorrt_stages.PROFILE)):
+        raise ValueError("export profile differs from tensorrt_stages.PROFILE")
+    stage_reports = {}
+    for stage in stages:
+        expected = source["stages"][stage]["onnx_sha256"]
+        path = args.from_export / "onnx" / f"{stage}.onnx"
+        actual = sha256(path)
+        if actual != expected:
+            raise ValueError(f"{path}: SHA-256 {actual} != report {expected}")
+        shutil.copyfile(path, onnx_dir / path.name)
+        stage_reports[stage] = {"onnx_sha256": actual,
+                                "onnx_check": source["stages"][stage].get("onnx_check"),
+                                "onnx_from_export": str(args.from_export)}
+    return source, stage_reports
 
 
 def verify_inputs(args):
@@ -283,6 +322,23 @@ def main(argv=None):
     unknown = sorted(set(stages) - set(tensorrt_stages.STAGES))
     if unknown:
         raise SystemExit(f"unknown stages: {', '.join(unknown)}")
+    onnx_dir = args.output_dir / "onnx"
+    bundle = args.output_dir / "bundle"
+    if args.from_export is not None:
+        for directory in (onnx_dir, bundle, args.output_dir / "logs"):
+            directory.mkdir(parents=True)
+        source, stage_reports = reuse_export(args, stages, onnx_dir)
+        commit = source["upstream"]["commit"]
+        report = {key: source[key] for key in ("schema", "upstream", "checkpoints", "tools",
+                                               "environment", "onnx_opset", "onnx_tolerance",
+                                               "profile")}
+        report["onnx_from_export"] = {"path": str(args.from_export),
+                                      "report_sha256": sha256(args.from_export / "report.json")}
+        report["build"] = {"precision": args.precision,
+                           "builder_optimization_level": args.builder_optimization_level,
+                           "workspace_mib": args.workspace_mib}
+        report["stages"] = stage_reports
+        return build_bundle(args, stages, commit, report, onnx_dir, bundle)
     commit = verify_reference(args.reference_root)
     verify_inputs(args)
     sys.path.insert(0, str(args.reference_root.resolve()))
@@ -291,8 +347,6 @@ def main(argv=None):
     import torch
 
     torch.manual_seed(0)
-    onnx_dir = args.output_dir / "onnx"
-    bundle = args.output_dir / "bundle"
     for directory in (onnx_dir, bundle, args.output_dir / "logs"):
         directory.mkdir(parents=True)
     image, video = load_models(args)
@@ -323,7 +377,12 @@ def main(argv=None):
         report["stages"][stage] = {"onnx_sha256": sha256(path), "onnx_check": checks}
         if not all(check["passed"] for check in checks):
             raise RuntimeError(f"ONNX export of {stage} disagrees with PyTorch: {checks}")
+    status = build_bundle(args, stages, commit, report, onnx_dir, bundle)
+    verify_reference(args.reference_root)
+    return status
 
+
+def build_bundle(args, stages, commit, report, onnx_dir, bundle):
     (bundle / "stages.json").write_text(
         json.dumps({"schema": "nvcr.dcvcuf.tensorrt_stages.v1", "model": MODEL_PROFILE_ID,
                     "stages": stage_contracts(stages)}, indent=2) + "\n", encoding="utf-8")
@@ -342,7 +401,6 @@ def main(argv=None):
         write_bundle_manifest(args, bundle, stages, model_profile, device,
                               multiprocessor_count(args.device))
         report["bundle_manifest_sha256"] = sha256(bundle / "engine_manifest.json")
-    verify_reference(args.reference_root)
     (args.output_dir / "report.json").write_text(
         json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"[export] wrote {args.output_dir / 'report.json'}")

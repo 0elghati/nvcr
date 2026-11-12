@@ -1,6 +1,6 @@
 # Cross-target decoding of neural video: research report (issue #216)
 
-Status as of 2026-11-05. Roadmap item C12. Branch
+Status as of 2026-11-05. Roadmap item C14. Branch
 `fix/cross-gpu-entropy-determinism` on `ef4dcfd8` (`main` `163441e9`); all work
 described here is uncommitted.
 
