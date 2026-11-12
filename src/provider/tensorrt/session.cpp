@@ -1,6 +1,10 @@
 #include "session.hpp"
 
+#include "../../common/json.hpp"
 #include "../../common/sha256.hpp"
+#include "fx/ops.hpp"
+#include "fx/plugins.hpp"
+#include "nvcr/numerics/profiles.hpp"
 
 #include <NvInferVersion.h>
 #include <cuda_fp16.h>
@@ -560,6 +564,7 @@ std::optional<nvinfer1::DataType> tensorrt_data_type(session_api::TensorDataType
     case session_api::TensorDataType::int32: return nvinfer1::DataType::kINT32;
     case session_api::TensorDataType::float16: return nvinfer1::DataType::kHALF;
     case session_api::TensorDataType::float32: return nvinfer1::DataType::kFLOAT;
+    case session_api::TensorDataType::uint8: return nvinfer1::DataType::kUINT8;
     default: return std::nullopt;
     }
 }
@@ -569,6 +574,7 @@ std::size_t tensor_element_bytes(session_api::TensorDataType type) {
     case session_api::TensorDataType::float16: return sizeof(__half);
     case session_api::TensorDataType::int32:
     case session_api::TensorDataType::float32: return sizeof(std::uint32_t);
+    case session_api::TensorDataType::uint8: return 1;
     default: return 0;
     }
 }
@@ -1001,7 +1007,46 @@ Result<std::vector<DeviceTensor>> TensorRTExecutionSession::run_stage(
             "TensorRT stage belongs to another provider session",
             std::string(subsystem));
     }
-    return run_stage(concrete->engine_index(), inputs, output_storage);
+    if (concrete->descriptor().numerics_profile != numerics::fx_v1) {
+        return run_stage(concrete->engine_index(), inputs, output_storage);
+    }
+    auto word = fx_failure_word();
+    if (!word) return word.error();
+    const auto previous = fx::install_failure_word(word.value());
+    auto outputs = run_stage(concrete->engine_index(), inputs, output_storage);
+    fx::install_failure_word(previous);
+    if (!outputs) return outputs;
+    auto checked = check_fx_failure(concrete->descriptor().stage_id);
+    if (!checked) return checked.error();
+    return outputs;
+}
+
+Result<std::uint32_t*> TensorRTExecutionSession::fx_failure_word() {
+    if (fx_word_ != nullptr) return fx_word_;
+    std::uint32_t* word = nullptr;
+    if (const auto status = cudaMalloc(&word, sizeof(*word)); status != cudaSuccess) {
+        return cuda_error("fx failure word", status);
+    }
+    if (const auto status = cudaMemset(word, 0, sizeof(*word)); status != cudaSuccess) {
+        cudaFree(word);
+        return cuda_error("fx failure word", status);
+    }
+    fx_word_ = word;
+    return fx_word_;
+}
+
+// A kernel that met one of nvcr.fx.v1's failure conditions set this session's word: the stage fails.
+Result<void> TensorRTExecutionSession::check_fx_failure(const std::string& stage_id) {
+    std::uint32_t* word = fx_word_;
+    std::uint32_t failed = 0;
+    auto copied = copy_async(&failed, word, sizeof(failed), cudaMemcpyDeviceToHost, stream_, "fx failure word");
+    if (!copied) return copied.error();
+    auto synchronized = synchronize_stream(stream_, "fx failure word");
+    if (!synchronized) return synchronized.error();
+    if (failed == 0) return {};
+    cudaMemsetAsync(word, 0, sizeof(*word), stream_);
+    return Error(ErrorCode::malformed_bitstream, stage_id + ": a value left the nvcr.fx.v1 range",
+                 std::string(subsystem));
 }
 
 Result<std::vector<DeviceTensor>> run_device_stage(
@@ -1035,7 +1080,23 @@ Result<session_api::Completion> TensorRTExecutionSession::submit(
             "TensorRT stage belongs to another provider session",
             std::string(subsystem));
     }
-    return submit_impl(concrete_stage, tensors, dependencies);
+    // Codecs that use only this generic contract never call finalize_stages().
+    if (!initialized_) {
+        auto finalized = finalize_stages();
+        if (!finalized) return finalized.error();
+    }
+    if (concrete_stage->descriptor().numerics_profile != numerics::fx_v1) {
+        return submit_impl(concrete_stage, tensors, dependencies);
+    }
+    auto word = fx_failure_word();
+    if (!word) return word.error();
+    const auto previous = fx::install_failure_word(word.value());
+    auto completion = submit_impl(concrete_stage, tensors, dependencies);
+    fx::install_failure_word(previous);
+    if (!completion) return completion;
+    auto checked = check_fx_failure(concrete_stage->descriptor().stage_id);
+    if (!checked) return checked.error();
+    return completion;
 }
 
 Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
@@ -1126,9 +1187,7 @@ Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
                     std::string(tensor_specification.name),
                 std::string(subsystem));
         }
-        // Pinned host buffers are device-addressable under unified addressing.
-        // shortcut: engines read them over the bus (zero copy); stage through
-        // device buffers if a codec's host-side tensors become the bottleneck.
+        // Pinned host buffers are staged through device copies below.
         if (!tensor->storage.buffer || tensor->storage.buffer->owner_id() != owner_id_ ||
             (tensor->storage.buffer->domain() != session_api::MemoryDomain::provider_device &&
              tensor->storage.buffer->domain() != session_api::MemoryDomain::pinned_host)) {
@@ -1191,6 +1250,8 @@ Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
     graph_signature.reserve(specification.tensors.size() * 6U);
     std::vector<session_api::BufferHandle> retained_buffers;
     retained_buffers.reserve(tensors.size());
+    struct StagedOutput final { void* host; const void* device; std::size_t bytes; };
+    std::vector<StagedOutput> staged_outputs;
     for (const auto& tensor_specification : specification.tensors) {
         const auto* tensor = find_tensor(tensor_specification.name);
         auto concrete_buffer = std::dynamic_pointer_cast<TensorRTBuffer>(tensor->storage.buffer);
@@ -1203,6 +1264,25 @@ Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
         auto* address = static_cast<std::byte*>(concrete_buffer->data()) +
             tensor->storage.offset_bytes;
         const std::string name(tensor_specification.name);
+        // A pinned host tensor goes through a device copy, so engines never read or write it over the bus.
+        if (tensor->storage.buffer->domain() == session_api::MemoryDomain::pinned_host) {
+            std::size_t bytes = tensor_element_bytes(tensor->data_type);
+            for (const auto dimension : tensor->shape) bytes *= static_cast<std::size_t>(dimension);
+            auto& device = staging_[std::string(specification.filename) + "/" + name];
+            if (device.bytes < bytes) {
+                auto allocated = allocate_cuda(bytes);
+                if (!allocated) return allocated.error();
+                device = std::move(allocated.value());
+            }
+            auto* host = address;
+            address = static_cast<std::byte*>(device.data);
+            if (tensor_specification.mode == nvinfer1::TensorIOMode::kINPUT) {
+                auto copied = copy_async(address, host, bytes, cudaMemcpyHostToDevice, stream_, "stage input");
+                if (!copied) return copied.error();
+            } else {
+                staged_outputs.push_back({host, address, bytes});
+            }
+        }
         if (!context->setTensorAddress(name.c_str(), address)) {
             return backend_error(
                 std::string(specification.filename) + " rejected device address for " + name);
@@ -1250,6 +1330,11 @@ Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
             static_cast<void>(cudaEventDestroy(profile_events.second));
         }
         return enqueued.error();
+    }
+    for (const auto& output : staged_outputs) {
+        auto copied = copy_async(output.host, output.device, output.bytes, cudaMemcpyDeviceToHost, stream_,
+                                 "stage output");
+        if (!copied) return copied.error();
     }
     if (profile_cuda) {
         auto recorded = record_cuda_event(
@@ -1307,6 +1392,7 @@ TensorRTExecutionSession::~TensorRTExecutionSession() {
     if (stream_ != nullptr) {
         static_cast<void>(cudaStreamSynchronize(stream_));
     }
+    if (fx_word_ != nullptr) static_cast<void>(cudaFree(fx_word_));
     std::size_t graph_captures = 0;
     std::size_t graph_hits = 0;
     std::size_t graph_entries = 0;
@@ -1376,7 +1462,65 @@ Result<session_api::BufferHandle> TensorRTExecutionSession::allocate(
 }
 
 bool TensorRTExecutionSession::supports_numerics_profile(std::string_view profile) const noexcept {
+    if (profile == numerics::fx_v1) return fx_ready_;
     return profile == deterministic::intconv_profile && compute_major_ >= 8;
+}
+
+// An nvcr.fx.v1 stage runs the plan <component>.fx.plan, which the bundle lists in
+// engine.sha256 and whose sidecar names the program digest it was compiled from.
+Result<session_api::ExecutableStage> TensorRTExecutionSession::load_fx_stage(
+    session_api::ExecutableStageDescriptor descriptor) {
+    if (!supports_numerics_profile(descriptor.numerics_profile)) {
+        return Error(ErrorCode::incompatible_precision,
+                     descriptor.stage_id + " requires nvcr.fx.v1, which this build or device does not implement",
+                     std::string(subsystem));
+    }
+    const auto plan = descriptor.artifact.component_id + ".fx.plan";
+    const auto sidecar = plan + ".json";
+    if (!bundle_files_.contains(plan) || !bundle_files_.contains(sidecar)) {
+        return Error(ErrorCode::missing_artifact, "the bundle has no nvcr.fx.v1 plan for " + descriptor.stage_id,
+                     std::string(subsystem));
+    }
+    auto json = detail::json::parse_file(bundle_root_ / sidecar, subsystem);
+    if (!json) return json.error();
+    const auto* program = json.value().find("program_sha256");
+    std::string expected;
+    for (const auto byte : descriptor.artifact.expected_digest) {
+        constexpr char digits[] = "0123456789abcdef";
+        expected += digits[static_cast<unsigned>(byte) >> 4U];
+        expected += digits[static_cast<unsigned>(byte) & 15U];
+    }
+    if (program == nullptr || program->string_value != expected) {
+        return Error(ErrorCode::digest_mismatch,
+                     plan + " was not compiled from the program the stream requires", std::string(subsystem));
+    }
+    // The plan's sidecar records its shapes; -1 marks a dynamic axis.
+    TensorRTStageSpec specification;
+    specification.filename = plan;
+    const auto* shapes = json.value().find("tensors");
+    for (const auto& contract : descriptor.tensors) {
+        const auto* shape = shapes ? shapes->find(contract.name) : nullptr;
+        if (shape == nullptr || shape->array_value.size() != 4) {
+            return Error(ErrorCode::invalid_argument, plan + " records no shape for " + contract.name,
+                         std::string(subsystem));
+        }
+        TensorRTTensorSpec tensor;
+        tensor.name = contract.name;
+        tensor.data_type = session_api::TensorDataType::int32;
+        tensor.rank = 4;
+        tensor.mode = contract.access == session_api::TensorAccess::read ? nvinfer1::TensorIOMode::kINPUT
+                                                                          : nvinfer1::TensorIOMode::kOUTPUT;
+        for (std::size_t axis = 0; axis < 4; ++axis) {
+            tensor.dimensions[axis] = shape->array_value[axis].integer_value.value_or(0);
+            tensor.warmup_dimensions[axis] = tensor.dimensions[axis];
+        }
+        specification.tensors.push_back(std::move(tensor));
+    }
+    descriptor.stage_id = plan;
+    descriptor.artifact.component_id = plan;
+    descriptor.artifact.path = (bundle_root_ / plan).string();
+    descriptor.artifact.provider_id = "tensorrt";
+    return load_validated_stage(std::move(descriptor), std::move(specification));
 }
 
 Result<session_api::ExecutableStage> TensorRTExecutionSession::load_exact_stage(
@@ -1451,11 +1595,19 @@ Result<std::vector<DeviceTensor>> TensorRTExecutionSession::run_exact_stage(
 
 Result<session_api::ExecutableStage> TensorRTExecutionSession::load_stage(
     session_api::ExecutableStageDescriptor descriptor) {
+    if (descriptor.numerics_profile == numerics::fx_v1) return load_fx_stage(std::move(descriptor));
     auto normative = deterministic::is_normative(descriptor);
     if (!normative) return normative.error();
     if (normative.value()) return load_exact_stage(std::move(descriptor));
     // Generic callers describe a stage only by its contract: dynamic axes warm
     // up at the engine's optimization-profile minimum.
+    // A component the bundle holds as <component>.plan resolves to that plan.
+    if (!descriptor.artifact.component_id.ends_with(".plan") &&
+        bundle_files_.contains(descriptor.artifact.component_id + ".plan")) {
+        descriptor.stage_id = descriptor.artifact.component_id + ".plan";
+        descriptor.artifact.component_id = descriptor.stage_id;
+        descriptor.artifact.path = (bundle_root_ / descriptor.stage_id).string();
+    }
     TensorRTStageSpec specification;
     specification.filename = descriptor.stage_id;
     specification.tensors.reserve(descriptor.tensors.size());
@@ -1566,12 +1718,9 @@ Result<session_api::ExecutableStage> TensorRTExecutionSession::load_validated_st
 }
 
 Result<void> TensorRTExecutionSession::reset() {
-    if (!initialized_) {
-        return Error(
-            ErrorCode::invalid_state,
-            "TensorRT session is not initialized",
-            std::string(subsystem));
-    }
+    // Codecs that use only the generic contract finalize on their first
+    // submission; before it the session has run nothing.
+    if (!initialized_) return {};
     auto synchronized = synchronize_stream(stream_, "cudaStreamSynchronize session reset");
     if (!synchronized) return synchronized.error();
     scratch_arena_.reset();
@@ -1607,6 +1756,11 @@ Result<void> TensorRTExecutionSession::initialize(
     const auto major_status = cudaDeviceGetAttribute(
         &compute_major_, cudaDevAttrComputeCapabilityMajor, configuration.provider.device_id);
     if (major_status != cudaSuccess) return cuda_error("cudaDeviceGetAttribute", major_status);
+    int compute_minor = 0;
+    const auto minor_status = cudaDeviceGetAttribute(
+        &compute_minor, cudaDevAttrComputeCapabilityMinor, configuration.provider.device_id);
+    if (minor_status != cudaSuccess) return cuda_error("cudaDeviceGetAttribute", minor_status);
+    fx_ready_ = fx::kernels_available(compute_major_, compute_minor) && fx::register_plugins();
     auto selected_policy = determine_context_policy(configuration);
     if (!selected_policy) return selected_policy.error();
     auto manifest = validate_engine_manifest(

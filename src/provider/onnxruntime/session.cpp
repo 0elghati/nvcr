@@ -4,7 +4,9 @@
 #include "nvcr/runtime/registry.hpp"
 
 #include "../../common/sha256.hpp"
+#include "../../deterministic/fx_program.hpp"
 #include "../../deterministic/normative_stage.hpp"
+#include "nvcr/numerics/profiles.hpp"
 
 #include <onnxruntime_cxx_api.h>
 
@@ -363,6 +365,25 @@ private:
     deterministic::NormativeProgram program_;
 };
 
+// An nvcr.fx.v1 stage: a program run by the CPU reference executor.
+class FxStage final : public session_api::IExecutableStage {
+public:
+    FxStage(session_api::ExecutableStageDescriptor descriptor, std::string owner_id,
+            deterministic::fx::Program program)
+        : descriptor_(std::move(descriptor)), owner_id_(std::move(owner_id)), program_(std::move(program)) {}
+
+    [[nodiscard]] const session_api::ExecutableStageDescriptor& descriptor() const noexcept override {
+        return descriptor_;
+    }
+    [[nodiscard]] std::string_view owner_id() const noexcept override { return owner_id_; }
+    [[nodiscard]] const deterministic::fx::Program& program() const noexcept { return program_; }
+
+private:
+    session_api::ExecutableStageDescriptor descriptor_;
+    std::string owner_id_;
+    deterministic::fx::Program program_;
+};
+
 // Run() returns after the outputs are written, so every completion is ready.
 class OrtCompletion final : public session_api::ICompletion {
 public:
@@ -401,14 +422,16 @@ public:
         }
     }
 
-    // The CPU target runs nvcr.intconv.v1 through its CPU reference. Other
-    // execution providers (CUDA, QNN) do not implement it.
+    // The CPU target runs nvcr.intconv.v1 and nvcr.fx.v1 through their CPU
+    // references. Other execution providers (CUDA, QNN) do not implement them.
     [[nodiscard]] bool supports_numerics_profile(std::string_view profile) const noexcept override {
-        return target_.runtime_name == "CPUExecutionProvider" && profile == deterministic::intconv_profile;
+        return target_.runtime_name == "CPUExecutionProvider" &&
+            (profile == deterministic::intconv_profile || profile == numerics::fx_v1);
     }
 
     [[nodiscard]] Result<session_api::ExecutableStage> load_stage(
         session_api::ExecutableStageDescriptor descriptor) override {
+        if (descriptor.numerics_profile == numerics::fx_v1) return load_fx_stage(std::move(descriptor));
         auto normative = deterministic::is_normative(descriptor);
         if (!normative) return normative.error();
         if (normative.value()) {
@@ -543,6 +566,9 @@ public:
         if (const auto exact = std::dynamic_pointer_cast<const ExactStage>(stage)) {
             return submit_exact(*exact, tensors, dependencies);
         }
+        if (const auto fx = std::dynamic_pointer_cast<const FxStage>(stage)) {
+            return submit_fx(*fx, tensors, dependencies);
+        }
         const auto concrete = std::dynamic_pointer_cast<const OrtStage>(stage);
         if (!concrete || concrete->owner_id() != owner_id_) {
             return session_error(
@@ -614,6 +640,89 @@ public:
     [[nodiscard]] Result<void> reset() override { return {}; }
 
 private:
+    [[nodiscard]] Result<session_api::ExecutableStage> load_fx_stage(session_api::ExecutableStageDescriptor descriptor) {
+        if (!supports_numerics_profile(descriptor.numerics_profile)) {
+            return session_error(ErrorCode::incompatible_precision,
+                                 descriptor.stage_id + " requires nvcr.fx.v1, which the " +
+                                     std::string(target_.runtime_name) + " target does not implement");
+        }
+        const auto& artifact = descriptor.artifact;
+        auto digest = deterministic::fx::program_digest(artifact.path, artifact.component_id);
+        if (!digest) return digest.error();
+        std::string expected;
+        for (const auto byte : artifact.expected_digest) {
+            constexpr char digits[] = "0123456789abcdef";
+            expected += digits[static_cast<unsigned>(byte) >> 4U];
+            expected += digits[static_cast<unsigned>(byte) & 15U];
+        }
+        if (digest.value() != expected) {
+            return session_error(ErrorCode::digest_mismatch, "fx program digest mismatch for " + descriptor.stage_id);
+        }
+        auto program = deterministic::fx::load_program(artifact.path, artifact.component_id);
+        if (!program) return program.error();
+        return session_api::ExecutableStage(
+            std::make_shared<FxStage>(std::move(descriptor), owner_id_, std::move(program.value())));
+    }
+
+    [[nodiscard]] Result<session_api::Completion> submit_fx(
+        const FxStage& stage,
+        std::span<const session_api::TensorView> tensors,
+        std::span<const session_api::ExecutionDependency> dependencies) {
+        if (stage.owner_id() != owner_id_) {
+            return session_error(ErrorCode::invalid_argument, "stage belongs to another provider session");
+        }
+        for (const auto& dependency : dependencies) {
+            if (!dependency.completion || dependency.completion->owner_id() != owner_id_) {
+                return session_error(ErrorCode::invalid_argument, "dependency belongs to another provider session");
+            }
+            auto waited = dependency.completion->wait();
+            if (!waited) return waited.error();
+        }
+        const auto& program = stage.program();
+        // int32 host views of the bound tensors, by name.
+        std::map<std::string, std::span<std::int32_t>, std::less<>> views;
+        std::map<std::string, std::vector<std::int64_t>, std::less<>> shapes;
+        for (const auto& tensor : tensors) {
+            const auto& buffer = tensor.storage.buffer;
+            if (tensor.data_type != session_api::TensorDataType::int32 || !buffer || buffer->owner_id() != owner_id_ ||
+                tensor.shape.size() != 4) {
+                return session_error(ErrorCode::invalid_argument,
+                                     "fx tensor " + std::string(tensor.name) + " must be an int32 NCHW buffer of this session");
+            }
+            auto bytes = buffer->host_bytes();
+            if (tensor.storage.offset_bytes > bytes.size() ||
+                tensor.storage.size_bytes > bytes.size() - tensor.storage.offset_bytes ||
+                tensor.storage.size_bytes % sizeof(std::int32_t) != 0U) {
+                return session_error(ErrorCode::invalid_argument, "fx tensor " + std::string(tensor.name) + " is out of bounds");
+            }
+            views[std::string(tensor.name)] = std::span<std::int32_t>(
+                reinterpret_cast<std::int32_t*>(bytes.data() + tensor.storage.offset_bytes),
+                tensor.storage.size_bytes / sizeof(std::int32_t));
+            shapes[std::string(tensor.name)] = tensor.shape;
+        }
+        std::vector<deterministic::fx::Tensor> inputs;
+        for (const auto id : program.inputs) {
+            const auto& name = program.tensor_names[id];
+            const auto found = views.find(name);
+            if (found == views.end()) return session_error(ErrorCode::invalid_argument, "fx input " + name + " is not bound");
+            const auto& shape = shapes[name];
+            inputs.push_back({static_cast<std::int32_t>(shape[1]), static_cast<std::int32_t>(shape[2]),
+                              static_cast<std::int32_t>(shape[3]), {found->second.begin(), found->second.end()}});
+        }
+        auto outputs = deterministic::fx::run(program, inputs);
+        if (!outputs) return outputs.error();
+        for (std::size_t slot = 0; slot < program.outputs.size(); ++slot) {
+            const auto& name = program.tensor_names[program.outputs[slot]];
+            const auto found = views.find(name);
+            const auto& values = outputs.value()[slot].values;
+            if (found == views.end() || found->second.size() != values.size()) {
+                return session_error(ErrorCode::invalid_argument, "fx output " + name + " is not bound or misshapen");
+            }
+            std::copy(values.begin(), values.end(), found->second.begin());
+        }
+        return session_api::Completion(std::make_shared<OrtCompletion>(owner_id_));
+    }
+
     [[nodiscard]] Result<session_api::Completion> submit_exact(
         const ExactStage& stage,
         std::span<const session_api::TensorView> tensors,

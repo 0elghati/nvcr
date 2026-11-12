@@ -438,8 +438,9 @@ void numerics_profile_contract() {
     const auto& registry = nvcr::runtime::Registry::instance();
     if (auto dcvcrt = registry.find_codec("dcvc-rt")) {
         expect(dcvcrt->capabilities.numerics_profiles ==
-                   std::vector<std::string_view>{nvcr::numerics::native, nvcr::numerics::intconv_v1},
-               "dcvc-rt declares native (its default) and nvcr.intconv.v1");
+                   std::vector<std::string_view>{nvcr::numerics::native, nvcr::numerics::intconv_v1,
+                                                 nvcr::numerics::fx_v1},
+               "dcvc-rt declares native (its default), nvcr.intconv.v1 and nvcr.fx.v1");
     }
 
     nvcr::RuntimeConfiguration configuration;

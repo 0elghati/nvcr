@@ -764,7 +764,7 @@ public:
     [[nodiscard]] Result<session_api::ExecutableStage> load_stage(
         session_api::ExecutableStageDescriptor descriptor) override;
 
-    // nvcr.intconv.v1 on SM 8.0 and newer.
+    // nvcr.intconv.v1 on SM 8.0 and newer; nvcr.fx.v1 where its kernels were compiled.
     [[nodiscard]] bool supports_numerics_profile(std::string_view profile) const noexcept override;
 
     [[nodiscard]] Result<session_api::Completion> submit(
@@ -803,6 +803,10 @@ private:
         session_api::ExecutableStageDescriptor descriptor, TensorRTStageSpec specification);
     [[nodiscard]] Result<session_api::ExecutableStage> load_exact_stage(
         session_api::ExecutableStageDescriptor descriptor);
+    [[nodiscard]] Result<session_api::ExecutableStage> load_fx_stage(
+        session_api::ExecutableStageDescriptor descriptor);
+    [[nodiscard]] Result<std::uint32_t*> fx_failure_word();
+    [[nodiscard]] Result<void> check_fx_failure(const std::string& stage_id);
     [[nodiscard]] Result<std::vector<DeviceTensor>> run_exact_stage(
         const TensorRTExactStage& stage,
         std::span<const DeviceTensor* const> inputs,
@@ -815,11 +819,13 @@ private:
     std::vector<std::shared_ptr<const TensorRTStage>> stages_;
     std::vector<std::shared_ptr<const TensorRTExactStage>> exact_stages_;
     int compute_major_{0};
+    bool fx_ready_{false};
     std::map<std::string, std::string> bundle_files_;
     DeviceScratchArena scratch_arena_;
     BackendProfiler profiler_{false};
     std::shared_ptr<CudaStreamOwner> stream_owner_;
     cudaStream_t stream_{};
+    std::uint32_t* fx_word_{};  // this session's nvcr.fx.v1 failure word
     ContextPolicy context_policy_{ContextPolicy::per_engine};
     bool ready_{};
     bool initialized_{};
@@ -827,6 +833,7 @@ private:
     bool fixed_shape_profile_{};
     fs::path bundle_root_;
     std::string owner_id_;
+    std::map<std::string, CudaAllocation> staging_;  // device copies of pinned host tensors, per stage tensor
 };
 
 class SessionExecutionScope final {

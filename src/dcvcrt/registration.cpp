@@ -33,7 +33,7 @@ void register_codec() {
             .supports_delayed_output = false,
             .min_qp = 0,
             .max_qp = 63,
-            .numerics_profiles = {nvcr::numerics::native, nvcr::numerics::intconv_v1},
+            .numerics_profiles = {nvcr::numerics::native, nvcr::numerics::intconv_v1, nvcr::numerics::fx_v1},
         },
         // Encoder option schema (namespaced dcvc_rt.*).
         OptionSchema{{

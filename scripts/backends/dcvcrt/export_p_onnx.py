@@ -246,6 +246,34 @@ def main() -> int:
             frame_hat = self.reconstruction(feature, q_recon)
             return frame_hat, feature
 
+    class Encode(nn.Module):
+        """The P-frame analysis transform under nvcr.fx.v1: the picture as 8-bit luma and 4:2:0 chroma at the padded
+        size, the exact context (int32 at 2^-14). The encoder only chooses symbols with y, so it may run in FP16."""
+
+        def __init__(self, source: DMC):
+            super().__init__()
+            self.encoder = source.encoder
+
+        def forward(self, luma: torch.Tensor, chroma: torch.Tensor, context: torch.Tensor, q_encoder: torch.Tensor):
+            chroma = functional.interpolate(chroma.float(), scale_factor=2.0, mode="nearest")
+            frame = (torch.cat((luma.float(), chroma), dim=1) / 255).to(q_encoder.dtype)
+            return self.encoder(frame, (context.float() * 2.0 ** -14).to(q_encoder.dtype), q_encoder)
+
+    class Display(nn.Module):
+        """The P-frame picture under nvcr.fx.v1, as shown: the reconstruction network on the exact feature (int32 at
+        2^-14), as 8-bit 4:2:0 planes at the padded size (luma floor(255 v + 1/2) of v clamped to [0, 1], chroma
+        floor(255 mean of 2x2) clamped to [0, 255]). Nothing reads it back, so it may run in FP16."""
+
+        def __init__(self, source: DMC):
+            super().__init__()
+            self.reconstruction = source.recon_generation_net
+
+        def forward(self, feature: torch.Tensor, q_recon: torch.Tensor):
+            frame = self.reconstruction((feature.float() * 2.0 ** -14).to(q_recon.dtype), q_recon).float()
+            luma = torch.floor(frame[:, :1].clamp(0, 1) * 255 + 0.5)
+            chroma = torch.floor(functional.avg_pool2d(frame[:, 1:], 2) * 255).clamp(0, 255)
+            return luma.to(torch.uint8), chroma.to(torch.uint8)
+
     padded_height = (args.height + 63) // 64 * 64
     padded_width = (args.width + 63) // 64 * 64
     frame = torch.zeros((1, 3, padded_height, padded_width), device=device, dtype=dtype)
@@ -387,6 +415,18 @@ def main() -> int:
         ["y_hat", "context", "q_decoder", "q_recon"],
         ["frame_hat", "feature"],
         ({2: latent_h, 3: latent_w}, {2: feature_h, 3: feature_w}, None, None),
+    )
+    export(
+        "p_encode", Encode(model),
+        (torch.zeros((1, 1, padded_height, padded_width), dtype=torch.uint8, device=device),
+         torch.zeros((1, 2, padded_height // 2, padded_width // 2), dtype=torch.uint8, device=device),
+         torch.zeros(feature.shape, dtype=torch.int32, device=device), q_encoder),
+        ["luma", "chroma", "context", "q_encoder"], ["y"],
+        ({2: frame_h, 3: frame_w}, {2: 32 * block_h, 3: 32 * block_w}, {2: feature_h, 3: feature_w}, None),
+    )
+    export(
+        "p_display", Display(model), (torch.zeros(feature.shape, dtype=torch.int32, device=device), q_recon),
+        ["feature", "q_recon"], ["luma", "chroma"], ({2: feature_h, 3: feature_w}, None),
     )
 
     manifest = {

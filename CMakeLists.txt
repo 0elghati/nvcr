@@ -123,6 +123,7 @@ target_sources(
         src/common/sha256.cpp
         src/configuration/configuration.cpp
         src/dcvcrt/adapter.cpp
+        src/dcvcrt/fx_backend.cpp
         src/dcvcrt/host_backend.cpp
         src/dcvcrt/host_ops.cpp
         src/dcvcrt/numerics.cpp
@@ -144,6 +145,8 @@ target_sources(
         src/runtime/registry.cpp
         src/runtime/runtime.cpp
         src/statistics/statistics.cpp
+        src/deterministic/fx.cpp
+        src/deterministic/fx_program.cpp
         src/deterministic/normative_stage.cpp
         src/deterministic/program.cpp
         $<TARGET_OBJECTS:nvcr_dcvc_rans>
@@ -192,9 +195,48 @@ if(NVCR_ENABLE_TENSORRT)
             src/provider/tensorrt/session.cpp
             src/dcvcrt/backend/tensorrt/cuda_ops.cu
             src/dcvcrt/backend/tensorrt/engine_specs.cpp
-            src/dcvcrt/backend/tensorrt/backend.cpp)
-    target_link_libraries(nvcr PRIVATE CUDA::cudart TensorRT::TensorRT)
+            src/dcvcrt/backend/tensorrt/backend.cpp
+            src/provider/tensorrt/fx/kernel_table.cpp
+            src/provider/tensorrt/fx/ops.cu
+            src/provider/tensorrt/fx/plans.cpp
+            src/provider/tensorrt/fx/plugins.cpp)
+    target_link_libraries(nvcr PRIVATE CUDA::cudart CUDA::cuda_driver TensorRT::TensorRT)
     target_compile_definitions(nvcr PRIVATE NVCR_HAS_TENSORRT=1)
+
+    # nvcr.fx.v1 on TensorRT: Triton kernels compiled ahead of time for the build
+    # GPU's architecture. Without NVCR_TENSORRT_FX_PYTHON (a Python with Triton
+    # 3.5.1) the table is empty and the provider does not claim the profile.
+    set(NVCR_TENSORRT_FX_PYTHON "" CACHE FILEPATH "Python with Triton that compiles the nvcr.fx.v1 kernels")
+    set(nvcr_fx_dir "${CMAKE_CURRENT_SOURCE_DIR}/src/provider/tensorrt/fx")
+    set(nvcr_fx_cubins "${CMAKE_CURRENT_BINARY_DIR}/generated/fx_cubins.cpp")
+    if(NVCR_TENSORRT_FX_PYTHON)
+        list(GET CMAKE_CUDA_ARCHITECTURES 0 nvcr_fx_sm)
+        string(REGEX REPLACE "[^0-9].*$" "" nvcr_fx_sm "${nvcr_fx_sm}")
+        add_custom_command(
+            OUTPUT "${nvcr_fx_cubins}"
+            COMMAND "${NVCR_TENSORRT_FX_PYTHON}" "${nvcr_fx_dir}/kernels/aot_compile.py"
+                --variants "${CMAKE_CURRENT_SOURCE_DIR}/configs/tensorrt/fx-kernel-variants.json"
+                --out "${nvcr_fx_cubins}" --header "${nvcr_fx_dir}/kernel_table.hpp"
+                --target "cuda:${nvcr_fx_sm}:32"
+            DEPENDS "${nvcr_fx_dir}/kernels/aot_compile.py" "${nvcr_fx_dir}/kernels/fx_kernels.py"
+                "${CMAKE_CURRENT_SOURCE_DIR}/configs/tensorrt/fx-kernel-variants.json"
+            VERBATIM)
+    else()
+        file(WRITE "${nvcr_fx_cubins}"
+            "#include \"${nvcr_fx_dir}/kernel_table.hpp\"\n"
+            "namespace nvcr::tensorrt::fx {\n"
+            "const KernelEntry kernel_entries[] = {{\"\", nullptr, 0, \"\", 0, 0}};\n"
+            "const std::size_t kernel_entry_count = 0;\n"
+            "const char kernel_target[] = \"\";\n"
+            "const char kernel_triton_version[] = \"\";\n"
+            "}  // namespace nvcr::tensorrt::fx\n")
+    endif()
+    set_source_files_properties("${nvcr_fx_cubins}" PROPERTIES COMPILE_OPTIONS "-O0")
+    target_sources(nvcr PRIVATE "${nvcr_fx_cubins}")
+
+    add_executable(nvcr_fx_plans src/provider/tensorrt/fx/build_plans_main.cpp)
+    set_target_properties(nvcr_fx_plans PROPERTIES OUTPUT_NAME nvcr-fx-plans)
+    target_link_libraries(nvcr_fx_plans PRIVATE nvcr CUDA::cudart TensorRT::TensorRT)
 
     # Exact executor kernels. Precise division, no flush-to-zero, and no
     # compiler-formed FMAs: results must equal the CPU reference bit for bit.
@@ -396,6 +438,9 @@ install(
     INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 if(TARGET nvcr_cli)
     install(TARGETS nvcr_cli RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+endif()
+if(TARGET nvcr_fx_plans)
+    install(TARGETS nvcr_fx_plans RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 endif()
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated/bin")
 configure_file(

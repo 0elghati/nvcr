@@ -148,6 +148,16 @@ def main() -> int:
         )
         write_json(root / "i_frame_manifest.json", i_manifest)
 
+        # nvcr.fx.v1's optional P graphs are accepted next to the required ones.
+        optional = artifacts.OPTIONAL_MODEL_GRAPHS["p_frame_manifest.json"]
+        for name in optional:
+            write_bytes(root / name, f"fixture:{name}".encode())
+        with_optional = dict(p_manifest)
+        with_optional["graphs"] = p_manifest["graphs"] + [hashed_entry(root, name) for name in optional]
+        write_json(root / "p_frame_manifest.json", with_optional)
+        artifacts.validate_model_manifests(root, require_graphs=True)
+        write_json(root / "p_frame_manifest.json", p_manifest)
+
         portable = dict(i_manifest)
         portable["checkpoint_file"] = "/host/checkpoints/cvpr2025_image.pth.tar"
         write_json(root / "i_frame_manifest.json", portable)

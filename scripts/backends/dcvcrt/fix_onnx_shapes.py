@@ -44,6 +44,8 @@ def spatial_sizes(width: int, height: int) -> dict[str, dict[str, tuple[int, int
         "p_prior": {"z_hat": hyper, "temporal_context": feature},
         "p_spatial_prior": spatial_prior,
         "p_synthesis": {"y_hat": latent, "context": feature},
+        "p_encode": {"luma": frame, "chroma": (frame[0] // 2, frame[1] // 2), "context": feature},
+        "p_display": {"feature": feature},
     }
 
 

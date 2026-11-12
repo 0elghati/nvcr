@@ -3,6 +3,7 @@
 #include "nvcr/dcvcrt/backend.hpp"
 #include "nvcr/runtime/registry.hpp"
 
+#include "fx_backend.hpp"
 #include "host_backend.hpp"
 #include "session.hpp"
 
@@ -44,6 +45,12 @@ public:
         const RuntimeConfiguration& configuration,
         std::shared_ptr<provider::experimental::IProviderSession>
             provider_session) override {
+        // Under nvcr.fx.v1 one provider-neutral flow serves every provider that implements it.
+        if (configuration.codec.numerics_profile == numerics::fx_v1) {
+            auto backend = make_fx_backend(std::move(provider_session));
+            if (!backend) return backend.error();
+            return make_sessions(configuration, std::move(backend.value()));
+        }
 #if defined(NVCR_HAS_TENSORRT)
         if (configuration.provider.id == tensorrt_provider_descriptor().id) {
             auto backend = make_tensorrt_backend(std::move(provider_session));

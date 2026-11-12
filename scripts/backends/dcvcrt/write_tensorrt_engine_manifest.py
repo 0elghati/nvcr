@@ -197,6 +197,8 @@ def main() -> None:
         "p_prior.plan",
         "p_spatial_prior.plan",
         "p_synthesis.plan",
+        "p_encode.plan",
+        "p_display.plan",
         "i_entropy.bin",
         "i_quant.bin",
         "i_frame_manifest.json",
@@ -225,7 +227,9 @@ def main() -> None:
     missing = [name for name in required_files if not (args.engines / name).is_file()]
     if missing:
         raise SystemExit("engine bundle is incomplete: " + ", ".join(missing))
-    file_hashes = {name: sha256(args.engines / name) for name in required_files}
+    # nvcr.fx.v1 plans (add_fx_plans.py) stay listed when the manifest is rewritten.
+    fx_plans = sorted(path.name for path in args.engines.glob("*.fx.plan*"))
+    file_hashes = {name: sha256(args.engines / name) for name in (*required_files, *fx_plans)}
     checksum_path = args.engines / "engine.sha256"
     checksum_path.write_text(
         "".join(f"{file_hashes[name]}  {name}\n" for name in sorted(file_hashes)),
