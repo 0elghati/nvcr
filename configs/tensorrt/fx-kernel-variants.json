@@ -49,7 +49,17 @@
   {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 2, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 4, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 0},
   {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 2, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 4, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 1},
   {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 2, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 5, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 0},
-  {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 2, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 5, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 1}
+  {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 2, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 5, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 1},
+  {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 4, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 1, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 0},
+  {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 4, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 1, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 1},
+  {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 4, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 2, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 0},
+  {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 4, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 2, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 1},
+  {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 4, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 3, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 0},
+  {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 4, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 3, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 1},
+  {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 4, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 4, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 0},
+  {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 4, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 4, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 1},
+  {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 4, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 5, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 0},
+  {"BM": 64, "BN": 128, "BK": 32, "warps": 4, "stages": 3, "G": 4, "NRES": 0, "WSILU": 1, "WSH": 3, "XS": 5, "hO": 1, "hK": 1, "hS": 1, "hL": 0, "hN": 1}
 ],
 "dw": [
   {"hH": 0, "hW": 0},
