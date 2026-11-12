@@ -75,18 +75,25 @@ from another pair.
 
 Decoding a stream encoded on a different provider or target:
 
-| Encoder | Decoder | Native numerics (default) | `nvcr.intconv.v1` |
-|---|---|---|---|
-| TensorRT, RTX 4070 | TensorRT, same RTX 4070 and plans | `native`, bit-identical | `exact` |
-| TensorRT, RTX 4070 | ONNX Runtime CPU, same host | `unsupported` (desync detected) | `exact` |
-| ONNX Runtime CPU | TensorRT, RTX 4070, same host | `unsupported` (desync detected) | `exact` |
-| TensorRT, RTX 4070 | TensorRT, RTX 5060 | `untested` (issue #216 reports desync) | `untested` |
-| Any | ONNX Runtime CUDA or QNN | `untested` | `unsupported` (profile not implemented; fails before decode) |
+| Encoder | Decoder | Native numerics (default) | `nvcr.intconv.v1` | `nvcr.fx.v1` |
+|---|---|---|---|---|
+| TensorRT, RTX 4070 | TensorRT, same RTX 4070 and plans | `native`, bit-identical | `exact` | `exact` |
+| TensorRT, RTX 4070 | ONNX Runtime CPU, same host | `unsupported` (desync detected) | `exact` | `exact` |
+| ONNX Runtime CPU | TensorRT, RTX 4070, same host | `unsupported` (desync detected) | `exact` | `untested` |
+| TensorRT, RTX 4070 | TensorRT, RTX 5060 | `untested` (issue #216 reports desync) | `untested` | `untested` |
+| Any | ONNX Runtime CUDA or QNN | `untested` | `unsupported` (profile not implemented; fails before decode) | `unsupported` (profile not implemented; fails before decode) |
+
+Under `nvcr.fx.v1`, the decoder's entropy decisions, decoded latents and
+reference state are bit-identical to the encoder's. P pictures are drawn from
+that state in FP16 and are not part of the profile.
 
 Exact numerics currently cost speed: at 1080p on the RTX 4070, decode runs at
 18.4 fps against 48.7 fps native and encode at 30.1 against 64.5 fps (codec
 interval, diagnostic measurement).
-Evidence: [issue #216](../evidence/issue-216-cross-hardware-fix-20261104.md).
+Under `nvcr.fx.v1` it runs at 29.4 fps decode and 24.5 fps encode, against
+47.6 and 45.5 fps native (codec interval, diagnostic). Native remains DCVC-RT's default.
+Evidence: [issue #216](../evidence/issue-216-cross-hardware-fix-20261104.md),
+[`nvcr.fx.v1`](../evidence/fx-dcvcrt-rtx4070-20261112.md).
 
 ## Format and codec position
 
