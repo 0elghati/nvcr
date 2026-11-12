@@ -1,5 +1,7 @@
 #include "cuda_ops.hpp"
 
+#include "../../scale_index.hpp"
+
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 
@@ -414,6 +416,25 @@ __global__ void add_and_multiply_kernel(
         __half2float(sum) * load_half(quant_step, index));
 }
 
+__constant__ float exact_thresholds[127] = {NVCR_DCVCRT_SCALE_THRESHOLDS};
+
+// Same search as exact_scale_index() in scale_index.hpp.
+__device__ std::uint8_t exact_index(float scale) {
+    if (!(scale >= 0.11F)) scale = 0.11F;
+    if (scale > 16.0F) scale = 16.0F;
+    int low = 0;
+    int high = 127;
+    while (low < high) {
+        const int middle = (low + high + 1) / 2;
+        if (exact_thresholds[middle - 1] <= scale) {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    return static_cast<std::uint8_t>(low);
+}
+
 __device__ std::uint8_t scale_index(float scale) {
     scale = fminf(scale_max, fmaxf(scale_min, scale));
     const float index = (logf(scale) - log_scale_min) * log_step_recip;
@@ -425,7 +446,8 @@ __global__ void build_encode_indexes_kernel(
     const __half* scales,
     std::int16_t* output,
     std::size_t count,
-    float force_zero_threshold) {
+    float force_zero_threshold,
+    bool exact) {
     const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
     if (index >= count) return;
     const float scale = load_half(scales, index);
@@ -435,20 +457,21 @@ __global__ void build_encode_indexes_kernel(
     }
     const auto symbol = static_cast<std::int16_t>(load_half(symbols, index));
     output[index] = static_cast<std::int16_t>(
-        static_cast<std::uint16_t>(symbol) << 8U | scale_index(scale));
+        static_cast<std::uint16_t>(symbol) << 8U | (exact ? exact_index(scale) : scale_index(scale)));
 }
 
 __global__ void build_decode_indexes_kernel(
     const __half* scales,
     std::uint8_t* output,
     std::size_t count,
-    float force_zero_threshold) {
+    float force_zero_threshold,
+    bool exact) {
     const auto index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
     if (index >= count) return;
     const float scale = load_half(scales, index);
     output[index] = force_zero_threshold > 0.0F && scale <= force_zero_threshold
         ? 0
-        : scale_index(scale);
+        : (exact ? exact_index(scale) : scale_index(scale));
 }
 
 bool invalid_shape(Shape4D shape) {
@@ -770,13 +793,14 @@ cudaError_t build_encode_indexes(
     std::int16_t* output,
     std::size_t count,
     float force_zero_threshold,
-    cudaStream_t stream) noexcept {
+    cudaStream_t stream,
+    bool exact) noexcept {
     if (symbols == nullptr || scales == nullptr || output == nullptr || count == 0) {
         return cudaErrorInvalidValue;
     }
     build_encode_indexes_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
         static_cast<const __half*>(symbols), static_cast<const __half*>(scales), output,
-        count, force_zero_threshold);
+        count, force_zero_threshold, exact);
     return cudaPeekAtLastError();
 }
 
@@ -785,10 +809,11 @@ cudaError_t build_decode_indexes(
     std::uint8_t* output,
     std::size_t count,
     float force_zero_threshold,
-    cudaStream_t stream) noexcept {
+    cudaStream_t stream,
+    bool exact) noexcept {
     if (scales == nullptr || output == nullptr || count == 0) return cudaErrorInvalidValue;
     build_decode_indexes_kernel<<<blocks(count), threads_per_block, 0, stream>>>(
-        static_cast<const __half*>(scales), output, count, force_zero_threshold);
+        static_cast<const __half*>(scales), output, count, force_zero_threshold, exact);
     return cudaPeekAtLastError();
 }
 

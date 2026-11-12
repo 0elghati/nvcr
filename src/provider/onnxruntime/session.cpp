@@ -4,6 +4,7 @@
 #include "nvcr/runtime/registry.hpp"
 
 #include "../../common/sha256.hpp"
+#include "../../deterministic/normative_stage.hpp"
 
 #include <onnxruntime_cxx_api.h>
 
@@ -342,6 +343,26 @@ private:
     std::vector<ONNXTensorElementDataType> output_types_;
 };
 
+// A normative stage: a portable program run by the exact CPU reference.
+class ExactStage final : public session_api::IExecutableStage {
+public:
+    ExactStage(session_api::ExecutableStageDescriptor descriptor, std::string owner_id,
+               deterministic::NormativeProgram program)
+        : descriptor_(std::move(descriptor)), owner_id_(std::move(owner_id)),
+          program_(std::move(program)) {}
+
+    [[nodiscard]] const session_api::ExecutableStageDescriptor& descriptor() const noexcept override {
+        return descriptor_;
+    }
+    [[nodiscard]] std::string_view owner_id() const noexcept override { return owner_id_; }
+    [[nodiscard]] const deterministic::NormativeProgram& program() const noexcept { return program_; }
+
+private:
+    session_api::ExecutableStageDescriptor descriptor_;
+    std::string owner_id_;
+    deterministic::NormativeProgram program_;
+};
+
 // Run() returns after the outputs are written, so every completion is ready.
 class OrtCompletion final : public session_api::ICompletion {
 public:
@@ -380,8 +401,28 @@ public:
         }
     }
 
+    // The CPU target runs nvcr.intconv.v1 through its CPU reference. Other
+    // execution providers (CUDA, QNN) do not implement it.
+    [[nodiscard]] bool supports_numerics_profile(std::string_view profile) const noexcept override {
+        return target_.runtime_name == "CPUExecutionProvider" && profile == deterministic::intconv_profile;
+    }
+
     [[nodiscard]] Result<session_api::ExecutableStage> load_stage(
         session_api::ExecutableStageDescriptor descriptor) override {
+        auto normative = deterministic::is_normative(descriptor);
+        if (!normative) return normative.error();
+        if (normative.value()) {
+            if (!supports_numerics_profile(descriptor.numerics_profile)) {
+                return session_error(
+                    ErrorCode::incompatible_precision,
+                    descriptor.stage_id + " requires " + descriptor.numerics_profile + ", which the " +
+                        std::string(target_.runtime_name) + " target does not implement");
+            }
+            auto program = deterministic::load_normative_program(descriptor);
+            if (!program) return program.error();
+            return session_api::ExecutableStage(std::make_shared<ExactStage>(
+                std::move(descriptor), owner_id_, std::move(program.value())));
+        }
         const auto& artifact = descriptor.artifact;
         if (!simple_component_id(artifact.component_id)) {
             return session_error(
@@ -499,6 +540,9 @@ public:
         const session_api::ExecutableStage& stage,
         std::span<const session_api::TensorView> tensors,
         std::span<const session_api::ExecutionDependency> dependencies) override {
+        if (const auto exact = std::dynamic_pointer_cast<const ExactStage>(stage)) {
+            return submit_exact(*exact, tensors, dependencies);
+        }
         const auto concrete = std::dynamic_pointer_cast<const OrtStage>(stage);
         if (!concrete || concrete->owner_id() != owner_id_) {
             return session_error(
@@ -570,6 +614,52 @@ public:
     [[nodiscard]] Result<void> reset() override { return {}; }
 
 private:
+    [[nodiscard]] Result<session_api::Completion> submit_exact(
+        const ExactStage& stage,
+        std::span<const session_api::TensorView> tensors,
+        std::span<const session_api::ExecutionDependency> dependencies) {
+        if (stage.owner_id() != owner_id_) {
+            return session_error(ErrorCode::invalid_argument, "stage belongs to another provider session");
+        }
+        for (const auto& dependency : dependencies) {
+            if (!dependency.completion || dependency.completion->owner_id() != owner_id_) {
+                return session_error(
+                    ErrorCode::invalid_argument, "dependency belongs to another provider session");
+            }
+            auto waited = dependency.completion->wait();
+            if (!waited) return waited.error();
+        }
+        std::vector<deterministic::HalfTensorView> inputs;
+        std::vector<deterministic::HalfTensorView> outputs;
+        for (const auto& tensor : tensors) {
+            const bool writable = tensor.access != session_api::TensorAccess::read;
+            const auto& buffer = tensor.storage.buffer;
+            if (tensor.data_type != session_api::TensorDataType::float16 || !buffer ||
+                buffer->owner_id() != owner_id_) {
+                return session_error(
+                    ErrorCode::invalid_argument,
+                    "normative tensor " + std::string(tensor.name) + " must be an FP16 buffer of this session");
+            }
+            auto bytes = buffer->host_bytes();
+            if (tensor.storage.offset_bytes > bytes.size() ||
+                tensor.storage.size_bytes > bytes.size() - tensor.storage.offset_bytes ||
+                tensor.storage.size_bytes % sizeof(std::uint16_t) != 0U ||
+                (reinterpret_cast<std::uintptr_t>(bytes.data()) + tensor.storage.offset_bytes) %
+                        alignof(std::uint16_t) != 0U) {
+                return session_error(
+                    ErrorCode::invalid_argument, "normative tensor " + std::string(tensor.name) + " is out of bounds");
+            }
+            const std::span<std::uint16_t> values(
+                reinterpret_cast<std::uint16_t*>(bytes.data() + tensor.storage.offset_bytes),
+                tensor.storage.size_bytes / sizeof(std::uint16_t));
+            (writable ? outputs : inputs).push_back(
+                deterministic::HalfTensorView{tensor.name, tensor.shape, values});
+        }
+        auto ran = deterministic::run_half_cpu(stage.program(), inputs, outputs);
+        if (!ran) return ran.error();
+        return session_api::Completion(std::make_shared<OrtCompletion>(owner_id_));
+    }
+
     [[nodiscard]] static std::optional<ONNXTensorElementDataType> declared_precision(
         std::string_view precision) noexcept {
         // An undeclared precision keeps the provider's original fp16-only rule.

@@ -24,6 +24,9 @@ enum class AccessUnitSectionType : std::uint16_t {
     quality_rate_side_data = 4,
     color_metadata = 5,
     encoder_statistics = 6,
+    // The exact numerics a decoder must reproduce: an NVCR numerics profile
+    // and the digest of every normative program (numerics_identity.hpp).
+    numerics_identity = 7,
     private_extension = 0x8000,
 };
 

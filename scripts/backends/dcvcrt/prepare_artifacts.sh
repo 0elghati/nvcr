@@ -322,6 +322,10 @@ PY
         --height 192 \
         --width 192 \
         --qp 32
+
+    echo "Exporting exact-numerics normative programs to $models_dir/normative"
+    PYTHON="$python_bin" "$script_dir/export_normative_programs.sh" \
+        "$models_dir" "$models_dir/normative"
 fi
 
 required_assets=(

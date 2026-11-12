@@ -3,6 +3,7 @@
 #include "nvcr/dcvcrt/backend.hpp"
 
 #include "host_ops.hpp"
+#include "numerics.hpp"
 #include "orchestration.hpp"
 
 #include <algorithm>
@@ -335,7 +336,8 @@ Result<CodecEncodeResult> encode_intra(
             return op_error("I-frame mask processing");
         }
         indexes[slot].resize(reduced_count);
-        if (!host_ops::build_encode_indexes(symbols, scales, indexes[slot], 0.0F)) {
+        if (!host_ops::build_encode_indexes(
+                symbols, scales, indexes[slot], 0.0F, orchestration.exact_indexes())) {
             return op_error("build_encode_indexes");
         }
         if (stage_index > 0 && !host_ops::add_in_place(y_hat.value().values, reconstructed)) {
@@ -484,7 +486,7 @@ Result<CodecDecodeResult> decode_intra(
     for (std::int32_t stage_index = 0; stage_index < 4; ++stage_index) {
         if (!host_ops::make_four_way_mask(mask, y_shape, stage_index) ||
             !host_ops::reduce_masked_quarters(current_scales, mask, scales, y_shape) ||
-            !host_ops::build_decode_indexes(scales, indexes, 0.0F)) {
+            !host_ops::build_decode_indexes(scales, indexes, 0.0F, orchestration.exact_indexes())) {
             return op_error("I-frame decode index preparation");
         }
         auto decoded = orchestration.decode_y(indexes);
@@ -667,7 +669,8 @@ Result<CodecEncodeResult> encode_predicted(
             y_hat.value().values, scales_full, 0.0F) ||
         !host_ops::reduce_channel_halves(symbols_full, symbols, prior_shape) ||
         !host_ops::reduce_channel_halves(scales_full, scales, prior_shape) ||
-        !host_ops::build_encode_indexes(symbols, scales, indexes0, 0.0F)) {
+        !host_ops::build_encode_indexes(
+            symbols, scales, indexes0, 0.0F, orchestration.exact_indexes())) {
         return op_error("P-frame first mask processing");
     }
 
@@ -689,7 +692,8 @@ Result<CodecEncodeResult> encode_predicted(
             reconstructed, scales_full, 0.0F) ||
         !host_ops::reduce_channel_halves(symbols_full, symbols, prior_shape) ||
         !host_ops::reduce_channel_halves(scales_full, scales, prior_shape) ||
-        !host_ops::build_encode_indexes(symbols, scales, indexes1, 0.0F) ||
+        !host_ops::build_encode_indexes(
+            symbols, scales, indexes1, 0.0F, orchestration.exact_indexes()) ||
         !host_ops::add_and_multiply(y_hat.value().values, reconstructed, q_dec_values)) {
         return op_error("P-frame second mask processing");
     }
@@ -823,7 +827,7 @@ Result<CodecDecodeResult> decode_predicted(
     if (!y_hat) return y_hat.error();
     if (!host_ops::make_two_way_mask(mask, prior_shape, 0) ||
         !host_ops::reduce_masked_halves(scales_values, mask, scales, prior_shape) ||
-        !host_ops::build_decode_indexes(scales, indexes, 0.0F)) {
+        !host_ops::build_decode_indexes(scales, indexes, 0.0F, orchestration.exact_indexes())) {
         return op_error("P-frame first decode index preparation");
     }
     auto decoded0 = orchestration.decode_y(indexes);
@@ -849,7 +853,7 @@ Result<CodecDecodeResult> decode_predicted(
     if (!host_ops::make_two_way_mask(mask, prior_shape, 1) ||
         !host_ops::reduce_masked_halves(
             spatial_values.first(prior_count), mask, scales, prior_shape) ||
-        !host_ops::build_decode_indexes(scales, indexes, 0.0F)) {
+        !host_ops::build_decode_indexes(scales, indexes, 0.0F, orchestration.exact_indexes())) {
         return op_error("P-frame second decode index preparation");
     }
     auto decoded1 = orchestration.decode_y(indexes);
@@ -906,10 +910,27 @@ public:
         }
         try {
             const auto& bundle_root = configuration.artifacts.intra_engine_path;
+            auto normative = normative_stages(configuration);
+            if (!normative) return normative.error();
             std::vector<session_api::ExecutableStage> stages;
             stages.reserve(intra_stage_ids.size() + predicted_stage_ids.size());
+            if (normative.value()) {
+                for (auto descriptor : normative.value()->descriptors) {
+                    auto loaded = session_->load_stage(std::move(descriptor));
+                    if (!loaded) return loaded.error();
+                    stages.push_back(std::move(loaded.value()));
+                }
+            }
+            const auto normative_stage = [&](std::string_view stage_id) {
+                if (!normative.value()) return false;
+                for (const auto& descriptor : normative.value()->descriptors) {
+                    if (descriptor.stage_id == stage_id) return true;
+                }
+                return false;
+            };
             for (const auto ids : {std::span(intra_stage_ids), std::span(predicted_stage_ids)}) {
                 for (const auto stage_id : ids) {
+                    if (normative_stage(stage_id)) continue;
                     session_api::ExecutableStageDescriptor descriptor;
                     descriptor.stage_id = std::string(stage_id);
                     descriptor.artifact.codec_id = "dcvc-rt";
@@ -928,10 +949,12 @@ public:
             IntraOrchestration intra_orchestration;
             auto intra_ready = intra_orchestration.initialize(bundle_root);
             if (!intra_ready) return intra_ready.error();
+            intra_orchestration.set_exact_indexes(normative.value().has_value());
             auto bound = intra_orchestration.bind_stages(stages);
             if (!bound) return bound.error();
             PredictedOrchestration predicted_orchestration;
             auto predicted_ready = predicted_orchestration.initialize(bundle_root);
+            predicted_orchestration.set_exact_indexes(normative.value().has_value());
             if (!predicted_ready) return predicted_ready.error();
             bound = predicted_orchestration.bind_stages(stages);
             if (!bound) return bound.error();

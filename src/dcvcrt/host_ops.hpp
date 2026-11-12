@@ -97,11 +97,12 @@ struct Shape4D final {
     std::span<Half> first, std::span<const Half> second,
     std::span<const Half> quant_step) noexcept;
 
+// exact: the exact threshold mapping (scale_index.hpp) instead of logf.
 [[nodiscard]] bool build_encode_indexes(
     std::span<const Half> symbols, std::span<const Half> scales,
-    std::span<std::int16_t> output, float force_zero_threshold) noexcept;
+    std::span<std::int16_t> output, float force_zero_threshold, bool exact = false) noexcept;
 [[nodiscard]] bool build_decode_indexes(
     std::span<const Half> scales, std::span<std::uint8_t> output,
-    float force_zero_threshold) noexcept;
+    float force_zero_threshold, bool exact = false) noexcept;
 
 }  // namespace nvcr::dcvcrt::host_ops

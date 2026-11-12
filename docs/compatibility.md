@@ -38,6 +38,56 @@ portable across devices or runtimes. Always say what is portable: source code,
 host binary, CUDA code, engine bundle, catalog entry, access unit, or container
 userspace.
 
+## Cross-target decode
+
+A DCVC-RT stream decodes correctly only on a decoder that reproduces the
+encoder's entropy parameters bit for bit: the same execution provider and the
+same exact plan set on the same GPU model. A different GPU (for example RTX
+4070 to RTX 5060), a different plan set, or a different provider computes
+slightly different FP16 scales. Any scale near one of the 128 entropy-table
+boundaries then selects a neighbouring table and desynchronizes the rANS
+decoder (issue #216).
+
+Such a decode fails with `malformed_bitstream` ("DCVC-RT entropy decoding
+desynchronized") instead of reconstructing wrong frames. Each frame's rANS
+stream must end exactly at the encoder's initial state with every byte
+consumed, and the decoder never reads past the stream. Detection is
+probabilistic but practically certain for a desynchronized frame. Bit errors
+that only touch raw bypass bits do not desynchronize the coder and are not
+detected, because `NVAU` carries no checksum.
+
+An encoder can instead request exact numerics (`--numerics nvcr.intconv.v1`).
+Every decoder-side stage then runs in exact integer arithmetic from portable programs in the artifact bundle's
+`normative/` directory, so every provider that implements the profile
+reproduces the encoder's entropy decisions, reference state and decoded frames
+bit for bit, I- and P-frames alike. The stream names the profile and a digest
+of the programs on every random-access unit; a decoder without the profile or
+with different programs fails before decoding. See
+[cross-target decode](cross-target-decode.md).
+
+### DCVC-RT capability matrix
+
+Cells follow `AGENTS.md`: `exact` (bit-identical through a conformant numerics
+profile), `native` (decodes with the provider's native arithmetic),
+`unsupported` (fails, cleanly), `untested`. A cell is filled only from a
+retained conformance result; support is never inferred from a GPU model or
+from another pair.
+
+Decoding a stream encoded on a different provider or target:
+
+| Encoder | Decoder | Native numerics (default) | `nvcr.intconv.v1` |
+|---|---|---|---|
+| TensorRT, RTX 4070 | TensorRT, same RTX 4070 and plans | `native`, bit-identical | `exact` |
+| TensorRT, RTX 4070 | ONNX Runtime CPU, same host | `unsupported` (desync detected) | `exact` |
+| ONNX Runtime CPU | TensorRT, RTX 4070, same host | `unsupported` (desync detected) | `exact` |
+| TensorRT, RTX 4070 | TensorRT, RTX 5060 | `untested` (issue #216 reports desync) | `untested` |
+| Any | ONNX Runtime CUDA or QNN | `untested` | `unsupported` (profile not implemented; fails before decode) |
+
+Exact numerics currently cost speed: at 1080p on the RTX 4070, decode runs at
+18.4 fps against 48.7 fps native and encode at 30.1 against 64.5 fps (codec
+interval, diagnostic measurement).
+Evidence: [issue #216](../evidence/issue-216-cross-hardware-fix-20261104.md).
+
 ## Format and codec position
 
 - `NVAU` is the versioned, bounded codec access-unit contract. Version 1 is the

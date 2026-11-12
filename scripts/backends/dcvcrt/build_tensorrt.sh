@@ -378,6 +378,12 @@ if ((stamp_only == 0)); then
         fi
         cp -f "$model_dir/$asset" "$engine_dir/$asset"
     done
+    # Exact-numerics programs are target independent; the bundle carries them
+    # so encode and decode find them without extra configuration.
+    if [[ -d "$model_dir/normative" ]]; then
+        rm -rf "$engine_dir/normative"
+        cp -r "$model_dir/normative" "$engine_dir/normative"
+    fi
 fi
 timing_cache="$engine_dir/timing.cache"
 common_build=(
