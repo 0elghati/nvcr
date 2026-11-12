@@ -1,6 +1,10 @@
 #include "session.hpp"
 
+#include "../../common/json.hpp"
 #include "../../common/sha256.hpp"
+#include "fx/ops.hpp"
+#include "fx/plugins.hpp"
+#include "nvcr/numerics/profiles.hpp"
 
 #include <NvInferVersion.h>
 #include <cuda_fp16.h>
@@ -1001,7 +1005,26 @@ Result<std::vector<DeviceTensor>> TensorRTExecutionSession::run_stage(
             "TensorRT stage belongs to another provider session",
             std::string(subsystem));
     }
-    return run_stage(concrete->engine_index(), inputs, output_storage);
+    auto outputs = run_stage(concrete->engine_index(), inputs, output_storage);
+    if (!outputs || concrete->descriptor().numerics_profile != numerics::fx_v1) return outputs;
+    auto checked = check_fx_failure(concrete->descriptor().stage_id);
+    if (!checked) return checked.error();
+    return outputs;
+}
+
+// A kernel that met one of nvcr.fx.v1's failure conditions set the word: the stage fails.
+Result<void> TensorRTExecutionSession::check_fx_failure(const std::string& stage_id) {
+    std::uint32_t* word = nullptr;
+    std::uint32_t failed = 0;
+    if (const auto status = fx::failure_word(&word); status != cudaSuccess) return cuda_error("fx failure word", status);
+    auto copied = copy_async(&failed, word, sizeof(failed), cudaMemcpyDeviceToHost, stream_, "fx failure word");
+    if (!copied) return copied.error();
+    auto synchronized = synchronize_stream(stream_, "fx failure word");
+    if (!synchronized) return synchronized.error();
+    if (failed == 0) return {};
+    cudaMemsetAsync(word, 0, sizeof(*word), stream_);
+    return Error(ErrorCode::malformed_bitstream, stage_id + ": a value left the nvcr.fx.v1 range",
+                 std::string(subsystem));
 }
 
 Result<std::vector<DeviceTensor>> run_device_stage(
@@ -1035,7 +1058,16 @@ Result<session_api::Completion> TensorRTExecutionSession::submit(
             "TensorRT stage belongs to another provider session",
             std::string(subsystem));
     }
-    return submit_impl(concrete_stage, tensors, dependencies);
+    // Codecs that use only this generic contract never call finalize_stages().
+    if (!initialized_) {
+        auto finalized = finalize_stages();
+        if (!finalized) return finalized.error();
+    }
+    auto completion = submit_impl(concrete_stage, tensors, dependencies);
+    if (!completion || concrete_stage->descriptor().numerics_profile != numerics::fx_v1) return completion;
+    auto checked = check_fx_failure(concrete_stage->descriptor().stage_id);
+    if (!checked) return checked.error();
+    return completion;
 }
 
 Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
@@ -1376,7 +1408,65 @@ Result<session_api::BufferHandle> TensorRTExecutionSession::allocate(
 }
 
 bool TensorRTExecutionSession::supports_numerics_profile(std::string_view profile) const noexcept {
+    if (profile == numerics::fx_v1) return fx_ready_;
     return profile == deterministic::intconv_profile && compute_major_ >= 8;
+}
+
+// An nvcr.fx.v1 stage runs the plan <component>.fx.plan, which the bundle lists in
+// engine.sha256 and whose sidecar names the program digest it was compiled from.
+Result<session_api::ExecutableStage> TensorRTExecutionSession::load_fx_stage(
+    session_api::ExecutableStageDescriptor descriptor) {
+    if (!supports_numerics_profile(descriptor.numerics_profile)) {
+        return Error(ErrorCode::incompatible_precision,
+                     descriptor.stage_id + " requires nvcr.fx.v1, which this build or device does not implement",
+                     std::string(subsystem));
+    }
+    const auto plan = descriptor.artifact.component_id + ".fx.plan";
+    const auto sidecar = plan + ".json";
+    if (!bundle_files_.contains(plan) || !bundle_files_.contains(sidecar)) {
+        return Error(ErrorCode::missing_artifact, "the bundle has no nvcr.fx.v1 plan for " + descriptor.stage_id,
+                     std::string(subsystem));
+    }
+    auto json = detail::json::parse_file(bundle_root_ / sidecar, subsystem);
+    if (!json) return json.error();
+    const auto* program = json.value().find("program_sha256");
+    std::string expected;
+    for (const auto byte : descriptor.artifact.expected_digest) {
+        constexpr char digits[] = "0123456789abcdef";
+        expected += digits[static_cast<unsigned>(byte) >> 4U];
+        expected += digits[static_cast<unsigned>(byte) & 15U];
+    }
+    if (program == nullptr || program->string_value != expected) {
+        return Error(ErrorCode::digest_mismatch,
+                     plan + " was not compiled from the program the stream requires", std::string(subsystem));
+    }
+    // The plan is built for fixed shapes, which its sidecar records.
+    TensorRTStageSpec specification;
+    specification.filename = plan;
+    const auto* shapes = json.value().find("tensors");
+    for (const auto& contract : descriptor.tensors) {
+        const auto* shape = shapes ? shapes->find(contract.name) : nullptr;
+        if (shape == nullptr || shape->array_value.size() != 4) {
+            return Error(ErrorCode::invalid_argument, plan + " records no shape for " + contract.name,
+                         std::string(subsystem));
+        }
+        TensorRTTensorSpec tensor;
+        tensor.name = contract.name;
+        tensor.data_type = session_api::TensorDataType::int32;
+        tensor.rank = 4;
+        tensor.mode = contract.access == session_api::TensorAccess::read ? nvinfer1::TensorIOMode::kINPUT
+                                                                          : nvinfer1::TensorIOMode::kOUTPUT;
+        for (std::size_t axis = 0; axis < 4; ++axis) {
+            tensor.dimensions[axis] = shape->array_value[axis].integer_value.value_or(0);
+            tensor.warmup_dimensions[axis] = tensor.dimensions[axis];
+        }
+        specification.tensors.push_back(std::move(tensor));
+    }
+    descriptor.stage_id = plan;
+    descriptor.artifact.component_id = plan;
+    descriptor.artifact.path = (bundle_root_ / plan).string();
+    descriptor.artifact.provider_id = "tensorrt";
+    return load_validated_stage(std::move(descriptor), std::move(specification));
 }
 
 Result<session_api::ExecutableStage> TensorRTExecutionSession::load_exact_stage(
@@ -1451,11 +1541,19 @@ Result<std::vector<DeviceTensor>> TensorRTExecutionSession::run_exact_stage(
 
 Result<session_api::ExecutableStage> TensorRTExecutionSession::load_stage(
     session_api::ExecutableStageDescriptor descriptor) {
+    if (descriptor.numerics_profile == numerics::fx_v1) return load_fx_stage(std::move(descriptor));
     auto normative = deterministic::is_normative(descriptor);
     if (!normative) return normative.error();
     if (normative.value()) return load_exact_stage(std::move(descriptor));
     // Generic callers describe a stage only by its contract: dynamic axes warm
     // up at the engine's optimization-profile minimum.
+    // A component the bundle holds as <component>.plan resolves to that plan.
+    if (!descriptor.artifact.component_id.ends_with(".plan") &&
+        bundle_files_.contains(descriptor.artifact.component_id + ".plan")) {
+        descriptor.stage_id = descriptor.artifact.component_id + ".plan";
+        descriptor.artifact.component_id = descriptor.stage_id;
+        descriptor.artifact.path = (bundle_root_ / descriptor.stage_id).string();
+    }
     TensorRTStageSpec specification;
     specification.filename = descriptor.stage_id;
     specification.tensors.reserve(descriptor.tensors.size());
@@ -1607,6 +1705,11 @@ Result<void> TensorRTExecutionSession::initialize(
     const auto major_status = cudaDeviceGetAttribute(
         &compute_major_, cudaDevAttrComputeCapabilityMajor, configuration.provider.device_id);
     if (major_status != cudaSuccess) return cuda_error("cudaDeviceGetAttribute", major_status);
+    int compute_minor = 0;
+    const auto minor_status = cudaDeviceGetAttribute(
+        &compute_minor, cudaDevAttrComputeCapabilityMinor, configuration.provider.device_id);
+    if (minor_status != cudaSuccess) return cuda_error("cudaDeviceGetAttribute", minor_status);
+    fx_ready_ = fx::kernels_available(compute_major_, compute_minor) && fx::register_plugins();
     auto selected_policy = determine_context_policy(configuration);
     if (!selected_policy) return selected_policy.error();
     auto manifest = validate_engine_manifest(
