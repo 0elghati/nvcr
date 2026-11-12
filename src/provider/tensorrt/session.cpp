@@ -1466,7 +1466,7 @@ Result<session_api::ExecutableStage> TensorRTExecutionSession::load_fx_stage(
         return Error(ErrorCode::digest_mismatch,
                      plan + " was not compiled from the program the stream requires", std::string(subsystem));
     }
-    // The plan is built for fixed shapes, which its sidecar records.
+    // The plan's sidecar records its shapes; -1 marks a dynamic axis.
     TensorRTStageSpec specification;
     specification.filename = plan;
     const auto* shapes = json.value().find("tensors");

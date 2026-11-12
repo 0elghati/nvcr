@@ -2,8 +2,8 @@
 """Adds DCVC-RT's nvcr.fx.v1 stages to a TensorRT engine bundle.
 
 Copies the fx programs and fx_entropy.json into <bundle>/normative, compiles each program into
-<bundle>/<stage>.fx.plan with nvcr-fx-plans at the bundle's optimum frame size (padded to 16), and lists the new
-files in engine.sha256 and engine_manifest.json.
+<bundle>/<stage>.fx.plan with nvcr-fx-plans over the bundle's frame sizes (its visible minimum to maximum, optimized
+for its optimum, each padded to 16), and lists the new files in engine.sha256 and engine_manifest.json.
 
 usage: add_fx_plans.py --bundle DIR --programs DIR --nvcr-fx-plans PATH
 """
@@ -50,7 +50,10 @@ def main():
     args = ap.parse_args()
     manifest_path = args.bundle / "engine_manifest.json"
     manifest = json.loads(manifest_path.read_text())
-    width, height = manifest["visible_dimensions"]["optimum"]
+    visible = manifest["visible_dimensions"]
+    low, opt, high = (shapes(*visible[key]) for key in ("minimum", "optimum", "maximum"))
+    ranged = {stage: {name: [low[stage][name], opt[stage][name], high[stage][name]] for name in opt[stage]}
+              for stage in opt}
 
     normative = args.bundle / "normative"
     normative.mkdir(exist_ok=True)
@@ -58,7 +61,7 @@ def main():
         shutil.copy2(path, normative / path.name)
     with tempfile.TemporaryDirectory() as tmp:
         shape_file = Path(tmp) / "shapes.json"
-        shape_file.write_text(json.dumps(shapes(width, height)))
+        shape_file.write_text(json.dumps(ranged))
         subprocess.run([str(args.nvcr_fx_plans), str(normative), str(shape_file), str(args.bundle)], check=True)
 
     files = manifest["files"]
@@ -68,7 +71,7 @@ def main():
     checksum.write_text("".join(f"{files[name]}  {name}\n" for name in sorted(files)))
     manifest["checksum_manifest_sha256"] = sha256(checksum)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
-    print(f"{args.bundle}: fx plans for {width}x{height}")
+    print(f"{args.bundle}: fx plans for {visible['minimum']} to {visible['maximum']}")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 // Compiles an nvcr.fx.v1 program into a TensorRT plan: one plugin layer per
-// node (concat and slice as native int32 layers), fixed input shapes. The plan
+// node (concat and slice as native int32 layers), fixed or ranged input shapes. The plan
 // computes exactly the program's integers; the program stays the normative
 // artifact.
 
@@ -8,6 +8,7 @@
 #include <NvInfer.h>
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <iostream>
 #include <map>
@@ -122,6 +123,8 @@ Result<Plan> build_plan(const Program& program, std::span<const InputShape> inpu
     std::unique_ptr<IBuilderConfig> config(builder->createBuilderConfig());
     if (!network || !config) return failure("cannot create a TensorRT network");
 
+    auto* profile = builder->createOptimizationProfile();
+    bool ranged = false;
     std::vector<ITensor*> tensors(program.tensor_names.size(), nullptr);
     for (const auto id : program.inputs) {
         const auto& name = program.tensor_names[id];
@@ -129,9 +132,22 @@ Result<Plan> build_plan(const Program& program, std::span<const InputShape> inpu
         if (found == inputs.end() || found->channels != program.tensor_channels[id]) {
             return failure(program.name + ": no shape given for input " + name);
         }
-        tensors[id] = network->addInput(name.c_str(), DataType::kINT32,
-                                        Dims4{1, found->channels, found->height, found->width});
+        const auto c = found->channels;
+        if (!found->ranged()) {
+            tensors[id] = network->addInput(name.c_str(), DataType::kINT32, Dims4{1, c, found->height, found->width});
+            continue;
+        }
+        tensors[id] = network->addInput(name.c_str(), DataType::kINT32, Dims4{1, c, -1, -1});
+        profile->setDimensions(name.c_str(), OptProfileSelector::kMIN, Dims4{1, c, found->min_height, found->min_width});
+        profile->setDimensions(name.c_str(), OptProfileSelector::kOPT, Dims4{1, c, found->height, found->width});
+        profile->setDimensions(name.c_str(), OptProfileSelector::kMAX, Dims4{1, c, found->max_height, found->max_width});
+        ranged = true;
     }
+    if (ranged) config->addOptimizationProfile(profile);
+    // Slice sizes of dynamic tensors are computed as shape * keep + fixed.
+    static const std::int64_t keep[4] = {0, 0, 1, 1};
+    std::vector<std::array<std::int64_t, 4>> fixed;
+    fixed.reserve(program.nodes.size());
     for (const auto& node : program.nodes) {
         std::vector<ITensor*> in;
         for (const auto id : node.inputs) {
@@ -163,9 +179,18 @@ Result<Plan> build_plan(const Program& program, std::span<const InputShape> inpu
         }
         case Op::slice: {
             const auto dims = in[0]->getDimensions();
-            out = network->addSlice(*in[0], Dims4{0, node.begin, 0, 0},
-                                    Dims4{1, node.end - node.begin, dims.d[2], dims.d[3]}, Dims4{1, 1, 1, 1})
-                      ->getOutput(0);
+            auto* layer = network->addSlice(*in[0], Dims4{0, node.begin, 0, 0},
+                                            Dims4{1, node.end - node.begin, dims.d[2], dims.d[3]}, Dims4{1, 1, 1, 1});
+            if (dims.d[2] < 0 || dims.d[3] < 0) {
+                fixed.push_back({1, node.end - node.begin, 0, 0});
+                const Dims shape4{1, {4}};
+                auto* k = network->addConstant(shape4, Weights{DataType::kINT64, keep, 4})->getOutput(0);
+                auto* c = network->addConstant(shape4, Weights{DataType::kINT64, fixed.back().data(), 4})->getOutput(0);
+                auto* kept = network->addElementWise(*network->addShape(*in[0])->getOutput(0), *k,
+                                                     ElementWiseOperation::kPROD)->getOutput(0);
+                layer->setInput(2, *network->addElementWise(*kept, *c, ElementWiseOperation::kSUM)->getOutput(0));
+            }
+            out = layer->getOutput(0);
             break;
         }
         default: {
