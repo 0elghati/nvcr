@@ -357,15 +357,8 @@ private:
         return nhwc(z.value(), s, false);
     }
 
-    static std::vector<std::uint8_t> indexes_of(const Buffer& indexes) {
-        std::vector<std::uint8_t> out(indexes.count());
-        std::transform(indexes.ints().begin(), indexes.ints().end(), out.begin(),
-                       [](std::int32_t v) { return static_cast<std::uint8_t>(v); });
-        return out;
-    }
-
     // The coder's part of a decoded step: symbols for the indexes that are not skipped, 0 for the others.
-    static void place(std::span<const std::uint8_t> index, std::span<const std::int8_t> decoded, const Buffer& symbols) {
+    static void place(std::span<const std::int32_t> index, std::span<const std::int8_t> decoded, const Buffer& symbols) {
         auto out = symbols.ints();
         std::size_t next = 0;
         for (std::size_t i = 0; i < index.size(); ++i) {
@@ -374,23 +367,25 @@ private:
         if (next != decoded.size()) throw std::runtime_error("decoded symbol count");
     }
 
-    static std::vector<std::uint8_t> coded(std::span<const std::uint8_t> index) {
+    static std::vector<std::uint8_t> coded(std::span<const std::int32_t> index) {
         std::vector<std::uint8_t> out;
+        out.reserve(index.size());
         for (const auto i : index) {
-            if (i != skipped_index) out.push_back(i);
+            if (i != skipped_index) out.push_back(static_cast<std::uint8_t>(i));
         }
         return out;
     }
 
     // The encoder's symbol round(y_scaled - mean) of one element, clamped like upstream; skipped elements are 0.
-    static std::int32_t quantize(double y_scaled, std::int32_t mean, std::uint8_t index) {
+    static std::int32_t quantize(double y_scaled, std::int32_t mean, std::int32_t index) {
         if (index == skipped_index) return 0;
         return static_cast<std::int32_t>(std::clamp(std::nearbyint(y_scaled - static_cast<double>(mean) / one), -128.0, 127.0));
     }
 
-    static void row(std::vector<std::int16_t>& rows, std::int32_t symbol, std::uint8_t index) {
+    static void row(std::vector<std::int16_t>& rows, std::int32_t symbol, std::int32_t index) {
         if (index == skipped_index) return;
-        rows.push_back(static_cast<std::int16_t>(static_cast<std::uint16_t>(static_cast<std::uint8_t>(symbol)) << 8U | index));
+        rows.push_back(static_cast<std::int16_t>(static_cast<std::uint16_t>(static_cast<std::uint8_t>(symbol)) << 8U |
+                                               static_cast<std::uint8_t>(index)));
     }
 
     // 8-bit 4:2:0 from an exact picture in [-1/2, 1/2] at 2^-fa: luma round(255 v), chroma round(255 mean of 2x2).
@@ -399,8 +394,10 @@ private:
         const auto plane = static_cast<std::size_t>(g.ph * g.pw);
         const auto w = static_cast<std::size_t>(g.width), h = static_cast<std::size_t>(g.height);
         const auto stride = static_cast<std::size_t>(g.pw);
-        std::vector<std::byte> bytes(w * h * 3 / 2);
-        auto* out = reinterpret_cast<std::uint8_t*>(bytes.data());
+        auto frame = Frame::create(static_cast<std::uint32_t>(g.width), static_cast<std::uint32_t>(g.height),
+                                   PixelFormat::yuv420p8, timestamp);
+        if (!frame) throw std::runtime_error(std::string(frame.error().message()));
+        auto* out = reinterpret_cast<std::uint8_t*>(frame.value().data().data());
         const auto at = [&](std::size_t c, std::size_t y, std::size_t x) {
             return std::clamp<std::int64_t>(v[c * plane + y * stride + x] + one / 2, 0, one);
         };
@@ -415,9 +412,6 @@ private:
                 }
             }
         }
-        auto frame = Frame::copy_from(static_cast<std::uint32_t>(g.width), static_cast<std::uint32_t>(g.height),
-                                      PixelFormat::yuv420p8, bytes, timestamp);
-        if (!frame) throw std::runtime_error(std::string(frame.error().message()));
         return std::move(frame.value());
     }
 
@@ -425,17 +419,16 @@ private:
     static Frame shown(const Buffer& luma, const Buffer& chroma, std::size_t f, const Geometry& g, Timestamp timestamp) {
         const auto w = static_cast<std::size_t>(g.width), h = static_cast<std::size_t>(g.height);
         const auto pw = static_cast<std::size_t>(g.pw), ph = static_cast<std::size_t>(g.ph);
-        std::vector<std::byte> bytes(w * h * 3 / 2);
-        auto* out = bytes.data();
+        auto frame = Frame::create(static_cast<std::uint32_t>(g.width), static_cast<std::uint32_t>(g.height),
+                                   PixelFormat::yuv420p8, timestamp);
+        if (!frame) throw std::runtime_error(std::string(frame.error().message()));
+        auto* out = frame.value().data().data();
         const auto* y = luma.handle->host_bytes().data() + f * ph * pw;
         for (std::size_t row = 0; row < h; ++row, out += w) std::copy_n(y + row * pw, w, out);
         for (std::size_t k = 0; k < 2; ++k) {
             const auto* c = chroma.handle->host_bytes().data() + (2 * f + k) * (ph / 2) * (pw / 2);
             for (std::size_t row = 0; row < h / 2; ++row, out += w / 2) std::copy_n(c + row * (pw / 2), w / 2, out);
         }
-        auto frame = Frame::copy_from(static_cast<std::uint32_t>(g.width), static_cast<std::uint32_t>(g.height),
-                                      PixelFormat::yuv420p8, bytes, timestamp);
-        if (!frame) throw std::runtime_error(std::string(frame.error().message()));
         return std::move(frame.value());
     }
 
@@ -462,7 +455,7 @@ private:
         std::optional<Buffer> y_hat;
         for (int k = 0;; ++k) {
             auto symbols = take(reduced, true);
-            const auto index = indexes_of(indexes);
+            const auto index = indexes.ints();
             if (y_scaled == nullptr) {
                 place(index, decode(coded(index)), symbols);
             } else {
@@ -583,7 +576,7 @@ private:
         check(run(s, stage("p_prior"),
                   {{"z_fixed", &z}, {"memory", &*reference.memory}, {"qp", &qp_t}, {"latent_ref", &ref}},
                   {{"q_dec", &q_dec}, {"indexes", &indexes}, {"means", &means}, {"reduced", &reduced}}));
-        const auto index = indexes_of(indexes);
+        const auto index = indexes.ints();
         auto symbols = take(g.latent(ch_y), true);
         std::vector<std::int16_t> rows;
         if (!host) place(index, decode(coded(index)), symbols);
