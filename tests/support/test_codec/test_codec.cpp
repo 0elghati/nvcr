@@ -86,6 +86,7 @@ public:
             .supports_delayed_output = true,
             .min_qp = 0,
             .max_qp = 63,
+            .numerics_profiles = {nvcr::numerics::native, nvcr::numerics::intconv_v1},
         };
     }
 

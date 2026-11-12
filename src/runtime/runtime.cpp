@@ -3,8 +3,10 @@
 #include "nvcr/codec/runtime.hpp"
 #include "nvcr/logging/logger.hpp"
 #include "nvcr/memory/memory_pool.hpp"
+#include "nvcr/numerics/profiles.hpp"
 #include "nvcr/runtime/registry.hpp"
 
+#include <algorithm>
 #include <mutex>
 #include <new>
 #include <utility>
@@ -46,6 +48,19 @@ Result<Runtime> Runtime::create(RuntimeConfiguration configuration) {
     auto& registry = runtime::Registry::instance();
     auto adapter = registry.create_codec(configuration.codec.id);
     if (!adapter) return adapter.error();
+
+    // The codec runs only under a profile it declares (the first is its default),
+    // and an exact profile only on a provider that implements it.
+    const auto profiles = adapter.value()->capabilities().numerics_profiles;
+    auto& profile = configuration.codec.numerics_profile;
+    if (profile.empty() && !profiles.empty()) profile = profiles.front();
+    if (std::find(profiles.begin(), profiles.end(), profile) == profiles.end()) {
+        return Error(ErrorCode::incompatible_precision,
+                     configuration.codec.id + " does not run under numerics profile '" + profile + "'",
+                     "runtime");
+    }
+    const bool exact = profile != nvcr::numerics::native;
+
     if (!registry.compatible(configuration.codec.id, configuration.provider.id)) {
         return Error(
             ErrorCode::missing_provider,
@@ -57,6 +72,11 @@ Result<Runtime> Runtime::create(RuntimeConfiguration configuration) {
     runtime::RuntimeServices services(registry, configuration.provider.id);
     auto provider_session = services.create_provider_session(configuration);
     if (provider_session) {
+        if (exact && !provider_session.value()->supports_numerics_profile(profile)) {
+            return Error(ErrorCode::incompatible_precision,
+                         configuration.provider.id + " does not implement numerics profile '" + profile + "'",
+                         "runtime");
+        }
         auto sessions = adapter.value()->create_sessions(
             configuration, std::move(provider_session.value()));
         if (sessions) {
@@ -69,6 +89,10 @@ Result<Runtime> Runtime::create(RuntimeConfiguration configuration) {
         return provider_session.error();
     }
 
+    if (exact) {
+        return Error(ErrorCode::incompatible_precision,
+                     "numerics profile '" + profile + "' needs a provider session", "runtime");
+    }
     auto components = adapter.value()->create_components(configuration, services);
     if (!components) return components.error();
     return create(std::move(configuration), std::move(components.value()));

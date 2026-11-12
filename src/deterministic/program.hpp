@@ -39,6 +39,7 @@
 // Tensors are batch-1 NCHW float32.
 
 #include "nvcr/common/error.hpp"
+#include "nvcr/numerics/profiles.hpp"
 
 #include <array>
 #include <cstddef>
@@ -51,7 +52,7 @@
 
 namespace nvcr::deterministic {
 
-inline constexpr std::string_view intconv_profile = "nvcr.intconv.v1";
+inline constexpr std::string_view intconv_profile = nvcr::numerics::intconv_v1;
 
 enum class OpKind : std::uint8_t {
     conv,
