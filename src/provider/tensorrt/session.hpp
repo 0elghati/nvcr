@@ -831,6 +831,7 @@ private:
     bool fixed_shape_profile_{};
     fs::path bundle_root_;
     std::string owner_id_;
+    std::map<std::string, CudaAllocation> staging_;  // device copies of pinned host tensors, per stage tensor
 };
 
 class SessionExecutionScope final {

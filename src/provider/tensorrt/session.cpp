@@ -1158,9 +1158,7 @@ Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
                     std::string(tensor_specification.name),
                 std::string(subsystem));
         }
-        // Pinned host buffers are device-addressable under unified addressing.
-        // shortcut: engines read them over the bus (zero copy); stage through
-        // device buffers if a codec's host-side tensors become the bottleneck.
+        // Pinned host buffers are staged through device copies below.
         if (!tensor->storage.buffer || tensor->storage.buffer->owner_id() != owner_id_ ||
             (tensor->storage.buffer->domain() != session_api::MemoryDomain::provider_device &&
              tensor->storage.buffer->domain() != session_api::MemoryDomain::pinned_host)) {
@@ -1223,6 +1221,8 @@ Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
     graph_signature.reserve(specification.tensors.size() * 6U);
     std::vector<session_api::BufferHandle> retained_buffers;
     retained_buffers.reserve(tensors.size());
+    struct StagedOutput final { void* host; const void* device; std::size_t bytes; };
+    std::vector<StagedOutput> staged_outputs;
     for (const auto& tensor_specification : specification.tensors) {
         const auto* tensor = find_tensor(tensor_specification.name);
         auto concrete_buffer = std::dynamic_pointer_cast<TensorRTBuffer>(tensor->storage.buffer);
@@ -1235,6 +1235,25 @@ Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
         auto* address = static_cast<std::byte*>(concrete_buffer->data()) +
             tensor->storage.offset_bytes;
         const std::string name(tensor_specification.name);
+        // A pinned host tensor goes through a device copy, so engines never read or write it over the bus.
+        if (tensor->storage.buffer->domain() == session_api::MemoryDomain::pinned_host) {
+            std::size_t bytes = tensor_element_bytes(tensor->data_type);
+            for (const auto dimension : tensor->shape) bytes *= static_cast<std::size_t>(dimension);
+            auto& device = staging_[std::string(specification.filename) + "/" + name];
+            if (device.bytes < bytes) {
+                auto allocated = allocate_cuda(bytes);
+                if (!allocated) return allocated.error();
+                device = std::move(allocated.value());
+            }
+            auto* host = address;
+            address = static_cast<std::byte*>(device.data);
+            if (tensor_specification.mode == nvinfer1::TensorIOMode::kINPUT) {
+                auto copied = copy_async(address, host, bytes, cudaMemcpyHostToDevice, stream_, "stage input");
+                if (!copied) return copied.error();
+            } else {
+                staged_outputs.push_back({host, address, bytes});
+            }
+        }
         if (!context->setTensorAddress(name.c_str(), address)) {
             return backend_error(
                 std::string(specification.filename) + " rejected device address for " + name);
@@ -1282,6 +1301,11 @@ Result<session_api::Completion> TensorRTExecutionSession::submit_impl(
             static_cast<void>(cudaEventDestroy(profile_events.second));
         }
         return enqueued.error();
+    }
+    for (const auto& output : staged_outputs) {
+        auto copied = copy_async(output.host, output.device, output.bytes, cudaMemcpyDeviceToHost, stream_,
+                                 "stage output");
+        if (!copied) return copied.error();
     }
     if (profile_cuda) {
         auto recorded = record_cuda_event(
