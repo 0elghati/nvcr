@@ -326,6 +326,12 @@ PY
     echo "Exporting exact-numerics normative programs to $models_dir/normative"
     PYTHON="$python_bin" "$script_dir/export_normative_programs.sh" \
         "$models_dir" "$models_dir/normative"
+
+    echo "Exporting nvcr.fx.v1 programs to $models_dir/normative"
+    "$python_bin" "$script_dir/export_fx_programs.py" \
+        --dcvcrt-root "$dcvcrt_root" \
+        --config "$repo_root/configs/numerics/dcvcrt-fx.json" \
+        --output-dir "$models_dir/normative"
 fi
 
 required_assets=(
