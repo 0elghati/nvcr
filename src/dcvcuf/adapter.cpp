@@ -1,10 +1,14 @@
 #include "nvcr/dcvcuf/adapter.hpp"
 
+#include "../codec/stream_numerics.hpp"
 #include "execution_session.hpp"
+#include "fx_session.hpp"
+#include "numerics.hpp"
 #include "tensorrt_session.hpp"
 
 #include "nvcr/bitstream/access_unit.hpp"
 #include "nvcr/dcvcuf/backend.hpp"
+#include "nvcr/numerics/profiles.hpp"
 #include "nvcr/runtime/registry.hpp"
 #include "nvcr/statistics/statistics.hpp"
 
@@ -122,10 +126,12 @@ Result<CodecPayload> parse_payload(
     return parsed;
 }
 
+// Exact streams state their numerics on intra units; the HT-S groups of the
+// sequence inherit it.
 Result<Packet> wrap_access_unit(
-    const RuntimeConfiguration& configuration, FrameType type,
-    std::uint32_t width, std::uint32_t height, Timestamp timestamp,
-    std::vector<std::byte> payload) {
+    const RuntimeConfiguration& configuration, const codec::StreamNumerics& numerics,
+    std::uint64_t index, FrameType type, std::uint32_t width, std::uint32_t height,
+    Timestamp timestamp, std::vector<std::byte> payload) {
     AccessUnit access_unit{
         configuration.stream.bitstream_model_id,
         width,
@@ -134,8 +140,10 @@ Result<Packet> wrap_access_unit(
         type,
         type == FrameType::intra,
         std::move(payload)};
-    auto serialized = AccessUnitIO::serialize(
-        access_unit, configuration.runtime.max_packet_bytes);
+    auto serialized = numerics.exact() && type == FrameType::intra
+        ? numerics.serialize_random_access(std::move(access_unit), configuration.codec.id, index,
+                                           configuration.runtime.max_packet_bytes)
+        : AccessUnitIO::serialize(access_unit, configuration.runtime.max_packet_bytes);
     if (!serialized) return serialized.error();
     return Packet(std::move(serialized.value()), timestamp, type);
 }
@@ -145,10 +153,11 @@ public:
     Encoder(
         RuntimeConfiguration configuration,
         std::shared_ptr<ExecutionSession> provider,
-        std::shared_ptr<Statistics> statistics)
+        std::shared_ptr<Statistics> statistics, codec::StreamNumerics numerics)
         : configuration_(std::move(configuration)),
           provider_(std::move(provider)),
-          statistics_(std::move(statistics)) {}
+          statistics_(std::move(statistics)),
+          numerics_(std::move(numerics)) {}
 
     Result<void> send_frame(const Frame& frame) override {
         if (flushed_)
@@ -169,7 +178,7 @@ public:
             if (!encoded) return encoded.error();
             const std::array timestamps{frame.timestamp()};
             auto packet = wrap_access_unit(
-                configuration_, FrameType::intra, frame.width(), frame.height(),
+                configuration_, numerics_, frame_index_, FrameType::intra, frame.width(), frame.height(),
                 frame.timestamp(),
                 make_payload(FrameType::intra, encoded.value(), timestamps));
             if (!packet) return packet.error();
@@ -257,7 +266,7 @@ private:
         for (std::size_t index = 0; index < valid_count; ++index)
             timestamps.push_back(pending_[index].timestamp());
         auto packet = wrap_access_unit(
-            configuration_, FrameType::predicted, width_, height_,
+            configuration_, numerics_, frame_index_, FrameType::predicted, width_, height_,
             timestamps.front(),
             make_payload(FrameType::predicted, encoded.value(), timestamps,
                          reset_feature_memory));
@@ -275,6 +284,7 @@ private:
     RuntimeConfiguration configuration_;
     std::shared_ptr<ExecutionSession> provider_;
     std::shared_ptr<Statistics> statistics_;
+    codec::StreamNumerics numerics_;
     std::vector<Frame> pending_;
     std::deque<Packet> outputs_;
     std::uint64_t frame_index_{};
@@ -289,10 +299,11 @@ public:
     Decoder(
         RuntimeConfiguration configuration,
         std::shared_ptr<ExecutionSession> provider,
-        std::shared_ptr<Statistics> statistics)
+        std::shared_ptr<Statistics> statistics, codec::StreamNumerics numerics)
         : configuration_(std::move(configuration)),
           provider_(std::move(provider)),
-          statistics_(std::move(statistics)) {}
+          statistics_(std::move(statistics)),
+          numerics_(std::move(numerics)) {}
 
     Result<void> send_access_unit(const Packet& packet) override {
         if (flushed_)
@@ -313,6 +324,9 @@ public:
         }
         if (access_unit.value().qp > max_qp)
             return codec_error(ErrorCode::malformed_bitstream, "DCVC-UF QP exceeds 63");
+        // The numerics requirement is resolved before any decode work.
+        auto compatible = numerics_.check(access_unit.value());
+        if (!compatible) return compatible.error();
         auto payload = parse_payload(
             access_unit.value().frame_type, access_unit.value().payload);
         if (!payload) return payload.error();
@@ -376,6 +390,7 @@ public:
         outputs_.clear();
         flushed_ = false;
         reference_valid_ = false;
+        numerics_.reset();
         return provider_->reset_decoder_state();
     }
 
@@ -383,6 +398,7 @@ private:
     RuntimeConfiguration configuration_;
     std::shared_ptr<ExecutionSession> provider_;
     std::shared_ptr<Statistics> statistics_;
+    codec::StreamNumerics numerics_;
     std::deque<Frame> outputs_;
     bool flushed_{};
     bool reference_valid_{};
@@ -409,7 +425,20 @@ public:
     Result<codec::Sessions> create_sessions(
         const RuntimeConfiguration& configuration,
         std::shared_ptr<provider::experimental::IProviderSession> session) override {
-        auto native = std::dynamic_pointer_cast<ExecutionSession>(session);
+        auto normative = normative_stages(configuration);
+        if (!normative) return normative.error();
+        codec::StreamNumerics numerics("dcvcuf", std::string(payload_profile));
+        auto set = numerics.set(normative.value() ? std::optional(normative.value()->identity) : std::nullopt);
+        if (!set) return set.error();
+        // Under nvcr.fx.v1 one provider-neutral flow serves every provider that implements it.
+        std::shared_ptr<ExecutionSession> native;
+        if (numerics.exact()) {
+            auto fx = make_fx_session(std::move(session), configuration);
+            if (!fx) return fx.error();
+            native = std::move(fx.value());
+        } else {
+            native = std::dynamic_pointer_cast<ExecutionSession>(session);
+        }
 #ifdef NVCR_HAS_TENSORRT
         if (!native) {
             auto wrapped = make_tensorrt_session(session);
@@ -430,9 +459,9 @@ public:
         auto statistics = std::make_shared<Statistics>();
         codec::Sessions output;
         output.encoder = std::make_unique<Encoder>(
-            configuration, native, statistics);
+            configuration, native, statistics, numerics);
         output.decoder = std::make_unique<Decoder>(
-            configuration, std::move(native), statistics);
+            configuration, std::move(native), statistics, std::move(numerics));
         output.statistics = std::move(statistics);
         return output;
     }

@@ -5,6 +5,7 @@
 #endif
 
 #include "nvcr/dcvcuf/adapter.hpp"
+#include "nvcr/numerics/profiles.hpp"
 #include "nvcr/runtime/registry.hpp"
 
 #include <cstdlib>
@@ -39,6 +40,7 @@ void register_codec() {
             .supports_delayed_output = true,
             .min_qp = 0,
             .max_qp = 63,
+            .numerics_profiles = {numerics::native, numerics::fx_v1},
         },
         codec::OptionSchema{{
             {"dcvc_uf.quality_index", "uint",
