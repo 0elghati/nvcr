@@ -99,6 +99,11 @@ public:
         return q_decoder_;
     }
 
+    // Map scales to entropy tables with the exact threshold table
+    // (scale_index.hpp) instead of logf; set under an exact numerics profile.
+    void set_exact_indexes(bool exact) noexcept { exact_indexes_ = exact; }
+    [[nodiscard]] bool exact_indexes() const noexcept { return exact_indexes_; }
+
     [[nodiscard]] Result<void> begin_encode(bool use_two_coders);
     [[nodiscard]] Result<void> encode_z(
         std::span<const std::int8_t> symbols,
@@ -128,6 +133,7 @@ private:
         static_cast<std::size_t>(IntraStage::count);
 
     RansCodec rans_;
+    bool exact_indexes_{false};
     std::size_t image_z_group_{static_cast<std::size_t>(-1)};
     std::size_t gaussian_y_group_{static_cast<std::size_t>(-1)};
     std::vector<float> q_encoder_;
@@ -175,6 +181,11 @@ public:
         const codec::SequenceStateView& state,
         const ReferenceState& reference) const;
 
+    // Map scales to entropy tables with the exact threshold table
+    // (scale_index.hpp) instead of logf; set under an exact numerics profile.
+    void set_exact_indexes(bool exact) noexcept { exact_indexes_ = exact; }
+    [[nodiscard]] bool exact_indexes() const noexcept { return exact_indexes_; }
+
     [[nodiscard]] Result<void> begin_encode(bool use_two_coders);
     [[nodiscard]] Result<void> encode_z(
         std::span<const std::int8_t> symbols,
@@ -205,6 +216,7 @@ private:
         static_cast<std::size_t>(PredictedStage::count);
 
     RansCodec rans_;
+    bool exact_indexes_{false};
     std::size_t video_z_group_{static_cast<std::size_t>(-1)};
     std::size_t gaussian_y_group_{static_cast<std::size_t>(-1)};
     std::vector<float> q_encoder_;

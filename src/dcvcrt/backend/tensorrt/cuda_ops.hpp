@@ -184,13 +184,16 @@ cudaError_t build_encode_indexes(
     std::int16_t* output,
     std::size_t count,
     float force_zero_threshold,
-    cudaStream_t stream) noexcept;
+    cudaStream_t stream,
+    bool exact = false) noexcept;
 
+// exact: the exact threshold mapping (scale_index.hpp) instead of logf.
 cudaError_t build_decode_indexes(
     const void* scales,
     std::uint8_t* output,
     std::size_t count,
     float force_zero_threshold,
-    cudaStream_t stream) noexcept;
+    cudaStream_t stream,
+    bool exact = false) noexcept;
 
 }  // namespace nvcr::dcvcrt::cuda_ops

@@ -3,7 +3,12 @@
 NVCR is a native C++ runtime for running neural video codecs as usable
 applications. It gives a learned compression method the parts it needs in
 practice: encode and decode sessions, GPU execution, compatible inference
-engines, a portable bitstream, a command-line tool, packages, and containers.
+engines, a versioned bitstream, a command-line tool, packages, and containers.
+DCVC-RT streams decode on the provider and target that encoded them; streams
+encoded with exact numerics (`--numerics nvcr.intconv.v1`) decode bit-identically
+on every provider that implements the profile. See
+[cross-target decode](docs/cross-target-decode.md) and the
+[capability matrix](docs/compatibility.md#dcvc-rt-capability-matrix).
 
 [DCVC-RT](https://github.com/microsoft/DCVC) is NVCR's first codec integration.
 [MLVC](https://github.com/microsoft/MLVC) is an experimental second codec that
