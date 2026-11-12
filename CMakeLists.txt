@@ -118,6 +118,7 @@ target_sources(
         src/artifacts/resolver.cpp
         src/codec/sequence_state.cpp
         src/codec/runtime.cpp
+        src/codec/fx_stages.cpp
         src/codec/stream_numerics.cpp
         src/common/error.cpp
         src/common/json.cpp
