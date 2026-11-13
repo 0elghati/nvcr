@@ -111,7 +111,7 @@ or target:
 Under `nvcr.fx.v1` the decoder's entropy decisions, decoded latents, feature
 memory and decoded features are bit-identical to the encoder's; the eight
 pictures of a chunk are drawn from that state in FP16 and are not part of the
-profile. At 1080p on the RTX 4070 it decodes at 60.2 fps and encodes at 52.3 fps,
+profile. At 1080p on the RTX 4070 it decodes at 60.2 fps and encodes at 61.0 fps,
 against 90.9 and 113.5 fps native (codec interval, diagnostic), at -1.5 % to
 -1.8 % BD-rate against native. Native remains DCVC-UF's default.
 Evidence: [`nvcr.fx.v1`](../evidence/fx-dcvcuf-rtx4070-20261112.md),
