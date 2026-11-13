@@ -285,10 +285,10 @@ private:
         auto out = padded.halves();
         for (std::int64_t c = 0; c < ch_y; ++c) {
             for (std::int64_t row = 0; row < g.yh4; ++row) {
-                for (std::int64_t col = 0; col < g.yw4; ++col) {
-                    out[static_cast<std::size_t>((c * g.yh4 + row) * g.yw4 + col)] = in[static_cast<std::size_t>(
-                        (c * g.yh + std::min(row, g.yh - 1)) * g.yw + std::min(col, g.yw - 1))];
-                }
+                const auto* line = in.data() + (c * g.yh + std::min(row, g.yh - 1)) * g.yw;
+                auto* padded_line = out.data() + (c * g.yh4 + row) * g.yw4;
+                std::copy_n(line, g.yw, padded_line);
+                std::fill(padded_line + g.yw, padded_line + g.yw4, line[g.yw - 1]);
             }
         }
         check(run(*session_, stage(component), {{"y_padded", &padded}}, {{"z", &z}}));
@@ -579,18 +579,27 @@ private:
         const auto index = indexes.ints();
         auto symbols = take(g.latent(ch_y), true);
         std::vector<std::int16_t> rows;
-        if (!host) place(index, decode(coded(index)), symbols);
+        if (host) {  // steps not quantized yet stay 0: the stages scale every symbol before they mask
+            std::fill(symbols.ints().begin(), symbols.ints().end(), 0);
+        } else {
+            place(index, decode(coded(index)), symbols);
+        }
         std::optional<Buffer> y_hat;
         for (int k = 0;; ++k) {
             if (host) {  // step k's symbols, from y / q_dec and the step's means
-                auto out = symbols.ints();
+                // Group g of the channels codes the positions of parity four_way[k][g] at this step.
+                const auto out = symbols.ints();
+                const auto values = y->halves();
+                const auto steps = q_dec.ints();
+                const auto mean = means.ints();
+                const auto& value_of = half_values();
                 for (std::int64_t c = 0; c < ch_y; ++c) {
-                    for (std::int64_t row = 0; row < g.yh; ++row) {
-                        for (std::int64_t col = 0; col < g.yw; ++col) {
-                            if (!active(k, static_cast<int>(c), row, col)) continue;
-                            const auto at = static_cast<std::size_t>((c * g.yh + row) * g.yw + col);
-                            const double q = static_cast<double>(q_dec.ints()[at]) / one;
-                            out[at] = quantize(half_to_double(y->halves()[at]) / q, means.ints()[at], index[at]);
+                    const int parity = four_way[static_cast<std::size_t>(k)][static_cast<std::size_t>(c / (ch_y / 4))];
+                    for (std::int64_t row = parity / 2; row < g.yh; row += 2) {
+                        const auto end = static_cast<std::size_t>((c * g.yh + row + 1) * g.yw);
+                        for (auto at = static_cast<std::size_t>((c * g.yh + row) * g.yw + parity % 2); at < end; at += 2) {
+                            out[at] = quantize(value_of[values[at]] / (static_cast<double>(steps[at]) / one), mean[at],
+                                               index[at]);
                         }
                     }
                 }
@@ -611,7 +620,9 @@ private:
                    {"context", &context}, {"qp", &qp_t}, {"parity", &par}},
                   {{"feature", &feature}}));
         if (host) {  // every coded element of the chunk, in tensor order
-            for (std::size_t i = 0; i < index.size(); ++i) row(rows, symbols.ints()[i], index[i]);
+            rows.reserve(index.size());
+            const auto coded_symbols = symbols.ints();
+            for (std::size_t i = 0; i < index.size(); ++i) row(rows, coded_symbols[i], index[i]);
         }
         return {std::move(feature), std::move(rows)};
     }
@@ -659,6 +670,16 @@ private:
         for (std::size_t f = 0; f < timestamps.size(); ++f) frames.push_back(shown(luma, chroma, f, g, timestamps[f]));
         advance(decoder_, std::move(feature), reset);
         return frames;
+    }
+
+    // Every binary16 value as a double, by bit pattern.
+    static const std::vector<double>& half_values() {
+        static const std::vector<double> table = [] {
+            std::vector<double> t(65536);
+            for (std::size_t h = 0; h < t.size(); ++h) t[h] = half_to_double(static_cast<std::uint16_t>(h));
+            return t;
+        }();
+        return table;
     }
 
     // IEEE binary16 bit pattern -> double (the quantization tables).
