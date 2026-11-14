@@ -1,5 +1,6 @@
 #include "fx_backend.hpp"
 
+#include "../codec/fx_stages.hpp"
 #include "../common/json.hpp"
 #include "host_ops.hpp"
 #include "numerics.hpp"
@@ -42,62 +43,9 @@ Error fail(std::string message) { return Error(ErrorCode::backend_error, std::mo
 
 std::int32_t round_up(std::int32_t value, std::int32_t multiple) { return (value + multiple - 1) / multiple * multiple; }
 
-// ---- provider buffers ----------------------------------------------------------------------------------------------
-struct Buffer final {
-    api::BufferHandle handle;
-    std::array<std::int64_t, 4> shape{};
-    api::TensorDataType type{api::TensorDataType::int32};
-    bool host{false};
-
-    [[nodiscard]] std::size_t count() const {
-        return static_cast<std::size_t>(shape[0] * shape[1] * shape[2] * shape[3]);
-    }
-    [[nodiscard]] std::size_t bytes() const {
-        return count() * (type == api::TensorDataType::int32 ? 4U : type == api::TensorDataType::float16 ? 2U : 1U);
-    }
-    [[nodiscard]] std::span<std::int32_t> ints() const {
-        return {reinterpret_cast<std::int32_t*>(handle->host_bytes().data()), count()};
-    }
-    [[nodiscard]] std::span<Half> halves() const {
-        return {reinterpret_cast<Half*>(handle->host_bytes().data()), count()};
-    }
-};
-
-// host: the codec reads or writes the values; otherwise device memory is preferred.
-Result<Buffer> allocate(api::IProviderSession& session, std::array<std::int64_t, 4> shape, bool host,
-                        api::TensorDataType type = api::TensorDataType::int32) {
-    Buffer buffer{nullptr, shape, type, host};
-    const std::array<api::MemoryDomain, 3> domains{api::MemoryDomain::provider_device, api::MemoryDomain::pinned_host,
-                                                   api::MemoryDomain::host};
-    for (std::size_t i = host ? 1 : 0; i < domains.size(); ++i) {
-        auto allocated = session.allocate(buffer.bytes(), domains[i]);
-        if (allocated && (!host || !allocated.value()->host_bytes().empty())) {
-            buffer.handle = std::move(allocated.value());
-            return buffer;
-        }
-    }
-    return fail("cannot allocate a provider buffer");
-}
-
-struct Bind final {
-    std::string_view name;
-    const Buffer* buffer;
-};
-
-Result<void> run(api::IProviderSession& session, const api::ExecutableStage& stage, const std::vector<Bind>& in,
-                 const std::vector<Bind>& out) {
-    std::vector<api::TensorView> views;
-    for (const auto* list : {&in, &out}) {
-        for (const auto& b : *list) {
-            views.push_back({b.name, b.buffer->type, {b.buffer->shape.begin(), b.buffer->shape.end()},
-                             list == &in ? api::TensorAccess::read : api::TensorAccess::write,
-                             {b.buffer->handle, 0, b.buffer->bytes()}});
-        }
-    }
-    auto completion = session.submit(stage, views, {});
-    if (!completion) return completion.error();
-    return completion.value()->wait();
-}
+using codec::fx::Bind;
+using codec::fx::Buffer;
+using codec::fx::run;
 
 // ---- codec rules ---------------------------------------------------------------------------------------------------
 // Upstream DCVC-RT's spatial masks: in group g of the channels, step k codes the
@@ -269,19 +217,9 @@ public:
 private:
     const api::ExecutableStage& stage(const std::string& id) const { return stages_.at(id); }
 
-    // Storage is reused across frames: a pooled buffer is free when only the pool holds it.
     Result<Buffer> take(std::array<std::int64_t, 4> shape, bool host,
                         api::TensorDataType type = api::TensorDataType::int32) {
-        Buffer wanted{nullptr, shape, type, host};
-        for (const auto& pooled : pool_) {
-            if (pooled.handle.use_count() == 1 && pooled.host == host && pooled.bytes() == wanted.bytes()) {
-                wanted.handle = pooled.handle;
-                return wanted;
-            }
-        }
-        auto made = allocate(*session_, shape, host, type);
-        if (made) pool_.push_back(made.value());
-        return made;
+        return pool_.take(*session_, shape, host, type);
     }
 
     // Full-tensor offsets of a spatial step's active elements, in the entropy coder's order.
@@ -378,7 +316,7 @@ private:
     // The spatial steps' parity masks: channel 2 (row % 2) + column % 2 is 1 there, 0 elsewhere.
     Result<Buffer> parity(const Geometry& g) {
         if (!parity_ || parity_->shape[2] != g.yh || parity_->shape[3] != g.yw) {
-            auto made = allocate(*session_, {1, 4, g.yh, g.yw}, true);
+            auto made = codec::fx::allocate(*session_, {1, 4, g.yh, g.yw}, true);
             if (!made) return made.error();
             auto v = made.value().ints();
             const auto plane = static_cast<std::size_t>(g.yh) * static_cast<std::size_t>(g.yw);
@@ -792,7 +730,7 @@ private:
 
     std::shared_ptr<api::IProviderSession> session_;
     std::map<std::string, api::ExecutableStage, std::less<>> stages_;
-    std::vector<Buffer> pool_;
+    codec::fx::BufferPool pool_;
     std::map<std::array<int, 4>, std::vector<std::uint32_t>> active_;
     std::optional<Buffer> parity_;
     std::vector<double> scaled_;  // the encoder's y / step size, reused across frames

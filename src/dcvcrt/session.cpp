@@ -1,6 +1,7 @@
 #include "session.hpp"
 
 #include "numerics.hpp"
+#include "../codec/stream_numerics.hpp"
 
 #include "nvcr/bitstream/access_unit.hpp"
 #include "nvcr/bitstream/numerics_identity.hpp"
@@ -39,10 +40,8 @@ public:
         auto normative = normative_stages(configuration_);
         if (!normative) return normative.error();
         if (normative.value()) {
-            identity_ = normative.value()->identity;
-            auto section = NumericsIdentityIO::serialize(*identity_);
-            if (!section) return section.error();
-            identity_section_ = std::move(section.value());
+            auto set = numerics_.set(normative.value()->identity);
+            if (!set) return set.error();
         }
         auto initialized = backend_->initialize(configuration_);
         if (!initialized) return initialized.error();
@@ -74,8 +73,9 @@ public:
             std::move(encoded.value().payload)};
         // Exact streams state their numerics on random-access units; the
         // other units of the sequence inherit it and keep NVAU v1 framing.
-        auto serialized = identity_ && frame_type.value() == FrameType::intra
-            ? exact_access_unit(std::move(access_unit))
+        auto serialized = numerics_.exact() && frame_type.value() == FrameType::intra
+            ? numerics_.serialize_random_access(std::move(access_unit), configuration_.codec.id, encoded_frames_,
+                                                configuration_.runtime.max_packet_bytes)
             : AccessUnitIO::serialize(access_unit, configuration_.runtime.max_packet_bytes);
         if (!serialized) return serialized.error();
         ++encoded_frames_;
@@ -125,7 +125,7 @@ public:
                 decoder_state_.reset();
             }
             codec_payload = access_unit->payload;
-        } else if (identity_) {
+        } else if (numerics_.exact()) {
             return Error(ErrorCode::incompatible_target,
                          "this decoder runs exact numerics; the stream carries no numerics identity",
                          "dcvcrt");
@@ -137,7 +137,7 @@ public:
         }
         // The numerics requirement is resolved before any decode work.
         if (access_unit) {
-            auto compatible = check_numerics(*access_unit);
+            auto compatible = numerics_.check(*access_unit);
             if (!compatible) return compatible.error();
         }
         auto valid = decoder_state_.validate_packet(packet.frame_type());
@@ -195,94 +195,15 @@ public:
 
     void reset_decoder() noexcept {
         decoder_state_.reset();
-        exact_sequence_ = false;
+        numerics_.reset();
         backend_->reset_decoder();
         logger_->log(LogLevel::debug, "decoder sequence state reset");
     }
 
 private:
-    // NVAU v2 random-access unit: the codec payload and the numerics
-    // identity, both required.
-    [[nodiscard]] Result<std::vector<std::byte>> exact_access_unit(AccessUnit access_unit) const {
-        access_unit.codec_id = configuration_.codec.id;
-        access_unit.codec_profile_id = std::string(payload_profile);
-        access_unit.decode_order_index = encoded_frames_;
-        access_unit.presentation_order_index = encoded_frames_;
-        access_unit.random_access = access_unit.frame_type == FrameType::intra;
-        access_unit.sections = {
-            AccessUnitSection{
-                static_cast<std::uint16_t>(AccessUnitSectionType::codec_payload), 1,
-                AccessUnitIO::required_section_flag, access_unit.payload},
-            AccessUnitSection{
-                static_cast<std::uint16_t>(AccessUnitSectionType::numerics_identity),
-                NumericsIdentityIO::format_version, AccessUnitIO::required_section_flag,
-                identity_section_}};
-        return AccessUnitIO::serialize_sectioned(access_unit, configuration_.runtime.max_packet_bytes);
-    }
-
-    // A stream with exact numerics decodes only on a decoder that runs the
-    // same profile with the same normative programs; a native stream only on
-    // a native decoder. Everything else fails here, before decoding. The
-    // identity is stated on random-access units; a unit without one belongs
-    // to the sequence the last random-access unit opened.
-    [[nodiscard]] Result<void> check_numerics(const AccessUnit& access_unit) {
-        const AccessUnitSection* section = nullptr;
-        for (const auto& candidate : access_unit.sections) {
-            if (candidate.type != static_cast<std::uint16_t>(AccessUnitSectionType::numerics_identity)) {
-                continue;
-            }
-            if (section != nullptr) {
-                return Error(ErrorCode::malformed_bitstream,
-                             "access unit has more than one numerics identity", "dcvcrt");
-            }
-            section = &candidate;
-        }
-        if (section == nullptr) {
-            if (access_unit.frame_type == FrameType::intra) exact_sequence_ = false;
-            if (!identity_ || (access_unit.frame_type != FrameType::intra && exact_sequence_)) return {};
-            return Error(ErrorCode::incompatible_target,
-                         "this decoder runs exact numerics; the stream uses native numerics", "dcvcrt");
-        }
-        if (access_unit.codec_profile_id != payload_profile) {
-            return Error(ErrorCode::incompatible_version,
-                         "unsupported DCVC-RT codec profile '" + access_unit.codec_profile_id + "'",
-                         "dcvcrt");
-        }
-        if (access_unit.frame_type != FrameType::intra) {
-            return Error(ErrorCode::malformed_bitstream,
-                         "numerics identity on a unit that is not a random access point", "dcvcrt");
-        }
-        if (section->version != NumericsIdentityIO::format_version) {
-            return Error(ErrorCode::incompatible_version,
-                         "unsupported numerics identity version " + std::to_string(section->version),
-                         "dcvcrt");
-        }
-        if ((section->flags & AccessUnitIO::required_section_flag) == 0U) {
-            return Error(ErrorCode::malformed_bitstream, "numerics identity must be required", "dcvcrt");
-        }
-        auto identity = NumericsIdentityIO::deserialize(section->payload);
-        if (!identity) return identity.error();
-        if (!identity_) {
-            return Error(ErrorCode::incompatible_target,
-                         "stream requires " + identity.value().profile +
-                             " normative stages; decode with that numerics profile and its programs",
-                         "dcvcrt");
-        }
-        if (identity.value() != *identity_) {
-            return Error(ErrorCode::incompatible_target,
-                         "stream's numerics profile or normative programs differ from this decoder's",
-                         "dcvcrt");
-        }
-        exact_sequence_ = true;
-        return {};
-    }
-
     RuntimeConfiguration configuration_;
     std::unique_ptr<codec::CodecBackend> backend_;
-    std::optional<NumericsIdentity> identity_;
-    std::vector<std::byte> identity_section_;
-    // The last random-access unit decoded opened an exact-numerics sequence.
-    bool exact_sequence_{false};
+    codec::StreamNumerics numerics_{"dcvcrt", std::string(payload_profile)};
     std::uint64_t encoded_frames_{0};
     codec::SequenceState encoder_state_;
     codec::SequenceState decoder_state_;
