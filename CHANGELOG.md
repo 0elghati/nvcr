@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.0](https://github.com/0elghati/nvcr/compare/v1.5.1...v1.6.0) (2026-11-14)
+
+
+### Features
+
+* **codec:** codecs declare the numerics profiles they run under ([#248](https://github.com/0elghati/nvcr/issues/248)) ([84f6cf4](https://github.com/0elghati/nvcr/commit/84f6cf47d298b84efdec2db8f8def18600787f4f))
+* **dcvcrt:** DCVC-RT under the nvcr.fx.v1 exact profile on TensorRT and ONNX Runtime CPU ([#252](https://github.com/0elghati/nvcr/issues/252)) ([14ae8dc](https://github.com/0elghati/nvcr/commit/14ae8dc03fdcf745ce2147e8552552812a4739e8))
+* **dcvcuf:** DCVC-UF under the nvcr.fx.v1 exact profile on TensorRT and ONNX Runtime CPU ([#254](https://github.com/0elghati/nvcr/issues/254)) ([8680ab9](https://github.com/0elghati/nvcr/commit/8680ab90f0a9ab89a5131e0da0c4c6db92075f9b))
+
 ## [1.5.1](https://github.com/0elghati/nvcr/compare/v1.5.0...v1.5.1) (2026-11-12)
 
 
