@@ -55,11 +55,16 @@ ENGINE_PROFILES = ("qcif", "cif", "360p", "540p", "720p", "1080p")
 BACKEND_PROFILES = {
     "dcvcrt": ENGINE_PROFILES,
     "mlvc": ("s-perceptual", "perceptual", "psnr"),
+    "dcvcuf": ("1080p",),
 }
 # Each backend has its own rolling release: installers released before MLVC
 # reject any catalog entry whose profile they do not know.
-BACKEND_ASSET_RELEASES = {"dcvcrt": "engine-assets", "mlvc": "engine-assets-mlvc"}
-MODEL_BACKENDS = {"dcvcrt-cvpr2025": "dcvcrt", "mlvc": "mlvc"}
+BACKEND_ASSET_RELEASES = {
+    "dcvcrt": "engine-assets",
+    "mlvc": "engine-assets-mlvc",
+    "dcvcuf": "engine-assets-dcvcuf",
+}
+MODEL_BACKENDS = {"dcvcrt-cvpr2025": "dcvcrt", "mlvc": "mlvc", "dcvcuf-cvpr2026-hts": "dcvcuf"}
 CATALOG_SCHEMA = "nvcr.engine-catalog.v1"
 CATALOG_FILENAME = "nvcr-engine-catalog.json"
 DEFAULT_REPOSITORY = "0elghati/nvcr"
@@ -93,6 +98,41 @@ RUNTIME_ASSETS = (
     "p_quant.bin",
     "p_frame_manifest.json",
 )
+# DCVC-UF's plans (scripts/backends/dcvcuf/export_tensorrt_stages.py) and tables.
+DCVCUF_FILES = (
+    *(f"{stage}.plan" for stage in (
+        "i_encoder", "i_decoder", "i_hyper_encoder", "i_hyper_decoder",
+        "i_spatial_prior_1", "i_spatial_prior_2", "i_spatial_prior_3",
+        "p_feature_extractor", "p_feature_adaptor_i", "p_feature_adaptor_m",
+        "p_encoder", "p_decoder", "p_hyper_encoder", "p_hyper_decoder", "p_prior",
+        "p_spatial_prior_1", "p_spatial_prior_2", "p_spatial_prior_3",
+        "p_reconstruction", "p_reset",
+    )),
+    "stages.json",
+    "tables.bin",
+)
+# nvcr.fx.v1 (scripts/backends/<codec>/add_fx_plans.py): a plan per normative
+# stage, built from the program in normative/, and FP16 plans around them.
+FX_STAGES = {
+    "dcvcrt": (
+        "i_prior", "i_spatial_prior_1", "i_spatial_prior_2", "i_spatial_prior_3",
+        "i_synthesis", "p_reference_frame", "p_reference_feature", "p_reset_frame",
+        "p_prior", "p_spatial_prior", "p_synthesis",
+    ),
+    "dcvcuf": (
+        "i_prior", "i_spatial_prior_1", "i_spatial_prior_2", "i_spatial_prior_3",
+        "i_synthesis", "p_reference_frame", "p_reset_reference", "p_reference_memory",
+        "p_prior", "p_spatial_prior_1", "p_spatial_prior_2", "p_spatial_prior_3",
+        "p_synthesis",
+    ),
+}
+FX_FP16_PLANS = {
+    "dcvcrt": ("p_encode.plan", "p_display.plan"),
+    "dcvcuf": (
+        "i_analysis.plan", "i_hyper_analysis.plan", "p_hyper_analysis.plan",
+        "p_encode.plan", "p_display.plan",
+    ),
+}
 
 # These filenames are part of the pinned DCVC-RT artifact contract. Keeping
 # them here prevents a partially exported model from being stamped into an
@@ -341,6 +381,17 @@ def mlvc_bundle_files(root: Path, checksums: dict[str, str]) -> set[str]:
     return files
 
 
+def validate_fx_programs(root: Path, backend: str) -> None:
+    """Each fx plan must be built from the normative/ program the runtime hashes."""
+    normative = root / "normative"
+    if not (normative / "fx_entropy.json").is_file():
+        raise ValidationError("fx engine bundle is missing normative/fx_entropy.json")
+    for stage in FX_STAGES[backend]:
+        program = sha256(normative / f"{stage}.fxprog.json")
+        if load_json(root / f"{stage}.fx.plan.json").get("program_sha256") != program:
+            raise ValidationError(f"{stage}.fx.plan does not match normative/{stage}.fxprog.json")
+
+
 def bundle_backend(manifest: dict[str, Any]) -> str:
     backend = MODEL_BACKENDS.get(str(manifest.get("model_profile_id")))
     if backend is None:
@@ -439,11 +490,19 @@ def validate_engine_bundle(root: Path) -> dict[str, Any]:
             extra = sorted(set(checksums) - mlvc_files)
             raise ValidationError(f"checksum set mismatch; missing={missing}, extra={extra}")
     else:
-        required = set(REQUIRED_PLANS + RUNTIME_ASSETS)
-        if set(checksums) != required:
-            missing = sorted(required - set(checksums))
-            extra = sorted(set(checksums) - required)
+        names = set(checksums)
+        required = set(REQUIRED_PLANS + RUNTIME_ASSETS if backend == "dcvcrt" else DCVCUF_FILES)
+        fx = {f"{stage}.fx.plan{end}" for stage in FX_STAGES[backend] for end in ("", ".json")}
+        fx.update(FX_FP16_PLANS[backend])
+        has_fx = any(".fx.plan" in name for name in names)
+        if has_fx:
+            required |= fx
+        if not required <= names or not names <= required | fx:
+            missing = sorted(required - names)
+            extra = sorted(names - required - fx)
             raise ValidationError(f"checksum set mismatch; missing={missing}, extra={extra}")
+        if has_fx:
+            validate_fx_programs(root, backend)
     manifest_hashes = manifest.get("files")
     if not isinstance(manifest_hashes, dict) or manifest_hashes != checksums:
         raise ValidationError("engine manifest file hashes do not match engine.sha256")
@@ -454,6 +513,8 @@ def validate_engine_bundle(root: Path) -> dict[str, Any]:
     if backend == "mlvc":
         if checksums["bundle_manifest.json"] != manifest["model_profile_sha256"]:
             raise ValidationError("MLVC bundle manifest identity mismatch")
+        return manifest
+    if backend == "dcvcuf":
         return manifest
     if sha256(root / "i_frame_manifest.json") != manifest["i_model_manifest_sha256"]:
         raise ValidationError("I-frame model manifest identity mismatch")

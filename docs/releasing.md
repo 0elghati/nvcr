@@ -99,9 +99,15 @@ contains a compatible entry.
 Each backend has its own rolling release and catalog, because installers
 released before MLVC reject entries they do not know: DCVC-RT uses
 `engine-assets`, MLVC uses `engine-assets-mlvc` (for example
-`nvcr-engines-linux-amd64-sm120-mlvc-perceptual.tar.gz`). The catalog merge
-refuses a release that would mix backends. Stage MLVC bundles with
+`nvcr-engines-linux-amd64-sm120-mlvc-perceptual.tar.gz`) and DCVC-UF uses
+`engine-assets-dcvcuf`. The catalog merge refuses a release that would mix
+backends. Stage MLVC bundles with
 `scripts/release_engine_assets.sh --asset-release engine-assets-mlvc`.
+
+A bundle with nvcr.fx.v1 plans carries their programs in `normative/`.
+Installers up to 1.6.0 reject DCVC-RT bundles with these plans, so those go to
+`engine-assets-dcvcrt-fx` and install with
+`nvcr-artifacts install --asset-release engine-assets-dcvcrt-fx`.
 
 `nvcr-engine-catalog.json` uses schema `nvcr.engine-catalog.v1`. Every entry
 records archive hash and size, codec/model/target/engine profiles, architecture,

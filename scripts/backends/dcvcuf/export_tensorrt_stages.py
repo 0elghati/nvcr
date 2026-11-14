@@ -265,10 +265,8 @@ def write_bundle_manifest(args, bundle, stages, model_profile, device, sm_count)
     engine_profile = json.dumps(
         {"profile": tensorrt_stages.PROFILE,
          "stages": {stage: shape_arguments(stage) for stage in stages}}, sort_keys=True)
-    target_profile = json.dumps(
-        {"id": args.target_profile_id, "device": device, "multiprocessors": sm_count,
-         "cuda_runtime_version": args.cuda_runtime_version, "tensorrt": "10.9.0"},
-        sort_keys=True)
+    # The registered target profile, as the engine catalog checks it.
+    target_profile = Path(__file__).resolve().parents[3] / "configs/targets" / f"{args.target_profile_id}.json"
     manifest = {
         "format": 2,
         "schema": "nvcr.engine-bundle.v2",
@@ -276,12 +274,15 @@ def write_bundle_manifest(args, bundle, stages, model_profile, device, sm_count)
         "model_profile_id": MODEL_PROFILE_ID,
         "model_profile_sha256": sha256_text(model_profile),
         "target_profile_id": args.target_profile_id,
-        "target_profile_sha256": sha256_text(target_profile),
+        "target_profile_sha256": sha256(target_profile),
         "engine_profile_id": tensorrt_stages.PROFILE["name"],
         "engine_profile_sha256": sha256_text(engine_profile),
         "optimization_point": tensorrt_stages.PROFILE["name"],
         "precision": "fp16",  # tensor I/O; the build precision is in the report
         "shape_profile": "dynamic",
+        "visible_dimensions": {  # [width, height]
+            label: [tensorrt_stages.PROFILE[key][1], tensorrt_stages.PROFILE[key][0]]
+            for label, key in (("minimum", "frame_min"), ("optimum", "frame_opt"), ("maximum", "frame_max"))},
         "hardware_compatibility": "exact",
         "device_name": device["name"],
         "compute_capability_major": device["major"],

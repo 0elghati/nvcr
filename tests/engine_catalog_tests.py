@@ -729,5 +729,83 @@ class MlvcArtifactTests(unittest.TestCase):
         self.assertEqual(links, ["profiles/mlvc/s-perceptual"])
 
 
+def write_dcvcuf_bundle(bundle: Path, *, drop: tuple[str, ...] = ()) -> None:
+    """A DCVC-UF engine bundle with nvcr.fx.v1 plans, shaped like add_fx_plans.py's."""
+    normative = bundle / "normative"
+    normative.mkdir(parents=True)
+    (normative / "fx_entropy.json").write_text("{}")
+    files = {name: name.encode()
+             for name in (*artifacts.DCVCUF_FILES, *artifacts.FX_FP16_PLANS["dcvcuf"])}
+    for stage in artifacts.FX_STAGES["dcvcuf"]:
+        program = json.dumps({"stage": stage}).encode()
+        (normative / f"{stage}.fxprog.json").write_bytes(program)
+        files[f"{stage}.fx.plan"] = stage.encode()
+        files[f"{stage}.fx.plan.json"] = json.dumps(
+            {"program_sha256": sha256_bytes(program)}).encode()
+    for name in drop:
+        files.pop(name)
+    for name, data in files.items():
+        (bundle / name).write_bytes(data)
+    digests = {name: sha256_bytes(data) for name, data in files.items()}
+    checksums = "".join(f"{digests[name]}  {name}\n" for name in sorted(digests)).encode()
+    (bundle / "engine.sha256").write_bytes(checksums)
+    values = identity()
+    values.pop("device_id")
+    manifest = {
+        "format": 2, "schema": "nvcr.engine-bundle.v2", "kind": "nvcr-tensorrt-engine-bundle",
+        "model_profile_id": "dcvcuf-cvpr2026-hts", "model_profile_sha256": "a" * 64,
+        "target_profile_id": "rtx4070-ubuntu2404", "target_profile_sha256": "b" * 64,
+        "engine_profile_id": "1080p", "engine_profile_sha256": "c" * 64,
+        "optimization_point": "1080p", "shape_profile": "dynamic",
+        "visible_dimensions": {"minimum": [64, 64], "optimum": [1920, 1088],
+                               "maximum": [1920, 1088]},
+        "hardware_compatibility": "exact", "workspace_mib": 1024,
+        "builder_optimization_level": 5, "checksum_manifest": "engine.sha256",
+        "checksum_manifest_sha256": sha256_bytes(checksums), "files": digests,
+        "precision": "fp16",
+        **{key: values[key] for key in values
+           if key not in ("operating_system", "architecture")},
+    }
+    (bundle / "engine_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
+class FxArtifactTests(unittest.TestCase):
+    def test_fx_plans_come_complete_with_their_programs(self) -> None:
+        fx_files = {*artifacts.FX_FP16_PLANS["dcvcuf"],
+                    *(f"{stage}.fx.plan{end}" for stage in artifacts.FX_STAGES["dcvcuf"]
+                      for end in ("", ".json"))}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_dcvcuf_bundle(root / "full")
+            self.assertEqual(artifacts.validate_engine_bundle(root / "full")["model_profile_id"],
+                             "dcvcuf-cvpr2026-hts")
+            write_dcvcuf_bundle(root / "native", drop=tuple(fx_files))
+            artifacts.validate_engine_bundle(root / "native")
+            write_dcvcuf_bundle(root / "partial", drop=("p_synthesis.fx.plan",))
+            with self.assertRaisesRegex(artifacts.ValidationError,
+                                        r"missing=\['p_synthesis.fx.plan'\]"):
+                artifacts.validate_engine_bundle(root / "partial")
+            (root / "full/normative/p_synthesis.fxprog.json").write_text("{}")
+            with self.assertRaisesRegex(artifacts.ValidationError, "p_synthesis.fx.plan does not"):
+                artifacts.validate_engine_bundle(root / "full")
+
+    def test_archive_carries_normative_programs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stem = "nvcr-engines-rtx4070-ubuntu2404-dcvcuf-cvpr2026-hts-1080p"
+            asset = root / "stage" / stem
+            write_dcvcuf_bundle(asset / "dcvcuf")
+            rows = "".join(f"{sha256_bytes(path.read_bytes())}  ./{path.relative_to(asset)}\n"
+                           for path in sorted(asset.rglob("*")) if path.is_file())
+            (asset / "ENGINE-ASSET-MANIFEST.sha256").write_text(rows, encoding="utf-8")
+            archive = root / f"{stem}.tar.gz"
+            with tarfile.open(archive, "w:gz") as stream:
+                stream.add(asset, arcname=stem)
+            extracted = artifacts.extract_engine_archive(archive, root / "extract")
+            self.assertEqual(extracted.name, "dcvcuf")
+            self.assertEqual(archive.name, artifacts.expected_asset_filename(
+                "rtx4070-ubuntu2404", "dcvcuf-cvpr2026-hts", "1080p"))
+
+
 if __name__ == "__main__":
     unittest.main()
