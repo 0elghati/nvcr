@@ -176,13 +176,15 @@ class Emitter:
         return p.node("add", [a, b], half, label)
 
     def dcb(self, m, x):
-        """DepthConvBlock: 1x1 + WSiLU, depthwise, 1x1 + residual, 1x1 + WSiLU chunk-add, 1x1 + residual(s)."""
+        """DepthConvBlock: 1x1 + WSiLU, depthwise, 1x1 + residual, 1x1 + WSiLU chunk-add, 1x1 + residual(s).
+        DCVC-RT's chunk-add sums the two halves of the channels, DCVC-UF's four interleaved channels."""
         if m.adaptor is not None:
             x = self.conv(m.adaptor, x)
         t = self.conv(m.dc[0], x, lut=True)
         t = self.depthwise(m.dc[2], t)
         out = self.conv(m.dc[3], t, res=(x,))
-        t = self.conv(m.ffn[0], out, lut=True, group=2, perm=True)
+        interleaved = hasattr(m.ffn[1], "wsilu")
+        t = self.conv(m.ffn[0], out, lut=True, group=4 if interleaved else 2, perm=not interleaved)
         return self.conv(m.ffn[2], t, res=(out, x) if m.shortcut else (out,))
 
     def run(self, m, x):
@@ -207,6 +209,8 @@ class Emitter:
         if isinstance(m, ResidualBlockUpsample):
             return self.run(m.conv, self.run(m.up, x))
         if isinstance(m, ResidualBlockWithStride2):
+            if m.down.kernel_size == (1, 1):  # DCVC-UF: pixel_unshuffle(2), then a 1x1 conv
+                return self.run(m.conv, self.gemm(m.down, self.shuffle(x, 2, "unshuffle", inverse=True)))
             return self.run(m.conv, self.conv(m.down, x))
         if isinstance(m, DepthConvBlock):
             return self.dcb(m, x)

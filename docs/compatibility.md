@@ -95,6 +95,28 @@ Under `nvcr.fx.v1` it runs at 29.4 fps decode and 24.5 fps encode, against
 Evidence: [issue #216](../evidence/issue-216-cross-hardware-fix-20261104.md),
 [`nvcr.fx.v1`](../evidence/fx-dcvcrt-rtx4070-20261112.md).
 
+### DCVC-UF capability matrix
+
+Same cell rules. Decoding a DCVC-UF HT-S stream encoded on a different provider
+or target:
+
+| Encoder | Decoder | Native numerics (default) | `nvcr.fx.v1` |
+|---|---|---|---|
+| TensorRT, RTX 4070 | TensorRT, same RTX 4070 and plans | `native`, bit-identical | `exact` |
+| TensorRT, RTX 4070 | ONNX Runtime CPU, same host | `unsupported` (no native path) | `exact` |
+| ONNX Runtime CPU | TensorRT, RTX 4070, same host | `unsupported` (no native path) | `untested` |
+| TensorRT, RTX 4070 | TensorRT, RTX 5060 Laptop | `unsupported` (desync detected) | `untested` |
+| Any | ONNX Runtime CUDA or QNN | `unsupported` | `unsupported` (profile not implemented; fails before decode) |
+
+Under `nvcr.fx.v1` the decoder's entropy decisions, decoded latents, feature
+memory and decoded features are bit-identical to the encoder's; the eight
+pictures of a chunk are drawn from that state in FP16 and are not part of the
+profile. At 1080p on the RTX 4070 it decodes at 60.2 fps and encodes at 61.0 fps,
+against 90.9 and 113.5 fps native (codec interval, diagnostic), at -1.5 % to
+-1.8 % BD-rate against native. Native remains DCVC-UF's default.
+Evidence: [`nvcr.fx.v1`](../evidence/fx-dcvcuf-rtx4070-20261112.md),
+[C13 cross-decode](../evidence/phase-c11-dcvcuf-tensorrt-20261102.md#cross-decode-of-identical-bytes-c13-c11-g4--2026-11-08).
+
 ## Format and codec position
 
 - `NVAU` is the versioned, bounded codec access-unit contract. Version 1 is the
