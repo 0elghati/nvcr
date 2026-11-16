@@ -33,8 +33,14 @@ tree at configure time; CMake runs it.
    python scripts/backends/dcvcuf/export_tensorrt_stages.py \
      --reference-root <dcvc-uf> --image-checkpoint cvpr2026_image.pth.tar \
      --image-checkpoint-sha256 <sha> --video-checkpoint cvpr2026_video_hts.pth.tar \
-     --video-checkpoint-sha256 <sha> --builder-optimization-level 5 --output-dir <out>
+     --video-checkpoint-sha256 <sha> --builder-optimization-level 5 \
+     --profile 1080p --output-dir <out>
    ```
+
+   `--profile` is one of the registered engine profiles, `qcif`, `cif`, `360p`,
+   `540p`, `720p` or `1080p`: the plans take frames from 64x64 up to that
+   resolution and are tuned at it. The ONNX graphs do not depend on the
+   profile, so one export serves all six through `--from-export`.
 
 2. Add the quantization and entropy tables from the native bundle:
 
@@ -49,7 +55,7 @@ tree at configure time; CMake runs it.
    `add_tensorrt_tables.py --tables <tables.bin> --tables-sha256 <sha>`.
 
 3. Run: `nvcr encode --codec dcvc-uf --engine-dir <out>/bundle ...`. Each plan's
-   execution context is sized for the 1080p profile; on a GPU shared with other
+   execution context is sized for its profile's largest frame; on a GPU shared with other
    work, `NVCR_TENSORRT_LOW_MEMORY_MODE=1` creates contexts per call instead.
 
 `tensorrt_stages.py` defines the stages. `port_glue_kernels.py` regenerates
