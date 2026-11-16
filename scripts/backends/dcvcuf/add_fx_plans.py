@@ -147,11 +147,23 @@ def main():
                 if conv.bias is not None:
                     conv.bias.data = conv.bias.data[order]
 
+    def fold(branches):
+        """In these blocks the sum moves into the 1x1 conv after the chunk-add, whose input weights repeat over the
+        four channel blocks: conv, WSiLU, conv, with no slices or sum left for TensorRT to copy."""
+        for m in branches.modules():
+            if isinstance(m, nn.Sequential) and len(m) == 3 and isinstance(m[1], WSiLUChunkAdd):
+                last = m[2]
+                wide = nn.Conv2d(4 * last.in_channels, last.out_channels, 1).to(last.weight)
+                wide.weight.data = last.weight.data.repeat(1, 4, 1, 1)
+                wide.bias.data = last.bias.data
+                m[1], m[2] = m[1].wsilu, wide
+
     ck = args.checkpoints or args.dcvcuf_root / "checkpoints"
     inet = load(ck / "cvpr2026_image.pth.tar", IMAGE_SHA256, DMCI())
     pnet = load(ck / "cvpr2026_video_hts.pth.tar", VIDEO_SHA256, DMC(ModelStructure.HTS))
     for net in (inet, pnet):
         contiguous(net)
+    fold(pnet.recon_head.conv2)  # the display's eight per-frame branches
     stages = json.loads((args.bundle / "stages.json").read_text())["stages"]
     profile = next(t["profile"] for t in stages["i_encoder"] if t["name"] == "frame")
     frames = {key: (profile[key][3], profile[key][2]) for key in ("min", "opt", "max")}  # (width, height)
