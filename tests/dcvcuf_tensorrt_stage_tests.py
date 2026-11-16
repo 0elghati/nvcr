@@ -7,7 +7,8 @@ import sys
 import tempfile
 import unittest
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts/backends/dcvcuf"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS = REPOSITORY_ROOT / "scripts/backends/dcvcuf"
 sys.path.insert(0, str(SCRIPTS))
 
 
@@ -68,24 +69,40 @@ class StageTableTests(unittest.TestCase):
                     self.assertGreater(channels, 0)
 
     def test_profile_axes_keep_upstream_scale_relations(self):
-        for key in ("min", "opt", "max"):
-            frame = stages.PROFILE[f"frame_{key}"]
-            with self.subTest(point=key):
-                latent = [stages.axis_size(size, "latent") for size in frame]
-                padded = [stages.axis_size(size, "latent_pad4") for size in frame]
-                self.assertEqual([size * 16 for size in latent], list(frame))
-                self.assertEqual([stages.axis_size(size, "feature") for size in frame],
-                                 [size * 2 for size in latent])
-                self.assertTrue(all(size % 4 == 0 for size in padded))
-                self.assertEqual([stages.axis_size(size, "hyper") * 4 for size in frame], padded)
-        for axis in ("frame", "feature", "latent", "hyper"):
-            shapes = stages.profile_shapes(8, axis)
-            for position in (2, 3):
-                self.assertLessEqual(shapes["min"][position], shapes["opt"][position])
-                self.assertLessEqual(shapes["opt"][position], shapes["max"][position])
+        for name, profile in stages.PROFILES.items():
+            for key in ("min", "opt", "max"):
+                frame = profile[f"frame_{key}"]
+                with self.subTest(profile=name, point=key):
+                    latent = [stages.axis_size(size, "latent") for size in frame]
+                    padded = [stages.axis_size(size, "latent_pad4") for size in frame]
+                    self.assertEqual([size * 16 for size in latent], list(frame))
+                    self.assertEqual([stages.axis_size(size, "feature") for size in frame],
+                                     [size * 2 for size in latent])
+                    self.assertTrue(all(size % 4 == 0 for size in padded))
+                    self.assertEqual([stages.axis_size(size, "hyper") * 4 for size in frame], padded)
+            for axis in ("frame", "feature", "latent", "latent_pad4", "hyper"):
+                shapes = stages.profile_shapes(8, axis, profile)
+                for position in (2, 3):
+                    self.assertLessEqual(shapes["min"][position], shapes["opt"][position])
+                    self.assertLessEqual(shapes["opt"][position], shapes["max"][position])
+
+    def test_profiles_cover_the_registered_resolutions_as_the_sessions_pad(self):
+        import json
+
+        for name, (width, height) in stages.RESOLUTIONS.items():
+            document = json.loads((REPOSITORY_ROOT / "configs/engine-profiles" / f"{name}.json")
+                                  .read_text(encoding="utf-8"))
+            self.assertEqual(document["visible_dimensions"]["optimum"], [width, height])
+        # 1080p is unchanged; 720p's 45-row latent pads to 48 rows, so 12 hyper rows.
+        self.assertEqual(stages.PROFILES["1080p"]["frame_max"], (1088, 1920))
+        self.assertEqual(stages.PROFILES["720p"]["frame_max"], (720, 1280))
+        self.assertEqual([stages.axis_size(720, axis) for axis in ("latent", "latent_pad4", "hyper")],
+                         [45, 48, 12])
+        with self.assertRaises(ValueError):
+            stages.axis_size(1080, "latent")
 
     def test_scalar_tensors_are_fixed_per_channel_scales(self):
-        self.assertEqual(stages.profile_shapes(384, "scalar"),
+        self.assertEqual(stages.profile_shapes(384, "scalar", stages.PROFILES["1080p"]),
                          {"min": [1, 384, 1, 1], "opt": [1, 384, 1, 1], "max": [1, 384, 1, 1]})
 
 
@@ -163,7 +180,7 @@ class CheckerMappingTests(unittest.TestCase):
             bundle.mkdir()
             contracts = {name: [
                 {"name": tensor, "access": access, "channels": channels, "axis": axis,
-                 "profile": stages.profile_shapes(channels, axis)}
+                 "profile": stages.profile_shapes(channels, axis, stages.PROFILES["1080p"])}
                 for access, tensors in (("read", inputs), ("write", outputs))
                 for tensor, channels, axis in tensors]
                 for name, (inputs, outputs) in stages.STAGES.items()}

@@ -55,7 +55,7 @@ ENGINE_PROFILES = ("qcif", "cif", "360p", "540p", "720p", "1080p")
 BACKEND_PROFILES = {
     "dcvcrt": ENGINE_PROFILES,
     "mlvc": ("s-perceptual", "perceptual", "psnr"),
-    "dcvcuf": ("1080p",),
+    "dcvcuf": ENGINE_PROFILES,
 }
 # Each backend has its own rolling release: installers released before MLVC
 # reject any catalog entry whose profile they do not know.

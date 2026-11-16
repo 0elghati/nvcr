@@ -30,12 +30,29 @@ AXES = {
     "scalar": None,
 }
 
-# 1080p shape profile on padded frame sizes (multiples of 64 at the minimum).
-PROFILE = {
-    "name": "1080p",
-    "frame_min": (64, 64),
-    "frame_opt": (1088, 1920),
-    "frame_max": (1088, 1920),
+# Visible (width, height) of each registered engine profile (configs/engine-profiles).
+RESOLUTIONS = {
+    "qcif": (176, 144),
+    "cif": (352, 288),
+    "360p": (640, 360),
+    "540p": (960, 540),
+    "720p": (1280, 720),
+    "1080p": (1920, 1080),
+}
+
+
+def padded(size):
+    """The sessions pad frames to multiples of 16."""
+    return -(-size // 16) * 16
+
+
+# Shape profiles on padded (height, width) frame sizes: every frame from 64x64 up
+# to the profile's resolution, tuned at that resolution.
+PROFILES = {
+    name: {"name": name, "frame_min": (64, 64),
+           "frame_opt": (padded(height), padded(width)),
+           "frame_max": (padded(height), padded(width))}
+    for name, (width, height) in RESOLUTIONS.items()
 }
 
 # name -> (inputs, outputs); each tensor is (name, channels, axis class).
@@ -111,13 +128,17 @@ def tensor_format(channels):
 
 
 def axis_size(frame_size, axis):
-    divisor = AXES[axis]
-    if divisor is None:
+    """Size along one axis for a padded frame size, padded as the sessions pad:
+    latents to multiples of 4 (pad_for_y), from which the hyper latent follows."""
+    if frame_size % 16:
+        raise ValueError(f"frame size {frame_size} is not a multiple of 16")
+    if AXES[axis] is None:
         return 1
-    size = frame_size // divisor
     if axis == "latent_pad4":
-        size = (size + 3) // 4 * 4
-    return size
+        return -(-frame_size // 16 // 4) * 4
+    if axis == "hyper":
+        return -(-frame_size // 16 // 4)
+    return frame_size // AXES[axis]
 
 
 def tensor_shape(channels, axis, frame_hw):
@@ -126,8 +147,8 @@ def tensor_shape(channels, axis, frame_hw):
     return [1, channels, axis_size(frame_hw[0], axis), axis_size(frame_hw[1], axis)]
 
 
-def profile_shapes(channels, axis):
-    return {key: tensor_shape(channels, axis, PROFILE[f"frame_{key}"])
+def profile_shapes(channels, axis, profile):
+    return {key: tensor_shape(channels, axis, profile[f"frame_{key}"])
             for key in ("min", "opt", "max")}
 
 
