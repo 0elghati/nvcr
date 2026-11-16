@@ -789,6 +789,22 @@ class FxArtifactTests(unittest.TestCase):
             with self.assertRaisesRegex(artifacts.ValidationError, "p_synthesis.fx.plan does not"):
                 artifacts.validate_engine_bundle(root / "full")
 
+    def test_dcvcrt_fx_bundles_stay_off_the_legacy_release(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            bundle = Path(temporary) / "dcvcrt"
+            bundle.mkdir()
+            (bundle / "p_encode.plan").write_bytes(b"")
+            for release in ("engine-assets", None):
+                catalog_helper.check_asset_release(bundle, release)  # native: anywhere
+            (bundle / "p_synthesis.fx.plan").write_bytes(b"")
+            for release in ("engine-assets", None):
+                with self.assertRaisesRegex(SystemExit, "go to engine-assets-dcvcrt-fx"):
+                    catalog_helper.check_asset_release(bundle, release)
+            catalog_helper.check_asset_release(bundle, "engine-assets-dcvcrt-fx")
+            # Every DCVC-UF installer knows nvcr.fx.v1.
+            uf = bundle.rename(Path(temporary) / "dcvcuf")
+            catalog_helper.check_asset_release(uf, "engine-assets-dcvcuf")
+
     def test_archive_carries_normative_programs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

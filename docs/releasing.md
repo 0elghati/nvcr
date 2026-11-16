@@ -107,7 +107,8 @@ backends. Stage MLVC bundles with
 A bundle with nvcr.fx.v1 plans carries their programs in `normative/`.
 Installers up to 1.6.0 reject DCVC-RT bundles with these plans, so those go to
 `engine-assets-dcvcrt-fx` and install with
-`nvcr-artifacts install --asset-release engine-assets-dcvcrt-fx`.
+`nvcr-artifacts install --asset-release engine-assets-dcvcrt-fx`. The upload
+workflow refuses them on any other release.
 
 `nvcr-engine-catalog.json` uses schema `nvcr.engine-catalog.v1`. Every entry
 records archive hash and size, codec/model/target/engine profiles, architecture,

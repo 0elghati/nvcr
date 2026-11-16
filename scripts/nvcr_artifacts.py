@@ -64,6 +64,9 @@ BACKEND_ASSET_RELEASES = {
     "mlvc": "engine-assets-mlvc",
     "dcvcuf": "engine-assets-dcvcuf",
 }
+# Installers up to 1.6.0 check DCVC-RT's exact native file set, so DCVC-RT
+# bundles with nvcr.fx.v1 plans have a release of their own.
+FX_ASSET_RELEASES = {"dcvcrt": "engine-assets-dcvcrt-fx"}
 MODEL_BACKENDS = {"dcvcrt-cvpr2025": "dcvcrt", "mlvc": "mlvc", "dcvcuf-cvpr2026-hts": "dcvcuf"}
 CATALOG_SCHEMA = "nvcr.engine-catalog.v1"
 CATALOG_FILENAME = "nvcr-engine-catalog.json"
