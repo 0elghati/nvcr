@@ -76,6 +76,8 @@ def parse_args(argv=None):
     parser.add_argument("--cuda-runtime-version", type=int, default=12080,
                         help="CUDA runtime the NVCR process uses (major*1000+minor*10)")
     parser.add_argument("--target-profile-id", default="rtx4070-ubuntu2404")
+    parser.add_argument("--profile", choices=tuple(tensorrt_stages.PROFILES), default="1080p",
+                        help="engine profile: frames from 64x64 up to this resolution")
     parser.add_argument("--stage", action="append", help="Restrict to these stages")
     parser.add_argument("--skip-build", action="store_true", help="Export and check ONNX only")
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -100,8 +102,7 @@ def reuse_export(args, stages, onnx_dir):
         raise ValueError(f"{args.from_export}/report.json is not a DCVC-UF TensorRT export report")
     if source["upstream"]["commit"] != PINNED_REFERENCE_COMMIT:
         raise ValueError("export was made from a different upstream commit")
-    if source["profile"] != json.loads(json.dumps(tensorrt_stages.PROFILE)):
-        raise ValueError("export profile differs from tensorrt_stages.PROFILE")
+    # The graphs have dynamic spatial axes, so an export serves every profile.
     stage_reports = {}
     for stage in stages:
         expected = source["stages"][stage]["onnx_sha256"]
@@ -204,11 +205,11 @@ def check_onnx(stage, module, path):
     return results
 
 
-def shape_arguments(stage):
+def shape_arguments(stage, profile):
     inputs, _ = tensorrt_stages.STAGES[stage]
     shapes = {"min": [], "opt": [], "max": []}
     for name, channels, axis in inputs:
-        for key, shape in tensorrt_stages.profile_shapes(channels, axis).items():
+        for key, shape in tensorrt_stages.profile_shapes(channels, axis, profile).items():
             shapes[key].append(f"{name}:{'x'.join(map(str, shape))}")
     return {key: ",".join(values) for key, values in shapes.items()}
 
@@ -219,7 +220,7 @@ def io_formats(tensors):
 
 
 def build_engine(args, stage, onnx_path, bundle, timing_cache):
-    shapes = shape_arguments(stage)
+    shapes = shape_arguments(stage, tensorrt_stages.PROFILES[args.profile])
     command = [
         str(args.trtexec), f"--onnx={onnx_path}", f"--saveEngine={bundle / (stage + '.plan')}",
         f"--minShapes={shapes['min']}", f"--optShapes={shapes['opt']}",
@@ -258,17 +259,16 @@ def multiprocessor_count(device):
 
 
 def write_bundle_manifest(args, bundle, stages, model_profile, device, sm_count):
+    profile = tensorrt_stages.PROFILES[args.profile]
     files = {path.name: sha256(path) for path in sorted(bundle.glob("*.plan"))}
     files["stages.json"] = sha256(bundle / "stages.json")
     checksums = "".join(f"{digest}  {name}\n" for name, digest in sorted(files.items()))
     (bundle / "engine.sha256").write_text(checksums, encoding="utf-8")
     engine_profile = json.dumps(
-        {"profile": tensorrt_stages.PROFILE,
-         "stages": {stage: shape_arguments(stage) for stage in stages}}, sort_keys=True)
-    target_profile = json.dumps(
-        {"id": args.target_profile_id, "device": device, "multiprocessors": sm_count,
-         "cuda_runtime_version": args.cuda_runtime_version, "tensorrt": "10.9.0"},
-        sort_keys=True)
+        {"profile": profile,
+         "stages": {stage: shape_arguments(stage, profile) for stage in stages}}, sort_keys=True)
+    # The registered target profile, as the engine catalog checks it.
+    target_profile = Path(__file__).resolve().parents[3] / "configs/targets" / f"{args.target_profile_id}.json"
     manifest = {
         "format": 2,
         "schema": "nvcr.engine-bundle.v2",
@@ -276,12 +276,15 @@ def write_bundle_manifest(args, bundle, stages, model_profile, device, sm_count)
         "model_profile_id": MODEL_PROFILE_ID,
         "model_profile_sha256": sha256_text(model_profile),
         "target_profile_id": args.target_profile_id,
-        "target_profile_sha256": sha256_text(target_profile),
-        "engine_profile_id": tensorrt_stages.PROFILE["name"],
+        "target_profile_sha256": sha256(target_profile),
+        "engine_profile_id": profile["name"],
         "engine_profile_sha256": sha256_text(engine_profile),
-        "optimization_point": tensorrt_stages.PROFILE["name"],
+        "optimization_point": profile["name"],
         "precision": "fp16",  # tensor I/O; the build precision is in the report
         "shape_profile": "dynamic",
+        "visible_dimensions": {  # [width, height]
+            label: [profile[key][1], profile[key][0]]
+            for label, key in (("minimum", "frame_min"), ("optimum", "frame_opt"), ("maximum", "frame_max"))},
         "hardware_compatibility": "exact",
         "device_name": device["name"],
         "compute_capability_major": device["major"],
@@ -301,14 +304,14 @@ def write_bundle_manifest(args, bundle, stages, model_profile, device, sm_count)
         json.dumps(manifest, indent=4, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def stage_contracts(stages):
+def stage_contracts(stages, profile):
     contracts = {}
     for stage in stages:
         inputs, outputs = tensorrt_stages.STAGES[stage]
         contracts[stage] = [
             {"name": name, "access": access, "channels": channels, "axis": axis,
              "format": tensorrt_stages.tensor_format(channels),
-             "profile": tensorrt_stages.profile_shapes(channels, axis)}
+             "profile": tensorrt_stages.profile_shapes(channels, axis, profile)}
             for access, tensors in (("read", inputs), ("write", outputs))
             for name, channels, axis in tensors]
     return contracts
@@ -330,8 +333,8 @@ def main(argv=None):
         source, stage_reports = reuse_export(args, stages, onnx_dir)
         commit = source["upstream"]["commit"]
         report = {key: source[key] for key in ("schema", "upstream", "checkpoints", "tools",
-                                               "environment", "onnx_opset", "onnx_tolerance",
-                                               "profile")}
+                                               "environment", "onnx_opset", "onnx_tolerance")}
+        report["profile"] = tensorrt_stages.PROFILES[args.profile]
         report["onnx_from_export"] = {"path": str(args.from_export),
                                       "report_sha256": sha256(args.from_export / "report.json")}
         report["build"] = {"precision": args.precision,
@@ -365,7 +368,7 @@ def main(argv=None):
                   "builder_optimization_level": args.builder_optimization_level,
                   "workspace_mib": args.workspace_mib},
         "onnx_opset": ONNX_OPSET, "onnx_tolerance": {"atol": ONNX_ATOL, "peak_rtol": ONNX_PEAK_RTOL},
-        "profile": tensorrt_stages.PROFILE,
+        "profile": tensorrt_stages.PROFILES[args.profile],
         "stages": {},
     }
     for stage in stages:
@@ -385,7 +388,7 @@ def main(argv=None):
 def build_bundle(args, stages, commit, report, onnx_dir, bundle):
     (bundle / "stages.json").write_text(
         json.dumps({"schema": "nvcr.dcvcuf.tensorrt_stages.v1", "model": MODEL_PROFILE_ID,
-                    "stages": stage_contracts(stages)}, indent=2) + "\n", encoding="utf-8")
+                    "stages": stage_contracts(stages, tensorrt_stages.PROFILES[args.profile])}, indent=2) + "\n", encoding="utf-8")
     if not args.skip_build:
         timing_cache = args.output_dir / "timing.cache"
         for stage in stages:

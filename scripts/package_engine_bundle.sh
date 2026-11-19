@@ -64,17 +64,22 @@ PY_NAME
 staging_root="$(mktemp -d "${TMPDIR:-/tmp}/nvcr-engine-package.XXXXXX")"
 trap 'rm -rf -- "$staging_root"' EXIT
 # The archive directory names the backend; MLVC bundles carry Microsoft's
-# libmlvc model bundle, DCVC-RT bundles derive from microsoft/DCVC.
-if [[ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["model_profile_id"])' \
-        "$engine_dir/engine_manifest.json")" == "mlvc" ]]; then
+# libmlvc model bundle, DCVC-RT and DCVC-UF bundles derive from microsoft/DCVC.
+case "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["model_profile_id"])' \
+        "$engine_dir/engine_manifest.json")" in
+mlvc)
     backend="mlvc"
     notices=("$script_dir/../third_party/mlvc_model/LICENSE.MIT"
-             "$script_dir/../third_party/mlvc_model/UPSTREAM.md")
-else
+             "$script_dir/../third_party/mlvc_model/UPSTREAM.md") ;;
+dcvcuf-*)
+    backend="dcvcuf"
+    notices=("$script_dir/../third_party/dcvcuf_rans/LICENSE.txt"
+             "$script_dir/../third_party/dcvcuf_rans/NOTICE.txt") ;;
+*)
     backend="dcvcrt"
     notices=("$script_dir/../third_party/dcvc_rt/LICENSE.MIT"
-             "$script_dir/../third_party/dcvc_rt/NOTICE.txt")
-fi
+             "$script_dir/../third_party/dcvc_rt/NOTICE.txt") ;;
+esac
 bundle_root="$staging_root/$asset_name/$backend"
 mkdir -p "$bundle_root"
 cp -p "$script_dir/../LICENSE" "$bundle_root/LICENSE"
@@ -99,6 +104,11 @@ while read -r digest filename extra || [[ -n "${digest:-}${filename:-}${extra:-}
     fi
     cp -p "$source_file" "$bundle_root/$filename"
 done <"$engine_dir/engine.sha256"
+# nvcr.fx.v1 reads its programs from normative/; ENGINE-ASSET-MANIFEST.sha256 covers them.
+if [[ -d "$engine_dir/normative" ]]; then
+    mkdir "$bundle_root/normative"
+    find "$engine_dir/normative" -maxdepth 1 -type f -exec cp -p -t "$bundle_root/normative" {} +
+fi
 "$script_dir/nvcr_artifacts.py" validate "$bundle_root" --json >/dev/null
 
 manifest_tmp="$staging_root/ENGINE-ASSET-MANIFEST.sha256.tmp"

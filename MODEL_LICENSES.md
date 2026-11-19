@@ -28,6 +28,20 @@ The model profile is `dcvcrt-cvpr2025`, defined in
 Checkpoint SHA-256 values are recorded in the model profile. Acquisition and
 conversion instructions are in [DCVC-RT artifacts](docs/dcvcrt-artifacts.md).
 
+## Pinned DCVC-UF model set
+
+The model profile is `dcvcuf-cvpr2026-hts`, from the same repository at commit
+`cbdae87a5445114cdc7f48816da63ea80bdeac40`, whose `LICENSE.txt` and
+`NOTICE.txt` are identical to DCVC-RT's pinned copies. They are retained as
+[LICENSE.txt](third_party/dcvcuf_rans/LICENSE.txt) and
+[NOTICE.txt](third_party/dcvcuf_rans/NOTICE.txt), and `dcvcuf` engine archives
+carry them.
+
+- Image checkpoint: `cvpr2026_image.pth.tar`, SHA-256
+  `b3b900de23f30e4fc437010ddffe6a5413a56d6cfd97fb6235adbcd2b6973302`
+- Video checkpoint: `cvpr2026_video_hts.pth.tar`, SHA-256
+  `565607d84943ee79072a5760d34a200d5724b4bb72c6bc24bfab41e8ae4f5f47`
+
 ## MLVC
 
 The MLVC adapter runs Microsoft's MLVC ONNX model bundles. The

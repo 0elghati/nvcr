@@ -106,17 +106,29 @@ def download(url: str, destination: Path) -> None:
     )
 
 
+def check_asset_release(bundle_root: Path, asset_release: str | None) -> None:
+    """A bundle whose backend gives nvcr.fx.v1 plans their own release goes only there."""
+    fx_release = artifacts.FX_ASSET_RELEASES.get(bundle_root.name)
+    if fx_release is not None and asset_release != fx_release and any(
+        bundle_root.glob("*.fx.plan")
+    ):
+        fail(f"{bundle_root.name} bundles with nvcr.fx.v1 plans go to {fx_release}, "
+             f"not {asset_release}: installers up to 1.6.0 reject them")
+
+
 def validate_archive(
     archive: Path,
     *,
     archive_sha256: str,
     extract_root: Path,
     target_profiles_dir: Path,
+    asset_release: str | None,
 ) -> dict[str, object]:
     try:
         bundle_root = artifacts.extract_engine_archive(archive, extract_root)
     except artifacts.ValidationError as error:
         fail(str(error))
+    check_asset_release(bundle_root, asset_release)
     manifest_path = bundle_root / "engine_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     backend = bundle_root.name  # extract_engine_archive checked it against the model
@@ -230,6 +242,10 @@ def main() -> int:
     parser.add_argument("--existing-catalog", type=Path)
     parser.add_argument("--catalog-output", type=Path, required=True)
     parser.add_argument("--allow-file-url", action="store_true")
+    parser.add_argument(
+        "--asset-release", default=os.environ.get("NVCR_ENGINE_ASSET_RELEASE"),
+        help="rolling release tag the assets go to (default: $NVCR_ENGINE_ASSET_RELEASE)",
+    )
     args = parser.parse_args()
     if args.assets_file is not None and args.assets_text is not None:
         fail("use either --assets-file or --assets-text")
@@ -261,6 +277,7 @@ def main() -> int:
                 archive_sha256=actual_sha256,
                 extract_root=args.extract_dir,
                 target_profiles_dir=args.target_profiles_dir,
+                asset_release=args.asset_release,
             )
         )
         upload_files.extend((archive, checksum))
