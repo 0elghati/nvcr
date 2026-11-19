@@ -233,8 +233,8 @@ On the S25 they produced byte-identical streams and reconstructions to
 ONNX Runtime's defaults while cutting the mean model time at 640x360 from
 13.8 ms to 2.4 ms (encode) and from 15.3 ms to 3.2 ms (decode). They are not
 provider defaults: as defaults, QNN failed to finalize DCVC-RT's `i_analysis`
-graph. Other codecs keep ONNX Runtime's defaults (`ORT_ENABLE_ALL`, backend
-path only).
+graph. DCVC-RT requests burst mode and finalization mode 3 but keeps
+`ORT_ENABLE_ALL` (roadmap C15; not yet measured on a device).
 
 `onnxruntime-qnn` also caches compiled HTP graphs as ONNX Runtime EPContext
 models, by default in `<bundle>/.nvcr-cache`. The cache file name is a digest

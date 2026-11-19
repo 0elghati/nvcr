@@ -940,6 +940,12 @@ public:
                     descriptor.artifact.provider_id = configuration.provider.id;
                     descriptor.artifact.precision = "fp16";
                     descriptor.artifact.path = bundle_root.string();
+                    // MLVC's QNN speed settings, minus ORT_DISABLE_ALL: that one
+                    // makes QNN fail to finalize i_analysis (C10 evidence).
+                    descriptor.provider_options = {
+                        {"qnn.htp_performance_mode", "burst"},
+                        {"qnn.htp_graph_finalization_optimization_mode", "3"},
+                    };
                     auto loaded = session_->load_stage(std::move(descriptor));
                     if (!loaded) return loaded.error();
                     stages.push_back(std::move(loaded.value()));
