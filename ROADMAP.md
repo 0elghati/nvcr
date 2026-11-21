@@ -1,6 +1,6 @@
 # NVCR roadmap
 
-Last reviewed: 2026-11-16
+Last reviewed: 2026-11-21
 
 ## Product direction
 
@@ -60,6 +60,29 @@ not count as additional production codecs/providers or performance baselines.
 | Compatibility classes | Experimental | Compare against complete exact baselines |
 | Cross-target decode (issue #216) | In progress (C14) | Native streams decode only on the encoding target and fail cleanly elsewhere with `malformed_bitstream`. Streams encoded with `--numerics nvcr.intconv.v1` decode bit-identically, I- and P-frames, across TensorRT (RTX 4070) and ONNX Runtime CPU, at no BD-rate cost against FP32 (-0.089%; FP16 path +0.064%) but at about 37% of native 1080p decode speed. Under `nvcr.fx.v1`, TensorRT and ONNX Runtime CPU decoders keep a state bit-identical to the encoder's, and 1080p decode runs at 29.4 fps against 47.6 native at +0.16% BD-rate. DCVC-UF HT-S runs under `nvcr.fx.v1` too: TensorRT and ONNX Runtime CPU decoders keep the encoder's state, 1080p decode at 60.2 fps against 90.9 native, at -1.5 % to -1.8 % BD-rate against native. RTX 4070 bundles with fx plans for every registered resolution, both codecs, pass stage conformance and a packaging round trip and are staged for `engine-assets-dcvcrt-fx` and `engine-assets-dcvcuf` 2026-11-16, not yet in the catalogs ([fx bundle evidence](evidence/fx-engine-bundles-rtx4070-20261116.md)). Open: RTX 4070 to RTX 5060, catalog publication after #256, QNN; see the capability matrices for [DCVC-RT](docs/compatibility.md#dcvc-rt-capability-matrix) and [DCVC-UF](docs/compatibility.md#dcvc-uf-capability-matrix) |
 | Public C++ API/ABI | Release policy adopted | Preserve public API compatibility in patch and minor releases; require a major release for breaking changes. Rebuild applications when upgrading; cross-release ABI compatibility is not guaranteed. |
+| Artifact registry and bundle lifecycle | Deferred design revisit; no current priority change | Reassess the distribution backend separately from the catalog and lifecycle mechanism. Prototype OCI alongside GitHub Releases before choosing a migration path; see the [artifact registry strategy](docs/artifact-registry-strategy.md) |
+
+## Deferred artifact registry and bundle lifecycle revisit
+
+This revisit is recorded for later and does not displace the active codec and
+provider qualification work.
+
+1. **Distribution backend.** Reassess rolling GitHub Releases against OCI,
+   object storage, Hugging Face Hub, and NGC. The first experiment should
+   dual-publish one existing bundle to an OCI registry, using its digest as the
+   immutable identity while keeping GitHub Releases available to current
+   clients.
+2. **Registry mechanism.** Separate artifact storage from discovery and
+   selection. Specify a signed, versioned compatibility index; atomic
+   publication; concurrent-publisher protection; provenance and conformance
+   attachments; installation receipts; rollback, deprecation, revocation,
+   mirroring, offline use, and garbage collection.
+
+No backend switch is approved by this entry. The alternatives, smallest useful
+prototype, migration path, and acceptance gates are recorded in the
+[artifact registry strategy](docs/artifact-registry-strategy.md). Resolution
+coverage and exact-versus-dynamic plan selection remain a separate decision in
+the [engine bundle resolution strategy](docs/engine-bundle-resolution.md).
 
 ## Active v2 work
 
