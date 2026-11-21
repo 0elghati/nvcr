@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/0elghati/nvcr/compare/v1.6.0...v1.7.0) (2026-11-21)
+
+
+### Features
+
+* **release:** publish nvcr.fx.v1 and DCVC-UF engine bundles ([#256](https://github.com/0elghati/nvcr/issues/256)) ([cc9fcc1](https://github.com/0elghati/nvcr/commit/cc9fcc158b79978201e36f9ed16cda4ac6cf9f40))
+
 ## [1.6.0](https://github.com/0elghati/nvcr/compare/v1.5.1...v1.6.0) (2026-11-14)
 
 
