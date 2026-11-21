@@ -30,6 +30,8 @@ what it is for before asking you to run commands.
 - [Codec/provider integration status](codec-provider-matrix.md)
 - [Long-term vision](NVCR_VISION.md)
 - [Architecture](architecture.md)
+- [Engine bundle resolution strategy](engine-bundle-resolution.md)
+- [Artifact registry strategy](artifact-registry-strategy.md)
 - [v2 codec/provider boundary RFC](provider-boundary-v2.md)
 - [C++ API](reference.md)
 - [DCVC-RT integration](dcvcrt-integration.md)
