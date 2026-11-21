@@ -733,7 +733,8 @@ public:
 
     // Prepares the runtime, stream and scratch arena and validates the bundle
     // identity, target and file digests. Codecs then load their stages with
-    // load_stage() and call finalize_stages() before executing.
+    // load_stage() and call finalize_stages() before executing; a codec that
+    // holds only the generic IProviderSession is finalized by its first submit().
     [[nodiscard]] Result<void> initialize(const RuntimeConfiguration& configuration);
     [[nodiscard]] Result<session_api::ExecutableStage> load_stage(
         TensorRTStageSpec specification, std::string codec_id);

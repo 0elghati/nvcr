@@ -12,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -56,6 +57,47 @@ session_api::ExecutableStageDescriptor synthesis_descriptor(const std::filesyste
     return descriptor;
 }
 
+// Codecs that hold only the generic IProviderSession never call
+// finalize_stages(): their first submission finalizes the session.
+void check_first_submission_finalizes(
+    const nvcr::RuntimeConfiguration& configuration, const std::filesystem::path& root) {
+    auto created = nvcr::tensorrt::make_provider_session(configuration);
+    expect(static_cast<bool>(created), "a generic provider session opens");
+    if (!created) return;
+    auto& session = *created.value();
+    auto stage = session.load_stage(synthesis_descriptor(root));
+    expect(static_cast<bool>(stage), "the generic session loads the stage");
+    if (!stage) return;
+
+    struct Binding {
+        std::string_view name;
+        std::vector<std::int64_t> shape;
+        session_api::TensorAccess access;
+    };
+    const Binding bindings[] = {
+        {"y_hat", {1, 256, 4, 4}, session_api::TensorAccess::read},
+        {"q_dec", {1, 368, 1, 1}, session_api::TensorAccess::read},
+        {"frame_hat", {1, 3, 64, 64}, session_api::TensorAccess::write},
+    };
+    std::vector<session_api::TensorView> views;
+    for (const auto& binding : bindings) {
+        std::size_t bytes = sizeof(std::uint16_t);
+        for (const auto extent : binding.shape) bytes *= static_cast<std::size_t>(extent);
+        auto buffer = session.allocate(bytes, session_api::MemoryDomain::provider_device);
+        expect(static_cast<bool>(buffer), "the generic session allocates device buffers");
+        if (!buffer) return;
+        views.push_back({binding.name, session_api::TensorDataType::float16, binding.shape,
+                         binding.access, {buffer.value(), 0, bytes}});
+    }
+    auto completion = session.submit(stage.value(), views, {});
+    if (!completion) std::cerr << completion.error().describe() << '\n';
+    expect(completion && completion.value()->wait(),
+           "the first submission finalizes an unfinalized session and executes");
+    auto* tensorrt_session = dynamic_cast<nvcr::tensorrt::TensorRTExecutionSession*>(&session);
+    expect(tensorrt_session != nullptr && !tensorrt_session->finalize_stages(),
+           "a session finalized by its first submission does not finalize again");
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -68,6 +110,8 @@ int main(int argc, char* argv[]) {
     configuration.artifacts.intra_engine_path = root;
     configuration.artifacts.model_id = "dcvcrt-cvpr2025";
     configuration.provider.id = "tensorrt";
+
+    check_first_submission_finalizes(configuration, root);
 
     auto created = nvcr::tensorrt::make_provider_session(configuration);
     if (!created) {
@@ -102,9 +146,9 @@ int main(int argc, char* argv[]) {
     auto stage = session->load_stage(synthesis_descriptor(root));
     expect(static_cast<bool>(stage), "a matching generic descriptor loads");
     expect(!session->load_stage(synthesis_descriptor(root)), "a stage loads at most once");
-    expect(!session->submit(stage ? stage.value() : nullptr, {}, {}),
-           "execution before finalize is rejected");
 
+    // A codec that owns the TensorRT session finalizes it explicitly. A submit()
+    // here would finalize it first (check_first_submission_finalizes).
     auto finalized = session->finalize_stages();
     expect(static_cast<bool>(finalized), "the session finalizes its loaded stages");
     if (!finalized) std::cerr << finalized.error().describe() << '\n';
@@ -113,6 +157,8 @@ int main(int argc, char* argv[]) {
     late.stage_id = late.artifact.component_id = "i_analysis.plan";
     late.artifact.path = (root / "i_analysis.plan").string();
     expect(!session->load_stage(late), "stages cannot be loaded after finalize");
+    expect(!session->submit(stage ? stage.value() : nullptr, {}, {}),
+           "a submission without the stage's tensors is rejected");
 
     if (stage && finalized) {
         const auto scope = session->allocation_scope();
