@@ -79,10 +79,10 @@ is not a rewrite.
 | Epic | Scope | Status |
 |---|---|---|
 | #260 | Version axes, capability negotiation, diagnostics | Inventory (#278) and capability vocabulary (#279) complete |
-| #261 | Portable codec packs and disconnected first use | **Active** (user direction 2026-11-23). #280 selection proposed for review in [the portable-pack record](docs/portable-pack-selection.md): MLVC-S on ONNX Runtime CPU, with DCVC-RT `nvcr.fx.v1` deferred until a CPU executor is measured. Next: #268, the pack schema and proof, and #281, the disconnected first-run harness |
+| #261 | Portable codec packs and disconnected first use | **Active** (user direction 2026-11-23). First pack: DCVC-RT under `nvcr.fx.v1` on ONNX Runtime CPU ([portable-pack record](docs/portable-pack-selection.md), revised after the #287 decision). Critical path: #294, making the CPU fx executor usable. Then #268, the pack schema and proof, and #281, the disconnected first-run harness |
 | #262 | Replaceable providers and progressive acceleration | Open; #282 provider-seam audit can run in parallel |
 | #263 | Capability registry, OCI evaluation, verified cache | Open; waits for measured pack layouts from #261 |
-| #264 | Stateful conformance, NVAU v2, interoperability profiles | Open |
+| #264 | Stateful conformance, NVAU v2, interoperability profiles | #287 core decision by user 2026-11-23: a supported path must be `exact` (state, entropy decisions and latents bit-identical; displayed pictures within one code value). `native` and bounded-quality paths stay experimental. The ADR, stream identification and conformance thresholds remain open |
 | #265 | FFmpeg integration and support promotion | Open |
 
 #261 exits when a complete installation contains the runtime, one portable
