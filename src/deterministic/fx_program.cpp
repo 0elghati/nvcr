@@ -413,7 +413,7 @@ Result<Program> load_program(const std::filesystem::path& directory, std::string
     return program;
 }
 
-Result<std::vector<Tensor>> run(const Program& program, std::span<const Tensor> inputs) {
+Result<std::vector<Tensor>> run(const Program& program, std::span<const Tensor> inputs, Kernels kernels) {
     if (inputs.size() != program.inputs.size()) return invalid(program.name + ": wrong number of inputs");
     std::vector<std::optional<Tensor>> tensors(program.tensor_names.size());
     for (std::size_t slot = 0; slot < inputs.size(); ++slot) {
@@ -449,10 +449,13 @@ Result<std::vector<Tensor>> run(const Program& program, std::span<const Tensor> 
             for (std::size_t r = 1; r < in.size(); ++r) {
                 if (in[r]->channels != op.out_channels / op.group) return invalid(program.name + ": residual channels");
             }
-            y = gemm(op, x, std::span<const Tensor* const>(in).subspan(1));
+            const auto residuals = std::span<const Tensor* const>(in).subspan(1);
+            y = kernels == Kernels::tiled ? gemm_tiled(op, x, residuals) : gemm(op, x, residuals);
             break;
         }
-        case Op::depthwise3x3: y = depthwise3x3(node.depthwise, x); break;
+        case Op::depthwise3x3:
+            y = kernels == Kernels::tiled ? depthwise3x3_tiled(node.depthwise, x) : depthwise3x3(node.depthwise, x);
+            break;
         case Op::mul: {
             const Tensor& b = *in[1];
             if (b.plane() != 1 && (b.height != x.height || b.width != x.width)) {

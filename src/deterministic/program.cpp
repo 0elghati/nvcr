@@ -3,6 +3,7 @@
 #include "../common/json.hpp"
 #include "../common/sha256.hpp"
 #include "det_math.hpp"
+#include "parallel.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -10,12 +11,7 @@
 #include <limits>
 #include <map>
 #include <optional>
-#include <thread>
 #include <utility>
-
-#if defined(__x86_64__) || defined(_M_X64)
-#include <xmmintrin.h>
-#endif
 
 namespace nvcr::deterministic {
 namespace {
@@ -315,47 +311,6 @@ Result<Node> parse_node(
     }
     node.output = tensors.define(output.value(), channels);
     return node;
-}
-
-// Clears flush-to-zero/denormals-are-zero for the calling thread so CPU results
-// keep denormals exactly like the GPU kernels.
-class DenormalGuard final {
-public:
-    DenormalGuard() {
-#if defined(__x86_64__) || defined(_M_X64)
-        saved_ = _mm_getcsr();
-        _mm_setcsr(saved_ & ~0x8040U);
-#endif
-    }
-    ~DenormalGuard() {
-#if defined(__x86_64__) || defined(_M_X64)
-        _mm_setcsr(saved_);
-#endif
-    }
-    DenormalGuard(const DenormalGuard&) = delete;
-    DenormalGuard& operator=(const DenormalGuard&) = delete;
-
-private:
-    [[maybe_unused]] unsigned int saved_{0};
-};
-
-template <typename Function>
-void parallel_for(std::int32_t count, Function function) {
-    const auto workers = static_cast<std::int32_t>(std::clamp<unsigned>(
-        std::thread::hardware_concurrency(), 1U, 16U));
-    if (workers <= 1 || count < 4) {
-        for (std::int32_t index = 0; index < count; ++index) function(index);
-        return;
-    }
-    std::vector<std::thread> threads;
-    threads.reserve(static_cast<std::size_t>(workers));
-    for (std::int32_t worker = 0; worker < workers; ++worker) {
-        threads.emplace_back([&, worker] {
-            const DenormalGuard guard;
-            for (std::int32_t index = worker; index < count; index += workers) function(index);
-        });
-    }
-    for (auto& thread : threads) thread.join();
 }
 
 void conv(const Program& program, const Node& node, const Tensor& input, Tensor& output) {

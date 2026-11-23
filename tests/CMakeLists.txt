@@ -196,6 +196,16 @@ target_link_libraries(nvcr_fx_program_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_fx_program_tests)
 add_test(NAME nvcr_fx_program COMMAND nvcr_fx_program_tests)
 
+# NVCR_FX_PROGRAM_DIR (optional): fx programs whose every stage the tiled CPU kernels also run.
+add_executable(nvcr_fx_executor_tests fx_executor_tests.cpp)
+target_include_directories(nvcr_fx_executor_tests PRIVATE "${PROJECT_SOURCE_DIR}/src")
+target_link_libraries(nvcr_fx_executor_tests PRIVATE NVCR::nvcr)
+nvcr_set_project_warnings(nvcr_fx_executor_tests)
+add_test(NAME nvcr_fx_executor COMMAND nvcr_fx_executor_tests)
+if(NVCR_FX_PROGRAM_DIR)
+    add_test(NAME nvcr_fx_executor_programs COMMAND nvcr_fx_executor_tests ${NVCR_FX_PROGRAM_DIR})
+endif()
+
 add_executable(nvcr_numerics_identity_tests numerics_identity_tests.cpp)
 target_link_libraries(nvcr_numerics_identity_tests PRIVATE NVCR::nvcr)
 nvcr_set_project_warnings(nvcr_numerics_identity_tests)

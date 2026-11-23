@@ -74,8 +74,13 @@ struct Program final {
 // SHA-256 (lowercase hex) of <directory>/<stage>.fxprog.json: the program's identity.
 [[nodiscard]] Result<std::string> program_digest(const std::filesystem::path& directory, std::string_view stage);
 
+// The reference kernels are the plain loops of fx.hpp; tiled computes the same
+// integers faster and stays checked against them.
+enum class Kernels : std::uint8_t { tiled, reference };
+
 // Runs the program on its inputs (program.inputs order) and returns its outputs
 // (program.outputs order), or the stage failure the spec defines.
-[[nodiscard]] Result<std::vector<Tensor>> run(const Program& program, std::span<const Tensor> inputs);
+[[nodiscard]] Result<std::vector<Tensor>> run(const Program& program, std::span<const Tensor> inputs,
+                                              Kernels kernels = Kernels::tiled);
 
 }  // namespace nvcr::deterministic::fx

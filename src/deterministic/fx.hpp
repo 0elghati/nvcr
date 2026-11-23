@@ -52,6 +52,9 @@ struct Gemm final {
 };
 
 [[nodiscard]] Result<Tensor> gemm(const Gemm& op, const Tensor& x, std::span<const Tensor* const> residuals);
+// gemm's integers, computed in pixel tiles on worker threads. On any failure it
+// returns gemm's own error, so both fail on exactly the same inputs.
+[[nodiscard]] Result<Tensor> gemm_tiled(const Gemm& op, const Tensor& x, std::span<const Tensor* const> residuals);
 
 struct Depthwise final {
     std::vector<std::int32_t> weights;  // [channels][3][3]
@@ -60,6 +63,8 @@ struct Depthwise final {
 };
 
 [[nodiscard]] Result<Tensor> depthwise3x3(const Depthwise& op, const Tensor& x);
+// depthwise3x3's integers, one channel per worker; same failures as depthwise3x3.
+[[nodiscard]] Result<Tensor> depthwise3x3_tiled(const Depthwise& op, const Tensor& x);
 // rsr(a * b, shift); b has a's channels or one, and a's size or 1x1 (broadcast).
 [[nodiscard]] Result<Tensor> mul(const Tensor& a, const Tensor& b, int shift);
 [[nodiscard]] Result<Tensor> affine(const Tensor& x, std::int64_t alpha, std::int64_t beta, int shift);
