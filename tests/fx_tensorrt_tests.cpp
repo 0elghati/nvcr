@@ -7,6 +7,7 @@
 //   run at 240x240 and 176x144, or a bundle's own plans run at the given sizes.
 
 #include "deterministic/fx_program.hpp"
+#include "fx_inputs.hpp"
 #include "provider/tensorrt/fx/ops.hpp"
 #include "provider/tensorrt/fx/plugins.hpp"
 
@@ -27,6 +28,7 @@
 namespace {
 
 namespace det = nvcr::deterministic::fx;
+namespace fx_inputs = nvcr::test::fx;
 namespace trt = nvcr::tensorrt::fx;
 
 int failures = 0;
@@ -97,7 +99,7 @@ std::optional<std::vector<det::Tensor>> run_plan(const std::vector<std::byte>& p
 
 void compare(const std::vector<std::byte>& plan, const det::Program& program, const std::vector<det::Tensor>& inputs,
              const std::string& frame) {
-    const auto reference = det::run(program, inputs);
+    const auto reference = det::run(program, inputs, det::Kernels::reference);
     const auto got = run_plan(plan, program, inputs);
     expect(reference.has_value() == got.has_value(), program.name + ": TensorRT and the reference agree on failure");
     if (!reference || !got) return;
@@ -106,48 +108,6 @@ void compare(const std::vector<std::byte>& plan, const det::Program& program, co
                program.name + "." + program.tensor_names[program.outputs[i]] + " is bit-identical");
     }
     std::cout << program.name << " at " << frame << ": identical\n";
-}
-
-// Seeded inputs at the scale the codec feeds: small integers at 2^-14, pictures in [0, 2^14], QP 37,
-// the spatial steps' parity masks and entropy symbols.
-det::Tensor input(const std::string& name, int channels, int height, int width, std::mt19937& rng) {
-    det::Tensor t{channels, height, width, {}};
-    std::normal_distribution<double> normal(0.0, name == "feature" || name.find("context") != std::string::npos ? 4.0 : 2.0);
-    std::uniform_int_distribution<std::int32_t> pixel(0, 1 << 14);
-    for (std::size_t i = 0; i < static_cast<std::size_t>(channels) * t.plane(); ++i) {
-        const auto at = static_cast<int>(i % t.plane());
-        if (name == "parity") {
-            t.values.push_back(static_cast<std::size_t>(2 * (at / width % 2) + at % width % 2) == i / t.plane() ? 1 : 0);
-        } else if (name == "symbols") {
-            t.values.push_back(static_cast<std::int32_t>(std::lround(normal(rng))));
-        } else if (name == "qp") {
-            t.values.push_back(37);
-        } else if (name == "frame") {
-            t.values.push_back(pixel(rng));
-        } else if (name == "latent_ref") {
-            t.values.push_back(0);
-        } else {
-            t.values.push_back(static_cast<std::int32_t>(std::lround(normal(rng))) * (1 << 14));
-        }
-    }
-    return t;
-}
-
-// Input shapes of a stage at a frame size (padded to 16); channels come from the program.
-std::vector<std::array<int, 3>> stage_shapes(const det::Program& program, int width, int height) {
-    const int h = (height + 15) / 16 * 16, w = (width + 15) / 16 * 16, yh = h / 16, yw = w / 16;
-    const int zh = (yh + 3) / 4, zw = (yw + 3) / 4;
-    const std::map<std::string, std::array<int, 3>> sizes{
-        {"z_fixed", {128, zh, zw}}, {"latent_ref", {1, yh, yw}}, {"common", {256, yh, yw}},
-        {"frame", {3, h, w}},       {"qp", {1, 1, 1}},           {"feature", {256, h / 8, w / 8}},
-        {"context", {256, h / 8, w / 8}}, {"temporal_context", {256, h / 8, w / 8}}, {"memory", {512, h / 8, w / 8}}};
-    std::vector<std::array<int, 3>> shapes;
-    for (const auto id : program.inputs) {
-        const auto found = sizes.find(program.tensor_names[id]);
-        shapes.push_back({program.tensor_channels[id], found != sizes.end() ? found->second[1] : yh,
-                          found != sizes.end() ? found->second[2] : yw});
-    }
-    return shapes;
 }
 
 // Every fx program in the directory (any codec's). Without a bundle, plans are built for 64x64 to 240x240 and run
@@ -170,7 +130,8 @@ void fx_stages(const std::filesystem::path& directory, const std::filesystem::pa
         if (!program) continue;
         std::vector<std::byte> plan;
         if (bundle.empty()) {
-            const auto low = stage_shapes(program.value(), 64, 64), high = stage_shapes(program.value(), 240, 240);
+            const auto low = fx_inputs::stage_shapes(program.value(), 64, 64);
+            const auto high = fx_inputs::stage_shapes(program.value(), 240, 240);
             std::vector<trt::InputShape> shapes;
             for (std::size_t slot = 0; slot < high.size(); ++slot) {
                 shapes.push_back({program.value().tensor_names[program.value().inputs[slot]], high[slot][0],
@@ -192,13 +153,8 @@ void fx_stages(const std::filesystem::path& directory, const std::filesystem::pa
             if (plan.empty()) continue;
         }
         for (const auto& [width, height] : frames) {
-            std::vector<det::Tensor> inputs;
-            const auto shapes = stage_shapes(program.value(), width, height);
-            for (std::size_t slot = 0; slot < shapes.size(); ++slot) {
-                const auto& name = program.value().tensor_names[program.value().inputs[slot]];
-                inputs.push_back(input(name, shapes[slot][0], shapes[slot][1], shapes[slot][2], rng));
-            }
-            compare(plan, program.value(), inputs, std::to_string(width) + "x" + std::to_string(height));
+            const auto seeded = fx_inputs::stage_inputs(program.value(), width, height, rng);
+            compare(plan, program.value(), seeded, std::to_string(width) + "x" + std::to_string(height));
         }
     }
 }

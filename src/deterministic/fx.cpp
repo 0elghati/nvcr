@@ -1,6 +1,10 @@
 #include "fx.hpp"
 
+#include "parallel.hpp"
+
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <string>
 
 namespace nvcr::deterministic::fx {
@@ -61,6 +65,79 @@ Result<Tensor> gemm(const Gemm& op, const Tensor& x, std::span<const Tensor* con
     return y;
 }
 
+Result<Tensor> gemm_tiled(const Gemm& op, const Tensor& x, std::span<const Tensor* const> residuals) {
+    // |w|, |x_i| <= digit2_max, so one product fits int16 x int16 -> int32 and two
+    // products still fit int32: 2 * 32639^2 < 2^31. The int64 sums are exact
+    // (spec section 5), so the order they are formed in cannot change a result.
+    static_assert(2 * digit2_max * digit2_max < (std::int64_t{1} << 31));
+    constexpr std::size_t tile = 128;
+    const std::size_t n = x.plane();
+    const auto k_count = static_cast<std::size_t>(op.in_channels);
+    Tensor y = like(x, op.out_channels / op.group);
+    std::vector<std::int16_t> weights(op.weights.size());
+    std::transform(op.weights.begin(), op.weights.end(), weights.begin(),
+                   [](std::int32_t w) { return static_cast<std::int16_t>(w); });
+    // Work items are pixel tiles times ranges of output groups, so small planes
+    // (a latent of a few hundred pixels) still occupy every worker.
+    const auto tiles = static_cast<std::int32_t>((n + tile - 1) / tile);
+    const std::int32_t chunks = std::clamp<std::int32_t>(64 / tiles, 1, y.channels);
+    std::atomic<bool> failed{false};
+    parallel_for(tiles * chunks, [&](std::int32_t item) {
+        const std::size_t p0 = static_cast<std::size_t>(item / chunks) * tile;
+        const std::size_t len = std::min(tile, n - p0);
+        const std::int32_t g_begin = y.channels * (item % chunks) / chunks;
+        const std::int32_t g_end = y.channels * (item % chunks + 1) / chunks;
+        std::vector<std::int16_t> xi(k_count * tile, 0);  // quantized once, zero past the plane's end
+        for (std::size_t k = 0; k < k_count; ++k) {
+            for (std::size_t i = 0; i < len; ++i) {
+                xi[k * tile + i] = static_cast<std::int16_t>(
+                    std::clamp(rsr(x.values[k * n + p0 + i], op.input_shift), -digit2_max, digit2_max));
+            }
+        }
+        std::array<std::int64_t, tile> acc{};
+        std::array<std::int64_t, tile> sum{};
+        for (std::int32_t g = g_begin; g < g_end && !failed.load(std::memory_order_relaxed); ++g) {
+            sum.fill(0);
+            for (int j = 0; j < op.group; ++j) {
+                const auto o = static_cast<std::size_t>(g * op.group + j);
+                const std::int16_t* w = weights.data() + o * k_count;
+                acc.fill(op.bias[o]);
+                std::size_t k = 0;
+                for (; k + 1 < k_count; k += 2) {
+                    const std::int32_t w0 = w[k], w1 = w[k + 1];
+                    const std::int16_t* x0 = xi.data() + k * tile;
+                    const std::int16_t* x1 = x0 + tile;
+                    for (std::size_t i = 0; i < tile; ++i) acc[i] += w0 * x0[i] + w1 * x1[i];
+                }
+                if (k < k_count) {
+                    const std::int32_t w0 = w[k];
+                    const std::int16_t* x0 = xi.data() + k * tile;
+                    for (std::size_t i = 0; i < tile; ++i) acc[i] += w0 * x0[i];
+                }
+                for (std::size_t i = 0; i < len; ++i) {
+                    const std::int64_t r = rsr(acc[i], op.shift[o]);
+                    if (r >= gemm_limit || r <= -gemm_limit) {
+                        failed = true;
+                        return;
+                    }
+                    sum[i] += op.activation ? delta_act(r, *op.activation) : r;
+                }
+            }
+            for (std::size_t i = 0; i < len; ++i) {
+                const auto at = static_cast<std::size_t>(g) * n + p0 + i;
+                std::int64_t v = sum[i];
+                for (const Tensor* residual : residuals) v += residual->values[at];
+                if (!store(v, y.values[at])) {
+                    failed = true;
+                    return;
+                }
+            }
+        }
+    });
+    if (failed) return gemm(op, x, residuals);  // the reference reports the failure it meets first
+    return y;
+}
+
 Result<Tensor> depthwise3x3(const Depthwise& op, const Tensor& x) {
     Tensor y = like(x, x.channels);
     for (std::int32_t c = 0; c < x.channels; ++c) {
@@ -82,6 +159,36 @@ Result<Tensor> depthwise3x3(const Depthwise& op, const Tensor& x) {
             }
         }
     }
+    return y;
+}
+
+Result<Tensor> depthwise3x3_tiled(const Depthwise& op, const Tensor& x) {
+    Tensor y = like(x, x.channels);
+    std::atomic<bool> failed{false};
+    parallel_for(x.channels, [&](std::int32_t c) {
+        const auto ci = static_cast<std::size_t>(c);
+        const std::int32_t* in = x.values.data() + ci * x.plane();
+        for (std::int32_t row = 0; row < x.height && !failed.load(std::memory_order_relaxed); ++row) {
+            for (std::int32_t col = 0; col < x.width; ++col) {
+                std::int64_t acc = op.bias[ci];
+                for (int i = 0; i < 3; ++i) {
+                    for (int j = 0; j < 3; ++j) {
+                        const int yy = row + i - 1;
+                        const int xx = col + j - 1;
+                        if (yy < 0 || yy >= x.height || xx < 0 || xx >= x.width) continue;
+                        acc += std::int64_t{op.weights[ci * 9 + static_cast<std::size_t>(i * 3 + j)]} *
+                            in[static_cast<std::size_t>(yy * x.width + xx)];
+                    }
+                }
+                const auto at = ci * x.plane() + static_cast<std::size_t>(row * x.width + col);
+                if (!store(rsr(acc, op.shift[ci]), y.values[at])) {
+                    failed = true;
+                    return;
+                }
+            }
+        }
+    });
+    if (failed) return depthwise3x3(op, x);  // the reference reports the failure it meets first
     return y;
 }
 
