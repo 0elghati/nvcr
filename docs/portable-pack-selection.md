@@ -5,16 +5,37 @@ Status: decision record for issue #280 (feature #268, epic #261),
 Per #280, reviewers can reject it before the pack schema or any export code is
 written.
 
+Revised 2026-11-23: by user decision on #287, a v2-supported path must be
+`exact`. The first selection, MLVC-S, has no exact profile, so DCVC-RT under
+`nvcr.fx.v1` replaces it.
+
+## Exactness rule for supported paths
+
+A supported v2 path must be `exact` as [the capability matrix](compatibility.md#dcvc-rt-capability-matrix)
+defines it: through a conformant numerics profile, the decoder's entropy
+decisions, decoded latents and reference state are bit-identical to the
+encoder's. Displayed pictures produced by a stage outside the profile (DCVC-RT's
+FP16 `p_display`) may differ between providers by at most one code value per
+sample, and that bound is part of conformance. Stricter exact pictures were
+considered and not required: they would put the heaviest stage on the CPU's
+exact path, and a display difference is never read back, so it cannot
+accumulate. `native` and bounded-quality paths may remain experimental, but
+they cannot be promoted to v2 support.
+
 ## Selection
 
 | Choice | Selection |
 |---|---|
-| Baseline codec | MLVC-S, the libmlvc `dmc61sbr_mini_reglu-perceptual_v1-onnx-generic-v0.1` bundle (SHA-256 `c37ee2f5…`, libmlvc `c504aaa`, checkpoint `mlvc-s-perceptual-v1.ckpt`) |
-| Portable representation | That ONNX bundle, unchanged: FP16 NCHW encoder and decoder graphs per canvas, one shared `weights.bin`, and the Gaussian and bit-estimator PMF tables |
-| Broad provider | ONNX Runtime CPU on x86_64 |
-| Declared capability range | Visible sizes up to 640x368, served by the 320x192 and 640x368 canvases. The proof resolutions are 176x144 and 640x360, which already have upstream-runtime parity vectors |
-| Numerics | `native`. No cross-provider interoperability is claimed until #287 defines a bounded-quality profile |
-| Derived accelerator | The C12 TensorRT plans built from the same ONNX parts, to show that a derived artifact keeps codec and model identity |
+| Baseline codec | DCVC-RT, microsoft/DCVC `1feb52a5`, checkpoints `cvpr2025_image` and `cvpr2025_video` (model profile `dcvcrt-cvpr2025`) |
+| Portable representation | The 11 `nvcr.fx.v1` normative programs (`.fxprog.json` and `.fxw`, plus `fx_entropy.json`), the FP16 ONNX graphs for the stages outside the profile (encoder analysis, `p_display`), and the CDF and quantisation assets |
+| Broad provider | ONNX Runtime CPU on x86_64. The normative stages run in NVCR's CPU fx executor and the FP16 stages in ONNX Runtime kernels |
+| Declared capability range | The programs do not depend on resolution. The proof resolutions are 176x144 and 640x360. The declared upper bound is the largest size at which the CPU decode meets the throughput floor set in the executor task |
+| Numerics | `nvcr.fx.v1`, `exact` |
+| Derived accelerator | The `nvcr.fx.v1` TensorRT bundles (`engine-assets-dcvcrt-fx`), which must reference the pack's content identity |
+
+The critical path is the CPU fx executor. It currently decodes about one 1080p
+frame every 7 minutes, and the selection holds only if it becomes usable at the
+declared range.
 
 ## Why the candidates split
 
@@ -38,12 +59,12 @@ The three candidates differ in what "portable" can mean for them today.
   exact output: decoders diverge to 57.5 dB Y at 176x144 and 44.4 dB at
   640x360 by frame 63, and recover to about 58.5 dB at the LTR recovery
   ([C12 evidence](../evidence/phase-c12-mlvc-tensorrt-20261104.md)). There is
-  no exact profile, so cross-provider support depends on how #287 defines
-  bounded-quality interoperability.
+  no exact profile.
 
-MLVC is therefore the only candidate that can complete a usable disconnected
-first run with existing, already-redistributed artifacts. DCVC-RT's exact
-numerics remain the strongest interoperability evidence in the repository.
+MLVC is the only candidate that could complete a usable disconnected first run
+with existing artifacts, but only with `native` numerics, which cannot be
+promoted to v2 support. DCVC-RT is the candidate with the most `exact`
+evidence, and its weakness is the executor's speed, not its numerics.
 
 ## Comparison
 
@@ -75,19 +96,16 @@ about 34 KB. The 8 TensorRT plans total 109,089,256 bytes.
 
 ## Rejected alternatives
 
-- **DCVC-RT under `nvcr.fx.v1`: deferred, not rejected.** It is the production
-  codec and it already has exact cross-provider decode. Its portable path,
-  however, depends on the CPU fx executor. That executor is a single-threaded
-  reference implementation running at about 7 minutes per 1080p frame, and
-  nothing has measured how much an optimised executor would gain. Its pack
-  would also make NVCR's program format, not ONNX, the portable
-  representation. That is consistent with the codec/provider split, but every
-  new provider would then have to implement `nvcr.fx.v1` before running any
-  pack. Proposed as the second pack, after a measured CPU executor task.
+- **MLVC-S: rejected for v2 support.** It was the first selection and has the
+  best CPU speed and the smallest pack. It has no exact profile, however:
+  across providers its decoders drift and only recover at LTR, and its parity
+  holds only on x86. It becomes eligible only if an exact MLVC profile is
+  defined and passes conformance.
 - **DCVC-UF HT-S under `nvcr.fx.v1`: rejected for the first proof.** It has the
-  same executor dependency and less evidence: one 9-frame cross-provider
-  decode, no ONNX Runtime CPU encode, no second resolution, and no ONNX stages
-  in published bundles.
+  same executor dependency as DCVC-RT and less evidence: one 9-frame
+  cross-provider decode, no ONNX Runtime CPU encode, no second resolution, and
+  no ONNX stages in published bundles. It is the natural second pack, because
+  it reuses the same executor.
 - **The standard MLVC `perceptual` and `psnr` models: rejected for the first
   proof.** They have no upstream reference vectors; their only check is a
   PyTorch-to-ONNX comparison within 0.07 dB. NVCR produces these exports
@@ -98,42 +116,48 @@ about 34 KB. The 8 TensorRT plans total 109,089,256 bytes.
 
 Each of these can reject the selection before implementation.
 
-1. **Interoperability meaning (#287).** MLVC-S has no exact profile, and its
-   parity holds only on x86. If #287 decides that a v2-supported path must be
-   exact, MLVC-S can prove the offline product but not the cross-provider
-   requirement. DCVC-RT would then become the first pack, with the CPU fx
-   executor on the critical path.
-2. **Fixed canvases (#283).** The proof uses two of libmlvc's four canvases as
-   a measured choice. It does not adopt the four-canvas policy. The pack
-   schema must express a canvas set as one kind of capability range, not as
-   its only shape model.
+1. **CPU fx executor speed.** The current executor runs on one thread and
+   repeats work: `gemm` in `src/deterministic/fx.cpp` re-quantises every input
+   value for every output channel, and its inner loop strides across channel
+   planes. All arithmetic is integer, so threading, hoisting and loop
+   reordering cannot change a result bit. How much they gain has not been
+   measured. If the optimised decode cannot meet the floor at 640x360, the
+   selection fails.
+2. **FP16 stages on CPU.** Native DCVC-RT on ONNX Runtime CPU decoded QCIF at
+   only 2.54 fps, while another build was running
+   ([C8](../evidence/phase-c8-onnxruntime-provider-20261101.md)). That suggests
+   the FP16 graphs are slow on CPU too. `p_display` and the encoder analysis
+   are outside the profile, so a CPU-specific FP32 export is allowed, provided
+   the one-code-value picture bound still holds.
 3. **Not shaping the format around one codec.** Before #268 freezes the schema,
-   the schema must also describe the DCVC-RT fx layout on paper: programs,
-   FP16 ONNX stages, entropy assets, dynamic shapes, a numerics requirement,
-   and no shared weight store.
-4. **Packaging policy.** `ASSET_DISTRIBUTION_POLICY.md` excludes ONNX bundles
-   from generic packages. The complete product (#269) needs an explicit policy
-   entry that is separate from the core SDK package.
-5. **Architecture scope.** The range is x86_64 only. NHWC and qualcomm bundles
-   are rejected with `not_implemented`, and arm64 CPU parity is not
-   established.
+   the schema must also describe the MLVC-S layout on paper: one weights file
+   shared by several graphs, fixed canvases (#283), and `native` numerics.
+4. **Packaging policy.** `ASSET_DISTRIBUTION_POLICY.md` excludes ONNX graphs and
+   entropy assets from generic packages. The complete product (#269) needs an
+   explicit policy entry, separate from the core SDK package.
+5. **Untested exact cells.** An ONNX Runtime CPU encode decoded on TensorRT
+   under `nvcr.fx.v1` is `untested`, and so is any second CPU or architecture.
+   The portable pack encodes on the CPU, so that cell must pass.
 
 ## Proof plan and exit measurements (for #268)
 
 1. A schema and validator for the pack, reviewed against item 3 above.
 2. An encode/decode run from the pack on ONNX Runtime CPU with no TensorRT plan
    present, at 176x144 and 640x360.
-3. Correctness: byte-identical records and decoded YUV against MLVC's
-   conversion runtime at both resolutions, plus reset, LTR recovery, and
-   malformed-unit cases.
+3. Correctness: every normative stage is bit-identical to the reference
+   executor. Decoder state is bit-identical to the encoder's in both
+   directions between ONNX Runtime CPU and TensorRT, across a reference reset.
+   Displayed pictures stay within one code value. Malformed units fail
+   cleanly.
 4. Startup: cold session-creation time.
 5. Memory: peak RSS.
 6. Throughput: process fps under `docs/performance.md`, encode and decode, at
    both resolutions, recording the CPU model and thread count.
-7. Size: pack bytes and installed bytes.
-8. Provenance: the libmlvc commit, the bundle digest, the checkpoint digest,
-   and per-part digests.
-9. Licence: the MIT licence and notice are inside the pack.
-10. A derived accelerator: TensorRT plans built from the pack resolve to the
-    same codec and model identity.
+7. Size: pack bytes and installed bytes. Programs repeat some weights, for
+   example `y_spatial_prior` in all three I spatial-prior programs.
+8. Provenance: the DCVC commit, the checkpoint digests, the export recipe, and
+   per-part digests.
+9. Licence: the MIT licence and upstream notice are inside the pack.
+10. A derived accelerator: the fx TensorRT bundles resolve to the pack's codec,
+    model and program identities.
 11. A fresh machine imports and validates the pack from documented inputs.
