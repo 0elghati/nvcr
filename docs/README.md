@@ -22,6 +22,7 @@ what it is for before asking you to run commands.
 - [Docker from Windows](docker-windows.md)
 - [Jetson](docker-jetson.md)
 - [Compatibility](compatibility.md)
+- [Version and identity contracts](version-contract-inventory.md)
 - [Model and engine artifacts](dcvcrt-artifacts.md)
 
 ## Understand NVCR
