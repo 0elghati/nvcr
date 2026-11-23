@@ -1060,7 +1060,7 @@ Goal:
 
 Status: Complete through B7. The design was accepted in
 [PR #145](https://github.com/0elghati/nvcr/pull/145), and the staged implementation
-is recorded in the [roadmap](../ROADMAP.md#active-v2-work).
+is recorded in the [roadmap](../ROADMAP.md#provider-boundary-migration-phase-b-complete).
 
 Complete the generic provider model.
 

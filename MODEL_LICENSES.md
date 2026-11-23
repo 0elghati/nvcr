@@ -50,8 +50,10 @@ The MLVC adapter runs Microsoft's MLVC ONNX model bundles. The
 [third_party/msrtc_rans](third_party/msrtc_rans). The validated bundles come
 from [libmlvc](https://github.com/microsoft/libmlvc), also MIT licensed, and
 their metadata names the public `mlvc-s-perceptual-v1.ckpt` checkpoint, whose
-SHA-256 is listed in the MLVC README. NVCR does not package or
-redistribute MLVC checkpoints or bundles. Pinned identities are in the
+SHA-256 is listed in the MLVC README. NVCR does not redistribute MLVC
+checkpoints, and generic packages contain no MLVC bundle. The separate `mlvc`
+engine archives carry libmlvc's published bundle unchanged, with its licence
+(see [the bundle record](third_party/mlvc_model/UPSTREAM.md)). Pinned identities are in the
 [C10 evidence](evidence/phase-c10-mlvc-codec-20261102.md).
 
 ## Derived assets and distribution

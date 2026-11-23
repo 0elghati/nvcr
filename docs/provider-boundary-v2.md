@@ -6,7 +6,7 @@ Last updated: 2026-09-14
 Scope: Architecture, migration, and completion record
 
 Related: [NVCR vision](NVCR_VISION.md) and
-[active v2 roadmap](../ROADMAP.md#active-v2-work)
+[provider-boundary migration roadmap](../ROADMAP.md#provider-boundary-migration-phase-b-complete)
 
 ## Decision summary
 
