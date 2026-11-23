@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/0elghati/nvcr/blob/main/docs/spec/capability-vocabulary-v1.schema.json",
+  "title": "NVCR capability admission cases v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "cases"],
+  "properties": {
+    "schema": {"const": "nvcr.capability-cases.v1"},
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/case"}
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringSet": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/nonEmptyString"}
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "directions", "tensor_types", "layouts", "shape_mode",
+        "state", "operators", "memory_domains_any_of", "synchronization",
+        "numerics_profile"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/nonEmptyString"},
+        "directions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["encode", "decode"]}
+        },
+        "tensor_types": {"$ref": "#/$defs/stringSet"},
+        "layouts": {"$ref": "#/$defs/stringSet"},
+        "shape_mode": {"enum": ["static", "bounded_dynamic"]},
+        "state": {"$ref": "#/$defs/nonEmptyString"},
+        "operators": {"$ref": "#/$defs/stringSet"},
+        "memory_domains_any_of": {"$ref": "#/$defs/stringSet"},
+        "synchronization": {"$ref": "#/$defs/nonEmptyString"},
+        "numerics_profile": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "providerCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tensor_types", "layouts", "shape_modes", "memory_domains",
+        "synchronization", "numerics_profiles", "model_formats"
+      ],
+      "properties": {
+        "tensor_types": {"$ref": "#/$defs/stringSet"},
+        "layouts": {"$ref": "#/$defs/stringSet"},
+        "shape_modes": {"$ref": "#/$defs/stringSet"},
+        "memory_domains": {"$ref": "#/$defs/stringSet"},
+        "synchronization": {"$ref": "#/$defs/stringSet"},
+        "numerics_profiles": {"$ref": "#/$defs/stringSet"},
+        "model_formats": {"$ref": "#/$defs/stringSet"}
+      }
+    },
+    "visibleSize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min_width", "max_width", "min_height", "max_height"],
+      "properties": {
+        "min_width": {"type": "integer", "minimum": 1},
+        "max_width": {"type": "integer", "minimum": 1},
+        "min_height": {"type": "integer", "minimum": 1},
+        "max_height": {"type": "integer", "minimum": 1}
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "codec", "provider", "artifact", "workload", "conformance",
+        "alternatives", "expected_decision"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/nonEmptyString"},
+        "codec": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "stages"],
+          "properties": {
+            "id": {"$ref": "#/$defs/nonEmptyString"},
+            "stages": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"$ref": "#/$defs/stage"}
+            }
+          }
+        },
+        "provider": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "capabilities"],
+          "properties": {
+            "id": {"$ref": "#/$defs/nonEmptyString"},
+            "capabilities": {"$ref": "#/$defs/providerCapabilities"}
+          }
+        },
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id", "codec_id", "provider_id", "model_id", "format",
+            "directions", "stage_ids", "visible_size", "operators_validated",
+            "digest_verified"
+          ],
+          "properties": {
+            "id": {"$ref": "#/$defs/nonEmptyString"},
+            "codec_id": {"$ref": "#/$defs/nonEmptyString"},
+            "provider_id": {"$ref": "#/$defs/nonEmptyString"},
+            "model_id": {"$ref": "#/$defs/nonEmptyString"},
+            "format": {"$ref": "#/$defs/nonEmptyString"},
+            "directions": {"$ref": "#/$defs/stringSet"},
+            "stage_ids": {"$ref": "#/$defs/stringSet"},
+            "visible_size": {"$ref": "#/$defs/visibleSize"},
+            "operators_validated": {"type": "boolean"},
+            "digest_verified": {"type": "boolean"}
+          }
+        },
+        "workload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["direction", "width", "height"],
+          "properties": {
+            "direction": {"enum": ["encode", "decode"]},
+            "width": {"type": "integer", "minimum": 1},
+            "height": {"type": "integer", "minimum": 1}
+          }
+        },
+        "conformance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "evidence"],
+          "properties": {
+            "status": {"enum": ["exact", "native", "unsupported", "untested"]},
+            "reason": {"$ref": "#/$defs/nonEmptyString"},
+            "evidence": {"$ref": "#/$defs/nonEmptyString"}
+          }
+        },
+        "alternatives": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["provider_id", "status"],
+            "properties": {
+              "provider_id": {"$ref": "#/$defs/nonEmptyString"},
+              "status": {"enum": ["exact", "native", "unsupported", "untested"]},
+              "requires": {"$ref": "#/$defs/nonEmptyString"}
+            }
+          }
+        },
+        "expected_decision": {"enum": ["admit", "reject", "hold"]}
+      }
+    }
+  }
+}
