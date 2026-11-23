@@ -32,6 +32,7 @@ what it is for before asking you to run commands.
 - [Long-term vision](NVCR_VISION.md)
 - [Architecture](architecture.md)
 - [v2 codec/provider boundary RFC](provider-boundary-v2.md)
+- [v2 capability vocabulary](spec/capability-vocabulary-v1.md)
 - [C++ API](reference.md)
 - [DCVC-RT integration](dcvcrt-integration.md)
 - [MLVC integration](mlvc-integration.md) (experimental)

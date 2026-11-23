@@ -16,6 +16,9 @@ if(Python3_Interpreter_FOUND)
         NAME nvcr_version_identity
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/version_identity_tests.py")
     add_test(
+        NAME nvcr_capability_admission
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/capability_admission_tests.py")
+    add_test(
         NAME nvcr_engine_catalog
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/engine_catalog_tests.py")
     add_test(

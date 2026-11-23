@@ -1,0 +1,269 @@
+{
+  "schema": "nvcr.capability-cases.v1",
+  "cases": [
+    {
+      "id": "dcvcrt-tensorrt-native-720p-encode",
+      "codec": {
+        "id": "dcvc-rt",
+        "stages": [
+          {
+            "id": "i_analysis",
+            "directions": ["encode"],
+            "tensor_types": ["float16"],
+            "layouts": ["nchw"],
+            "shape_mode": "bounded_dynamic",
+            "state": "stateless",
+            "operators": ["artifact-validated"],
+            "memory_domains_any_of": ["pinned_host", "provider_device"],
+            "synchronization": "completion",
+            "numerics_profile": "native"
+          },
+          {
+            "id": "p_reference",
+            "directions": ["encode", "decode"],
+            "tensor_types": ["float16"],
+            "layouts": ["nchw"],
+            "shape_mode": "bounded_dynamic",
+            "state": "sequence",
+            "operators": ["artifact-validated"],
+            "memory_domains_any_of": ["pinned_host", "provider_device"],
+            "synchronization": "completion",
+            "numerics_profile": "native"
+          }
+        ]
+      },
+      "provider": {
+        "id": "tensorrt",
+        "capabilities": {
+          "tensor_types": ["uint8", "int32", "float16", "float32"],
+          "layouts": ["nchw"],
+          "shape_modes": ["static", "bounded_dynamic"],
+          "memory_domains": ["pinned_host", "provider_device"],
+          "synchronization": ["completion"],
+          "numerics_profiles": ["native", "nvcr.intconv.v1", "nvcr.fx.v1"],
+          "model_formats": ["tensorrt-plan", "nvcr-program"]
+        }
+      },
+      "artifact": {
+        "id": "dcvcrt-720p-rtx4070",
+        "codec_id": "dcvc-rt",
+        "provider_id": "tensorrt",
+        "model_id": "dcvcrt-cvpr2025",
+        "format": "tensorrt-plan",
+        "directions": ["encode", "decode"],
+        "stage_ids": ["i_analysis", "p_reference"],
+        "visible_size": {
+          "min_width": 64,
+          "max_width": 1280,
+          "min_height": 64,
+          "max_height": 720
+        },
+        "operators_validated": true,
+        "digest_verified": true
+      },
+      "workload": {"direction": "encode", "width": 1280, "height": 720},
+      "conformance": {
+        "status": "native",
+        "evidence": "docs/codec-provider-matrix.md#codecprovider-integration-status"
+      },
+      "alternatives": [],
+      "expected_decision": "admit"
+    },
+    {
+      "id": "dcvcrt-onnxruntime-cpu-fx-720p-decode",
+      "codec": {
+        "id": "dcvc-rt",
+        "stages": [
+          {
+            "id": "i_prior",
+            "directions": ["decode"],
+            "tensor_types": ["int32"],
+            "layouts": ["nchw"],
+            "shape_mode": "bounded_dynamic",
+            "state": "stateless",
+            "operators": ["nvcr-program"],
+            "memory_domains_any_of": ["host", "pinned_host"],
+            "synchronization": "completion",
+            "numerics_profile": "nvcr.fx.v1"
+          },
+          {
+            "id": "p_reference",
+            "directions": ["decode"],
+            "tensor_types": ["int32"],
+            "layouts": ["nchw"],
+            "shape_mode": "bounded_dynamic",
+            "state": "sequence",
+            "operators": ["nvcr-program"],
+            "memory_domains_any_of": ["host", "pinned_host"],
+            "synchronization": "completion",
+            "numerics_profile": "nvcr.fx.v1"
+          }
+        ]
+      },
+      "provider": {
+        "id": "onnxruntime-cpu",
+        "capabilities": {
+          "tensor_types": ["uint8", "int8", "int32", "float16", "float32"],
+          "layouts": ["nchw"],
+          "shape_modes": ["static", "bounded_dynamic"],
+          "memory_domains": ["host", "pinned_host"],
+          "synchronization": ["completion"],
+          "numerics_profiles": ["native", "nvcr.intconv.v1", "nvcr.fx.v1"],
+          "model_formats": ["onnx", "nvcr-program"]
+        }
+      },
+      "artifact": {
+        "id": "dcvcrt-fx-720p-portable",
+        "codec_id": "dcvc-rt",
+        "provider_id": "onnxruntime-cpu",
+        "model_id": "dcvcrt-cvpr2025",
+        "format": "nvcr-program",
+        "directions": ["decode"],
+        "stage_ids": ["i_prior", "p_reference"],
+        "visible_size": {
+          "min_width": 64,
+          "max_width": 1280,
+          "min_height": 64,
+          "max_height": 720
+        },
+        "operators_validated": true,
+        "digest_verified": true
+      },
+      "workload": {"direction": "decode", "width": 1280, "height": 720},
+      "conformance": {
+        "status": "exact",
+        "evidence": "docs/compatibility.md#dcvc-rt-capability-matrix"
+      },
+      "alternatives": [],
+      "expected_decision": "admit"
+    },
+    {
+      "id": "mlvc-onnxruntime-cpu-native-640x360-decode",
+      "codec": {
+        "id": "mlvc",
+        "stages": [
+          {
+            "id": "mlvc_encoder_640x368",
+            "directions": ["encode"],
+            "tensor_types": ["float16", "int32"],
+            "layouts": ["nchw"],
+            "shape_mode": "static",
+            "state": "sequence-ltr",
+            "operators": ["artifact-validated"],
+            "memory_domains_any_of": ["host", "pinned_host"],
+            "synchronization": "completion",
+            "numerics_profile": "native"
+          },
+          {
+            "id": "mlvc_decoder_640x368",
+            "directions": ["decode"],
+            "tensor_types": ["float16", "int32"],
+            "layouts": ["nchw"],
+            "shape_mode": "static",
+            "state": "sequence-ltr",
+            "operators": ["artifact-validated"],
+            "memory_domains_any_of": ["host", "pinned_host"],
+            "synchronization": "completion",
+            "numerics_profile": "native"
+          }
+        ]
+      },
+      "provider": {
+        "id": "onnxruntime-cpu",
+        "capabilities": {
+          "tensor_types": ["uint8", "int8", "int32", "float16", "float32"],
+          "layouts": ["nchw"],
+          "shape_modes": ["static", "bounded_dynamic"],
+          "memory_domains": ["host", "pinned_host"],
+          "synchronization": ["completion"],
+          "numerics_profiles": ["native", "nvcr.intconv.v1", "nvcr.fx.v1"],
+          "model_formats": ["onnx", "nvcr-program"]
+        }
+      },
+      "artifact": {
+        "id": "mlvc-s-perceptual-generic-v0.1",
+        "codec_id": "mlvc",
+        "provider_id": "onnxruntime-cpu",
+        "model_id": "dmc61sbr_mini_reglu-perceptual_v1",
+        "format": "onnx",
+        "directions": ["encode", "decode"],
+        "stage_ids": ["mlvc_encoder_640x368", "mlvc_decoder_640x368"],
+        "visible_size": {
+          "min_width": 2,
+          "max_width": 640,
+          "min_height": 2,
+          "max_height": 368
+        },
+        "operators_validated": true,
+        "digest_verified": true
+      },
+      "workload": {"direction": "decode", "width": 640, "height": 360},
+      "conformance": {
+        "status": "native",
+        "evidence": "evidence/phase-c10-mlvc-codec-20261102.md"
+      },
+      "alternatives": [],
+      "expected_decision": "admit"
+    },
+    {
+      "id": "dcvcrt-onnxruntime-qnn-fx-360p-decode-unsupported",
+      "codec": {
+        "id": "dcvc-rt",
+        "stages": [
+          {
+            "id": "i_prior",
+            "directions": ["decode"],
+            "tensor_types": ["int32"],
+            "layouts": ["nchw"],
+            "shape_mode": "static",
+            "state": "stateless",
+            "operators": ["nvcr-program"],
+            "memory_domains_any_of": ["host", "pinned_host"],
+            "synchronization": "completion",
+            "numerics_profile": "nvcr.fx.v1"
+          }
+        ]
+      },
+      "provider": {
+        "id": "onnxruntime-qnn",
+        "capabilities": {
+          "tensor_types": ["uint8", "int32", "float16", "float32"],
+          "layouts": ["nchw"],
+          "shape_modes": ["static"],
+          "memory_domains": ["host", "pinned_host"],
+          "synchronization": ["completion"],
+          "numerics_profiles": ["native"],
+          "model_formats": ["onnx"]
+        }
+      },
+      "artifact": {
+        "id": "dcvcrt-fx-360p-portable",
+        "codec_id": "dcvc-rt",
+        "provider_id": "onnxruntime-qnn",
+        "model_id": "dcvcrt-cvpr2025",
+        "format": "nvcr-program",
+        "directions": ["decode"],
+        "stage_ids": ["i_prior"],
+        "visible_size": {
+          "min_width": 64,
+          "max_width": 640,
+          "min_height": 64,
+          "max_height": 360
+        },
+        "operators_validated": false,
+        "digest_verified": true
+      },
+      "workload": {"direction": "decode", "width": 640, "height": 360},
+      "conformance": {
+        "status": "unsupported",
+        "reason": "QNN does not implement nvcr.fx.v1 and must fail before decode",
+        "evidence": "docs/compatibility.md#dcvc-rt-capability-matrix"
+      },
+      "alternatives": [
+        {"provider_id": "onnxruntime-cpu", "status": "exact"},
+        {"provider_id": "tensorrt", "status": "exact", "requires": "matching fx bundle"}
+      ],
+      "expected_decision": "reject"
+    }
+  ]
+}
